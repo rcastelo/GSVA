@@ -1,0 +1,824 @@
+%\VignetteIndexEntry{Gene Set Variation Analysis}
+%\VignetteDepends(Biobase, methods, gplots, glmnet}
+%\VignetteKeywords{GSVA, GSEA, Expression, Microarray, Pathway}
+%\VignettePackage{GSVA}
+\documentclass[a4paper]{article}
+\usepackage{url}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{natbib}
+\usepackage{fullpage}
+
+\newcommand{\Rfunction}[1]{{\texttt{#1}}}
+\newcommand{\Robject}[1]{{\texttt{#1}}}
+\newcommand{\Rpackage}[1]{{\textsf{#1}}}
+\newcommand{\Rclass}[1]{{\textit{#1}}}
+
+\title{GSVA - The Gene Set Variation Analysis Package}
+\author{Sonja H\"anzelmann, Robert Castelo and Justin Guinney}
+
+\begin{document}
+
+\SweaveOpts{eps=FALSE}
+
+\maketitle
+
+\begin{abstract}
+The \Rpackage{GSVA} package implements a non-parametric unsupervised method,
+called Gene Set Variation Analysis (GSVA), for assessing gene set enrichment
+(GSE) in gene expression microarray data. In contrast to most GSE methods, GSVA
+performs a change in coordinate systems, transforming the data from a gene by
+sample matrix to a gene set by sample matrix. Thereby allowing for the
+evaluation of pathway enrichment for each sample. This transformation is done
+without the use of a phenotype, thus facilitating very powerful and open-ended
+analyses in a now pathway centric manner. In this vignette we illustrate how
+to use the \Rpackage{GSVA} package to perform some of these analyses using
+published microarray data already pre-processed and stored in the companion
+experimental data package \Rpackage{GSVAdata}.
+\end{abstract}
+
+<<options, echo=FALSE>>=
+options(width=60)
+@
+
+\section{Introduction}
+
+Gene set enrichment analysis (GSEA)
+\citep[see][]{mootha_pgc_1alpha_responsive_2003, subramanian_gene_2005} is a
+method designed to assess the concerted behavior of functionally related genes
+forming a set, between two well-defined groups of samples. Because it does not
+rely on a ``gene list'' of interest but on the entire ranking of genes, GSEA
+has been shown to provide greater sensitivity to find gene expression changes
+of small magnitude that operate coordinately in specific sets of functionally
+related genes. However, due to the reduced costs in genome-wide gene-expression
+assays, data is being produced under more complex experimental designs that
+involve multiple RNA sources enriched with a wide spectrum of phenotypic and/or
+clinical information. The Cancer Genome Atlas (TCGA) project
+(see \url{http://cancergenome.nih.gov}) and the data deposited on it constitute
+a canonical example of this situation.
+
+To facilitate the functional enrichment analysis of this kind of data, we
+developed Gene Set Variation Analysis (GSVA) which allows one to assess the
+underlying pathway activity variation by transforming the gene by sample matrix
+into a gene-set by sample matrix without the \textit{a priori} knowledge of the
+experimental design. The method is both non-parametric and unsupervised, and
+bypasses the conventional approach of explicitly modeling phenotypes within
+enrichment scoring algorithms. Focus is therefore placed on the
+\textit{relative} enrichment of pathways across the sample space rather than
+the \textit{absolute} enrichment with respect to a single phenotype. The value
+of this approach is that it permits the use of traditional analytical methods
+such as classification, survival, clustering, and correlation analysis in a
+pathway focused manner. It also facilitates sample-wise comparisons between
+pathways and other complex data types such as microRNA expression or binding
+data, copy-number variation (CNV) data, or single nucleotide polymorphisms
+(SNPs). However, for case-control or single phenotype experiments, or where the
+sample size is not sufficiently large ($<30$), other GSE methods that explicitly
+include the phenotype in their model are more likely to provide greater
+statistical power to detect functional enrichment.
+
+In the rest of this vignette we describe briefly the methodology behind GSVA,
+give an overview of the functions implemented in the package and show a few
+applications. The interested reader is referred to \citep{GSVA_submitted} for
+more comprehensive explanations and more complete data analysis examples with
+GSVA, as well as for citing GSVA if you use it in your own work.
+
+\section{GSVA enrichment scores}
+
+GSVA enrichment scores are calculated from two main inputs: a matrix
+$X=\{x_{ij}\}_{p\times n}$ of expression values for $p$ genes through $n$
+samples, where typically $p\gg n$, and a collection of gene sets
+$\Gamma = \{\gamma_1, \dots, \gamma_m\}$. We shall denote by $x_i$ the
+expression profile of the $i$-th gene, by $x_{ij}$ the specific expression
+value of the $i$-th gene in the $j$-th sample, and by $\gamma_k$ the subset
+of row indices in $X$ such that $\gamma_k \subset \{1,\ldots\,p\}$ defines a
+set of genes forming a pathway or some other functional unit. Let $|\gamma_k |$
+be the number of genes in the gene set.
+
+The first step in the calculation consists of evaluating whether a gene $i$ is
+highly or lowly expressed in sample $j$ in the context of the sample population
+distribution, with an expression-level statistic calculated as follows. First,
+for each gene expression profile $x_i=\{x_{i1},\dots,x_{in}\}$, a non-parametric
+kernel estimation of its cumulative density function is performed using a
+Gaussian kernel \citep[pg.~148]{silverman_density_1986}:
+
+\begin{equation}
+\label{density}
+\hat{F}_{h_i}(x_{ij})=\frac{1}{n}\sum_{k=1}^n\int_{-\infty}^{\frac{x_{ij}-x_{ik}}{h_i}}\frac{1}{\sqrt{2\pi}}e^{-\frac{t^2}{2}}dt\,.
+\end{equation}
+where $h_i$ is the gene-specific bandwidth parameter that controls the
+resolution of the kernel estimation and is taken as $h_i=s_i/4$, where $s_i$ is
+the sample standard deviation of the $i$-th gene. Second, the expression-level
+statistic is calculated as logarithm of the relative likelihood, or odds, that
+the $i$-th gene is expressed in sample $j$:
+
+\begin{equation}
+z_ij = \log\left(\frac{\hat{F}_{h_i}(x_{ij})}{1-\hat{F}_{h_i}(x_{ij})}\right)\,.
+\end{equation}
+
+The clearest context for differential gene expression arises under a bi-modal
+distribution of the data.  Here, $z_{ij}$'s corresponding to the lower mode will
+have a large negative statistic, higher modes will have a large positive
+statistic, and samples between the two modes will have $z_{ij}$'s at or near
+zero. Genes with uniform or unimodal population distributions do not preclude
+large negative or positive expression-level statistics, i.e. $x_{ij}$ lying in
+the tail of a distribution. To dampen the effect of potential outliers, the
+expression-level statistics $z_{ij}$ are first converted to a rank statistic
+$z_{(i)j}=p/2 - \textrm{rank}_j(z_{ij})$ for each $j$-th sample, before
+evaluating the enrichment scores.
+
+We assess the enrichment score similarity to the GSEA method
+\cite{subramanian_gene_2005} using a Kolmogorov-Smirnov (K-S)
+like random walk statistic:
+\begin{equation}
+\label{walk}
+\nu_{jk}(\ell) = \frac{\sum_{i=1}^\ell |z_{(i)j}|^{\tau} I(g_{(i)} \in
+\gamma_k)}{\sum_{i=1}^p |z_{(i)j}|^{\tau}I(g_{(i)} \in \gamma_k)} -
+\frac{\sum_{i=1}^\ell I(g_{(i)} \not\in \gamma_k)}{p-|\gamma_k|},
+\end{equation}
+where $\tau$ is a parameter describing the weight of the tail in the
+random walk (default $\tau = 1$), $\gamma_k$ is the $k$-th gene set,
+$I(g_{(i)} \in \gamma_k)$ is the indicator function on whether
+the $i$-th gene (the gene corresponding to the $i$-th ranked
+expression-level statistic) is in gene set $\gamma_k$, $|\gamma_k|$ is
+the number of genes in the $k$-th gene set, and $p$ is the number of
+genes in the data set. 
+
+Two approaches are possible for turning the K-S random walk statistic
+into an enrichment score (ES). The first approach is the previously described
+maximum deviation method \cite{subramanian_gene_2005} where the ES for the
+$j$-th sample with respect to the $k$-th gene set is the maximum deviation
+of the random walk from zero:
+\begin{equation}
+\label{escore}
+ES^k_j = \nu_{jk}[\arg \max_{\ell=1,..,p} \left|\nu_{jk}(\ell)\right|].
+\end{equation}
+For each gene set $k$, this approach produces a distribution of enrichment
+scores that is bi-modal.  Within the supervised paradigm, a ``normalized''
+enrichment score could be obtained via a permutation of the phenotypic labels;
+since we are operating without labels, we propose a second approach that
+produces an ES distribution that is approximately \textit{normal}:
+
+\begin{equation}
+\label{escore_2}
+ES^k_j = \mbox{max}(0, \nu_{jk}(1),\ldots,\nu_{jk}(p)) + \mbox{min}(0,\nu_{jk}(1),\ldots,\nu_{jk}(p))
+\end{equation}
+This approach takes the magnitude difference between the largest positive and
+negative random walk deviations, and has the effect of dampening out large
+enrichment scores if there is both a large positive and negative deviation in
+the random walk. For analyses that require an enrichment score distribution
+approximately normal, we recommend this alternative method.
+
+\section{Overview of the package}
+
+The \Rpackage{GSVA} package implements the methodology described in the previous
+section in the function \Rfunction{gsva()} which requires two main input
+arguments: the gene expression data and a collection of gene sets. The
+expression data can be provided either as a \Rclass{matrix} object of genes
+(rows) by sample (columns) expression values, or as an \Rclass{ExpressionSet}
+object. The collection of gene sets can be provided either as a \Rclass{list}
+object with names identifying gene sets and each entry of the list containing
+the gene identifiers of the genes forming the corresponding set, or as a
+\Rclass{GeneSetCollection} object as defined in the \Rpackage{GSEABase} package.
+
+When the two main arguments are an \Rclass{ExpressionSet} object and a
+\Rclass{GeneSetCollection} object, the \Rfunction{gsva()} function will first
+filter out from the gene sets those identifiers that do not match to the chip
+annotation associated to the \Rclass{ExpressionSet} object through the function
+\Rfunction{mapIdentifiers()} from the \Rpackage{GSEABase} package. This means
+that both input arguments may specify features with different types of
+identifiers, like Entrez IDs and probeset IDs, and the \Rpackage{GSEABase}
+package will take care to map them to one another. After this first filtering
+step, it will perform again a second one on the gene sets where those
+identifiers that do not match to the feature names in the \Rclass{ExpressionSet}
+object will be also discarded. If the expression data is given as a
+\Rclass{matrix} object then only the latter filtering step will be taken by the
+\Rfunction{gsva()} function and, therefore, it will be the responsibility of the
+user to have the same type of identifiers in both the expression data and the
+gene sets.
+
+After these automatic filtering steps, we may additionally filter out gene sets
+that do not meet a minimum and/or maximum size specified through the optional
+arguments \Robject{min.sz} and \Robject{max.sz} which are set by default to 1
+and \Robject{Inf}, respectively. Finally, the \Rfunction{gsva()} function will
+carry out the calculations specified in the previous section and return a
+gene-set by sample matrix of GSVA enrichment scores in the form of a
+\Rclass{matrix} object, if this was the class of the input expression data
+object or, otherwise, it will return an \Rclass{ExpressionSet} object inheriting
+all the corresponding phenotypic information from the input data.
+
+An important argument of the \Rfunction{gsva()} function is the flag
+\Robject{mx.diff} which is set to \Robject{TRUE} by default. Under this default
+setting, GSVA enrichment scores are calculated using Equation~\ref{escore_2} and
+therefore, more amenable by analysis techniques that assume the data to be
+normally distributed. When setting \Robject{mx.diff=FALSE}, then
+Equation~\ref{escore} is employed, calculating enrichment in an analogous way to
+classical GSEA which typically provides bi-modal distribution of GSVA enrichment
+scores for each gene.
+
+Since the calculations for each gene set are independent from each other, the
+\Rfunction{gsva()} function offers two possibilities to perform them in
+parallel. One consists of loading the library \Rpackage{snow}, which will enable
+the parallelization of the calculations through a cluster of computers. In order
+to activate this option we should specify in the argument \Robject{parallel.sz}
+the number of processors we want to use (default is zero which means no
+parallelization is going to be employed). The other is possibility is loading
+the library \Rpackage{multicore} and then the \Rfunction{gsva()} function will
+use the core processors of the computer where R is running. If we want to
+limit \Rfunction{gsva()} in the number of core processors that is should use
+we can do it by specifying such a value in the \Robject{parallel.sz} argument.
+
+The other two functions of the \Rpackage{GSVA} package are
+\Rfunction{filterGeneSets()} and \Rfunction{computeGeneSetOverlaps()} that
+serve to explicitly filter out gene sets by size and by pairwise overlap,
+respectively. Note that the size filter can be also applied within the
+\Rfunction{gsva()} function call.
+
+\section{Applications}
+
+In this section we illustrate the following applications of \Rpackage{GSVA}:
+
+\begin{itemize}
+  \item Functional enrichment between two subtypes of leukemia.
+  \item Identification of molecular signatures in distinct glioblastoma subtypes.
+  \item Meta-pathway analysis in the leukemia data.
+\end{itemize}
+
+Throughout this vignette we will use the C2 collection of literature curated
+gene sets that form part of the Molecular Signatures Database (MSigDB) version
+3.0. This particular collection of gene sets is provided as a
+\Rclass{GeneSetCollection} object called \Robject{c2BroadSets} in the companion
+experimental data package \Rpackage{GSVAdata}, which stores these and other data
+employed in this vignette. These data can be loaded as follows:
+
+<<results=hide>>=
+library(GSEABase)
+library(GSVAdata)
+
+data(c2BroadSets)
+c2BroadSets
+@
+where we observe that \Robject{c2BroadSets} contains \Sexpr{length(c2BroadSets)}
+gene sets. We also need to load the following additional libraries:
+
+<<results=hide>>=
+library(Biobase)
+library(genefilter)
+library(limma)
+library(RColorBrewer)
+library(graph)
+library(Rgraphviz)
+library(GSVA)
+@
+As a final setup step for this vignette, we will employ the
+\Rfunction{cache()} function from the \Rpackage{Biobase} package in order to
+load some pre-computed results and speed up the building time of the vignette:
+
+<<>>=
+cacheDir <- system.file("extdata", package="GSVA")
+cachePrefix <- "cache4vignette_"
+@
+In order to enforce re-calculating everything, either the call to the
+\Rfunction{cache()} function should be replaced by its first argument, or the
+following command should be written in the R console at this point:
+
+<<eval=FALSE>>=
+file.remove(paste(cacheDir, list.files(cacheDir, pattern=cachePrefix), sep="/"))
+@
+
+\subsection{Functional enrichment}
+
+In this section we illustrate how to identify functionally enriched gene sets
+between two phenotypes. As in most of the applications one starts by calculating
+GSVA enrichment scores and afterwards, in this case, we will employ the linear
+modeling techniques implemented in the \Rpackage{limma} package to find the
+enriched gene sets.
+
+The data set we are going to use in this section corresponds to the microarray
+data from \citep{armstrong_mll_2002} which consists of 37 different individuals
+with human acute leukemias, where 20 of them had conventional childhood acute
+lymphoblastic leukemia (ALL) and the other 17 were affected with the MLL
+(mixed-lineage leukemia gene) translocation. This leukemia data set is stored as
+an \verb+ExpressionSet+ object called \Robject{leukemia} in the
+\Rpackage{GSVAdata} package and details on how the data was pre-processed can be
+found on its help page. Enclosed with the RMA expression values we can find some
+metadata including the main phenotype corresponding to the leukemia sample
+subtype.
+
+<<>>=
+data(leukemia)
+leukemia_eset
+head(pData(leukemia_eset))
+table(leukemia_eset$subtype)
+@
+Let's examine the variability of the expression profiles across samples by
+plotting the cumulative distribution of IQR values as shown in Figure~\ref{figIQR}.
+About 50\% of the probesets show very limited variability across samples
+and, therefore, in the following non-specific filtering step we will filter
+out this fraction from further analysis.
+
+<<figIQR, echo=FALSE, results=hide>>=
+png(filename="GSVA-figIQR.png", width=500, height=500, res=150)
+IQRs <- esApply(leukemia_eset, 1, IQR)
+plot.ecdf(IQRs, pch=".", xlab="Interquartile range (IQR)", main="Leukemia data")
+abline(v=quantile(IQRs, prob=0.5), lwd=2, col="red")
+dev.off()
+@
+\begin{figure}[ht]
+\centerline{\includegraphics[width=0.5\textwidth]{GSVA-figIQR}}
+\caption{Empirical cumulative distribution of the interquartile range (IQR) of
+expression values in the leukemia data. The vertical red bar is located at the
+50\% quantile value of the cumulative distribution.}
+\label{figIQR}
+\end{figure}
+
+We carry out a non-specific filtering step by discarding the 50\% of the
+probesets with smaller variability, probesets without Entrez ID annotation,
+probesets whose associated Entrez ID is duplicated in the annotation, and
+Affymetrix quality control probes:
+
+<<>>=
+filtered_eset <- nsFilter(leukemia_eset, require.entrez=TRUE, remove.dupEntrez=TRUE,
+                          var.func=IQR, var.filter=TRUE, var.cutoff=0.5, filterByQuantile=TRUE,
+                          feature.exclude="^AFFX")
+filtered_eset
+leukemia_filtered_eset <- filtered_eset$eset
+@
+
+The calculation of GSVA enrichment scores is performed in one single call to the
+\verb+gsva()+ function. However, one should take into account that this function
+performs further non-specific filtering steps prior to the actual calculations
+in order to, in one hand, match gene identifiers between gene sets and gene
+expression values and, on the other hand, meet minimum and maximum gene-set size
+requirements specified with the arguments \verb+min.sz+ and \verb+max.sz+,
+respectively, which, in the call below, are set to 10 and 500 genes. Because we
+want to use \Rpackage{limma} on the resulting GSVA enrichment scores, we let
+the argument \Robject{mx.diff} to its default \Robject{TRUE} value.
+
+<<>>=
+cache(leukemia_es <- gsva(leukemia_filtered_eset, c2BroadSets,
+                           min.sz=10, max.sz=500, verbose=FALSE)$es.obs,
+                           dir=cacheDir, prefix=cachePrefix)
+@
+
+Here we show how to employ GSVA to identify gene sets that are differentially
+activated for a single dichotomous phenotype. We use the MSigDB C2 version 3.0
+database of gene sets \cite{subramanian_gene_2005} of curated pathways. We test
+whether there is a difference between the GSVA enrichment scores from each pair
+of phenotypes using a simple linear model and moderated t-statistics computed by
+the \verb+limma+ package using an empirical Bayes shrinkage method
+\citep[see][]{Smyth_2004}. We are going to examine both, changes at gene level
+and changes at pathway level and since, as we shall see below, there are plenty
+of them, we are going to employ the following stringent cutoffs to attain a high
+level of statistical and biological significance:
+
+<<>>=
+adjPvalueCutoff <- 0.001
+logFCcutoff <- log2(2)
+@
+where we will use the latter only for the gene-level differential expression
+analysis.
+
+<<>>=
+design <- model.matrix(~ factor(leukemia_es$subtype))
+colnames(design) <- c("ALL", "MLLvsALL")
+fit <- lmFit(leukemia_es, design)
+fit <- eBayes(fit)
+allGeneSets <- topTable(fit, coef="MLLvsALL", number=Inf)
+DEgeneSets <- topTable(fit, coef="MLLvsALL", number=Inf,
+                       p.value=adjPvalueCutoff, adjust="BH")
+res <- decideTests(fit, p.value=adjPvalueCutoff)
+summary(res)
+@
+Thus, there are \Sexpr{sum(res[, "MLLvsALL"]!=0)} MSigDB C2 curated pathways that
+are differentially activated between MLL and ALL at \Sexpr{adjPvalueCutoff*100}\%
+FDR. When we carry out the corresponding differential expression analysis at gene level:
+
+<<>>=
+logFCcutoff <- log2(2)
+design <- model.matrix(~ factor(leukemia_eset$subtype))
+colnames(design) <- c("ALL", "MLLvsALL")
+fit <- lmFit(leukemia_filtered_eset, design)
+fit <- eBayes(fit)
+allGenes <- topTable(fit, coef="MLLvsALL", number=Inf)
+DEgenes <- topTable(fit, coef="MLLvsALL", number=Inf,
+                    p.value=adjPvalueCutoff, adjust="BH", lfc=logFCcutoff)
+res <- decideTests(fit, p.value=adjPvalueCutoff, lfc=logFCcutoff)
+summary(res)
+@
+Here, \Sexpr{sum(res[, "MLLvsALL"]!=0)} genes show up as being differentially
+expressed with a minimum fold-change of \Sexpr{2^logFCcutoff} at \Sexpr{adjPvalueCutoff*100}\%
+FDR. These overall numbers of genes and pathways that change are better seen through the
+corresponding volcano plots shown in Figure~\ref{leukemiaVolcano}.
+
+<<leukemiaVolcano, echo=FALSE, results=hide>>=
+png(filename="GSVA-leukemiaVolcano.png", width=800, height=500)
+par(mfrow=c(1,2))
+plot(allGeneSets$logFC, -log10(allGeneSets$P.Value), pch=".", cex=4, col=grey(0.75),
+     main="Gene sets", xlab="GSVA enrichment score difference", ylab=expression(-log[10]~~~Raw~P-value))
+abline(h=-log10(max(allGeneSets$P.Value[allGeneSets$adj.P.Val <= adjPvalueCutoff])),
+       col=grey(0.5), lwd=1, lty=2)
+points(allGeneSets$logFC[match(DEgeneSets$ID, allGeneSets$ID)],
+       -log10(allGeneSets$P.Value[match(DEgeneSets$ID, allGeneSets$ID)]), pch=".",
+       cex=4, col="red")
+text(max(allGeneSets$logFC)*0.85,
+         -log10(max(allGeneSets$P.Value[allGeneSets$adj.P.Val <= adjPvalueCutoff])),
+         sprintf("%.1f%% FDR", 100*adjPvalueCutoff), pos=1)
+
+plot(allGenes$logFC, -log10(allGenes$P.Value), pch=".", cex=4, col=grey(0.75),
+     main="Genes", xlab="Log fold-change", ylab=expression(-log[10]~~~Raw~P-value))
+abline(h=-log10(max(allGenes$P.Value[allGenes$adj.P.Val <= adjPvalueCutoff])),
+       col=grey(0.5), lwd=1, lty=2)
+abline(v=c(-logFCcutoff, logFCcutoff), col=grey(0.5), lwd=1, lty=2)
+points(allGenes$logFC[match(DEgenes$ID, allGenes$ID)],
+       -log10(allGenes$P.Value[match(DEgenes$ID, allGenes$ID)]), pch=".",
+       cex=4, col="red")
+text(max(allGenes$logFC)*0.85,
+         -log10(max(allGenes$P.Value[allGenes$adj.P.Val <= adjPvalueCutoff])),
+         sprintf("%.1f%% FDR", 100*adjPvalueCutoff), pos=1)
+dev.off()
+@
+\begin{figure}
+\centerline{\includegraphics[width=0.8\textwidth]{GSVA-leukemiaVolcano}}
+\caption{Volcano plots for differential pathway activation (left) and differential
+         gene expression (right) in the leukemia data set.}
+\label{leukemiaVolcano}
+\end{figure}
+
+The signatures of both, the differentially activated pathways reported by the
+GSVA analysis and of the differentially expressed genes are shown in Figures
+\ref{leukemiaHeatmapGeneSets} and \ref{leukemiaHeatmapGenes}, respectively.
+The gene sets and pathways reported in Figure~\ref{leukemiaHeatmapGeneSets}
+include many directly related to the ALL and MLL leukemias and, among the rest,
+we could highlight, for instance, the Lysosome gene set since lysosomal
+enzyme abnormalities have been reported to be involved in leukemias
+\citep{Besley_lysosomes_leukemia_1983}.
+
+<<leukemiaHeatmapGeneSets, echo=FALSE, results=hide>>=
+png(filename="GSVA-leukemiaHeatmapGeneSets.png", width=500, height=500)
+GSVAsco <- exprs(leukemia_es[DEgeneSets$ID, ])
+colorLegend <- c("darkred", "darkblue")
+names(colorLegend) <- c("ALL", "MLL")
+sample.color.map <- colorLegend[pData(leukemia_es)[, "subtype"]]
+names(sample.color.map) <- colnames(GSVAsco)
+sampleClustering <- hclust(as.dist(1-cor(GSVAsco, method="spearman")), method="complete")
+geneSetClustering <- hclust(as.dist(1-cor(t(GSVAsco), method="pearson")), method="complete")
+heatmap(GSVAsco, ColSideColors=sample.color.map, xlab="samples",
+        ylab="Gene sets and pathways", margins=c(2, 20),
+        labRow=substr(gsub("_", " ", gsub("^KEGG_|^REACTOME_|^BIOCARTA_", "", rownames(GSVAsco))), 1, 35),
+        labCol="", scale="row",
+        Colv=as.dendrogram(sampleClustering), Rowv=as.dendrogram(geneSetClustering))
+legend("topleft", names(colorLegend), fill=colorLegend, inset=0.01, bg="white")
+dev.off()
+@
+\begin{figure}[ht]
+\centerline{\includegraphics[width=0.7\textwidth]{GSVA-leukemiaHeatmapGeneSets}}
+\caption{Heatmap of differentially activated pathways at \Sexpr{adjPvalueCutoff*100}\% FDR
+in the Leukemia data set.}
+\label{leukemiaHeatmapGeneSets}
+\end{figure}
+
+
+<<leukemiaHeatmapGenes, echo=FALSE, results=hide>>=
+png(filename="GSVA-leukemiaHeatmapGenes.png", width=500, height=500)
+exps <- exprs(leukemia_eset[DEgenes$ID, ])
+colorLegend <- c("darkred", "darkblue")
+names(colorLegend) <- c("ALL", "MLL")
+sample.color.map <- colorLegend[pData(leukemia_eset)[, "subtype"]]
+names(sample.color.map) <- colnames(exps)
+sampleClustering <- hclust(as.dist(1-cor(exps, method="spearman")), method="complete")
+geneClustering <- hclust(as.dist(1-cor(t(exps), method="pearson")), method="complete")
+heatmap(exps, ColSideColors=sample.color.map, xlab="samples", ylab="Genes",
+        labRow="", labCol="", scale="row", Colv=as.dendrogram(sampleClustering),
+         Rowv=as.dendrogram(geneClustering), margins=c(2,2))
+legend("topleft", names(colorLegend), fill=colorLegend, inset=0.01, bg="white")
+dev.off()
+@
+\begin{figure}[ht]
+\centerline{\includegraphics[width=0.7\textwidth]{GSVA-leukemiaHeatmapGenes}}
+\caption{Heatmap of differentially expressed genes with a minimum fold-change of
+\Sexpr{2^logFCcutoff} at \Sexpr{adjPvalueCutoff*100}\% FDR in the leukemia data set.}
+\label{leukemiaHeatmapGenes}
+\end{figure}
+
+
+\subsection{Molecular signature identification}
+
+In \cite{verhaak_integrated_2010} four subtypes of Glioblastoma multiforme
+(GBM) - proneural, classical, neural and mesenchymal - were identified by
+the characterization of distinct gene-level expression patterns. Using eight
+gene-set signatures specific to brain cell types - astrocytes, oligodendrocytes,
+neurons and cultured astroglial cells - derived from murine models by
+\cite{cahoy_transcriptome_2008}, we replicate the analysis of
+\cite{verhaak_integrated_2010} by employing GSVA to transform the gene
+expression measurements into enrichment scores for these eight gene sets, without
+taking the sample subtype grouping into account. We start by loading and giving
+a first glance to the data, which forms part of the \verb+GSVAdata+ package:
+
+<<>>=
+data(gbm_VerhaakEtAl)
+gbm_eset
+head(featureNames(gbm_eset))
+table(gbm_eset$subtype)
+data(brainTxDbSets)
+sapply(brainTxDbSets, length)
+lapply(brainTxDbSets, head)
+@
+GSVA enrichment scores for the gene sets contained in \Robject{brainTxDbSets}
+are calculated, in this case using \Robject{mx.diff=FALSE},  as follows:
+
+<<>>=
+gbm_es <- gsva(gbm_eset, brainTxDbSets, mx.diff=FALSE, verbose=FALSE)$es.obs
+@
+Figure \ref{gbmSignature} shows the GSVA enrichment scores obtained for the
+up-regulated gene sets across the samples of the four GBM subtypes. As expected,
+the \emph{neural} class is associated with the neural gene set and the astrocytic
+gene sets. The \emph{mesenchymal} subtype is characterized by the expression of
+mesenchymal and microglial markers, thus we expect it to correlate with the
+astroglial gene set. The \emph{proneural} subtype shows high expression of
+oligodendrocytic development genes, thus it is not surprising that the
+oligodendrocytic gene set is highly enriched for ths group. Interestingly, the
+\emph{classical} group correlates highly with the astrocytic gene set. In
+summary, the resulting GSVA enrichment scores recapitulate accurately the
+molecular signatures from \cite{verhaak_integrated_2010}.
+
+<<gbmSignature, echo=FALSE, results=hide>>=
+png(filename="GSVA-gbmSignature.png", width=700, height=500)
+subtypeOrder <- c("Proneural", "Neural", "Classical", "Mesenchymal")
+sampleOrderBySubtype <- sort(match(gbm_es$subtype, subtypeOrder), index.return=TRUE)$ix
+subtypeXtable <- table(gbm_es$subtype)
+subtypeColorLegend <- c(Proneural="red", Neural="green", Classical="blue", Mesenchymal="orange")
+geneSetOrder <- c("astroglia_up", "astrocytic_up", "neuronal_up", "oligodendrocytic_up")
+geneSetLabels <- gsub("_", " ", geneSetOrder)
+hmcol <- colorRampPalette(brewer.pal(10, "RdBu"))(256)
+hmcol <- hmcol[length(hmcol):1]
+
+heatmap(exprs(gbm_es)[geneSetOrder, sampleOrderBySubtype], Rowv=NA, Colv=NA,
+        scale="row", margins=c(3,5), col=hmcol,
+		    ColSideColors=rep(subtypeColorLegend[subtypeOrder], times=subtypeXtable[subtypeOrder]),
+				labCol="", gbm_es$subtype[sampleOrderBySubtype],
+        labRow=paste(toupper(substring(geneSetLabels, 1,1)), substring(geneSetLabels, 2), sep=""),
+        cexRow=2, main=" \n ")
+par(xpd=TRUE)
+text(0.22,1.11, "Proneural", col="red", cex=1.2)
+text(0.36,1.11, "Neural", col="green", cex=1.2)
+text(0.48,1.11, "Classical", col="blue", cex=1.2)
+text(0.66,1.11, "Mesenchymal", col="orange", cex=1.2)
+mtext("Gene sets", side=4, line=0, cex=1.5)
+mtext("Samples          ", side=1, line=4, cex=1.5)
+dev.off()
+@
+\begin{figure}
+\centerline{\includegraphics[width=0.6\textwidth]{GSVA-gbmSignature}}
+\caption{Heatmap of GSVA scores for cell-type brain signatures from murine models (y-axis)
+across GBM samples grouped by GBM subtype.}
+\label{gbmSignature}
+\end{figure}
+
+
+
+%========================================================================================
+
+\subsection{Meta-pathway analysis}
+
+In biological systems, pathways do not operate independently and can have diverse
+degrees of cross-talk between them. We call here a meta-pathway analysis the
+identification of pathways that have a highly-coordinated activity but whose gene
+sets have little or no overlap.
+
+For the purpose of simplifying calculations in this vignette, we consider only
+a subset of the C2 MSigDB Gene Sets, concretely those belonging to the KEGG
+pathways:
+
+<<>>=
+KEGGc2BroadSets <- c2BroadSets[grep("^KEGG", names(c2BroadSets))]
+KEGGc2BroadSets
+@
+We calculate GSVA enrichment scores discarding gene sets with less than 10
+genes and more than 500. Note that we do not filter for variability here as
+we are not searching of differential pathway activation and we do not do it
+either for probeset annotations since this step is taken when mapping probesets
+to gene sets:
+
+<<>>=
+leukemiaKEGG_es <- gsva(leukemia_eset, KEGGc2BroadSets, min.sz=10, max.sz=500,
+                        mx.diff=TRUE, verbose=FALSE)$es.obs
+@
+We are interested in those pathways that have little overlap between their sets
+of genes but are highly correlated. For the purpose of applying such a filter
+we need to calculate the fraction of genes that overlap between every pair of
+gene sets which is possible to do through the function
+\verb+computeGeneSetsOverlap()+:
+
+<<>>=
+overlapMatrix <- computeGeneSetsOverlap(KEGGc2BroadSets, leukemia_eset,
+                                        min.sz=10, max.sz=500)
+@
+We can quickly obtain a network of cross-talk associations by calculating
+marginal pairwise correlations, like Pearson correlation coefficients (PCCs),
+and selecting those pairs of pathways that are highly correlated. Here below we
+select pathway associations with an absolute PCC $|\rho| > 0.8$ and a maximum
+gene set overlap of 5\%. We can see the selected pairs forming this network in
+Figure~\ref{fig:LeukemiaPCCnet}.
+
+<<>>=
+pcc <- cor(t(exprs(leukemiaKEGG_es)))
+pcc[overlapMatrix > .05] <- 0
+pcc[lower.tri(pcc)] <- 0
+diag(pcc) <- 0
+arrIdxs <- which(abs(pcc) > 0.8, arr.ind=TRUE)
+
+pccEdges <- data.frame(PWYi=featureNames(leukemiaKEGG_es)[arrIdxs[,1]],
+                       PWYj=featureNames(leukemiaKEGG_es)[arrIdxs[,2]],
+                       PCC=pcc[arrIdxs])
+@
+
+<<leukemiaPCCnet, echo=FALSE, results=hide>>=
+png(filename="GSVA-leukemiaPCCnet.png", width=1100, height=1100, res=150)
+vtc <- unique(as.character(unlist(pccEdges[, c("PWYi", "PWYj")], use.names=FALSE)))
+g2plot <- new("graphNEL", nodes=vtc, edgemode="undirected")
+g2plot <- addEdge(from=as.character(pccEdges[, "PWYi"]),
+                  to=as.character(pccEdges[, "PWYj"]),
+                  graph=g2plot)
+nodlab <- gsub("_", " ", gsub("KEGG_", "", vtc))
+nodlab <- sapply(nodlab, function(x) { v <- unlist(strsplit(x, ' ')) ; t <- ""; l <- 0; for (w in v) { t <- paste(t,w,sep=" ") ; if (nchar(t)-l > 5) { t <- paste(t, "\ \n", sep="") ; l <- nchar(t) } } ; t })
+names(nodlab) <- vtc
+nodeRenderInfo(g2plot) <- list(shape="ellipse", label=nodlab, fill="lightgrey", lwd=2)
+g2plot <- layoutGraph(g2plot, layoutType="twopi")
+renderGraph(g2plot)
+dev.off()
+@
+\begin{figure}[ht]
+\centerline{\includegraphics[width=0.9\textwidth]{GSVA-leukemiaPCCnet}}
+\caption{Network of cross-talk associations between KEGG pathways of the leukemia data set
+obtained by selecting those associations with an absolute value of Pearson correlation
+$|\rho|>0.8$ and a maximum gene set overlap of 5\%.}
+\label{fig:LeukemiaPCCnet}
+\end{figure}
+
+Some of the marginal pairwise associations in Figure~\ref{fig:LeukemiaPCCnet}
+may be spurious, that is, indirectly mediated by other pathways. In order to
+select direct (non-spurious) relationships we have carried out a Gaussian
+graphical modeling (GGM) analysis of the cross-talk associations between
+pathways that follow from the GSVA enrichment score data. A GGM analysis assumes
+that the data forms a multivariate normal sample from a distribution
+$\mathcal{N}(\mu, \Sigma)$ and that the underlying network can be represented by
+an undirected graph $G$ whose missing edges match the pattern of zeroes in the
+inverse covariance matrix $\Sigma^{-1}$ \citep[see][]{Lauritzen_1996}. For this
+purpose we will employ the \Rpackage{qpgraph} library:
+
+<<>>=
+library(qpgraph)
+@
+Since the dimension of the data with $p=$\Sexpr{dim(leukemiaKEGG_es)[1]} and
+$n=$\Sexpr{dim(leukemiaKEGG_es)[2]} precludes the application of classical GGM
+techniques \citep[pg.~126]{Lauritzen_1996} we will follow a limited-order
+correlation based approach described in \citep{Castelo_qpgraph_2006,
+Castelo_qpgraph_2009}. We start by estimating average non-rejection rates
+\citep{Castelo_qpgraph_2009} which are a measure of linear association over all
+marginal distributions of size $(q+2) < n$.
+
+<<>>=
+cache(avgnrr <- qpAvgNrr(leukemiaKEGG_es, verbose=FALSE),
+                         dir=cacheDir, prefix=cachePrefix)
+@
+We do not consider the associations involving those pairs of pathways whose
+gene sets overlap by more than 5\%:
+
+<<>>=
+avgnrr[overlapMatrix > 0.05] <- NA
+@
+By considering some cutoff on the average non-rejection rate we could directly
+obtain an estimated $q$-order partial correlation graph, or qp-graph, denoted by
+$\hat{G}^{(q)}$ and which would constitute an approximation to the underlying
+undirected graph $G$. However, following the model-based strategy proposed in
+\citep{Castelo_qpgraph_2006}, we will first examine the maximum clique size,
+denoted by $w(G)$ and also known as the clique number of $G$, of the possible
+resulting graphs as function of different cutoffs applied to the average
+non-rejection rate. This can be done by using the function \verb+qpClique()+
+whose result is displayed in Figure~\ref{fig:avgnrrcliquenr}
+
+<<avgnrrcliquenr, echo=FALSE, results=hide>>=
+png(filename="GSVA-avgnrrcliquenr.png", width=800, height=800, res=150)
+@
+<<avgnrrcliquenr, echo=TRUE, results=hide>>=
+qpclq <- qpClique(avgnrr, N=dim(leukemiaKEGG_es)[2])
+@
+<<avgnrrcliquenr, echo=FALSE, results=hide>>=
+dev.off()
+@
+\begin{figure}[ht]
+\centerline{\includegraphics[width=0.5\textwidth]{GSVA-avgnrrcliquenr}}
+\caption{Clique number as function of the average non-rejection rate. The red
+line indicates the sample size of the leukemia data set
+($n=$\Sexpr{dim(leukemiaKEGG_es)[2]}) and next to each point the graph density
+is indicated.}
+\label{fig:avgnrrcliquenr}
+\end{figure}
+
+This function also returns the largest cutoff $\beta^*$, among those considered
+in the plot, whose resulting estimated graph $\hat{G}$ has $w(\hat{G}) < n$. In
+this case $\beta^*=$\Sexpr{round(qpclq$threshold, digits=2)} and using this
+cutoff we obtain a resulting qp-graph $\hat{G}^{(q)}$ which has
+$w(\hat{G}^{(q)})=$\Sexpr{qpclq$clqsizeunderN} as shown here below:
+
+<<>>=
+g <- qpGraph(avgnrr, threshold=qpclq$threshold)
+w <- qpCliqueNumber(g, verbose=FALSE)
+w
+@
+Since $w(\hat{G}^{(q)})=$\Sexpr{qpclq$clqsizeunderN} is smaller than
+$n=$\Sexpr{dim(leukemia_eset)[2]} there is a chance that the maximum
+likelihood estimate (MLE) of the sample covariance matrix $S$ exists
+\citep[pg.~133]{Lauritzen_1996}, under the restrictions imposed by the qp-graph
+$\hat{G}^{(q)}$. Once a MLE of $S$ is obtained, its inverse
+$\Sigma^{-1}=K=\{\kappa_{ij}\}$ can be calculated and, therefore, the
+corresponding partial correlation coefficients (PACs) as follows:
+
+\begin{equation}
+\rho_{ij.R}=\frac{-\kappa_{ij}}{\sqrt{\kappa_{ii}\,\kappa_{jj}}}\,\,\,
+\mathrm{where}\,\, R=V\backslash\{i,j\}\,.
+\end{equation}
+Since these PACs come from a MLE of the sample covariance matrix $S$,
+P-values for the null hypothesis of zero partial correlation can be
+calculated following \citep{Roverato_1996}. All these computations can be
+made in one single call to the function \verb+qpPAC()+:
+
+<<>>=
+cache(pac <- qpPAC(leukemiaKEGG_es, g, return.K=TRUE, verbose=FALSE),
+                   dir=cacheDir, prefix=cachePrefix)
+@
+We employ the estimated PACs and their P-values to select a final estimate
+$\hat{G}$ of the underlying undirected graph $G$ whose FWER of including a wrong
+edge is below a desired network-wide significance level. This control of the
+FWER helps in discarding spurious associations with a large marginal strength
+(i.e., a large Pearson correlation) but which in fact are indirectly occurring.
+In this case we select a $\hat{G}$ with FWER < 0.05 using Holm's procedure as
+follows:
+
+<<>>=
+ridx <- row(pac$P)[as.matrix(upper.tri(pac$P) & g)]
+cidx <- col(pac$P)[as.matrix(upper.tri(pac$P) & g)]
+sigEdges <- which(p.adjust(pac$P[cbind(ridx, cidx)], method="holm") < 0.05)
+
+sigEdges <- data.frame(PWYi=colnames(pac$P)[ridx][sigEdges],
+                       PWYj=colnames(pac$P)[cidx][sigEdges],
+                       PAC=pac$R[cbind(ridx, cidx)][sigEdges],
+                       P.value=pac$P[cbind(ridx, cidx)][sigEdges],
+                       PCC=cov2cor(solve(pac$K))[cbind(ridx, cidx)][sigEdges])
+sigEdges <- sigEdges[sort(abs(sigEdges$P.value), index.return=TRUE)$ix, ]
+dim(sigEdges)
+@
+
+<<leukemiaNet, echo=FALSE, results=hide>>=
+png(filename="GSVA-leukemiaNet.png", width=800, height=800, res=150)
+vtc <- unique(as.character(unlist(sigEdges[, c("PWYi", "PWYj")], use.names=FALSE)))
+g2plot <- new("graphNEL", nodes=vtc, edgemode="undirected")
+g2plot <- addEdge(from=as.character(sigEdges[, "PWYi"]),
+                  to=as.character(sigEdges[, "PWYj"]),
+                  graph=g2plot)
+nodlab <- gsub("_", " ", gsub("KEGG_", "", vtc))
+nodlab <- sapply(nodlab, function(x) { v <- unlist(strsplit(x, ' ')) ; t <- ""; l <- 0; for (w in v) { t <- paste(t,w,sep=" ") ; if (nchar(t)-l > 5) { t <- paste(t, "\ \n", sep="") ; l <- nchar(t) } } ; t })
+names(nodlab) <- vtc
+nodeRenderInfo(g2plot) <- list(shape="ellipse", label=nodlab, fill="lightgrey", lwd=2)
+g2plot <- layoutGraph(g2plot, layoutType="neato")
+renderGraph(g2plot)
+dev.off()
+@
+\begin{figure}[ht]
+\centerline{\includegraphics{GSVA-leukemiaNet}}
+\caption{Network of cross-talk associations between KEGG pathways of the leukemia data set
+obtained by a Gaussian graphical modeling approach by which edges are included in the graph
+at a FWER < 0.05.}
+\label{fig:LeukemiaNet}
+\end{figure}
+
+The network shown in Figure~\ref{fig:LeukemiaNet} contains one large
+connected component with the KEGG pathway "One carbon pool by folate" (KEGG ID
+HSA00670) as the most connected node in the network. Folate is an essential
+nutrient that has been shown to play a role in prevention of many diseases
+including neural tube defects, cardiovascular disease, and cancer where genetic
+variation in folate metabolism has been reported to be associated to childhood
+leukemia \citep{pmid11747917}. The genes that form this pathway, and form part
+of the analyzed data set, are:
+
+<<>>=
+ids <- geneIds(c2BroadSets["KEGG_ONE_CARBON_POOL_BY_FOLATE"])[[1]]
+unlist(mget(ids[!is.na(match(ids, unlist(mget(featureNames(leukemia_eset),
+                                              hgu95aENTREZID))))], org.Hs.egSYMBOL),
+       use.names=FALSE)
+@
+Among these genes, a specific polymorphism in {\it MTR} has been shown to be
+associated to an increased risk of ALL which was most pronounced for cases with
+the MLL translocation \citep{lightfoot_folate_pathway_leukemia_2010}.
+
+\section{Session Information}
+
+<<info, results=tex>>=
+toLatex(sessionInfo())
+@
+
+\bibliography{GSVA}
+\bibliographystyle{apalike}
+
+\end{document}

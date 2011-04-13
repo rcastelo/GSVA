@@ -1,0 +1,13 @@
+citHeader("To cite package 'GSVA' in publications use:")
+
+citEntry(entry="Article",
+  author = personList(as.person("Sonja H\"anzelmann"),
+                      as.person("Robert Castelo"),
+                      as.person("Justin Guinney")),
+  title = "GSVA: Gene Set Variation Analysis",
+  journal = "submitted",
+  year = "2011",
+  textVersion = paste("Hanzelmann, S., Castelo, R. and Guinney, A.",
+                      "GSVA: Gene Set Variation Analysis",
+                      "submitted, 2011.")
+)

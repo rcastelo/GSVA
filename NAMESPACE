@@ -1,0 +1,11 @@
+useDynLib(GSVA)
+
+import(methods)
+importClassesFrom(Biobase)
+importClassesFrom(GSEABase)
+importFrom(Biobase, exprs)
+importFrom(Biobase, annotation)
+
+exportMethods("gsva",
+              "filterGeneSets",
+              "computeGeneSetsOverlap")

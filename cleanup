@@ -1,0 +1,7 @@
+rm -f config.*
+
+rm -f src/Makevars
+
+rm -f src/*.o src/*.so
+
+rm -rf autom4te.cache

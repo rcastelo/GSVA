@@ -1,0 +1,30 @@
+===============
+Installing GSVA
+===============
+
+In order to successfully install and run GSVA you need to
+install first the GNU Scientific Library (GSL) which you
+can find in the following URL:
+
+http://www.gnu.org/software/gsl
+
+Once you have installed the GSL, if you have done it
+"system-wide" then you can install GSVA in the usual
+way as with any other Bioconductor package:
+
+biocLite("GSVA")
+
+However, if you have installed the GSL in a non system-wide
+location of you hard disk, you should provide this location
+to biocLite() as follows:
+
+biocLite("GSVA", configure.args="--with-gsl-lib=\"/where/gsl/lib/is\" --with-gsl-include=\"/where/gsl/include/is\"")
+
+If, alternatively, you have downloaded yourself the source
+tarball of GSVA and want to install it from the shell, then
+you should use:
+
+R CMD INSTALL --configure-args="--with-gsl-lib=`R RHOME`/lib --with-gsl-include=`R RHOME`/include" GSVA_X.Y.Z.tar.gz
+
+where X.Y.Z is the corresponding version of GSVA that you have
+actually downloaded.
