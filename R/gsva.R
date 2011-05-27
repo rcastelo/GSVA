@@ -297,7 +297,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, abs.ranking,
       }
 	
 		  m <- t(parSapp(cl, gset.idx.list, ks_test_m, 
-						  gene.density=rank_scores, 
+						  gene.density=rank.scores, 
 						  sort.idxs=sort.sgn.idxs,
 						  mx.diff=mx.diff, verbose=FALSE))
 		  if(verbose)

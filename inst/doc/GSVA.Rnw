@@ -123,17 +123,18 @@ statistic, and samples between the two modes will have $z_{ij}$'s at or near
 zero. Genes with uniform or unimodal population distributions do not preclude
 large negative or positive expression-level statistics, i.e. $x_{ij}$ lying in
 the tail of a distribution. To dampen the effect of potential outliers, the
-expression-level statistics $z_{ij}$ are first converted to a rank statistic
-$z_{(i)j}=p/2 - \textrm{rank}_j(z_{ij})$ for each $j$-th sample, before
-evaluating the enrichment scores.
+expression-level statistics $z_{ij}$ are first converted to ranks $z_{(i)j}$ for
+each $j$-th sample and then these ranks are further normalized into a rank-order
+statistic $r_{ij}=|p - z_{(i)j}+1-p/2|$ to be symmetric around zero, before evaluating
+the enrichment scores.
 
 We assess the enrichment score similarity to the GSEA method
 \cite{subramanian_gene_2005} using a Kolmogorov-Smirnov (K-S)
 like random walk statistic:
 \begin{equation}
 \label{walk}
-\nu_{jk}(\ell) = \frac{\sum_{i=1}^\ell |z_{(i)j}|^{\tau} I(g_{(i)} \in
-\gamma_k)}{\sum_{i=1}^p |z_{(i)j}|^{\tau}I(g_{(i)} \in \gamma_k)} -
+\nu_{jk}(\ell) = \frac{\sum_{i=1}^\ell |r_{ij}|^{\tau} I(g_{(i)} \in
+\gamma_k)}{\sum_{i=1}^p |r_{ij}|^{\tau}I(g_{(i)} \in \gamma_k)} -
 \frac{\sum_{i=1}^\ell I(g_{(i)} \not\in \gamma_k)}{p-|\gamma_k|},
 \end{equation}
 where $\tau$ is a parameter describing the weight of the tail in the
@@ -142,7 +143,12 @@ $I(g_{(i)} \in \gamma_k)$ is the indicator function on whether
 the $i$-th gene (the gene corresponding to the $i$-th ranked
 expression-level statistic) is in gene set $\gamma_k$, $|\gamma_k|$ is
 the number of genes in the $k$-th gene set, and $p$ is the number of
-genes in the data set. 
+genes in the data set. The first term in this equation corresponds to
+the step cumulative distribution function of the $r_{ij}$ rank-order
+statistics of the gene forming gene set $\gamma_k$ throughout the
+ranking $z_{(1)j},\dots,z_{(p)j}$ in sample $j$, while the second term
+corresponds to the step cumulative distribution function of all other
+genes outside $\gamma_k$ throughout this same ranking.
 
 Two approaches are possible for turning the K-S random walk statistic
 into an enrichment score (ES). The first approach is the previously described
@@ -151,23 +157,30 @@ $j$-th sample with respect to the $k$-th gene set is the maximum deviation
 of the random walk from zero:
 \begin{equation}
 \label{escore}
-ES^k_j = \nu_{jk}[\arg \max_{\ell=1,..,p} \left|\nu_{jk}(\ell)\right|].
+ES_{jk}^{\mbox{\tiny{max}}} = \nu_{jk}[\arg \max_{\ell=1,..,p} \left|\nu_{jk}(\ell)\right|].
 \end{equation}
 For each gene set $k$, this approach produces a distribution of enrichment
-scores that is bi-modal.  Within the supervised paradigm, a ``normalized''
+scores that is bi-modal. Within the supervised paradigm, a ``normalized''
 enrichment score could be obtained via a permutation of the phenotypic labels;
 since we are operating without labels, we propose a second approach that
-produces an ES distribution that is approximately \textit{normal}:
+produces an ES distribution that is unimodal:
 
 \begin{equation}
 \label{escore_2}
-ES^k_j = \mbox{max}(0, \nu_{jk}(1),\ldots,\nu_{jk}(p)) + \mbox{min}(0,\nu_{jk}(1),\ldots,\nu_{jk}(p))
+ES_{jk}^{\mbox{\tiny{diff}}} = \left|ES^{+}_{jk}\right| - \left|ES^{-}_{jk}\right|=\max_{\ell=1,\dots,p}(0,\nu_{jk}(\ell)) - \min_{\ell=1,\dots,p}(0,\nu_{jk}(\ell))\,,
 \end{equation}
+where $ES^{+}_{jk}$ and $ES^{-}_{jk}$ are the largest positive and negative
+random walk deviations from zero, respectively, for sample $j$ and gene set $k$.
 This approach takes the magnitude difference between the largest positive and
 negative random walk deviations, and has the effect of dampening out large
 enrichment scores if there is both a large positive and negative deviation in
-the random walk. For analyses that require an enrichment score distribution
-approximately normal, we recommend this alternative method.
+the random walk. This approach emphasizes genes in pathways that are concordantly
+activated in one direction only, i.e. over-expressed or under-expressed relative
+to the overall population. For pathways with genes strongly acting in both
+directions, the deviations will cancel each other out and show negligible enrichment.
+Also, because this statistic is unimodal (and through our own experimental
+observations, approximately normal), this statistic lends itself to downstream
+analyses which may impose distributional assumptions on the data.
 
 \section{Overview of the package}
 
@@ -449,10 +462,7 @@ The signatures of both, the differentially activated pathways reported by the
 GSVA analysis and of the differentially expressed genes are shown in Figures
 \ref{leukemiaHeatmapGeneSets} and \ref{leukemiaHeatmapGenes}, respectively.
 The gene sets and pathways reported in Figure~\ref{leukemiaHeatmapGeneSets}
-include many directly related to the ALL and MLL leukemias and, among the rest,
-we could highlight, for instance, the Lysosome gene set since lysosomal
-enzyme abnormalities have been reported to be involved in leukemias
-\citep{Besley_lysosomes_leukemia_1983}.
+include many directly related to the ALL and MLL leukemias.
 
 <<leukemiaHeatmapGeneSets, echo=FALSE, results=hide>>=
 png(filename="GSVA-leukemiaHeatmapGeneSets.png", width=500, height=500)
@@ -644,7 +654,8 @@ nodlab <- gsub("_", " ", gsub("KEGG_", "", vtc))
 nodlab <- sapply(nodlab, function(x) { v <- unlist(strsplit(x, ' ')) ; t <- ""; l <- 0; for (w in v) { t <- paste(t,w,sep=" ") ; if (nchar(t)-l > 5) { t <- paste(t, "\ \n", sep="") ; l <- nchar(t) } } ; t })
 names(nodlab) <- vtc
 nodeRenderInfo(g2plot) <- list(shape="ellipse", label=nodlab, fill="lightgrey", lwd=2)
-g2plot <- layoutGraph(g2plot, layoutType="twopi")
+edgeRenderInfo(g2plot) <- list(lwd=2)
+g2plot <- layoutGraph(g2plot, layoutType="neato")
 renderGraph(g2plot)
 dev.off()
 @
@@ -676,10 +687,13 @@ techniques \citep[pg.~126]{Lauritzen_1996} we will follow a limited-order
 correlation based approach described in \citep{Castelo_qpgraph_2006,
 Castelo_qpgraph_2009}. We start by estimating average non-rejection rates
 \citep{Castelo_qpgraph_2009} which are a measure of linear association over all
-marginal distributions of size $(q+2) < n$.
+marginal distributions of size $(q+2) < n$. Given the limited sample size
+$n=$\Sexpr{dim(leukemiaKEGG_es)[2]}, we will employ all possible $q$ orders,
+as in \citep{Castelo_qpgraph_2009}.
 
 <<>>=
-cache(avgnrr <- qpAvgNrr(leukemiaKEGG_es, verbose=FALSE),
+cache(avgnrr <- qpAvgNrr(leukemiaKEGG_es, qOrders=1:(dim(leukemiaKEGG_es)[2]-3),
+                         verbose=FALSE),
                          dir=cacheDir, prefix=cachePrefix)
 @
 We do not consider the associations involving those pairs of pathways whose
@@ -702,7 +716,7 @@ whose result is displayed in Figure~\ref{fig:avgnrrcliquenr}
 png(filename="GSVA-avgnrrcliquenr.png", width=800, height=800, res=150)
 @
 <<avgnrrcliquenr, echo=TRUE, results=hide>>=
-qpclq <- qpClique(avgnrr, N=dim(leukemiaKEGG_es)[2])
+qpclq <- qpClique(avgnrr, N=dim(leukemiaKEGG_es)[2], breaks=10)
 @
 <<avgnrrcliquenr, echo=FALSE, results=hide>>=
 dev.off()
@@ -781,6 +795,7 @@ nodlab <- gsub("_", " ", gsub("KEGG_", "", vtc))
 nodlab <- sapply(nodlab, function(x) { v <- unlist(strsplit(x, ' ')) ; t <- ""; l <- 0; for (w in v) { t <- paste(t,w,sep=" ") ; if (nchar(t)-l > 5) { t <- paste(t, "\ \n", sep="") ; l <- nchar(t) } } ; t })
 names(nodlab) <- vtc
 nodeRenderInfo(g2plot) <- list(shape="ellipse", label=nodlab, fill="lightgrey", lwd=2)
+edgeRenderInfo(g2plot) <- list(lwd=2)
 g2plot <- layoutGraph(g2plot, layoutType="neato")
 renderGraph(g2plot)
 dev.off()
@@ -793,14 +808,14 @@ at a FWER < 0.05.}
 \label{fig:LeukemiaNet}
 \end{figure}
 
-The network shown in Figure~\ref{fig:LeukemiaNet} contains one large
-connected component with the KEGG pathway "One carbon pool by folate" (KEGG ID
-HSA00670) as the most connected node in the network. Folate is an essential
-nutrient that has been shown to play a role in prevention of many diseases
-including neural tube defects, cardiovascular disease, and cancer where genetic
-variation in folate metabolism has been reported to be associated to childhood
-leukemia \citep{pmid11747917}. The genes that form this pathway, and form part
-of the analyzed data set, are:
+The resulting network is shown in Figure~\ref{fig:LeukemiaNet}. Among the selected cross-talk
+associations, the one between "Mismatch repair" (KEGG ID KO03430) and "One carbon pool by folate"
+(KEGG ID HSA00670) is quite relevant in the context of these data. Folate is an essential
+nutrient for basic processes as the synthesis, repair and methylation of DNA and which has been
+shown to play a role in prevention of many diseases including neural tube defects,
+cardiovascular disease, and cancer where genetic variation in folate metabolism has been reported
+to be associated to childhood leukemia \citep{pmid11747917}. The genes that form this pathway,
+and form part of the analyzed data set, are:
 
 <<>>=
 ids <- geneIds(c2BroadSets["KEGG_ONE_CARBON_POOL_BY_FOLATE"])[[1]]
