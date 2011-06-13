@@ -1,2 +1,2 @@
-PKG_LIBS += -L$(GSL_LIB) -lgsl -lgslcblas -lm
-PKG_CFLAGS += -I$(RHOME)/src/include -I$(GSL_INC)
+PKG_LIBS += -L$(LIB_GSL)$(R_ARCH)/lib -lgsl -lgslcblas -lm
+PKG_CFLAGS += -I$(RHOME)/src/include -I$(LIB_GSL)$(R_ARCH)/include
