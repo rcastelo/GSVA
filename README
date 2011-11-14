@@ -9,9 +9,10 @@ http://www.gnu.org/software/gsl
 
 Follow the link to the FTP site and download the lastest tar ball or,
 in any case, one with version >= 1.12, for instance, to your
-'Desktop' directory. Then go to the shell and type the following
-instruccions for a system-wide installation (assuming the tar ball
-has name 'gsl-1.15.tar.gz':
+'Desktop' directory. Then go to the shell (in a Mac computer you need
+to open the Terminal window program under the Applications/Utilities
+folder) and type the following instruccions for a system-wide installation
+(assuming the tar ball has name 'gsl-1.15.tar.gz':
 
 $ cd Desktop
 $ gzip -cd gsl-1.15.tar.gz | tar xvf -
@@ -53,8 +54,17 @@ Windows users
 
 In order to successfully install and run GSVA in a Windows
 system you need to install first the GNU Scientific Library
-(GSL) which, in the case of windows, you should download from
-the following URL:
+(GSL) which, in the case of windows, can be done in two ways,
+from the GNUWIN32 site and from the CYGWIN site. Each option
+requires slightly different configuration steps. Either is
+equally good for having GSVA running under windows and the choice
+is more a matter of whether incidentally you already have one of
+the two installed in your windows machine. If not, just take any
+of them.
+
+** GNUWIN32
+
+You should download the GNUWIN32 GSL from:
 
 http://gnuwin32.sourceforge.net/packages/gsl.htm
 
@@ -72,7 +82,7 @@ C:\Program Files\GnuWin32\bin
 and copy the file 'libgsl.dll' into 'libgsl-0.dll'. Then add the path
 where these files are located to your PATH environment variable by
 right-clicking on the "My PC" icon, select "Properties", go to the
-"Advanced" tab, clic on "Environment variables", select "Path" on the
+"Advanced" tab, click on "Environment variables", select "Path" on the
 "Environment variables" box, click on "Modify", and add to the end of
 the current string:
 
@@ -82,6 +92,44 @@ then press 'Ok' through out all previously opened dialog boxes and
 you should be able to install GSVA in the usual way as with any other
 Bioconductor package by writting the following instructions in the
 R shell:
+
+source("http://www.bioconductor.org/biocLite.R")
+biocLite("GSVA")
+
+
+** CYGWIN
+
+You should have first Cygwin installed from:
+
+http://cygwin.com
+
+and follow the instructions to further install the GSL CYGWIN package.
+Write down where the root of the GSL installation is in your hard disk.
+Let's assume this path is C:\GSL. You should add an environment variable
+called LIB_GSL that points to the root of this GSL installation, thus
+setting in this example the value C:/GSL. Note that this path should be
+set with slashes '/' instead of backslashes '\'. Then add the path
+
+C:/GSL/i383/bin
+
+to your PATH environment variable if your windows installation is 32bit
+and add
+
+C:/GSL/x64/bin
+
+instead to your PATH environment variable if your windows installation
+is 64bit.
+
+You can add and modify environment variables by right-clicking on the
+"My PC" icon, select "Properties", go to the "Advanced" tab and click
+on "Environment variables" where you'll be able to add and/or modify
+these variables. Remember to separate paths of the filesystem with
+a semicolon ';'.
+
+Once the environment variables are set you should press 'Ok' through
+all previously opened dialog boxes and you should be able to install GSVA
+in the usual way as with any other Bioconductor package by writting the
+following instructions in the R shell:
 
 source("http://www.bioconductor.org/biocLite.R")
 biocLite("GSVA")
