@@ -279,6 +279,7 @@ library(Biobase)
 library(genefilter)
 library(limma)
 library(RColorBrewer)
+library(RBGL)
 library(graph)
 library(Rgraphviz)
 library(GSVA)
@@ -370,7 +371,7 @@ the argument \Robject{mx.diff} to its default \Robject{TRUE} value.
 
 <<>>=
 cache(leukemia_es <- gsva(leukemia_filtered_eset, c2BroadSets,
-                           min.sz=10, max.sz=500, verbose=FALSE)$es.obs,
+                           min.sz=10, max.sz=500, verbose=TRUE)$es.obs,
                            dir=cacheDir, prefix=cachePrefix)
 @
 
@@ -601,8 +602,10 @@ a subset of the C2 MSigDB Gene Sets, concretely those belonging to the KEGG
 pathways:
 
 <<>>=
-KEGGc2BroadSets <- c2BroadSets[grep("^KEGG", names(c2BroadSets))]
-KEGGc2BroadSets
+canonicalC2BroadSets <- c2BroadSets[c(grep("^KEGG", names(c2BroadSets)),
+                                      grep("^REACTOME", names(c2BroadSets)),
+                                      grep("^BIOCARTA", names(c2BroadSets)))]
+canonicalC2BroadSets
 @
 We calculate GSVA enrichment scores discarding gene sets with less than 10
 genes and more than 500. Note that we do not filter for variability here as
@@ -611,8 +614,9 @@ either for probeset annotations since this step is taken when mapping probesets
 to gene sets:
 
 <<>>=
-leukemiaKEGG_es <- gsva(leukemia_eset, KEGGc2BroadSets, min.sz=10, max.sz=500,
-                        mx.diff=TRUE, verbose=FALSE)$es.obs
+cache(leukemia_canonicalPwy_es <- gsva(leukemia_eset, canonicalC2BroadSets,
+       min.sz=10, max.sz=500, mx.diff=TRUE, verbose=TRUE)$es.obs,
+       dir=cacheDir, prefix=cachePrefix)
 @
 We are interested in those pathways that have little overlap between their sets
 of genes but are highly correlated. For the purpose of applying such a filter
@@ -621,56 +625,17 @@ gene sets which is possible to do through the function
 \verb+computeGeneSetsOverlap()+:
 
 <<>>=
-overlapMatrix <- computeGeneSetsOverlap(KEGGc2BroadSets, leukemia_eset,
+overlapMatrix <- computeGeneSetsOverlap(canonicalC2BroadSets, leukemia_eset,
                                         min.sz=10, max.sz=500)
 @
-We can quickly obtain a network of cross-talk associations by calculating
+We could quickly obtain a network of cross-talk associations by calculating
 marginal pairwise correlations, like Pearson correlation coefficients (PCCs),
-and selecting those pairs of pathways that are highly correlated. Here below we
-select pathway associations with an absolute PCC $|\rho| > 0.8$ and a maximum
-gene set overlap of 5\%. We can see the selected pairs forming this network in
-Figure~\ref{fig:LeukemiaPCCnet}.
+and selecting those pairs of pathways that are highly correlated. However,
+potentially many of the marginal pairwise associations could be spurious,
+that is, indirectly mediated by other pathways.
 
-<<>>=
-pcc <- cor(t(exprs(leukemiaKEGG_es)))
-pcc[overlapMatrix > .05] <- 0
-pcc[lower.tri(pcc)] <- 0
-diag(pcc) <- 0
-arrIdxs <- which(abs(pcc) > 0.8, arr.ind=TRUE)
-
-pccEdges <- data.frame(PWYi=featureNames(leukemiaKEGG_es)[arrIdxs[,1]],
-                       PWYj=featureNames(leukemiaKEGG_es)[arrIdxs[,2]],
-                       PCC=pcc[arrIdxs])
-@
-
-<<leukemiaPCCnet, echo=FALSE, results=hide>>=
-png(filename="GSVA-leukemiaPCCnet.png", width=1100, height=1100, res=150)
-vtc <- unique(as.character(unlist(pccEdges[, c("PWYi", "PWYj")], use.names=FALSE)))
-g2plot <- new("graphNEL", nodes=vtc, edgemode="undirected")
-g2plot <- addEdge(from=as.character(pccEdges[, "PWYi"]),
-                  to=as.character(pccEdges[, "PWYj"]),
-                  graph=g2plot)
-nodlab <- gsub("_", " ", gsub("KEGG_", "", vtc))
-nodlab <- sapply(nodlab, function(x) { v <- unlist(strsplit(x, ' ')) ; t <- ""; l <- 0; for (w in v) { t <- paste(t,w,sep=" ") ; if (nchar(t)-l > 5) { t <- paste(t, "\ \n", sep="") ; l <- nchar(t) } } ; t })
-names(nodlab) <- vtc
-nodeRenderInfo(g2plot) <- list(shape="ellipse", label=nodlab, fill="lightgrey", lwd=2)
-edgeRenderInfo(g2plot) <- list(lwd=2)
-g2plot <- layoutGraph(g2plot, layoutType="neato")
-renderGraph(g2plot)
-dev.off()
-@
-\begin{figure}[ht]
-\centerline{\includegraphics[width=0.9\textwidth]{GSVA-leukemiaPCCnet}}
-\caption{Network of cross-talk associations between KEGG pathways of the leukemia data set
-obtained by selecting those associations with an absolute value of Pearson correlation
-$|\rho|>0.8$ and a maximum gene set overlap of 5\%.}
-\label{fig:LeukemiaPCCnet}
-\end{figure}
-
-Some of the marginal pairwise associations in Figure~\ref{fig:LeukemiaPCCnet}
-may be spurious, that is, indirectly mediated by other pathways. In order to
-select direct (non-spurious) relationships we have carried out a Gaussian
-graphical modeling (GGM) analysis of the cross-talk associations between
+In order to select direct (non-spurious) relationships we have carried out a
+Gaussian graphical modeling (GGM) analysis of the cross-talk associations between
 pathways that follow from the GSVA enrichment score data. A GGM analysis assumes
 that the data forms a multivariate normal sample from a distribution
 $\mathcal{N}(\mu, \Sigma)$ and that the underlying network can be represented by
@@ -681,71 +646,68 @@ purpose we will employ the \Rpackage{qpgraph} library:
 <<>>=
 library(qpgraph)
 @
-Since the dimension of the data with $p=$\Sexpr{dim(leukemiaKEGG_es)[1]} and
-$n=$\Sexpr{dim(leukemiaKEGG_es)[2]} precludes the application of classical GGM
+Since the dimension of the data with $p=$\Sexpr{dim(leukemia_canonicalPwy_es)[1]} and
+$n=$\Sexpr{dim(leukemia_canonicalPwy_es)[2]} precludes the application of classical GGM
 techniques \citep[pg.~126]{Lauritzen_1996} we will follow a limited-order
 correlation based approach described in \citep{Castelo_qpgraph_2006,
 Castelo_qpgraph_2009}. We start by estimating average non-rejection rates
 \citep{Castelo_qpgraph_2009} which are a measure of linear association over all
 marginal distributions of size $(q+2) < n$. Given the limited sample size
-$n=$\Sexpr{dim(leukemiaKEGG_es)[2]}, we will employ all possible $q$ orders,
+$n=$\Sexpr{dim(leukemia_canonicalPwy_es)[2]}, we will employ all possible $q$ orders,
 as in \citep{Castelo_qpgraph_2009}.
 
 <<>>=
-cache(avgnrr <- qpAvgNrr(leukemiaKEGG_es, qOrders=1:(dim(leukemiaKEGG_es)[2]-3),
-                         verbose=FALSE),
-                         dir=cacheDir, prefix=cachePrefix)
+cache(gennrr <- qpGenNrr(leukemia_canonicalPwy_es, datasetIdx="subtype",
+                         qOrders=c(ALL=15, MLL=12),
+                         identicalQs=FALSE, clusterSize=2)$genNrr,
+      dir=cacheDir, prefix=cachePrefix)
 @
 We do not consider the associations involving those pairs of pathways whose
 gene sets overlap by more than 5\%:
 
 <<>>=
-avgnrr[overlapMatrix > 0.05] <- NA
+gennrr[overlapMatrix > 0.05] <- NA
 @
 By considering some cutoff on the average non-rejection rate we could directly
 obtain an estimated $q$-order partial correlation graph, or qp-graph, denoted by
 $\hat{G}^{(q)}$ and which would constitute an approximation to the underlying
 undirected graph $G$. However, following the model-based strategy proposed in
-\citep{Castelo_qpgraph_2006}, we will first examine the maximum clique size,
-denoted by $w(G)$ and also known as the clique number of $G$, of the possible
-resulting graphs as function of different cutoffs applied to the average
-non-rejection rate. This can be done by using the function \verb+qpClique()+
-whose result is displayed in Figure~\ref{fig:avgnrrcliquenr}
+\citep{Castelo_qpgraph_2006}, we will first examine the maximum boundary size,
+denoted by $bd(G)$, of the possible resulting graphs as function of different
+cutoffs applied to the non-rejection rates. This can be done by using the
+function \verb+qpBoundary()+ whose result is displayed in
+Figure~\ref{fig:gennrrcliquenr}
 
-<<avgnrrcliquenr, echo=FALSE, results=hide>>=
-png(filename="GSVA-avgnrrcliquenr.png", width=800, height=800, res=150)
-@
-<<avgnrrcliquenr, echo=TRUE, results=hide>>=
-qpclq <- qpClique(avgnrr, N=dim(leukemiaKEGG_es)[2], breaks=10)
-@
-<<avgnrrcliquenr, echo=FALSE, results=hide>>=
+<<gennrrmaxbd, echo=FALSE, results=hide>>=
+png(filename="GSVA-gennrrmaxbd.png", width=800, height=800, res=150)
+qpbd <- qpBoundary(gennrr, N=ncol(leukemia_canonicalPwy_es), breaks=20)
 dev.off()
 @
 \begin{figure}[ht]
-\centerline{\includegraphics[width=0.5\textwidth]{GSVA-avgnrrcliquenr}}
-\caption{Clique number as function of the average non-rejection rate. The red
+\centerline{\includegraphics[width=0.5\textwidth]{GSVA-gennrrmaxbd}}
+\caption{Maximum boundary as function of non-rejection rate cutoffs. The red
 line indicates the sample size of the leukemia data set
-($n=$\Sexpr{dim(leukemiaKEGG_es)[2]}) and next to each point the graph density
+($n=$\Sexpr{dim(leukemia_canonicalPwy_es)[2]}) and next to each point the graph density
 is indicated.}
-\label{fig:avgnrrcliquenr}
+\label{fig:gennrrcliquenr}
 \end{figure}
 
 This function also returns the largest cutoff $\beta^*$, among those considered
-in the plot, whose resulting estimated graph $\hat{G}$ has $w(\hat{G}) < n$. In
-this case $\beta^*=$\Sexpr{round(qpclq$threshold, digits=2)} and using this
+in the plot, whose resulting estimated graph $\hat{G}$ has $bd(\hat{G}) < n$. In
+this case $\beta^*=$\Sexpr{round(qpbd$threshold, digits=2)} and using this
 cutoff we obtain a resulting qp-graph $\hat{G}^{(q)}$ which has
-$w(\hat{G}^{(q)})=$\Sexpr{qpclq$clqsizeunderN} as shown here below:
+$bd(\hat{G}^{(q)})=$\Sexpr{qpbd$bdsizeunderN} as shown here below:
 
 <<>>=
-g <- qpGraph(avgnrr, threshold=qpclq$threshold)
-w <- qpCliqueNumber(g, verbose=FALSE)
-w
+g <- qpGraph(gennrr, threshold=qpbd$threshold, return.type="graphNEL")
+g
+max(degree(g))
 @
-Since $w(\hat{G}^{(q)})=$\Sexpr{qpclq$clqsizeunderN} is smaller than
+Since $bd(\hat{G}^{(q)})=$\Sexpr{qpbd$bdsizeunderN} is smaller than
 $n=$\Sexpr{dim(leukemia_eset)[2]} there is a chance that the maximum
 likelihood estimate (MLE) of the sample covariance matrix $S$ exists
-\citep[pg.~133]{Lauritzen_1996}, under the restrictions imposed by the qp-graph
-$\hat{G}^{(q)}$. Once a MLE of $S$ is obtained, its inverse
+\citep[pg.~133]{Lauritzen_1996}, under the restrictions imposed by the
+qp-graph $\hat{G}^{(q)}$. Once a MLE of $S$ is obtained, its inverse
 $\Sigma^{-1}=K=\{\kappa_{ij}\}$ can be calculated and, therefore, the
 corresponding partial correlation coefficients (PACs) as follows:
 
@@ -755,66 +717,157 @@ corresponding partial correlation coefficients (PACs) as follows:
 \end{equation}
 Since these PACs come from a MLE of the sample covariance matrix $S$,
 P-values for the null hypothesis of zero partial correlation can be
-calculated following \citep{Roverato_1996}. All these computations can be
-made in one single call to the function \verb+qpPAC()+:
+calculated following \citep{Roverato_1996}. All these computations can
+be made in one single call to the function \verb+qpPAC()+:
 
 <<>>=
-cache(pac <- qpPAC(leukemiaKEGG_es, g, return.K=TRUE, verbose=FALSE),
-                   dir=cacheDir, prefix=cachePrefix)
+pac <- qpPAC(leukemia_canonicalPwy_es, g, return.K=TRUE, tol=0.01,
+             verbose=FALSE)
 @
 We employ the estimated PACs and their P-values to select a final estimate
-$\hat{G}$ of the underlying undirected graph $G$ whose FWER of including a wrong
-edge is below a desired network-wide significance level. This control of the
-FWER helps in discarding spurious associations with a large marginal strength
-(i.e., a large Pearson correlation) but which in fact are indirectly occurring.
-In this case we select a $\hat{G}$ with FWER < 0.05 using Holm's procedure as
-follows:
+$\hat{G}$ of the underlying undirected graph $G$ whose FDR of wrongly included
+edges is below a desired network-wide significance level. This FDR control at
+network-wide level helps in discarding spurious associations with a large marginal
+strength (i.e., a large Pearson correlation coefficient) but which in fact are
+indirectly occurring. Note below that PCCs are not directly estimated from the data
+but by scaling the MLE of the sample covariance matrix, obtaining in this way more
+precise estimates of the PCCs.
 
 <<>>=
-ridx <- row(pac$P)[as.matrix(upper.tri(pac$P) & g)]
-cidx <- col(pac$P)[as.matrix(upper.tri(pac$P) & g)]
-sigEdges <- which(p.adjust(pac$P[cbind(ridx, cidx)], method="holm") < 0.05)
+gAM <- qpGraph(gennrr, threshold=qpbd$threshold)
+ridx <- row(pac$P)[as.matrix(upper.tri(pac$P) & gAM)]
+cidx <- col(pac$P)[as.matrix(upper.tri(pac$P) & gAM)]
 
-sigEdges <- data.frame(PWYi=colnames(pac$P)[ridx][sigEdges],
-                       PWYj=colnames(pac$P)[cidx][sigEdges],
-                       PAC=pac$R[cbind(ridx, cidx)][sigEdges],
-                       P.value=pac$P[cbind(ridx, cidx)][sigEdges],
-                       PCC=cov2cor(solve(pac$K))[cbind(ridx, cidx)][sigEdges])
-sigEdges <- sigEdges[sort(abs(sigEdges$P.value), index.return=TRUE)$ix, ]
+allEdges <- data.frame(PWYi=colnames(pac$P)[ridx],
+                       PWYj=colnames(pac$P)[cidx],
+                       PAC=pac$R[cbind(ridx, cidx)],
+                       PAC.P.value=pac$P[cbind(ridx, cidx)],
+                       PAC.adj.P.value=p.adjust(pac$P[cbind(ridx, cidx)], method="fdr"),
+                       PCC=cov2cor(solve(pac$K))[cbind(ridx, cidx)])
+
+allEdges <- allEdges[sort(allEdges$PAC.adj.P.value, index.return=TRUE)$ix, ]
+dim(allEdges)
+@
+From the \Sexpr{dim(allEdges)[1]} associations we will select those with an
+absolute PCC larger than 0.7 and whose PAC P-value leads to a network-wide FDR
+below 10\% in order to avoid selecting spurious associations.
+
+<<>>=
+sigEdges <- allEdges[which(allEdges$PAC.adj.P.value < 0.1 & abs(allEdges$PCC) > 0.7) , ]
 dim(sigEdges)
+@
+Using these significant edges we build a \Rclass{graphNEL} object representing this
+network:
+
+<<>>=
+vtc <- unique(as.character(unlist(sigEdges[, c("PWYi", "PWYj")], use.names=FALSE)))
+g <- new("graphNEL", nodes=vtc, edgemode="undirected")
+g <- addEdge(from=as.character(sigEdges[, "PWYi"]),
+             to=as.character(sigEdges[, "PWYj"]),
+             graph=g)
+g
 @
 
 <<leukemiaNet, echo=FALSE, results=hide>>=
 png(filename="GSVA-leukemiaNet.png", width=800, height=800, res=150)
-vtc <- unique(as.character(unlist(sigEdges[, c("PWYi", "PWYj")], use.names=FALSE)))
-g2plot <- new("graphNEL", nodes=vtc, edgemode="undirected")
-g2plot <- addEdge(from=as.character(sigEdges[, "PWYi"]),
-                  to=as.character(sigEdges[, "PWYj"]),
-                  graph=g2plot)
-nodlab <- gsub("_", " ", gsub("KEGG_", "", vtc))
+nodlab <- gsub("_", " ", gsub("KEGG_|REACTOME_|BIOCARTA_", "", vtc))
 nodlab <- sapply(nodlab, function(x) { v <- unlist(strsplit(x, ' ')) ; t <- ""; l <- 0; for (w in v) { t <- paste(t,w,sep=" ") ; if (nchar(t)-l > 5) { t <- paste(t, "\ \n", sep="") ; l <- nchar(t) } } ; t })
 names(nodlab) <- vtc
-nodeRenderInfo(g2plot) <- list(shape="ellipse", label=nodlab, fill="lightgrey", lwd=2)
-edgeRenderInfo(g2plot) <- list(lwd=2)
-g2plot <- layoutGraph(g2plot, layoutType="neato")
-renderGraph(g2plot)
+nodeRenderInfo(g) <- list(shape="ellipse", label=nodlab, fill="lightgrey", lwd=1)
+edgeRenderInfo(g) <- list(lwd=1)
+g <- layoutGraph(g, layoutType="fdp")
+renderGraph(g)
 dev.off()
 @
 \begin{figure}[ht]
 \centerline{\includegraphics{GSVA-leukemiaNet}}
-\caption{Network of cross-talk associations between KEGG pathways of the leukemia data set
-obtained by a Gaussian graphical modeling approach by which edges are included in the graph
-at a FWER < 0.05.}
+\caption{Network of cross-talk associations between Broad C2 canonical pathways
+         of the leukemia data set obtained by a Gaussian graphical modeling approach
+         by which edges are included in the graph with a minimum absolute PCC > 0.7
+         at a FDR < 10\%.}
 \label{fig:LeukemiaNet}
 \end{figure}
 
-The resulting network is shown in Figure~\ref{fig:LeukemiaNet}. Among the selected cross-talk
-associations, the one between "Mismatch repair" (KEGG ID KO03430) and "One carbon pool by folate"
-(KEGG ID HSA00670) is quite relevant in the context of these data. Folate is an essential
-nutrient for basic processes as the synthesis, repair and methylation of DNA and which has been
-shown to play a role in prevention of many diseases including neural tube defects,
-cardiovascular disease, and cancer where genetic variation in folate metabolism has been reported
-to be associated to childhood leukemia \citep{pmid11747917}. The genes that form this pathway,
+The network is divided in connected components of the following sizes:
+
+<<>>=
+cct <- table(listLen(connComp(g)))
+cct
+@
+Thus, there is \Sexpr{cct[which.max(as.integer(names(cct)))]} very large connected
+component of \Sexpr{max(as.integer(names(cct)))} pathways in which we are going to focus. In order to dissect the larger component of \Sexpr{max(as.integer(names(cct)))} pathways, we are going to look to its degree distribution:
+
+<<>>=
+vtcCCmax <- connComp(g)[[which(sapply(connComp(g), length) == max(as.integer(names(cct))))]]
+gCCmax <- subGraph(vtcCCmax, g)
+gCCmax
+table(degree(gCCmax))
+@
+We can observe that 4 pathways, representing less than 3\% of the total, have a
+connectivity degree higher than 5. Concretely, the one with highest degree is connected
+to 12 other pathways, then two are connected to 7 and one is connected to 6. These
+highly-connected pathways are the following:
+
+<<>>=
+sort(degree(gCCmax), decreasing=TRUE)[1:4]
+@
+We are going to display the subnetwork formed by these highly-connected pathways and
+the ones adjacent to them in this large connected component. We start by extracting the
+corresponding subgraph:
+
+<<>>=
+vtcHubNet <- names(sort(degree(gCCmax), decreasing=TRUE)[1:4])
+pairs <- combn(vtcHubNet, 2)
+sp <- sp.between(gCCmax, pairs[1, ], pairs[2, ])
+vtcInShortestPaths <- unlist(sapply(sp, function(x) x$path_detail), use.names=FALSE)
+vtcHubNet <- unique(c(vtcHubNet,
+                      unlist(boundary(vtcHubNet, gCCmax), use.names=FALSE),
+                      vtcInShortestPaths))
+gHubNet <- subGraph(vtcHubNet, gCCmax)
+gHubNet
+@
+
+<<selectedGGMhighDeg, fig=TRUE, include=FALSE, height=4, width=4>>=
+nodlab <- gsub("_", " ", gsub("KEGG_|REACTOME_|BIOCARTA_", "", vtcHubNet))
+nodlab <- sapply(nodlab, function(x) { v <- unlist(strsplit(x, ' ')) ; t <- ""; l <- 0; for (w in v) { t <- paste(t,w,sep=" ") ; if (nchar(t)-l > 5) { t <- paste(t, "\ \n", sep="") ; l <- nchar(t) } } ; t })
+names(nodlab) <- vtcHubNet
+nodeRenderInfo(gHubNet) <- list(shape="ellipse", label=nodlab, fill="lightgrey", lwd=1)
+edgeRenderInfo(gHubNet) <- list(lwd=1)
+gHubNet <- layoutGraph(gHubNet, layoutType="fdp")
+renderGraph(gHubNet)
+@
+\begin{figure}[p]
+\centerline{\includegraphics[height=\textheight]{GSVA-selectedGGMhighDeg}}
+\caption{Network of cross-talk associations between Broad C2 canonical pathways
+         of the leukemia data set obtained by a Gaussian graphical modeling approach
+         by which edges are included in the graph with a minimum absolute PCC > 0.7
+         at a FDR < 10\%. The displayed network only includes edges connecting the
+         4 hub genes with highest degree and their interaction partners.}
+\label{fig:selectedGGMhighDeg}
+\end{figure}
+
+The resulting network is shown in Figure~\ref{fig:selectedGGMhighDeg}. The gene sets connected by
+the meta-pathway analysis show a clear structure, forming four distinct groups with each having a
+hub gene set. The gene sets surrounding each hub gene set are functionally related to each other
+and associated with cancer. Most of the gene sets are related to genome stability, cell cycle and
+cell proliferation, have an effect on the regulation of cell differentiation processes, and pertain
+to the escape of apotosis. Also, the members of the \textit{NUCLEAR RECEPTOR TRANSCRIPTION PATHWAY}
+-estrogen receptors, retinoic acid receptor and nuclear receptors- have been indicated as potential
+drug targets in disease \cite{gronemeyer_principles_2004}. Among them, Nr4a3 and Nr4a1 are proteins
+whose function is not very well understood. However, they have been implicated as tumor suppressors
+in myeloid leukemogenesis \cite{mullican_abrogation_2007}. Also, the decreased expression of retinoic
+acid receptor $\alpha$ plays a role in leukemogenesis \cite{glasow_dna_2008}. In fact, a recent
+review enumerating all genes known to be involved in MLL, includes nuclear-, retinoic acid- and
+estrogen receptors \cite{ansari_mixed_2010}. The \textit{FGFR LIGAND BINDING AND ACTIVATION} pathway
+contains members of the fibroblast growth factor family which are involved in oncogenic mechanisms
+\cite{turner_fibroblast_2010} and have been investigated as therapeutic targets
+\cite{greulich_targeting_2011}.
+
+Another gene set that comes to attention is \textit{ONE CARBON POOL BY FOLATE} because it is not
+directly associated with proliferation or mitosis. However, folate is an essential nutrient that
+has been shown to play a role in prevention of many diseases including neural tube defects,
+cardiovascular disease, and cancer. Genetic variation in folate metabolism has been reported to be
+associated with childhood leukemia \cite{thompson_maternal_2001}. The genes that form this pathway,
 and form part of the analyzed data set, are:
 
 <<>>=
@@ -823,9 +876,10 @@ unlist(mget(ids[!is.na(match(ids, unlist(mget(featureNames(leukemia_eset),
                                               hgu95aENTREZID))))], org.Hs.egSYMBOL),
        use.names=FALSE)
 @
-Among these genes, a specific polymorphism in {\it MTR} has been shown to be
-associated to an increased risk of ALL which was most pronounced for cases with
-the MLL translocation \citep{lightfoot_folate_pathway_leukemia_2010}.
+Among the genes forming this KEGG pathway, there is the 5-methyltetrahydrofolate-homocysteine
+methyltransferase {\it MTR} gene that encodes an enzyme that catalyzes the final step in methionine
+biosynthesis and has been associated to an increased risk of ALL which was most pronounced for cases
+with the \textit{MLL} translocation \cite{lightfoot_genetic_2010}.
 
 \section{Session Information}
 

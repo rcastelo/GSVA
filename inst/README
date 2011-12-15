@@ -1,3 +1,7 @@
+The GSVA package calls functions from the GNU Scientific Library
+and this README file discusses several steps to be taken to make
+sure that this library is available to GSVA when installing it.
+
 Unix/Mac users
 ==============
 
@@ -52,9 +56,20 @@ biocLite("GSVA")
 Windows users
 =============
 
-In order to successfully install and run GSVA in a Windows
-system you need to install first the GNU Scientific Library
-(GSL) which, in the case of windows, can be done in two ways,
+If you install the binary GSVA package for Windows that is available
+through the Bioconductor website, then nothing needs to be done next
+to a standard installation as a Bioconductor package, i.e.:
+
+source("http://www.bioconductor.org/biocLite.R")
+biocLite("GSVA")
+
+since the binary GSVA package at Bioconductor already contains the
+necessary GNU Scientific Library functions statically linked in the
+package.
+
+If you want to install the package from source (not recommended for
+standard users), then you need to install first the GNU Scientific
+Library (GSL) which, in the case of windows, can be done in two ways,
 from the GNUWIN32 site and from the CYGWIN site. Each option
 requires slightly different configuration steps. Either is
 equally good for having GSVA running under windows and the choice
