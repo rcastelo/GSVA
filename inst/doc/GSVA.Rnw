@@ -129,7 +129,7 @@ statistic $r_{ij}=|p - z_{(i)j}+1-p/2|$ to be symmetric around zero, before eval
 the enrichment scores.
 
 We assess the enrichment score similarity to the GSEA method
-\cite{subramanian_gene_2005} using a Kolmogorov-Smirnov (K-S)
+\citep{subramanian_gene_2005} using a Kolmogorov-Smirnov (K-S)
 like random walk statistic:
 \begin{equation}
 \label{walk}
@@ -152,7 +152,7 @@ genes outside $\gamma_k$ throughout this same ranking.
 
 Two approaches are possible for turning the K-S random walk statistic
 into an enrichment score (ES). The first approach is the previously described
-maximum deviation method \cite{subramanian_gene_2005} where the ES for the
+maximum deviation method \citep{subramanian_gene_2005} where the ES for the
 $j$-th sample with respect to the $k$-th gene set is the maximum deviation
 of the random walk from zero:
 \begin{equation}
@@ -377,7 +377,7 @@ cache(leukemia_es <- gsva(leukemia_filtered_eset, c2BroadSets,
 
 Here we show how to employ GSVA to identify gene sets that are differentially
 activated for a single dichotomous phenotype. We use the MSigDB C2 version 3.0
-database of gene sets \cite{subramanian_gene_2005} of curated pathways. We test
+database of gene sets \citep{subramanian_gene_2005} of curated pathways. We test
 whether there is a difference between the GSVA enrichment scores from each pair
 of phenotypes using a simple linear model and moderated t-statistics computed by
 the \verb+limma+ package using an empirical Bayes shrinkage method
@@ -515,13 +515,13 @@ dev.off()
 
 \subsection{Molecular signature identification}
 
-In \cite{verhaak_integrated_2010} four subtypes of Glioblastoma multiforme
+In \citep{verhaak_integrated_2010} four subtypes of Glioblastoma multiforme
 (GBM) - proneural, classical, neural and mesenchymal - were identified by
 the characterization of distinct gene-level expression patterns. Using eight
 gene-set signatures specific to brain cell types - astrocytes, oligodendrocytes,
 neurons and cultured astroglial cells - derived from murine models by
-\cite{cahoy_transcriptome_2008}, we replicate the analysis of
-\cite{verhaak_integrated_2010} by employing GSVA to transform the gene
+\citep{cahoy_transcriptome_2008}, we replicate the analysis of
+\citep{verhaak_integrated_2010} by employing GSVA to transform the gene
 expression measurements into enrichment scores for these eight gene sets, without
 taking the sample subtype grouping into account. We start by loading and giving
 a first glance to the data, which forms part of the \verb+GSVAdata+ package:
@@ -551,7 +551,7 @@ oligodendrocytic development genes, thus it is not surprising that the
 oligodendrocytic gene set is highly enriched for ths group. Interestingly, the
 \emph{classical} group correlates highly with the astrocytic gene set. In
 summary, the resulting GSVA enrichment scores recapitulate accurately the
-molecular signatures from \cite{verhaak_integrated_2010}.
+molecular signatures from \citet{verhaak_integrated_2010}.
 
 <<gbmSignature, echo=FALSE, results=hide>>=
 png(filename="GSVA-gbmSignature.png", width=700, height=500)
@@ -595,11 +595,12 @@ across GBM samples grouped by GBM subtype.}
 In biological systems, pathways do not operate independently and can have diverse
 degrees of cross-talk between them. We call here a meta-pathway analysis the
 identification of pathways that have a highly-coordinated activity but whose gene
-sets have little or no overlap.
+sets have little or no overlap. We apply here this type of analysis to the leukemia
+data set we previously analyzed for differential pathway activation.
 
-For the purpose of simplifying calculations in this vignette, we consider only
-a subset of the C2 MSigDB Gene Sets, concretely those belonging to the KEGG
-pathways:
+For this analysis we consider the subset of canonical pathways from the C2
+collection of MSigDB Gene Sets. These correspond to the following pathways from
+KEGG, REACTOME and BIOCARTA:
 
 <<>>=
 canonicalC2BroadSets <- c2BroadSets[c(grep("^KEGG", names(c2BroadSets)),
@@ -640,21 +641,27 @@ pathways that follow from the GSVA enrichment score data. A GGM analysis assumes
 that the data forms a multivariate normal sample from a distribution
 $\mathcal{N}(\mu, \Sigma)$ and that the underlying network can be represented by
 an undirected graph $G$ whose missing edges match the pattern of zeroes in the
-inverse covariance matrix $\Sigma^{-1}$ \citep[see][]{Lauritzen_1996}. For this
-purpose we will employ the \Rpackage{qpgraph} library:
+inverse covariance matrix $\Sigma^{-1}$ \citep[see][]{Lauritzen_1996}. Since the
+dimension of the data with $p=$\Sexpr{dim(leukemia_canonicalPwy_es)[1]} and
+$n=$\Sexpr{dim(leukemia_canonicalPwy_es)[2]} precludes the application of classical
+GGM techniques \citep[pg.~126]{Lauritzen_1996} we will follow a limited-order
+correlation based approach described in \citep{Castelo_qpgraph_2006,
+Castelo_qpgraph_2009} and implemented in the Bioconductor package \Rpackage{qpgraph}:
 
 <<>>=
 library(qpgraph)
 @
-Since the dimension of the data with $p=$\Sexpr{dim(leukemia_canonicalPwy_es)[1]} and
-$n=$\Sexpr{dim(leukemia_canonicalPwy_es)[2]} precludes the application of classical GGM
-techniques \citep[pg.~126]{Lauritzen_1996} we will follow a limited-order
-correlation based approach described in \citep{Castelo_qpgraph_2006,
-Castelo_qpgraph_2009}. We start by estimating average non-rejection rates
-\citep{Castelo_qpgraph_2009} which are a measure of linear association over all
-marginal distributions of size $(q+2) < n$. Given the limited sample size
-$n=$\Sexpr{dim(leukemia_canonicalPwy_es)[2]}, we will employ all possible $q$ orders,
-as in \citep{Castelo_qpgraph_2009}.
+In this approach one calculates a measure of linear association over all marginal
+distributions of size $(q+2) < n$, called the non-rejection rate \citep{Castelo_qpgraph_2006}.
+However, the stratification of samples into the two leukemia subtypes ALL and MLL
+introduces a covariate which could be confounding the estimated linear associations.
+In order to take into account this structure on the data we can employ the so-called
+generalized non-rejection rate \citep{Roverato_gnrr_2010}, which aims at identifying
+associations that are common through multiple data sets or experimental conditions,
+thus taking into account the structure of the data. We calculate generalized
+non-rejection rates using $q=15$ for ALL and $q=12$ for MLL, i.e., $q=n-5$ in each
+condition:
+
 
 <<>>=
 cache(gennrr <- qpGenNrr(leukemia_canonicalPwy_es, datasetIdx="subtype",
@@ -668,7 +675,7 @@ gene sets overlap by more than 5\%:
 <<>>=
 gennrr[overlapMatrix > 0.05] <- NA
 @
-By considering some cutoff on the average non-rejection rate we could directly
+By considering some cutoff on the generalized non-rejection rate we could directly
 obtain an estimated $q$-order partial correlation graph, or qp-graph, denoted by
 $\hat{G}^{(q)}$ and which would constitute an approximation to the underlying
 undirected graph $G$. However, following the model-based strategy proposed in
@@ -687,8 +694,8 @@ dev.off()
 \centerline{\includegraphics[width=0.5\textwidth]{GSVA-gennrrmaxbd}}
 \caption{Maximum boundary as function of non-rejection rate cutoffs. The red
 line indicates the sample size of the leukemia data set
-($n=$\Sexpr{dim(leukemia_canonicalPwy_es)[2]}) and next to each point the graph density
-is indicated.}
+($n=$\Sexpr{dim(leukemia_canonicalPwy_es)[2]}) and next to each point the graph
+density is indicated.}
 \label{fig:gennrrcliquenr}
 \end{figure}
 
@@ -750,7 +757,7 @@ dim(allEdges)
 @
 From the \Sexpr{dim(allEdges)[1]} associations we will select those with an
 absolute PCC larger than 0.7 and whose PAC P-value leads to a network-wide FDR
-below 10\% in order to avoid selecting spurious associations.
+below 10\%:
 
 <<>>=
 sigEdges <- allEdges[which(allEdges$PAC.adj.P.value < 0.1 & abs(allEdges$PCC) > 0.7) , ]
@@ -795,7 +802,10 @@ cct <- table(listLen(connComp(g)))
 cct
 @
 Thus, there is \Sexpr{cct[which.max(as.integer(names(cct)))]} very large connected
-component of \Sexpr{max(as.integer(names(cct)))} pathways in which we are going to focus. In order to dissect the larger component of \Sexpr{max(as.integer(names(cct)))} pathways, we are going to look to its degree distribution:
+component of \Sexpr{max(as.integer(names(cct)))} pathways in which we are going to focus
+our analysis. In order to dissect the larger component of
+\Sexpr{max(as.integer(names(cct)))} pathways, we are going to look to its degree
+distribution:
 
 <<>>=
 vtcCCmax <- connComp(g)[[which(sapply(connComp(g), length) == max(as.integer(names(cct))))]]
@@ -804,15 +814,14 @@ gCCmax
 table(degree(gCCmax))
 @
 We can observe that 4 pathways, representing less than 3\% of the total, have a
-connectivity degree higher than 5. Concretely, the one with highest degree is connected
-to 12 other pathways, then two are connected to 7 and one is connected to 6. These
-highly-connected pathways are the following:
+connectivity degree higher than \Sexpr{sort(degree(gCCmax), decreasing=TRUE)[5]}.
+These highly-connected pathways are the following:
 
 <<>>=
 sort(degree(gCCmax), decreasing=TRUE)[1:4]
 @
-We are going to display the subnetwork formed by these highly-connected pathways and
-the ones adjacent to them in this large connected component. We start by extracting the
+We are going to display the subnetwork formed by these highly-connected pathways, the
+paths that connect them and their interacting partners. We start by extracting the
 corresponding subgraph:
 
 <<>>=
@@ -826,6 +835,22 @@ vtcHubNet <- unique(c(vtcHubNet,
 gHubNet <- subGraph(vtcHubNet, gCCmax)
 gHubNet
 @
+The resulting network is shown in Figure~\ref{fig:selectedGGMhighDeg}. The gene sets connected by
+the meta-pathway analysis show a clear structure, forming four distinct groups with each having a
+hub gene set. The gene sets surrounding each hub gene set are functionally related to each other
+and associated with cancer. Most of the gene sets are related to genome stability, cell cycle and
+cell proliferation, have an effect on the regulation of cell differentiation processes, and pertain
+to the escape of apotosis. Also, the members of the \textit{NUCLEAR RECEPTOR TRANSCRIPTION PATHWAY}
+-estrogen receptors, retinoic acid receptor and nuclear receptors- have been indicated as potential
+drug targets in disease \citep{gronemeyer_principles_2004}. Among them, Nr4a3 and Nr4a1 are proteins
+whose function is not very well understood. However, they have been implicated as tumor suppressors
+in myeloid leukemogenesis \citep{mullican_abrogation_2007}. Also, the decreased expression of retinoic
+acid receptor $\alpha$ plays a role in leukemogenesis \citep{glasow_dna_2008}. In fact, a recent
+review enumerating all genes known to be involved in MLL, includes nuclear-, retinoic acid- and
+estrogen receptors \citep{ansari_mixed_2010}. The \textit{FGFR LIGAND BINDING AND ACTIVATION} pathway
+contains members of the fibroblast growth factor family which are involved in oncogenic mechanisms
+\citep{turner_fibroblast_2010} and have been investigated as therapeutic targets
+\citep{greulich_targeting_2011}.
 
 <<selectedGGMhighDeg, fig=TRUE, include=FALSE, height=4, width=4>>=
 nodlab <- gsub("_", " ", gsub("KEGG_|REACTOME_|BIOCARTA_", "", vtcHubNet))
@@ -846,28 +871,11 @@ renderGraph(gHubNet)
 \label{fig:selectedGGMhighDeg}
 \end{figure}
 
-The resulting network is shown in Figure~\ref{fig:selectedGGMhighDeg}. The gene sets connected by
-the meta-pathway analysis show a clear structure, forming four distinct groups with each having a
-hub gene set. The gene sets surrounding each hub gene set are functionally related to each other
-and associated with cancer. Most of the gene sets are related to genome stability, cell cycle and
-cell proliferation, have an effect on the regulation of cell differentiation processes, and pertain
-to the escape of apotosis. Also, the members of the \textit{NUCLEAR RECEPTOR TRANSCRIPTION PATHWAY}
--estrogen receptors, retinoic acid receptor and nuclear receptors- have been indicated as potential
-drug targets in disease \cite{gronemeyer_principles_2004}. Among them, Nr4a3 and Nr4a1 are proteins
-whose function is not very well understood. However, they have been implicated as tumor suppressors
-in myeloid leukemogenesis \cite{mullican_abrogation_2007}. Also, the decreased expression of retinoic
-acid receptor $\alpha$ plays a role in leukemogenesis \cite{glasow_dna_2008}. In fact, a recent
-review enumerating all genes known to be involved in MLL, includes nuclear-, retinoic acid- and
-estrogen receptors \cite{ansari_mixed_2010}. The \textit{FGFR LIGAND BINDING AND ACTIVATION} pathway
-contains members of the fibroblast growth factor family which are involved in oncogenic mechanisms
-\cite{turner_fibroblast_2010} and have been investigated as therapeutic targets
-\cite{greulich_targeting_2011}.
-
 Another gene set that comes to attention is \textit{ONE CARBON POOL BY FOLATE} because it is not
 directly associated with proliferation or mitosis. However, folate is an essential nutrient that
 has been shown to play a role in prevention of many diseases including neural tube defects,
 cardiovascular disease, and cancer. Genetic variation in folate metabolism has been reported to be
-associated with childhood leukemia \cite{thompson_maternal_2001}. The genes that form this pathway,
+associated with childhood leukemia \citep{thompson_maternal_2001}. The genes that form this pathway,
 and form part of the analyzed data set, are:
 
 <<>>=
@@ -879,7 +887,7 @@ unlist(mget(ids[!is.na(match(ids, unlist(mget(featureNames(leukemia_eset),
 Among the genes forming this KEGG pathway, there is the 5-methyltetrahydrofolate-homocysteine
 methyltransferase {\it MTR} gene that encodes an enzyme that catalyzes the final step in methionine
 biosynthesis and has been associated to an increased risk of ALL which was most pronounced for cases
-with the \textit{MLL} translocation \cite{lightfoot_genetic_2010}.
+with the \textit{MLL} translocation \citep{lightfoot_genetic_2010}.
 
 \section{Session Information}
 

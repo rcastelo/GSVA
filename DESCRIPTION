@@ -1,6 +1,6 @@
 Package: GSVA
-Version: 1.3.4
-Date: 2011-12-15
+Version: 1.3.5
+Date: 2011-12-16
 Title: Gene Set Variation Analysis
 Author: Justin Guinney <justin.guinney@sagebase.org> (with contributions from Robert Castelo <robert.castelo@upf.edu> and Sonja Haenzelmann <shanzelmann@imim.es)
 Maintainer: Justin Guinney <justin.guinney@sagebase.org>
