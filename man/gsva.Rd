@@ -1,8 +1,9 @@
 \name{gsva}
 \alias{gsva}
-\alias{gsva,ExpressionSet,list-method}
-\alias{gsva,ExpressionSet,GeneSetCollection-method}
-\alias{gsva,matrix,list-method}
+\alias{gsva,ExpressionSet,list,missing-method}
+\alias{gsva,ExpressionSet,GeneSetCollection,missing-method}
+\alias{gsva,matrix,GeneSetCollection,character-method}
+\alias{gsva,matrix,list,missing-method}
 
 \title{
 Gene Set Variation Analysis
@@ -11,7 +12,8 @@ Gene Set Variation Analysis
 Estimates GSVA enrichment scores.
 }
 \usage{
-\S4method{gsva}{ExpressionSet,list}(expr, gset.idx.list,
+\S4method{gsva}{ExpressionSet,list,missing}(expr, gset.idx.list, annotation=NULL,
+    rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
@@ -21,7 +23,8 @@ Estimates GSVA enrichment scores.
     parallel.type="SOCK",
     verbose=TRUE,
     mx.diff=TRUE)
-\S4method{gsva}{ExpressionSet,GeneSetCollection}(expr, gset.idx.list,
+\S4method{gsva}{ExpressionSet,GeneSetCollection,missing}(expr, gset.idx.list, annotation=NULL,
+    rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
@@ -31,7 +34,19 @@ Estimates GSVA enrichment scores.
     parallel.type="SOCK",
     verbose=TRUE,
     mx.diff=TRUE)
-\S4method{gsva}{matrix,list}(expr, gset.idx.list,
+\S4method{gsva}{matrix,GeneSetCollection,character}(expr, gset.idx.list, annotation=NA,
+    rnaseq=FALSE,
+    abs.ranking=FALSE,
+    min.sz=1,
+    max.sz=Inf,
+    no.bootstraps=0,
+    bootstrap.percent = .632,
+    parallel.sz=0,
+    parallel.type="SOCK",
+    verbose=TRUE,
+    mx.diff=TRUE)
+\S4method{gsva}{matrix,list,missing}(expr, gset.idx.list, annotation=NULL,
+    rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
@@ -47,10 +62,19 @@ Estimates GSVA enrichment scores.
   \item{expr}{Gene expression data which can be given either as an \code{ExpressionSet}
               object or as a matrix of expression values where rows correspond
               to genes and columns correspond to samples.}
+  \item{annotation}{In the case of calling \code{gsva()} with expression data in a \code{matrix}
+                    and gene sets as a \code{GeneSetCollection} object, the \code{annotation} argument
+                    can be used to supply the name of the Bioconductor package that contains
+                    annotations for the class of gene identifiers occurring in the row names of
+                    the expression data matrix. By default \code{annotation=NULL} which implies that
+                    \code{gsva()} will try to match the identifiers in \code{expr} to the identifiers
+                    in \code{gset.idx.list} just as they are.}
   \item{gset.idx.list}{Gene sets provided either as a \code{list} object or as a
                        \code{GeneSetCollection} object.}
+  \item{rnaseq}{Flag to inform whether the input gene expression data comes from microarray
+                (\code{rnaseq=FALSE}, default) or RNA-Seq (\code{rnaseq=TRUE}) experiments.}
   \item{abs.ranking}{Flag to determine whether genes should be ranked according to 
-  					their sign (flag=FALSE) or by absolute value (flag=TRUE). 
+  					their sign (\code{abs.ranking=FALSE}) or by absolute value (\code{abs.ranking=TRUE}). 
   					In the latter, pathways with genes enriched on either extreme
   					(high or low) will be regarded as 'highly' activated. }
   \item{min.sz}{Minimum size of the resulting gene sets.}
@@ -58,8 +82,8 @@ Estimates GSVA enrichment scores.
   \item{no.bootstraps}{Number of bootstrap iterations to perform.}
   \item{bootstrap.percent}{.632 is the ideal percent samples bootstrapped.}
   \item{parallel.sz}{Number of processors to use when doing the calculations in parallel.
-                     This requires to previously load either the \code{multicore} or the
-                     \code{snow} library. If \code{multicore} is loaded and this argument
+                     This requires to previously load either the \code{parallel} or the
+                     \code{snow} library. If \code{parallel} is loaded and this argument
                      is left with its default value (\code{parallel.sz=0}) then it will use
                      all available core processors unless we set this argument with a
                      smaller number. If \code{snow} is loaded then we must set this argument

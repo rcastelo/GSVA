@@ -3,10 +3,11 @@
 ## purpose: main function of the package which estimates activity
 ##          scores for each given gene-set
 
-setGeneric("gsva", function(expr, gset.idx.list, ...) standardGeneric("gsva"))
+setGeneric("gsva", function(expr, gset.idx.list, annotation=NULL, ...) standardGeneric("gsva"))
 
-setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
-          function(expr, gset.idx.list,
+setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list", annotation="missing"),
+          function(expr, gset.idx.list, annotation=NULL,
+  rnaseq=FALSE,
   abs.ranking=FALSE,
   min.sz=1,
   max.sz=Inf,
@@ -28,7 +29,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
-  eSco <- GSVA:::.gsva(Biobase::exprs(expr), mapped.gset.idx.list, abs.ranking,
+  eSco <- GSVA:::.gsva(Biobase::exprs(expr), mapped.gset.idx.list, rnaseq, abs.ranking,
                        no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
                        verbose, mx.diff)
   eScoEset <- expr
@@ -40,8 +41,9 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
               p.vals.sign=eSco$p.vals.sign))
 })
 
-setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollection"),
-          function(expr, gset.idx.list,
+setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollection", annotation="missing"),
+          function(expr, gset.idx.list, annotation=NULL,
+  rnaseq=FALSE,
   abs.ranking=FALSE,
   min.sz=1,
   max.sz=Inf,
@@ -70,7 +72,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
-  eSco <- GSVA:::.gsva(Biobase::exprs(expr), mapped.gset.idx.list, abs.ranking,
+  eSco <- GSVA:::.gsva(Biobase::exprs(expr), mapped.gset.idx.list, rnaseq, abs.ranking,
                        no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
                        verbose, mx.diff)
   eScoEset <- expr
@@ -82,8 +84,48 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
               p.vals.sign=eSco$p.vals.sign))
 })
 
-setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
-          function(expr, gset.idx.list,
+setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", annotation="character"),
+          function(expr, gset.idx.list, annotation=NA,
+  rnaseq=FALSE,
+  abs.ranking=FALSE,
+  min.sz=1,
+  max.sz=Inf,
+  no.bootstraps=0, 
+  bootstrap.percent = .632, 
+  parallel.sz=0, 
+  parallel.type="SOCK",
+  verbose=TRUE,
+  mx.diff=TRUE)
+{
+  if (verbose)
+    cat("Mapping identifiers between gene sets and feature names\n")
+
+  ## map gene identifiers of the gene sets to the features in the matrix
+  mapped.gset.idx.list <- gset.idx.list
+  if (!is.na(annotation))
+    mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
+                                           AnnotationIdentifier(annotation))
+  
+  ## map to the actual features for which expression data is available
+  tmp <- lapply(geneIds(mapped.gset.idx.list),
+                                 function(x, y) na.omit(match(x, y)),
+                                 rownames(expr))
+  names(tmp) <- names(mapped.gset.idx.list)
+
+  ## remove gene sets from the analysis for which no features are available
+  ## and meet the minimum and maximum gene-set size specified by the user
+  mapped.gset.idx.list <- filterGeneSets(tmp,
+                                         min.sz=max(1, min.sz),
+                                         max.sz=max.sz)
+
+  GSVA:::.gsva(expr, mapped.gset.idx.list, rnaseq, abs.ranking,
+               no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
+               verbose, mx.diff)
+})
+
+setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="missing"),
+          function(expr, gset.idx.list, annotation=NULL,
+  rnaseq=FALSE,
   abs.ranking=FALSE,
   min.sz=1,
   max.sz=Inf,
@@ -104,12 +146,13 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
-  GSVA:::.gsva(expr, mapped.gset.idx.list, abs.ranking, no.bootstraps,
+  GSVA:::.gsva(expr, mapped.gset.idx.list, rnaseq, abs.ranking, no.bootstraps,
                bootstrap.percent, parallel.sz, parallel.type,
                verbose, mx.diff)
 })
 
 .gsva <- function(expr, gset.idx.list,
+  rnaseq=FALSE,
   abs.ranking=FALSE,
   no.bootstraps=0, 
   bootstrap.percent = .632, 
@@ -143,7 +186,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 	if (verbose)
     cat("Computing observed enrichment scores\n")
 	es.obs <- compute.geneset.es(expr, gset.idx.list, 1:n.samples,
-                               abs.ranking,parallel.sz,
+                               rnaseq, abs.ranking,parallel.sz,
                                parallel.type,verbose=verbose, mx.diff=mx.diff)
 	
 	# es.bootstraps -> n.gset by n.samples by n.resamples
@@ -191,7 +234,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 				if(verbose) cat("bootstrap cycle ", i, "\n")
 				r <- clEvalQ(cl, compute.geneset.es(expr, gset.idx.list, 
 								sample(n.samples, bootstrap.nsamples, replace=T),
-								abs.ranking))
+								rnaseq, abs.ranking))
 				for(j in 1:length(r)){
 					es.bootstraps[,,(parallel.sz * (i-1) + j)] <- r[[j]]
 				}	
@@ -202,7 +245,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 			for(i in 1:no.bootstraps){
 				es.bootstraps[,,i] <- compute.geneset.es(expr, gset.idx.list,
 						sample(n.samples, bootstrap.nsamples, replace=T),
-						abs.ranking)
+						rnaseq, abs.ranking)
 			}
 		}
 	
@@ -228,29 +271,35 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 }
 
 
-compute.gene.density <- function(expr, sample.idxs){
+compute.gene.density <- function(expr, sample.idxs, rnaseq=FALSE){
 	n.test.samples <- ncol(expr)
 	n.genes <- nrow(expr)
 	n.density.samples <- length(sample.idxs)
 	
-	A = .C("assess_matrix_density_R",
+	A = .C("matrix_density_R",
 			as.double(t(expr[,sample.idxs])),
 			as.double(t(expr)),
 			R = double(n.test.samples * n.genes),
 			n.density.samples,
 			n.test.samples,
-			n.genes)$R
+			n.genes,
+      as.integer(rnaseq))$R
 	
 	gene.density <- t(matrix(A, n.test.samples, n.genes))
 	return (gene.density)	
 }
 
-compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, abs.ranking,
-                               parallel.sz=0, parallel.type="SOCK",
+compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
+                               abs.ranking, parallel.sz=0, parallel.type="SOCK",
                                verbose=FALSE, mx.diff){
 	num_genes <- nrow(expr)
-	if(verbose) cat("Computing gene densities\n")
-	gene.density <- compute.gene.density(expr, sample.idxs)
+	if (verbose) {
+    if (rnaseq)
+      cat("Estimating ECDFs in rnaseq data with Poisson kernels\n")
+    else
+      cat("Estimating ECDFs in microarray data with Gaussian kernels\n")
+  }
+	gene.density <- compute.gene.density(expr, sample.idxs, rnaseq)
 	
 	compute_rank_score <- function(sort_idx_vec){
 		tmp <- rep(0, num_genes)
@@ -267,15 +316,15 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, abs.ranking,
 	
 	rank.scores <- apply(sort.sgn.idxs, 2, compute_rank_score)
 	
-	haveMulticore <- GSVA:::.isPackageLoaded("multicore")
+	haveParallel <- GSVA:::.isPackageLoaded("parallel")
 	haveSnow <- GSVA:::.isPackageLoaded("snow")
 	
-	if(parallel.sz > 0 || haveMulticore) {
-		if(!haveMulticore && !haveSnow) {
-			stop("In order to run calculations in parallel either the 'snow', or the 'multicore' library, should be loaded first")
+	if(parallel.sz > 0 || haveParallel) {
+		if(!haveParallel && !haveSnow) {
+			stop("In order to run calculations in parallel either the 'snow', or the 'parallel' library, should be loaded first")
 		}
 
-    if (!haveMulticore) {  ## use snow
+    if (!haveParallel) {  ## use snow
       ## copying ShortRead's strategy, the calls to the 'get()' are
       ## employed to quieten R CMD check, and for no other reason
       makeCl <- get("makeCluster", mode="function")
@@ -304,10 +353,10 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, abs.ranking,
         cat("Cleaning up\n")
 		  stopCl(cl)
 
-    } else {             ## use multicore
+    } else {             ## use parallel
 
-      mclapp <- get('mclapply', envir=getNamespace('multicore'))
-      detCor <- get('detectCores', envir=getNamespace('multicore'))
+      mclapp <- get('mclapply', envir=getNamespace('parallel'))
+      detCor <- get('detectCores', envir=getNamespace('parallel'))
       nCores <- detCor()
       options(cores=nCores)
       if (parallel.sz > 0 && parallel.sz < nCores)
@@ -315,7 +364,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, abs.ranking,
 
       pb <- NULL
       if (verbose){
-        cat("Using multicore with", getOption("cores"), "cores\n")
+        cat("Using parallel with", getOption("cores"), "cores\n")
         assign("progressBar", txtProgressBar(style=3), envir=globalenv()) ## show progress if verbose=TRUE
         assign("nGeneSets", ceiling(length(gset.idx.list) / getOption("cores")), envir=globalenv())
         assign("iGeneSet", 0, envir=globalenv())
