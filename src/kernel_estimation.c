@@ -1,10 +1,13 @@
+/*
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <gsl/gsl_math.h>
-#include <gsl/gsl_statistics.h>
-#include <gsl/gsl_cdf.h>
+*/
+#include <R.h>
+#include <Rinternals.h>
+#include <Rmath.h>
+#include <R_ext/Rdynload.h>
 
 /**
  * X <- possibly bootstrapped samples for density distribution
@@ -23,24 +26,50 @@ double precomputedCdf(double x, double sigma);
 double precomputed_cdf[PRECOMPUTE_RESOLUTION+1];
 int is_precomputed = 0;
 
+/* calculates standard deviation, largely borrowed from C code in R's src/main/cov.c */
+double sd(double* x, int n) {
+  int         i, n1;
+  double      mean, sd;
+  long double sum = 0.0;
+  long double tmp;
+
+  for (i=0; i < n; i++)
+    sum += x[i];
+  tmp = sum / n;
+  if (R_FINITE((double) tmp)) {
+    sum = 0.0;
+    for (i=0; i < n; i++)
+      sum += x[i] - tmp;
+    tmp = tmp + sum / n;
+  }
+  mean = tmp;
+  n1 = n - 1;
+
+  sum = 0.0;
+  for (i=0; i < n; i++)
+    sum += (x[i] - mean) * (x[i] - mean);
+  sd = sqrt((double) (sum / ((long double) n1)));
+
+  return(sd);
+}
+
 /**
  * for resampling, x are the resampled points and y are the
  */
 void row_d(double* x, double* y, double* r, int size_density_n, int size_test_n, int rnaseq){
 
-	double bw = rnaseq ? 0.5 : (gsl_stats_sd(x, 1, size_density_n) / SIGMA_FACTOR);
-	if(is_precomputed == 0){
-		initCdfs();
-		is_precomputed = 1;
-	}
+  double bw = rnaseq ? 0.5 : (sd(x, size_density_n) / SIGMA_FACTOR);
+
+  if (!rnaseq && is_precomputed == 0) {
+    initCdfs();
+    is_precomputed = 1;
+  }
 
 	for(int j = 0; j < size_test_n; ++j){
 		double left_tail = 0.0;
 
 		for(int i = 0; i < size_density_n; ++i){
-			//if(i==j) continue; // skip self
-			//left_tail += gsl_cdf_gaussian_P(y[j]-x[i], bw);
-			left_tail += rnaseq ? gsl_cdf_poisson_P(y[j], x[i]+bw) : precomputedCdf(y[j]-x[i], bw);
+			left_tail += rnaseq ? ppois(y[j], x[i]+bw, TRUE, FALSE) : precomputedCdf(y[j]-x[i], bw);
 		}
 		left_tail = left_tail / size_density_n;
 		r[j] = -1.0 * log((1.0-left_tail)/left_tail);
@@ -79,7 +108,8 @@ inline double precomputedCdf(double x, double sigma){
 void initCdfs(void){
 	double divisor = PRECOMPUTE_RESOLUTION * 1.0;
 	for(int i = 0; i <= PRECOMPUTE_RESOLUTION; ++i)
-		precomputed_cdf[i] = gsl_cdf_ugaussian_P(MAX_PRECOMPUTE * i / divisor);
+    precomputed_cdf[i] = pnorm5(MAX_PRECOMPUTE * ((double) i) / divisor, 0.0, 1.0, TRUE, FALSE);
+                         /* standard normal distribution function, lower.tail=TRUE, log.p=FALSE */
 }
 
 

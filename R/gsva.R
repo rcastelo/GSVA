@@ -97,14 +97,15 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", an
   verbose=TRUE,
   mx.diff=TRUE)
 {
-  if (verbose)
-    cat("Mapping identifiers between gene sets and feature names\n")
-
   ## map gene identifiers of the gene sets to the features in the matrix
   mapped.gset.idx.list <- gset.idx.list
-  if (!is.na(annotation))
+  if (!is.na(annotation)) {
+    if (verbose)
+      cat("Mapping identifiers between gene sets and feature names\n")
+
     mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
                                            AnnotationIdentifier(annotation))
+  }
   
   ## map to the actual features for which expression data is available
   tmp <- lapply(geneIds(mapped.gset.idx.list),
