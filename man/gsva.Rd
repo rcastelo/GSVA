@@ -13,55 +13,68 @@ Estimates GSVA enrichment scores.
 }
 \usage{
 \S4method{gsva}{ExpressionSet,list,missing}(expr, gset.idx.list, annotation=NULL,
+    method=c("gsva", "ssgsea", "zscore"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
     no.bootstraps=0,
     bootstrap.percent = .632,
+    alpha=0.25,
     parallel.sz=0,
     parallel.type="SOCK",
     verbose=TRUE,
-    mx.diff=TRUE)
+    mx.diff=TRUE,
+    kernel=TRUE)
 \S4method{gsva}{ExpressionSet,GeneSetCollection,missing}(expr, gset.idx.list, annotation=NULL,
+    method=c("gsva", "ssgsea", "zscore"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
     no.bootstraps=0,
     bootstrap.percent = .632,
+    alpha=0.25,
     parallel.sz=0,
     parallel.type="SOCK",
     verbose=TRUE,
-    mx.diff=TRUE)
+    mx.diff=TRUE,
+    kernel=TRUE)
 \S4method{gsva}{matrix,GeneSetCollection,character}(expr, gset.idx.list, annotation=NA,
+    method=c("gsva", "ssgsea", "zscore"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
     no.bootstraps=0,
     bootstrap.percent = .632,
+    alpha=0.25,
     parallel.sz=0,
     parallel.type="SOCK",
     verbose=TRUE,
-    mx.diff=TRUE)
+    mx.diff=TRUE,
+    kernel=TRUE)
 \S4method{gsva}{matrix,list,missing}(expr, gset.idx.list, annotation=NULL,
+    method=c("gsva", "ssgsea", "zscore"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
     no.bootstraps=0,
     bootstrap.percent = .632,
+    alpha=0.25,
     parallel.sz=0,
     parallel.type="SOCK",
     verbose=TRUE,
-    mx.diff=TRUE)
-
+    mx.diff=TRUE,
+    kernel=TRUE)
 }
 \arguments{
   \item{expr}{Gene expression data which can be given either as an \code{ExpressionSet}
               object or as a matrix of expression values where rows correspond
               to genes and columns correspond to samples.}
+  \item{gset.idx.list}{Gene sets provided either as a \code{list} object or as a
+                       \code{GeneSetCollection} object.}
   \item{annotation}{In the case of calling \code{gsva()} with expression data in a \code{matrix}
                     and gene sets as a \code{GeneSetCollection} object, the \code{annotation} argument
                     can be used to supply the name of the Bioconductor package that contains
@@ -69,8 +82,11 @@ Estimates GSVA enrichment scores.
                     the expression data matrix. By default \code{annotation=NULL} which implies that
                     \code{gsva()} will try to match the identifiers in \code{expr} to the identifiers
                     in \code{gset.idx.list} just as they are.}
-  \item{gset.idx.list}{Gene sets provided either as a \code{list} object or as a
-                       \code{GeneSetCollection} object.}
+  \item{method}{Method to employ in the estimation of gene-set enrichment scores per sample. By default
+                this is set to \code{gsva} (H\"anzelmann et al, submitted) and other options are
+                \code{ssgsea} (Barbie et al, 2009) and \code{zscore}. The latter standardizes expression
+                profiles into z-scores and combines them together (Stouffer et al, 1949). This has been
+                used in this context, for instance, by Lee et al. (2008).}
   \item{rnaseq}{Flag to inform whether the input gene expression data comes from microarray
                 (\code{rnaseq=FALSE}, default) or RNA-Seq (\code{rnaseq=TRUE}) experiments.}
   \item{abs.ranking}{Flag to determine whether genes should be ranked according to 
@@ -81,6 +97,8 @@ Estimates GSVA enrichment scores.
   \item{max.sz}{Maximum size of the resulting gene sets.}
   \item{no.bootstraps}{Number of bootstrap iterations to perform.}
   \item{bootstrap.percent}{.632 is the ideal percent samples bootstrapped.}
+  \item{alpha}{Exponent defining the weight in the random walk of the \code{ssgsea} method (Barbie et al., 2009).
+               Its default value (0.25) corresponds to the one used in the publication.}
   \item{parallel.sz}{Number of processors to use when doing the calculations in parallel.
                      This requires to previously load either the \code{parallel} or the
                      \code{snow} library. If \code{parallel} is loaded and this argument
@@ -95,8 +113,11 @@ Estimates GSVA enrichment scores.
                  from the KS random walk statistic. \code{mx.diff=FALSE}: ES is calculated as
                  the maximum distance of the random walk from 0. \code{mx.diff=TRUE} (default): ES
                  is calculated as the magnitude difference between the largest positive
-                 and negative random walk deviations.
-}
+                 and negative random walk deviations.}
+  \item{kernel}{Logical, set to \code{TRUE} when the GSVA method employes a kernel non-parametric
+                estimation of the empirical cumulative distribution function (default) and \code{FALSE}
+                when this function is directly estimated from the observed data. This last option is
+                justified in the limit of the size of the sample by the so-called Glivenko-Cantelli theorem.}
 }
 
 \details{
@@ -116,10 +137,19 @@ scores, by using the arguments \code{min.sz} and \code{max.sz}.
 A gene-set by sample matrix of GSVA enrichment scores.
 }
 \references{
+Barbie, D.A. et al. Systematic RNA interference reveals that oncogenic KRAS-driven
+cancers require TBK1, \emph{Nature}, 462(5):108-112, 2009.
+
 H\"anzelmann, S., Castelo, R. and Guinney, J.
 GSVA: Gene Set Variation Analysis, \emph{submitted}
+
+Lee, E. et al. Inferring pathway activity toward precise disease classification,
+\emph{PLoS Comp Biol}, 4(11):e1000217, 2008.
+
+Stouffer, S.A. et al. The American Soldier, Vol.1: Adjustment during Army Life.
+Princeton University press, Princeton, 1949.
 }
-\author{J. Guinney}
+\author{J. Guinney and R. Castelo}
 \seealso{
   \code{\link{filterGeneSets}}
   \code{\link{computeGeneSetsOverlap}}
