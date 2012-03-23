@@ -14,12 +14,12 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list", annotati
   max.sz=Inf,
   no.bootstraps=0, 
   bootstrap.percent = .632, 
-  alpha=0.25,
   parallel.sz=0, 
   parallel.type="SOCK",
-  verbose=TRUE,
   mx.diff=TRUE,
-  kernel=TRUE)
+  tau=switch(method, gsva=1, ssgsea=0.25, NA),
+  kernel=TRUE,
+  verbose=TRUE)
 {
   method <- match.arg(method)
 
@@ -35,8 +35,8 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list", annotati
                                          max.sz=max.sz)
 
   eSco <- GSVA:::.gsva(Biobase::exprs(expr), mapped.gset.idx.list, method, rnaseq, abs.ranking,
-                       no.bootstraps, bootstrap.percent, alpha, parallel.sz, parallel.type,
-                       verbose, mx.diff, kernel)
+                       no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
+                       mx.diff, tau, kernel, verbose)
   eScoEset <- expr
   eScoEset <- Biobase::`exprs<-`(eScoEset, eSco$es.obs)
   eScoEset <- Biobase::`annotation<-`(eScoEset, "")
@@ -55,12 +55,12 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   max.sz=Inf,
   no.bootstraps=0, 
   bootstrap.percent = .632, 
-  alpha=0.25,
   parallel.sz=0, 
   parallel.type="SOCK",
-  verbose=TRUE,
   mx.diff=TRUE,
-  kernel=TRUE)
+  tau=switch(method, gsva=1, ssgsea=0.25, NA),
+  kernel=TRUE,
+  verbose=TRUE)
 {
   method <- match.arg(method)
 
@@ -68,8 +68,8 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
     cat("Mapping identifiers between gene sets and feature names\n")
 
   ## map gene identifiers of the gene sets to the features in the chip
-  mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
-                                         AnnotationIdentifier(annotation(expr)))
+  mapped.gset.idx.list <- GSEABase::mapIdentifiers(gset.idx.list,
+                                                   GSEABase::AnnoOrEntrezIdentifier(annotation(expr)))
   
   ## map to the actual features for which expression data is available
   tmp <- lapply(geneIds(mapped.gset.idx.list),
@@ -83,8 +83,8 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
                                          max.sz=max.sz)
 
   eSco <- GSVA:::.gsva(Biobase::exprs(expr), mapped.gset.idx.list, method, rnaseq, abs.ranking,
-                       no.bootstraps, bootstrap.percent, alpha, parallel.sz, parallel.type,
-                       verbose, mx.diff, kernel)
+                       no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
+                       mx.diff, tau, kernel, verbose)
   eScoEset <- expr
   eScoEset <- Biobase::`exprs<-`(eScoEset, eSco$es.obs)
   eScoEset <- Biobase::`annotation<-`(eScoEset, "")
@@ -103,12 +103,12 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", an
   max.sz=Inf,
   no.bootstraps=0, 
   bootstrap.percent = .632, 
-  alpha=0.25,
   parallel.sz=0, 
   parallel.type="SOCK",
-  verbose=TRUE,
   mx.diff=TRUE,
-  kernel=TRUE)
+  tau=switch(method, gsva=1, ssgsea=0.25, NA),
+  kernel=TRUE,
+  verbose=TRUE)
 {
   method <- match.arg(method)
 
@@ -118,8 +118,8 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", an
     if (verbose)
       cat("Mapping identifiers between gene sets and feature names\n")
 
-    mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
-                                           AnnotationIdentifier(annotation))
+    mapped.gset.idx.list <- GSEABase::mapIdentifiers(gset.idx.list,
+                                                     GSEABase::AnnoOrEntrezIdentifier(annotation))
   }
   
   ## map to the actual features for which expression data is available
@@ -135,8 +135,8 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", an
                                          max.sz=max.sz)
 
   GSVA:::.gsva(expr, mapped.gset.idx.list, method, rnaseq, abs.ranking,
-               no.bootstraps, bootstrap.percent, alpha, parallel.sz, parallel.type,
-               verbose, mx.diff, kernel)
+               no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
+               mx.diff, tau, kernel, verbose)
 })
 
 setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="missing"),
@@ -148,12 +148,12 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
   max.sz=Inf,
   no.bootstraps=0, 
   bootstrap.percent = .632, 
-  alpha=0.25,
   parallel.sz=0, 
   parallel.type="SOCK",
-  verbose=TRUE,
   mx.diff=TRUE,
-  kernel=TRUE)
+  tau=switch(method, gsva=1, ssgsea=0.25, NA),
+  kernel=TRUE,
+  verbose=TRUE)
 {
   method <- match.arg(method)
 
@@ -168,8 +168,8 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
                                          max.sz=max.sz)
 
   GSVA:::.gsva(expr, mapped.gset.idx.list, method, rnaseq, abs.ranking, no.bootstraps,
-               bootstrap.percent, alpha, parallel.sz, parallel.type,
-               verbose, mx.diff, kernel)
+               bootstrap.percent, parallel.sz, parallel.type,
+               mx.diff, tau, kernel, verbose)
 })
 
 .gsva <- function(expr, gset.idx.list,
@@ -178,12 +178,12 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
   abs.ranking=FALSE,
   no.bootstraps=0, 
   bootstrap.percent = .632, 
-  alpha=0.25,
   parallel.sz=0, 
   parallel.type="SOCK",
-  verbose=TRUE,
   mx.diff=TRUE,
-  kernel=TRUE)
+  tau=1,
+  kernel=TRUE,
+  verbose=TRUE)
 {
 	if(length(gset.idx.list) == 0){
 		stop("The gene set list is empty!  Filter may be too stringent.")
@@ -193,7 +193,8 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
 	  if(verbose)
 		  cat("Estimating ssGSEA scores for", length(gset.idx.list),"gene sets.\n")
 	
-    return(ssgsea(expr, gset.idx.list, alpha, parallel.sz, parallel.type, verbose))
+    return(ssgsea(expr, gset.idx.list, alpha=tau, parallel.sz=parallel.sz,
+                  parallel.type=parallel.type, verbose=verbose))
   }
 
   if (method == "zscore") {
@@ -225,8 +226,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
 	if (verbose)
     cat("Computing observed enrichment scores\n")
 	es.obs <- compute.geneset.es(expr, gset.idx.list, 1:n.samples,
-                               rnaseq, abs.ranking,parallel.sz,
-                               parallel.type,verbose=verbose, mx.diff=mx.diff, kernel=kernel)
+                               rnaseq=rnaseq, abs.ranking=abs.ranking, parallel.sz=parallel.sz,
+                               parallel.type=parallel.type, mx.diff=mx.diff, tau=tau,
+                               kernel=kernel, verbose=verbose)
 	
 	# es.bootstraps -> n.gset by n.samples by n.resamples
 	es.bootstraps=NULL
@@ -273,7 +275,8 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
 				if(verbose) cat("bootstrap cycle ", i, "\n")
 				r <- clEvalQ(cl, compute.geneset.es(expr, gset.idx.list, 
 								sample(n.samples, bootstrap.nsamples, replace=T),
-								rnaseq, abs.ranking))
+								rnaseq=rnaseq, abs.ranking=abs.ranking, mx.diff=mx.diff,
+                tau=tau, kernel=kernel, verbose=verbose))
 				for(j in 1:length(r)){
 					es.bootstraps[,,(parallel.sz * (i-1) + j)] <- r[[j]]
 				}	
@@ -284,7 +287,8 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
 			for(i in 1:no.bootstraps){
 				es.bootstraps[,,i] <- compute.geneset.es(expr, gset.idx.list,
 						sample(n.samples, bootstrap.nsamples, replace=T),
-						rnaseq, abs.ranking)
+						rnaseq=rnaseq, abs.ranking=abs.ranking, mx.diff=mx.diff,
+            tau=tau, kernel=kernel, verbose=verbose)
 			}
 		}
 	
@@ -340,7 +344,7 @@ compute.gene.density <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
 
 compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
                                abs.ranking, parallel.sz=0, parallel.type="SOCK",
-                               verbose=FALSE, mx.diff=TRUE, kernel=TRUE){
+                               mx.diff=TRUE, tau=1, kernel=TRUE, verbose=TRUE){
 	num_genes <- nrow(expr)
 	if (verbose) {
     if (kernel) {
@@ -389,7 +393,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
 		  cl <- makeCl(parallel.sz, type = parallel.type) 
 		  clEvalQ(cl, library(GSVA))
 		  if (verbose) {
-		    cat("Evaluating parallel ks-tests...\n")
+		    cat("Estimating enrichment scores in parallel\n")
 	      if(mx.diff) {
           cat("Taking diff of max KS.\n")
         } else{
@@ -400,7 +404,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
 		  m <- t(parSapp(cl, gset.idx.list, ks_test_m, 
 						  gene.density=rank.scores, 
 						  sort.idxs=sort.sgn.idxs,
-						  mx.diff=mx.diff, verbose=FALSE))
+						  mx.diff=mx.diff, tau=tau, verbose=FALSE))
 		  if(verbose)
         cat("Cleaning up\n")
 		  stopCl(cl)
@@ -425,7 +429,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
       m <- mclapp(gset.idx.list, GSVA:::ks_test_m,
                   gene.density=rank.scores,
                   sort.idxs=sort.sgn.idxs,
-                  mx.diff=mx.diff, verbose=verbose)
+                  mx.diff=mx.diff, tau=tau, verbose=verbose)
       m <- do.call("rbind", m)
       colnames(m) <- colnames(expr)
 
@@ -436,7 +440,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
 
 	} else {
 		if (verbose) {
-      cat("Evaluating ks-tests\n")
+      cat("Estimating enrichment scores\n")
 	    if (mx.diff) {
         cat("Taking diff of max KS.\n")
       } else{
@@ -451,7 +455,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
     }
 
 		m <- t(sapply(gset.idx.list, ks_test_m, rank.scores, sort.sgn.idxs,
-                  mx.diff=mx.diff, verbose=verbose))
+                  mx.diff=mx.diff, tau=tau, verbose=verbose))
 
     if (verbose) {
       close(get("progressBar", envir=globalenv()))
@@ -461,7 +465,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
 }
 
 
-ks_test_m <- function(gset_idxs, gene.density, sort.idxs, tau.factor=1, mx.diff=TRUE, verbose=TRUE){
+ks_test_m <- function(gset_idxs, gene.density, sort.idxs, mx.diff=TRUE, tau=1, verbose=TRUE){
 	
 	n.genes <- nrow(gene.density)
 	n.samples <- ncol(gene.density)
@@ -474,7 +478,7 @@ ks_test_m <- function(gset_idxs, gene.density, sort.idxs, tau.factor=1, mx.diff=
 			n.genes,
 			as.integer(gset_idxs),
 			n.geneset,
-			as.double(tau.factor),
+			as.double(tau),
 			n.samples,
 			as.integer(mx.diff))$R
 
@@ -489,12 +493,12 @@ ks_test_m <- function(gset_idxs, gene.density, sort.idxs, tau.factor=1, mx.diff=
 
 
 ## ks-test in R code - testing only
-ks_test_Rcode <- function(gene.density, gset_idxs, tau.factor=1, make.plot=FALSE){
+ks_test_Rcode <- function(gene.density, gset_idxs, tau=1, make.plot=FALSE){
 	
 	n.genes = length(gene.density)
 	n.gset = length(gset_idxs)
 	
-	sum.gset <- sum(abs(gene.density[gset_idxs])^tau.factor)
+	sum.gset <- sum(abs(gene.density[gset_idxs])^tau)
 	
 	dec = 1 / (n.genes - n.gset)
 	
@@ -505,7 +509,7 @@ ks_test_Rcode <- function(gene.density, gset_idxs, tau.factor=1, make.plot=FALSE
 	values <- rep(NaN, length(gset_idxs))
 	current = 0
 	for(i in seq_along(offsets)){
-		current = current + abs(gene.density[sort.idxs[offsets[i]]])^tau.factor / sum.gset - dec * (offsets[i]-last.idx-1)
+		current = current + abs(gene.density[sort.idxs[offsets[i]]])^tau / sum.gset - dec * (offsets[i]-last.idx-1)
 		
 		values[i] = current
 		last.idx = offsets[i]
@@ -588,7 +592,7 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz, parallel.type, verbose)
                       }
                       geneRanking <- order(R[, j], decreasing=TRUE)
                       es_sample <- NA
-                      if (!haveParallel && !haveSnow)
+                      if (is.na(cl) && !haveParallel)
                         es_sample <- sapply(geneSets, rndWalk, geneRanking, j, R, alpha)
                       else {
                         if (is.na(cl))
@@ -668,7 +672,7 @@ zscore <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
                                           get("iSample", envir=globalenv()) / get("nSamples", envir=globalenv()))
                       }
                       es_sample <- NA
-                      if (!haveParallel && !haveSnow)
+                      if (is.na(cl) && !haveParallel)
                         es_sample <- sapply(geneSets, combinez, j, Z)
                       else {
                         if (is.na(cl))
@@ -759,7 +763,7 @@ setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGen
 setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGenes="ExpressionSet"),
           function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
   ## map gene identifiers of the gene sets to the features in the chip
-  gSets <- mapIdentifiers(gSets, AnnotationIdentifier(annotation(uniqGenes)))
+  gSets <- GSEABase::mapIdentifiers(gSets, GSEABase::AnnoOrEntrezIdentifier(annotation(uniqGenes)))
   
   uniqGenes <- Biobase::featureNames(uniqGenes)
 

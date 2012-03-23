@@ -242,7 +242,7 @@ limit \Rfunction{gsva()} in the number of core processors that is should use
 we can do it by specifying such a value in the \Robject{parallel.sz} argument.
 
 The other two functions of the \Rpackage{GSVA} package are
-\Rfunction{filterGeneSets()} and \Rfunction{computeGeneSetOverlaps()} that
+\Rfunction{filterGeneSets()} and \Rfunction{computeGeneSetsOverlaps()} that
 serve to explicitly filter out gene sets by size and by pairwise overlap,
 respectively. Note that the size filter can be also applied within the
 \Rfunction{gsva()} function call.

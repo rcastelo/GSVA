@@ -20,12 +20,12 @@ Estimates GSVA enrichment scores.
     max.sz=Inf,
     no.bootstraps=0,
     bootstrap.percent = .632,
-    alpha=0.25,
     parallel.sz=0,
     parallel.type="SOCK",
-    verbose=TRUE,
     mx.diff=TRUE,
-    kernel=TRUE)
+    tau=switch(method, gsva=1, ssgsea=0.25, NA),
+    kernel=TRUE,
+    verbose=TRUE)
 \S4method{gsva}{ExpressionSet,GeneSetCollection,missing}(expr, gset.idx.list, annotation=NULL,
     method=c("gsva", "ssgsea", "zscore"),
     rnaseq=FALSE,
@@ -34,12 +34,12 @@ Estimates GSVA enrichment scores.
     max.sz=Inf,
     no.bootstraps=0,
     bootstrap.percent = .632,
-    alpha=0.25,
     parallel.sz=0,
     parallel.type="SOCK",
-    verbose=TRUE,
     mx.diff=TRUE,
-    kernel=TRUE)
+    tau=switch(method, gsva=1, ssgsea=0.25, NA),
+    kernel=TRUE,
+    verbose=TRUE)
 \S4method{gsva}{matrix,GeneSetCollection,character}(expr, gset.idx.list, annotation=NA,
     method=c("gsva", "ssgsea", "zscore"),
     rnaseq=FALSE,
@@ -48,12 +48,12 @@ Estimates GSVA enrichment scores.
     max.sz=Inf,
     no.bootstraps=0,
     bootstrap.percent = .632,
-    alpha=0.25,
     parallel.sz=0,
     parallel.type="SOCK",
-    verbose=TRUE,
     mx.diff=TRUE,
-    kernel=TRUE)
+    tau=switch(method, gsva=1, ssgsea=0.25, NA),
+    kernel=TRUE,
+    verbose=TRUE)
 \S4method{gsva}{matrix,list,missing}(expr, gset.idx.list, annotation=NULL,
     method=c("gsva", "ssgsea", "zscore"),
     rnaseq=FALSE,
@@ -62,12 +62,12 @@ Estimates GSVA enrichment scores.
     max.sz=Inf,
     no.bootstraps=0,
     bootstrap.percent = .632,
-    alpha=0.25,
     parallel.sz=0,
     parallel.type="SOCK",
-    verbose=TRUE,
     mx.diff=TRUE,
-    kernel=TRUE)
+    tau=switch(method, gsva=1, ssgsea=0.25, NA),
+    kernel=TRUE,
+    verbose=TRUE)
 }
 \arguments{
   \item{expr}{Gene expression data which can be given either as an \code{ExpressionSet}
@@ -97,8 +97,6 @@ Estimates GSVA enrichment scores.
   \item{max.sz}{Maximum size of the resulting gene sets.}
   \item{no.bootstraps}{Number of bootstrap iterations to perform.}
   \item{bootstrap.percent}{.632 is the ideal percent samples bootstrapped.}
-  \item{alpha}{Exponent defining the weight in the random walk of the \code{ssgsea} method (Barbie et al., 2009).
-               Its default value (0.25) corresponds to the one used in the publication.}
   \item{parallel.sz}{Number of processors to use when doing the calculations in parallel.
                      This requires to previously load either the \code{parallel} or the
                      \code{snow} library. If \code{parallel} is loaded and this argument
@@ -108,16 +106,20 @@ Estimates GSVA enrichment scores.
                      to a positive integer number that specifies the number of processors to
                      employ in the parallel calculation.}
   \item{parallel.type}{Type of cluster architecture when using \code{snow}.}
-  \item{verbose}{Gives information about each calculation step. Default: \code{FALSE}.}
   \item{mx.diff}{Offers two approaches to calculate the enrichment statistic (ES)
                  from the KS random walk statistic. \code{mx.diff=FALSE}: ES is calculated as
                  the maximum distance of the random walk from 0. \code{mx.diff=TRUE} (default): ES
                  is calculated as the magnitude difference between the largest positive
                  and negative random walk deviations.}
+  \item{tau}{Exponent defining the weight of the tail in the random walk performed by both the \code{gsva}
+             (H\"anzelmann et al., submitted) and the \code{ssgsea} (Barbie et al., 2009) methods. By default,
+             this \code{tau=1} when \code{method="gsva"} and \code{tau=0.25} when \code{method="ssgsea"} just
+             as specified by Barbie et al. (2009) where this parameter is called \code{alpha}.}
   \item{kernel}{Logical, set to \code{TRUE} when the GSVA method employes a kernel non-parametric
                 estimation of the empirical cumulative distribution function (default) and \code{FALSE}
                 when this function is directly estimated from the observed data. This last option is
                 justified in the limit of the size of the sample by the so-called Glivenko-Cantelli theorem.}
+  \item{verbose}{Gives information about each calculation step. Default: \code{FALSE}.}
 }
 
 \details{

@@ -1,3 +1,20 @@
+CHANGES IN VERSION 1.4
+----------------------
+
+USER VISIBLE CHANGES
+
+    o removed the system-requirement dependency from the GNU Scientific Library
+
+    o added two additional gene-set expression summarization methods: single-sample GSEA from Barbie et al. (Nature, 2009) and a combined Z-score method similar to the one used by Lee et al. (PLos Comp Biol, 2008) via a new 'method' argument in the 'gsva()' function
+
+    o added handling of RNA-seq expression data matrices by the GSVA method with a new 'rnaseq' argument in the 'gsva()' function
+
+    o added a method with signature(expr="matrix", gset.idx.list="GeneSetCollection", annotation="character") which did not exist before. Now gsva() accepts the following pairs of data structures storing expression data and gene sets: ExpressionSet-GeneSetCollection, ExpressionSet-list, matrix-GeneSetCollection and matrix-list
+
+BUG FIXES
+
+    o matching of gene IDs from ExpressionSet objects to GeneSetCollection objects now also works with Entrez-based gene IDs in ExpressionSet objects (e.g., when annotation(eset) == "org.Hs.eg.db") by using GSEABase >= 1.17.4
+
 CHANGES IN VERSION 0.9
 ----------------------
 
