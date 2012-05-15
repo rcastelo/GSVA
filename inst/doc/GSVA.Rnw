@@ -1250,7 +1250,7 @@ par(xpd=FALSE)
 dev.off()
 @
 \begin{figure}[p]
-\centerline{\includegraphics[height=0.5\texheight]{GSVA-RNAseqComp}}
+\centerline{\includegraphics[height=0.5\textheight]{GSVA-RNAseqComp}}
 \caption{{\bf GSVA for RNA-seq (Argonne).} A. Distribution of Spearman correlation values between gene expression profiles of RNA-seq and microarray data. B. Distribution of Spearman correlation values between GSVA enrichment scores of gene sets calculated from RNA-seq and microarray data. C and D. Comparison of GSVA enrichment scores obtained from microarray and RNA-seq data for two gene sets containing genes with sex-specific expression: MSY formed by genes from the male-specific region of the Y chromosome, thus male-specific, and XiE formed by genes that escape X-inactivation in females, thus female-specific. Red and blue dots represent female and male samples, respectively. In both cases GSVA-scores show very high correlation between the two profiling technologies where female samples show higher enrichment scores in the female-specific gene set and male samples show higher enrichment scores in the male-specific gene set.}
 \label{rnaseqcomp}
 \end{figure}
