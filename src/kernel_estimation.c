@@ -72,7 +72,8 @@ void row_d(double* x, double* y, double* r, int size_density_n, int size_test_n,
 			left_tail += rnaseq ? ppois(y[j], x[i]+bw, TRUE, FALSE) : precomputedCdf(y[j]-x[i], bw);
 		}
 		left_tail = left_tail / size_density_n;
-		r[j] = -1.0 * log((1.0-left_tail)/left_tail);
+		/* r[j] = -1.0 * log((1.0-left_tail)/left_tail); */ /* log-odds not necessary */
+    r[j] = left_tail;
 	}
 }
 

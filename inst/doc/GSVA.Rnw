@@ -15,14 +15,22 @@
 \newcommand{\Rpackage}[1]{{\textsf{#1}}}
 \newcommand{\Rclass}[1]{{\textit{#1}}}
 
-\title{GSVA - The Gene Set Variation Analysis Package}
-\author{Sonja H\"anzelmann, Robert Castelo and Justin Guinney}
+\title{GSVA: The Gene Set Variation Analysis package \\ for microarray and RNA-seq data}
+\author{Sonja H\"anzelmann$^1$, Robert Castelo$^1$ and Justin Guinney$^2$}
 
 \begin{document}
 
 \SweaveOpts{eps=FALSE}
 
 \maketitle
+
+\begin{quote}
+{\scriptsize
+1. Research Program on Biomedical Informatics (GRIB), Hospital del Mar Research Institute (IMIM) and Universitat Pompeu Fabra, Parc de Recerca Biom\`edica de Barcelona, Doctor Aiguader 88, 08003 Barcelona, Catalonia, Spain
+
+2. Sage Bionetworks, 1100 Fairview Ave N., Seattle, Washington, 98109 USA
+}
+\end{quote}
 
 \begin{abstract}
 The \Rpackage{GSVA} package implements a non-parametric unsupervised method,
@@ -85,102 +93,172 @@ GSVA, as well as for citing GSVA if you use it in your own work.
 
 \section{GSVA enrichment scores}
 
-GSVA enrichment scores are calculated from two main inputs: a matrix
-$X=\{x_{ij}\}_{p\times n}$ of expression values for $p$ genes through $n$
-samples, where typically $p\gg n$, and a collection of gene sets
-$\Gamma = \{\gamma_1, \dots, \gamma_m\}$. We shall denote by $x_i$ the
-expression profile of the $i$-th gene, by $x_{ij}$ the specific expression
-value of the $i$-th gene in the $j$-th sample, and by $\gamma_k$ the subset
-of row indices in $X$ such that $\gamma_k \subset \{1,\ldots\,p\}$ defines a
-set of genes forming a pathway or some other functional unit. Let $|\gamma_k |$
-be the number of genes in the gene set.
+A schematic overview of the GSVA method is provided in Figure \ref{methods}.
+Shown are the two required main inputs: a matrix $X=\{x_{ij}\}_{p\times n}$ of
+normalized expression values (see Methods for details on the pre-processing steps)
+for $p$ genes by $n$ samples, where typically $p\gg n$, and a collection of gene
+sets $\Gamma = \{\gamma_1, \dots, \gamma_m\}$. We shall denote by $x_i$ the
+expression profile of the $i$-th gene, by $x_{ij}$ the specific expression value
+of the $i$-th gene in the $j$-th sample, and by $\gamma_k$ the subset of row
+indices in $X$ such that $\gamma_k \subset \{1,\ldots\,p\}$ defines a set of genes
+forming a pathway or some other functional unit. Let $|\gamma_k |$ be the number
+of genes in $\gamma_k$.
 
-The first step in the calculation consists of evaluating whether a gene $i$ is
-highly or lowly expressed in sample $j$ in the context of the sample population
-distribution, with an expression-level statistic calculated as follows. First,
-for each gene expression profile $x_i=\{x_{i1},\dots,x_{in}\}$, a non-parametric
-kernel estimation of its cumulative density function is performed using a
-Gaussian kernel \citep[pg.~148]{silverman_density_1986}:
+\begin{figure}[ht]
+\centerline{\includegraphics[width=\textwidth]{methods}}
+\caption{{\bf GSVA methods outline.}
+The input for the GSVA algorithm are a gene expression matrix in the form of log2
+microarray expression values or RNA-seq counts and a database of gene sets.
+1. Kernel estimation of the cumulative density function (kcdf). The two plots
+show two simulated expression profiles mimicking 6 samples from microarray and
+RNA-seq. The $x$-axis corresponds to expression values where each gene is lowly
+expressed in the four samples with lower values and highly expressed in the other
+two. The scale of the kcdf is on the left $y$-axis and the scale of the Gaussian
+and Poisson kernels is on the right $y$-axis.
+2. The expression-level statistic is rank ordered for each sample. 
+3. For every gene set, the Kolmogorov-Smirnov-like rank statistic is calculated.
+The plot illustrates a gene set consisting of 3 genes out of a total number of 10
+with the sample-wise calculation of genes inside and outside of the gene set.
+4. The GSVA enrichment score is either the difference between the two sums or the
+maximum deviation from zero. The two plots show two simulations of the resulting
+scores under the null hypothesis of no gene expression change (see main text).
+The output of the algorithm is matrix containing pathway enrichment profiles for
+each gene set and sample. }
+\label{methods}
+\end{figure}
+
+GSVA starts by evaluating whether a gene $i$ is highly or lowly expressed in
+sample $j$ in the context of the sample population distribution. Probe effects
+can alter hybridization intensities in microarray data such that expression
+values can greatly differ between two non-expressed genes \citep{zilliox_gene_2007}.
+Analogous gene-specific biases, such as GC content or gene length have been
+described in RNA-seq data \citep{hansen_removing_2012}. To bring distinct expression
+profiles to a common scale, an expression-level statistic is calculated as follows.
+For each gene expression profile $x_i=\{x_{i1},\dots,x_{in}\}$, a non-parametric
+kernel estimation of its cumulative density function is performed using a Gaussian
+kernel \cite[pg.~148]{silverman_density_1986} in the case of microarray data:
 
 \begin{equation}
 \label{density}
-\hat{F}_{h_i}(x_{ij})=\frac{1}{n}\sum_{k=1}^n\int_{-\infty}^{\frac{x_{ij}-x_{ik}}{h_i}}\frac{1}{\sqrt{2\pi}}e^{-\frac{t^2}{2}}dt\,.
+\hat{F}_{h_i}(x_{ij})=\frac{1}{n}\sum_{k=1}^n\int_{-\infty}^{\frac{x_{ij}-x_{ik}}{h_i}}\frac{1}{\sqrt{2\pi}}e^{-\frac{t^2}{2}}dt\,,
 \end{equation}
-where $h_i$ is the gene-specific bandwidth parameter that controls the
-resolution of the kernel estimation and is taken as $h_i=s_i/4$, where $s_i$ is
-the sample standard deviation of the $i$-th gene. Second, the expression-level
-statistic is calculated as logarithm of the relative likelihood, or odds, that
-the $i$-th gene is expressed in sample $j$:
+where $h_i$ is the gene-specific bandwidth parameter that controls the resolution
+of the kernel estimation, which is set to $h_i=s_i/4$, where $s_i$ is the sample
+standard deviation of the $i$-th gene (Figure \ref{methods}, Step 1). In the case
+of RNA-seq data, a discrete Poisson kernel \citep{canale_bayesian_2011} is employed:
 
 \begin{equation}
-z_ij = \log\left(\frac{\hat{F}_{h_i}(x_{ij})}{1-\hat{F}_{h_i}(x_{ij})}\right)\,.
+\hat{F}_r(x_{ij}) = \frac{1}{n} \sum_{k=1}^n \sum_{y=0}^{x_{ij}} \frac{e^{-(x_{ik}+r)}(x_{ik}+r)^y}{y!}\,,
 \end{equation}
+where $r=0.5$ in order to set the mode of the Poisson kernel at each $x_{ik}$ since,
+in general, the mode of a Poisson distribution with an integer mean $\lambda$ occurs
+at $\lambda$ and $\lambda-1$ and at the largest integer smaller than $\lambda$ when
+$\lambda$ is continuous.
 
-The clearest context for differential gene expression arises under a bi-modal
-distribution of the data.  Here, $z_{ij}$'s corresponding to the lower mode will
-have a large negative statistic, higher modes will have a large positive
-statistic, and samples between the two modes will have $z_{ij}$'s at or near
-zero. Genes with uniform or unimodal population distributions do not preclude
-large negative or positive expression-level statistics, i.e. $x_{ij}$ lying in
-the tail of a distribution. To dampen the effect of potential outliers, the
-expression-level statistics $z_{ij}$ are first converted to ranks $z_{(i)j}$ for
-each $j$-th sample and then these ranks are further normalized into a rank-order
-statistic $r_{ij}=|p - z_{(i)j}+1-p/2|$ to be symmetric around zero, before evaluating
-the enrichment scores.
+Let $z_{ij}$ denote the previous expression-level statistic $\hat{F}_{h_i}(x_{ij})$,
+or $\hat{F}_r(x_{ij})$, depending on whether $x_{ij}$ are continuous microarray, or
+discrete count RNA-seq values, respectively. The following step condenses
+expression-level statistics into gene sets by calculating sample-wise enrichment
+scores. In order to reduce the influence of potential outliers on that step, we convert
+first the $z_{ij}$ into ranks $z_{(i)j}$ for each $j$-th sample and further normalize
+them into $r_{ij}=|p/2-z_{(i)j}|$ to make them symmetric around zero before evaluating
+the enrichment scores (Figure~\ref{methods}, Step 2).
 
-We assess the enrichment score similarity to the GSEA method
-\citep{subramanian_gene_2005} using a Kolmogorov-Smirnov (K-S)
-like random walk statistic:
+We assess the enrichment score similar to the GSEA and ASSESS methods
+\citep{subramanian_gene_2005,edelman_analysis_2006} using the Kolmogorov-Smirnov (KS)
+like random walk statistic (Figure~\ref{methods}, Step 3):
 \begin{equation}
 \label{walk}
 \nu_{jk}(\ell) = \frac{\sum_{i=1}^\ell |r_{ij}|^{\tau} I(g_{(i)} \in
 \gamma_k)}{\sum_{i=1}^p |r_{ij}|^{\tau}I(g_{(i)} \in \gamma_k)} -
 \frac{\sum_{i=1}^\ell I(g_{(i)} \not\in \gamma_k)}{p-|\gamma_k|},
 \end{equation}
-where $\tau$ is a parameter describing the weight of the tail in the
-random walk (default $\tau = 1$), $\gamma_k$ is the $k$-th gene set,
-$I(g_{(i)} \in \gamma_k)$ is the indicator function on whether
-the $i$-th gene (the gene corresponding to the $i$-th ranked
-expression-level statistic) is in gene set $\gamma_k$, $|\gamma_k|$ is
-the number of genes in the $k$-th gene set, and $p$ is the number of
-genes in the data set. The first term in this equation corresponds to
-the step cumulative distribution function of the $r_{ij}$ rank-order
-statistics of the gene forming gene set $\gamma_k$ throughout the
-ranking $z_{(1)j},\dots,z_{(p)j}$ in sample $j$, while the second term
-corresponds to the step cumulative distribution function of all other
-genes outside $\gamma_k$ throughout this same ranking.
+where $\tau$ is a parameter describing the weight of the tail in the random walk
+(default $\tau = 1$), $\gamma_k$ is the $k$-th gene set, $I(g_{(i)} \in \gamma_k)$ is
+the indicator function on whether the $i$-th gene (the gene corresponding to the $i$-th
+ranked expression-level statistic) is in gene set $\gamma_k$, $|\gamma_k|$ is the number
+of genes in the $k$-th gene set, and $p$ is the number of genes in the data set. 
 
-Two approaches are possible for turning the K-S random walk statistic
-into an enrichment score (ES). The first approach is the previously described
-maximum deviation method \citep{subramanian_gene_2005} where the ES for the
-$j$-th sample with respect to the $k$-th gene set is the maximum deviation
-of the random walk from zero:
+We offer two approaches for turning the KS random walk statistic into an enrichment
+statistic (ES). The first approach is the previously described maximum deviation method
+\citep{subramanian_gene_2005,edelman_analysis_2006,verhaak_integrated_2010} where the ES
+for the $j$-th sample with respect to the $k$-th gene set is the maximum deviation from
+zero of the random walk:
+
 \begin{equation}
 \label{escore}
-ES_{jk}^{\mbox{\tiny{max}}} = \nu_{jk}[\arg \max_{\ell=1,..,p} \left|\nu_{jk}(\ell)\right|].
+ES^{\mbox{\tiny{max}}}_{jk} = \nu_{jk}[\arg \max_{\ell=1,\dots,p} \left|\nu_{jk}(\ell)\right|].
 \end{equation}
-For each gene set $k$, this approach produces a distribution of enrichment
-scores that is bi-modal. Within the supervised paradigm, a ``normalized''
-enrichment score could be obtained via a permutation of the phenotypic labels;
-since we are operating without labels, we propose a second approach that
-produces an ES distribution that is unimodal:
+For each gene set $k$, this approach produces a distribution of enrichment scores that
+is bimodal (Figure~\ref{methods}, Step 4, Top panel). This is an intrinsic property of
+the KS-like random walk, which generates non-zero maximum deviations under the null
+distribution. In GSEA \citep{subramanian_gene_2005} it is also observed that the empirical
+null distribution obtained by permuting phenotypes is bimodal and, for this reason,
+significance is determined independently using the positive and negative sides of the null
+distribution. In our case, we would like to provide a standard Gaussian distribution of
+enrichment scores under the null hypothesis of no change in pathway activity throughout the
+sample population. For this purpose, we propose the following alternative score that produces
+an ES distribution approximating this requirement (Figure~\ref{methods}, Step 4, Bottom panel):
 
 \begin{equation}
 \label{escore_2}
-ES_{jk}^{\mbox{\tiny{diff}}} = \left|ES^{+}_{jk}\right| - \left|ES^{-}_{jk}\right|=\max_{\ell=1,\dots,p}(0,\nu_{jk}(\ell)) - \min_{\ell=1,\dots,p}(0,\nu_{jk}(\ell))\,,
+ES^{\mbox{\tiny{diff}}}_{jk} = \left|ES^{+}_{jk}\right| - \left|ES^{-}_{jk}\right|=\max_{\ell=1,\dots,p}(0,\nu_{jk}(\ell)) - \min_{\ell=1,\dots,p}(0,\nu_{jk}(\ell))\,.
 \end{equation}
-where $ES^{+}_{jk}$ and $ES^{-}_{jk}$ are the largest positive and negative
-random walk deviations from zero, respectively, for sample $j$ and gene set $k$.
-This approach takes the magnitude difference between the largest positive and
-negative random walk deviations, and has the effect of dampening out large
-enrichment scores if there is both a large positive and negative deviation in
-the random walk. This approach emphasizes genes in pathways that are concordantly
-activated in one direction only, i.e. over-expressed or under-expressed relative
-to the overall population. For pathways with genes strongly acting in both
-directions, the deviations will cancel each other out and show negligible enrichment.
-Also, because this statistic is unimodal (and through our own experimental
-observations, approximately normal), this statistic lends itself to downstream
-analyses which may impose distributional assumptions on the data.
+where $ES_{jk}^{+}$ and $ES_{jk}^{-}$ are the largest positive and negative random walk
+deviations from zero, respectively, for sample $j$ and gene set $k$.  This statistic may
+be compared to the Kuiper test statistic \citep{pearson_comparison_1963}, which sums the
+maximum and minimum deviations to make the test statistic more sensitive in the tails.
+In contrast, our test statistic penalizes deviations that are large in both tails, and
+provides a ``normalization'' of the enrichment score by subtracting potential noise. There
+is a clear biological interpretation of this statistic, it emphasizes genes in pathways that
+are concordantly activated in one direction only, either over-expressed or under-expressed
+relative to the overall population.  For pathways containing genes having very different
+expression patterns, the deviations will cancel each other out and show little or no enrichment.
+Because this statistic is unimodal and approximately normal downstream analyses which may
+impose distributional assumptions on the data are possible.
+
+Step 4 in Figure~\ref{methods} shows a simple simulation which we reproduce with the code
+below, where standard Gaussian deviates are independenty sampled from $p=20,000$ genes and
+$n=30$ samples, thus mimicking a null distribution of no change in gene expression. One
+hundred gene sets are uniformly sampled at random from the $p$ genes with sizes ranging
+between 10 and 100 genes. Using these two inputs, GSVA enrichment scores are calculated
+under the two approaches and their distribution is depicted in the two panels of this step
+in Figure~\ref{methods} and the larger figure below, illustrating the previous description.
+
+<<>>=
+library(GSVA)
+
+p <- 20000    ## number of genes
+n <- 30       ## number of samples
+nGS <- 100    ## number of gene sets
+min.sz <- 10  ## minimum gene set size
+max.sz <- 100 ## maximum gene set size
+X <- matrix(rnorm(p*n), nrow=p, dimnames=list(1:p, 1:n))
+dim(X)
+gs <- as.list(sample(min.sz:max.sz, size=nGS, replace=TRUE)) ## sample gene set sizes
+gs <- lapply(gs, function(n, p) sample(1:p, size=n, replace=FALSE), p) ## sample gene sets
+es.max <- gsva(X, gs, mx.diff=FALSE, verbose=FALSE)$es.obs
+es.dif <- gsva(X, gs, mx.diff=TRUE, verbose=FALSE)$es.obs
+@
+
+\begin{center}
+<<maxvsdif, fig=TRUE, png=TRUE, echo=TRUE, height=5, width=8>>=
+par(mfrow=c(1,2), mar=c(4, 4, 4, 1))
+plot(density(as.vector(es.max)), main="Maximum deviation from zero",
+     xlab="GSVA score", lwd=2, las=1, xaxt="n", xlim=c(-0.75, 0.75), cex.axis=0.8)
+axis(1, at=seq(-0.75, 0.75, by=0.25), labels=seq(-0.75, 0.75, by=0.25), cex.axis=0.8)
+plot(density(as.vector(es.dif)), main="Difference between largest\npositive and negative deviations",
+     xlab="GSVA score", lwd=2, las=1, xaxt="n", xlim=c(-0.75, 0.75), cex.axis=0.8)
+axis(1, at=seq(-0.75, 0.75, by=0.25), labels=seq(-0.75, 0.75, by=0.25), cex.axis=0.8)
+@
+\end{center}
+
+\bigskip
+Although the GSVA algorithm itself does not evaluate statistical significance for the
+enrichment of gene sets, significance with respect to one or more phenotypes can be easily
+evaluated using conventional statistical models. Likewise, false discovery rates can be
+estimated by permuting the sample labels (Methods).  Examples of these techniques are
+provided in the following section.
 
 \section{Overview of the package}
 
@@ -236,7 +314,7 @@ the parallelization of the calculations through a cluster of computers. In order
 to activate this option we should specify in the argument \Robject{parallel.sz}
 the number of processors we want to use (default is zero which means no
 parallelization is going to be employed). The other is possibility is loading
-the library \Rpackage{multicore} and then the \Rfunction{gsva()} function will
+the library \Rpackage{parallel} and then the \Rfunction{gsva()} function will
 use the core processors of the computer where R is running. If we want to
 limit \Rfunction{gsva()} in the number of core processors that is should use
 we can do it by specifying such a value in the \Robject{parallel.sz} argument.
@@ -246,6 +324,14 @@ The other two functions of the \Rpackage{GSVA} package are
 serve to explicitly filter out gene sets by size and by pairwise overlap,
 respectively. Note that the size filter can be also applied within the
 \Rfunction{gsva()} function call.
+
+The \Rfunction{gsva()} function offers also two other different unsupervised
+GSE methods that yield single sample enrichment scores and can be selected
+through the \Robject{method} argument. One of them is a combined z-score
+approach \citep{lee_inferring_2008} (\Robject{method="zscore"}) and the other
+is the single-sample GSEA approach \citep{barbie_systematic_2009}
+(\Robject{method="ssgsea"}). By default \Robject{method="gsva"} and the
+Rfunction{gsva()} function uses the GSVA algorithm described before.
 
 \section{Applications}
 
@@ -511,7 +597,6 @@ dev.off()
 \Sexpr{2^logFCcutoff} at \Sexpr{adjPvalueCutoff*100}\% FDR in the leukemia data set.}
 \label{leukemiaHeatmapGenes}
 \end{figure}
-
 
 \subsection{Molecular signature identification}
 
@@ -862,7 +947,7 @@ gHubNet <- layoutGraph(gHubNet, layoutType="fdp")
 renderGraph(gHubNet)
 @
 \begin{figure}[p]
-\centerline{\includegraphics[height=\textheight]{GSVA-selectedGGMhighDeg}}
+\centerline{\includegraphics[height=0.9\textheight]{GSVA-selectedGGMhighDeg}}
 \caption{Network of cross-talk associations between Broad C2 canonical pathways
          of the leukemia data set obtained by a Gaussian graphical modeling approach
          by which edges are included in the graph with a minimum absolute PCC > 0.7
@@ -888,6 +973,288 @@ Among the genes forming this KEGG pathway, there is the 5-methyltetrahydrofolate
 methyltransferase {\it MTR} gene that encodes an enzyme that catalyzes the final step in methionine
 biosynthesis and has been associated to an increased risk of ALL which was most pronounced for cases
 with the \textit{MLL} translocation \citep{lightfoot_genetic_2010}.
+
+\section{Comparison with other methods}
+
+In this section we compare the performance of GSVA with the two other methods available
+through the argument \Robject{method} of the function \Rfunction{gsva()} to condense
+gene-level expression into samplewise pathway-level enrichment scores. We start by
+calculating fold-changes using limma:
+
+<<>>=
+design <- model.matrix(~ factor(leukemia_eset$subtype))
+fitGenes <- lmFit(leukemia_eset, design)
+fitGenes <- eBayes(fitGenes)
+ttgenes <- topTable(fitGenes, coef=2, n=Inf)
+@
+Next, we split all \Sexpr{nrow(ttgenes)} genes into three equally sized fractions
+of the ranking by fold change:
+
+<<>>=
+abslogfc <- abs(ttgenes$logFC)
+names(abslogfc) <- ttgenes$ID
+qtlsabslogfc <- quantile(abslogfc, p=seq(0, 1, by=1/3))
+abslogfccutoff <- cut(abslogfc, qtlsabslogfc, include.lowest=TRUE)
+genesbyabslogfccutoff <- split(ttgenes$ID, abslogfccutoff)
+@
+We want compare the performance of GSVA in producing enrichment scores that enable
+the signature identification of a dichotomous phenotype under an scenario of subtle
+changes. For this purpose we will use the genes in the second tercile of fold-changes
+to form gene sets and calculate enrichment scores for them with each of the three
+methods. Using these enrichment scores and the package \Rpackage{limma} we will select
+the top five differentially expressed gene sets:
+
+<<>>=
+ntopgenesets <- 5
+@
+and use them to build a hierarchical clustering of the samples whose two main branches
+are taken as the predicted sample classification. The accuracy of this classification
+is then measured in terms of the adjusted rand index (ARI); see \citet{hubert_ari_1985}.
+We will apply this procedure through data sets of 10 samples per condition bootstrapped
+from the original leukemia data set. This entire strategy is coded in the following function:
+
+<<>>=
+computeARI <- function(geneSets, eset, selGenes, ntopgenesets) {
+  eset <- eset[selGenes, c(sample(which(eset$subtype == "ALL"), size=10),
+                           sample(which(eset$subtype == "MLL"), size=10))]
+  e <- exprs(eset)
+  design <- model.matrix(~ factor(eset$subtype))
+
+  es.gsva <- gsva(e, geneSets, min.sz=10, max.sz=500, verbose=FALSE)$es.obs
+  fit <- lmFit(es.gsva, design)
+  fit <- eBayes(fit)
+  topgeneset <- topTable(fit, coef=2)$ID[1:ntopgenesets]
+
+  sampleClustering <- hclust(as.dist(1-cor(es.gsva[topgeneset, ], method="spearman")), method="complete")
+  ari.gsva <- mclust::adjustedRandIndex(as.vector(cutree(sampleClustering, k=2)),
+                                        as.integer(factor(eset$subtype)))
+
+  es.ss <- gsva(e, geneSets, method="ssgsea", min.sz=10, max.sz=500, verbose=FALSE)
+  fit <- lmFit(es.ss, design)
+  fit <- eBayes(fit)
+  topgeneset <- topTable(fit, coef=2)$ID[1:ntopgenesets]
+
+  sampleClustering <- hclust(as.dist(1-cor(es.ss[topgeneset, ], method="spearman")), method="complete")
+  ari.ss <- mclust::adjustedRandIndex(as.vector(cutree(sampleClustering, k=2)),
+                                      as.integer(factor(eset$subtype)))
+
+  es.z <- gsva(e, geneSets, method="zscore", min.sz=10, max.sz=500, verbose=FALSE)
+  fit <- lmFit(es.z, design)
+  fit <- eBayes(fit)
+  topgeneset <- topTable(fit, coef=2)$ID[1:ntopgenesets]
+
+  sampleClustering <- hclust(as.dist(1-cor(es.z[topgeneset, ], method="spearman")), method="complete")
+  ari.z <- mclust::adjustedRandIndex(as.vector(cutree(sampleClustering, k=2)),
+                                     as.integer(factor(eset$subtype)))
+
+  c(ari.gsva, ari.ss, ari.z)
+}
+@
+
+In order to make computations feasible for this vignette we consider only gene sets in the C2 Broad
+Collection whose name includes either the word \verb+LEUKEMIA+ or \verb+MLL+ which should makes them
+more relevant to the ALL/MLL leukemia data we are using:
+
+<<>>=
+mappedGeneSets <- geneIds(mapIdentifiers(c2BroadSets[grep("LEUKEMIA|MLL", names(c2BroadSets))],
+                                         GSEABase::AnnoOrEntrezIdentifier(annotation(leukemia_eset))))
+length(mappedGeneSets)
+names(mappedGeneSets)
+@
+Finally, we carry out the simulation on 50 bootstrapped data sets as follows:
+
+<<>>=
+set.seed(123)
+ari <- replicate(50, computeARI(mappedGeneSets, leukemia_eset,
+                                genesbyabslogfccutoff[[2]], ntopgenesets))
+@
+where we have set the seed on the random number generator to enable reproducing the exact result.
+In Figure~\ref{comp_methods} we can see the 50 ARI values per method which are higher in GSVA than with
+ssGSEA or with the combined z-score approach. On top of each of the boxplots for these two compared
+ethods we show the $P$ values of the Kruskal-Wallis rank sum test of the null that the location
+arameters of the GSVA ARI values are the same than those from ssGSEA and the combined z-score,
+respectively. Both $P$ values indicate that GSVA provides larger power than ssGSEA and z-score to
+detect subtle changes in pathway activity.
+
+<<perf, echo=FALSE, results=hide>>=
+png(filename="GSVA-perf.png", width=1000, height=500, res=150)
+par(mfrow=c(1,2), mar=c(4, 4, 1, 1))
+design <- model.matrix(~ factor(leukemia_eset$subtype))
+fitGenes <- lmFit(leukemia_eset, design)
+fitGenes <- eBayes(fitGenes)
+ttgenes_leu <- topTable(fitGenes, coef=2, n=Inf)
+abslogfc_leu <- abs(ttgenes_leu$logFC)
+names(abslogfc_leu) <- ttgenes_leu$ID
+qtlsabslogfc_leu <- quantile(abslogfc_leu, p=seq(0, 1, by=1/3))
+abslogfccutoff_leu <- cut(abslogfc_leu, qtlsabslogfc_leu, include.lowest=TRUE)
+genesbyabslogfccutoff_leu <- split(ttgenes_leu$ID, abslogfccutoff_leu)
+M <- ttgenes_leu$logFC
+P <- -log10(ttgenes_leu$P.Value)
+names(M) <- names(P) <- ttgenes_leu$ID
+plot(M, P, pch=".", cex=1, type="n",
+     xlim=c(-2, 2), ylim=c(0, 15), xlab=expression(paste(log[2], " ALL", -log[2], " MLL")),
+     ylab=expression(paste(-log[10], " P-value")), main="", las=1)
+colrs <- c("blue", "violet", "red")
+for (i in length(genesbyabslogfccutoff_leu):1) {
+  points(M[genesbyabslogfccutoff_leu[[i]]], P[genesbyabslogfccutoff_leu[[i]]], pch=".", cex=1, col=colrs[i])
+}
+boxplot(t(ari), names=c("GSVA", "ssGSEA", "zscore"), las=1, xlab="Method", ylab="Adjusted Rand Index (ARI)")
+points(1:3+0.25, rowMeans(ari), pch=23, col="black", bg="black")
+pp <- c(kruskal.test(list(ari[1,], ari[2,]))$p.value, kruskal.test(list(ari[1,], ari[3,]))$p.value)
+pp <- sprintf("P=%.3g", pp)
+text(1:3, 0.9*rep(max(ari), 3), c(" ", paste("Kruskal-Wallis", pp, sep="\n")), cex=0.5)
+dev.off()
+@
+\begin{figure}[ht]
+\centerline{\includegraphics[width=\textwidth]{GSVA-perf}}
+\caption{{\bf Comparison of GSVA with single sample GSEA (ssGSEA) and combined z-score (zscore).}
+         On the left a volcano plot is shown where genes highlighted in red form the first tercile
+         of largest absolute fold-changes, violet indicates the second tercile and blue the third
+         tercile. On the right, boxplots of the adjusted rand index (ARI) values are shown for each
+         method using gene sets formed from genes belonging to the second tercile of fold-change
+         magnitude (violet in the volcano plot). Diamonds indicate mean value.}
+\label{comp_methods}
+\end{figure}
+
+\section{GSVA for RNA-Seq data}
+
+In this section we illustrate how to use GSVA with RNA-seq data and, more importantly, how the
+method provides pathway activity profiles analogous to the ones obtained from microarray data by
+using samples of lymphoblastoid cell lines (LCL) from HapMap individuals which have been profiled
+using both technologies \cite{huang_genome-wide_2007, pickrell_understanding_2010}. These data
+form part of the experimental package \Rpackage{GSVAdata} and the corresponding help pages contain
+details on how the data were processed. We start loading these data and verifying that
+they indeed contain expression data for the same genes and samples, as follows:
+
+<<>>=
+data(commonPickrellHuang)
+
+stopifnot(identical(featureNames(huangArrayRMAnoBatchCommon_eset),
+                    featureNames(pickrellCountsArgonneCQNcommon_eset)))
+stopifnot(identical(sampleNames(huangArrayRMAnoBatchCommon_eset),
+                    sampleNames(pickrellCountsArgonneCQNcommon_eset)))
+@
+Next, for the purpose of the current analysis we are going to use the previously defined collection
+of canonical C2 Broad Sets enlarged with two additional ones corresponding to genes with sex-specific
+expression:
+
+<<<>>=
+data(genderGenesEntrez)
+
+MSY <- GeneSet(msYgenesEntrez, geneIdType=EntrezIdentifier(),
+               collectionType=BroadCollection(category="c2"), setName="MSY")
+MSY
+XiE <- GeneSet(XiEgenesEntrez, geneIdType=EntrezIdentifier(),
+               collectionType=BroadCollection(category="c2"), setName="XiE")
+XiE
+
+
+canonicalC2BroadSets <- GeneSetCollection(c(canonicalC2BroadSets, MSY, XiE))
+canonicalC2BroadSets
+@
+We calculate now GSVA enrichment scores for these gene sets using first the microarray
+data and then the RNA-seq data. Note that the only requirement to do the latter is to
+set the argument \Robject{rnaseq=TRUE} which is \Robject{FALSE} by default.
+
+<<<>>=
+esmicro <- gsva(huangArrayRMAnoBatchCommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500,
+                mx.diff=TRUE, verbose=FALSE, rnaseq=FALSE)$es.obs
+dim(esmicro)
+esrnaseq <- gsva(pickrellCountsArgonneCQNcommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500,
+                 mx.diff=TRUE, verbose=FALSE, rnaseq=TRUE)$es.obs
+dim(esrnaseq)
+@
+In order to compare expression values from both technologies we are going to transform
+the RNA-seq read counts into RPKM values. For this purpose we need gene length and G+C content
+information also stored in the \Rpackage{GSVAdata} package and use the \Rfunction{cpm()}
+function from the \Rpackage{edgeR} package. Note that RPKMs can only be calculated for those
+genes for which the gene length and G+C content information is available:
+
+<<>>=
+data(annotEntrez220212)
+head(annotEntrez220212)
+
+cpm <- edgeR::cpm(exprs(pickrellCountsArgonneCQNcommon_eset))
+dim(cpm)
+
+common <- intersect(rownames(cpm), rownames(annotEntrez220212))
+length(common)
+
+rpkm <- sweep(cpm[common, ], 1, annotEntrez220212[common, "Length"] / 10^3, FUN="/")
+dim(rpkm)
+
+dim(huangArrayRMAnoBatchCommon_eset[rownames(rpkm), ])
+@
+We finally calculate Spearman correlations between gene and gene-level expression values
+and gene-set level GSVA enrichment scores produced from data obtained by microarray and
+RNA-seq technologies:
+
+<<>>=
+corsrowsgene <- sapply(1:nrow(huangArrayRMAnoBatchCommon_eset[rownames(rpkm), ]),
+                       function(i, expmicro, exprnaseq) cor(expmicro[i, ], exprnaseq[i, ], method="pearson"),
+                       exprs(huangArrayRMAnoBatchCommon_eset[rownames(rpkm), ]), log2(rpkm+0.1))
+names(corsrowsgene) <- rownames(rpkm)
+
+corsrowsgs <- sapply(1:nrow(esmicro),
+                     function(i, esmicro, esrnaseq) cor(esmicro[i, ], esrnaseq[i, ], method="spearman"),
+                     exprs(esmicro), exprs(esrnaseq))
+names(corsrowsgs) <- rownames(esmicro)
+@
+In panels A and B of Figure~\ref{rnaseqcomp} we can see the distribution of these correlations at
+gene and gene-set level and they show that GSVA enrichment scores correlate similarly to gene
+expression levels produced by both profiling technologies.
+
+We have also examined in detail two gene sets containing gender specific genes: those that escape
+X-inactivation in female samples \cite{carrel_x-inactivation_2005} and those that are located on
+the male-specific region of the Y chrosomome \cite{skaletsky_male-specific_2003}. In panels C and D
+of Figure~\ref{rnaseqcomp} we can see how microarray and RNA-seq enrichment scores correlate very
+well in these gene sets, with $\rho=0.82$ for the male-specific gene set and $\rho=0.78$ for the
+female-specific gene set. Male and female samples show higher GSVA enrichment scores in their
+corresponding gene set. This demonstrates the flexibility of GSVA to enable analogous unsupervised
+and single sample GSE analyses in data coming from both, microarray and RNA-seq technologies.
+
+<<RNAseqComp, echo=FALSE, results=hide>>=
+png(filename="GSVA-RNAseqComp.png", width=1100, height=1100, res=150)
+par(mfrow=c(2,2), mar=c(4, 5, 3, 2))
+hist(corsrowsgene, xlab="Spearman correlation", main="Gene level\n(RNA-seq RPKM vs Microarray RMA)",
+     xlim=c(-1, 1), col="grey", las=1)
+par(xpd=TRUE)
+text(par("usr")[1]*1.5, par("usr")[4]*1.1, "A", font=2, cex=2)
+par(xpd=FALSE)
+hist(corsrowsgs, xlab="Spearman correlation", main="Gene set level\n(GSVA enrichment scores)",
+     xlim=c(-1, 1), col="grey", las=1)
+par(xpd=TRUE)
+text(par("usr")[1]*1.5, par("usr")[4]*1.1, "B", font=2, cex=2)
+par(xpd=FALSE)
+plot(exprs(esrnaseq)["MSY", ], exprs(esmicro)["MSY", ], xlab="GSVA scores RNA-seq", ylab="GSVA scores microarray",
+     main=sprintf("MSY R=%.2f", cor(exprs(esrnaseq)["MSY", ], exprs(esmicro)["MSY", ])), las=1, type="n")
+     sprintf("MSY R=%.2f", cor(exprs(esrnaseq)["MSY", ], exprs(esmicro)["MSY", ]))
+abline(lm(exprs(esmicro)["MSY", ] ~ exprs(esrnaseq)["MSY", ]), lwd=2, lty=2, col="grey")
+points(exprs(esrnaseq)["MSY", pickrellCountsArgonneCQNcommon_eset$Gender == "Female"],
+       exprs(esmicro)["MSY", huangArrayRMAnoBatchCommon_eset$Gender == "Female"], col="red", pch=21, bg="red", cex=1)
+points(exprs(esrnaseq)["MSY", pickrellCountsArgonneCQNcommon_eset$Gender == "Male"],
+       exprs(esmicro)["MSY", huangArrayRMAnoBatchCommon_eset$Gender == "Male"], col="blue", pch=21, bg="blue", cex=1)
+par(xpd=TRUE)
+text(par("usr")[1]*1.5, par("usr")[4]*1.1, "C", font=2, cex=2)
+par(xpd=FALSE)
+plot(exprs(esrnaseq)["XiE", ], exprs(esmicro)["XiE", ], xlab="GSVA scores RNA-seq", ylab="GSVA scores microarray",
+     main=sprintf("XiE R=%.2f", cor(exprs(esrnaseq)["XiE", ], exprs(esmicro)["XiE", ])), las=1, type="n")
+abline(lm(exprs(esmicro)["XiE", ] ~ exprs(esrnaseq)["XiE", ]), lwd=2, lty=2, col="grey")
+points(exprs(esrnaseq["XiE", pickrellCountsArgonneCQNcommon_eset$Gender == "Female"]),
+       exprs(esmicro)["XiE", huangArrayRMAnoBatchCommon_eset$Gender == "Female"], col="red", pch=21, bg="red", cex=1)
+points(exprs(esrnaseq)["XiE", pickrellCountsArgonneCQNcommon_eset$Gender == "Male"],
+       exprs(esmicro)["XiE", huangArrayRMAnoBatchCommon_eset$Gender == "Male"], col="blue", pch=21, bg="blue", cex=1)
+par(xpd=TRUE)
+text(par("usr")[1]*1.5, par("usr")[4]*1.1, "D", font=2, cex=2)
+par(xpd=FALSE)
+dev.off()
+@
+\begin{figure}[p]
+\centerline{\includegraphics[height=0.5\texheight]{GSVA-RNAseqComp}}
+\caption{{\bf GSVA for RNA-seq (Argonne).} A. Distribution of Spearman correlation values between gene expression profiles of RNA-seq and microarray data. B. Distribution of Spearman correlation values between GSVA enrichment scores of gene sets calculated from RNA-seq and microarray data. C and D. Comparison of GSVA enrichment scores obtained from microarray and RNA-seq data for two gene sets containing genes with sex-specific expression: MSY formed by genes from the male-specific region of the Y chromosome, thus male-specific, and XiE formed by genes that escape X-inactivation in females, thus female-specific. Red and blue dots represent female and male samples, respectively. In both cases GSVA-scores show very high correlation between the two profiling technologies where female samples show higher enrichment scores in the female-specific gene set and male samples show higher enrichment scores in the male-specific gene set.}
+\label{rnaseqcomp}
+\end{figure}
+
 
 \section{Session Information}
 
