@@ -1,6 +1,6 @@
 Package: GSVA
-Version: 1.5.3
-Date: 2012-05-15
+Version: 1.5.4
+Date: 2012-05-16
 Title: Gene Set Variation Analysis for microarray and RNA-seq data
 Author: Justin Guinney <justin.guinney@sagebase.org> (with contributions from Robert Castelo <robert.castelo@upf.edu> and Sonja Haenzelmann <shanzelmann@imim.es)
 Maintainer: Justin Guinney <justin.guinney@sagebase.org>
@@ -11,6 +11,6 @@ Suggests: limma, qpgraph, RBGL, graph, Rgraphviz, RColorBrewer, genefilter, mclu
 Description: Gene Set Variation Analysis (GSVA) is a non-parametric, unsupervised method for estimating variation of gene set enrichment through the samples of a expression data set. GSVA performs a change in coordinate systems, transforming the data from a gene by sample matrix to a gene-set by sample matrix, thereby allowing the evaluation of pathway enrichment for each sample. This new matrix of GSVA enrichment scores facilitates applying standard analytical methods like functional enrichment, survival analysis, clustering, CNV-pathway analysis or cross-tissue pathway analysis, in a pathway-centric manner.
 License: GPL (>= 2)
 LazyLoad: yes
-biocViews: Microarray, Pathways, NetworkEnrichment
+biocViews: Microarray, Pathways, GeneSetEnrichment
 URL: http://www.sagebase.org
 
