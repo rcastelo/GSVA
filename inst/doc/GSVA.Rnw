@@ -700,7 +700,7 @@ Figure~\ref{fig:gennrrcliquenr}
 
 <<gennrrmaxbd, echo=FALSE, results=hide>>=
 png(filename="GSVA-gennrrmaxbd.png", width=800, height=800, res=150)
-qpbd <- qpBoundary(gennrr, N=ncol(leukemia_canonicalPwy_es), breaks=20)
+qpbd <- qpBoundary(gennrr, n=ncol(leukemia_canonicalPwy_es), breaks=20)
 dev.off()
 @
 \begin{figure}[ht]
