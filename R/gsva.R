@@ -414,15 +414,15 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
       mclapp <- get('mclapply', envir=getNamespace('parallel'))
       detCor <- get('detectCores', envir=getNamespace('parallel'))
       nCores <- detCor()
-      options(cores=nCores)
+      options(mc.cores=nCores)
       if (parallel.sz > 0 && parallel.sz < nCores)
-        options(cores=parallel.sz)
+        options(mc.cores=parallel.sz)
 
       pb <- NULL
       if (verbose){
-        cat("Using parallel with", getOption("cores"), "cores\n")
+        cat("Using parallel with", getOption("mc.cores"), "cores\n")
         assign("progressBar", txtProgressBar(style=3), envir=globalenv()) ## show progress if verbose=TRUE
-        assign("nGeneSets", ceiling(length(gset.idx.list) / getOption("cores")), envir=globalenv())
+        assign("nGeneSets", ceiling(length(gset.idx.list) / getOption("mc.cores")), envir=globalenv())
         assign("iGeneSet", 0, envir=globalenv())
       }
 
@@ -578,9 +578,9 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz, parallel.type, verbose)
       mclapp <- get('mclapply', envir=getNamespace('parallel'))
       detCor <- get('detectCores', envir=getNamespace('parallel'))
       nCores <- detCor()
-      options(cores=nCores)
+      options(mc.cores=nCores)
       if (parallel.sz > 0 && parallel.sz < nCores)
-        options(cores=parallel.sz)
+        options(mc.cores=parallel.sz)
     }
   }
 
@@ -659,9 +659,9 @@ zscore <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
       mclapp <- get('mclapply', envir=getNamespace('parallel'))
       detCor <- get('detectCores', envir=getNamespace('parallel'))
       nCores <- detCor()
-      options(cores=nCores)
+      options(mc.cores=nCores)
       if (parallel.sz > 0 && parallel.sz < nCores)
-        options(cores=parallel.sz)
+        options(mc.cores=parallel.sz)
     }
   }
 
