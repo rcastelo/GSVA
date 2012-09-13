@@ -604,6 +604,9 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz, parallel.type, verbose)
                       unlist(es_sample)
                     }, R, geneSets, alpha)
 
+  if (length(geneSets) == 1)
+    es <- matrix(es, nrow=1)
+
   colnames(es) <- colnames(X)
 
   ## normalize enrichment scores by using the entire data set, as indicated
@@ -683,6 +686,9 @@ zscore <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
 
                       unlist(es_sample)
                     }, Z, geneSets)
+
+  if (length(geneSets) == 1)
+    es <- matrix(es, nrow=1)
 
   colnames(es) <- colnames(X)
 
