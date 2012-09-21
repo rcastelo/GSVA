@@ -39,7 +39,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list", annotati
                        mx.diff, tau, kernel, verbose)
   eScoEset <- expr
   eScoEset <- Biobase::`exprs<-`(eScoEset, eSco$es.obs)
-  eScoEset <- Biobase::`annotation<-`(eScoEset, "")
+  eScoEset <- Biobase::`annotation<-`(eScoEset, value="")
 
 	return(list(es.obs=eScoEset,
 				      bootstrap=eSco$bootstrap,
@@ -87,7 +87,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
                        mx.diff, tau, kernel, verbose)
   eScoEset <- expr
   eScoEset <- Biobase::`exprs<-`(eScoEset, eSco$es.obs)
-  eScoEset <- Biobase::`annotation<-`(eScoEset, "")
+  eScoEset <- Biobase::`annotation<-`(eScoEset, value="")
 
 	return(list(es.obs=eScoEset,
 				      bootstrap=eSco$bootstrap,
