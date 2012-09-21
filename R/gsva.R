@@ -7,7 +7,7 @@ setGeneric("gsva", function(expr, gset.idx.list, annotation=NULL, ...) standardG
 
 setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list", annotation="missing"),
           function(expr, gset.idx.list, annotation=NULL,
-  method=c("gsva", "ssgsea", "zscore"),
+  method=c("gsva", "ssgsea", "zscore", "plage"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
   min.sz=1,
@@ -48,7 +48,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list", annotati
 
 setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollection", annotation="missing"),
           function(expr, gset.idx.list, annotation=NULL,
-  method=c("gsva", "ssgsea", "zscore"),
+  method=c("gsva", "ssgsea", "zscore", "plage"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
   min.sz=1,
@@ -69,7 +69,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
 
   ## map gene identifiers of the gene sets to the features in the chip
   mapped.gset.idx.list <- GSEABase::mapIdentifiers(gset.idx.list,
-                                                   GSEABase::AnnoOrEntrezIdentifier(annotation(expr)))
+                                                   GSEABase::AnnoOrEntrezIdentifier(Biobase::annotation(expr)))
   
   ## map to the actual features for which expression data is available
   tmp <- lapply(geneIds(mapped.gset.idx.list),
@@ -96,7 +96,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
 
 setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", annotation="character"),
           function(expr, gset.idx.list, annotation=NA,
-  method=c("gsva", "ssgsea", "zscore"),
+  method=c("gsva", "ssgsea", "zscore", "plage"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
   min.sz=1,
@@ -119,7 +119,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", an
       cat("Mapping identifiers between gene sets and feature names\n")
 
     mapped.gset.idx.list <- GSEABase::mapIdentifiers(gset.idx.list,
-                                                     GSEABase::AnnoOrEntrezIdentifier(annotation))
+                                                     GSEABase::AnnoOrEntrezIdentifier(Biobase::annotation))
   }
   
   ## map to the actual features for which expression data is available
@@ -141,7 +141,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", an
 
 setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="missing"),
           function(expr, gset.idx.list, annotation=NULL,
-  method=c("gsva", "ssgsea", "zscore"),
+  method=c("gsva", "ssgsea", "zscore", "plage"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
   min.sz=1,
@@ -173,7 +173,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
 })
 
 .gsva <- function(expr, gset.idx.list,
-  method=c("gsva", "ssgsea", "zscore"),
+  method=c("gsva", "ssgsea", "zscore", "plage"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
   no.bootstraps=0, 
@@ -202,9 +202,19 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
       stop("rnaseq=TRUE does not work with method='zscore'.")
 
 	  if(verbose)
-		  cat("Estimating z-scores for", length(gset.idx.list),"gene sets.\n")
+		  cat("Estimating combined z-scores for", length(gset.idx.list),"gene sets.\n")
 
     return(zscore(expr, gset.idx.list, parallel.sz, parallel.type, verbose))
+  }
+
+  if (method == "plage") {
+    if (rnaseq)
+      stop("rnaseq=TRUE does not work with method='plage'.")
+
+	  if(verbose)
+		  cat("Estimating PLAGE scores for", length(gset.idx.list),"gene sets.\n")
+
+    return(plage(expr, gset.idx.list, parallel.sz, parallel.type, verbose))
   }
 
 	if(verbose)
@@ -375,8 +385,8 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
 	haveParallel <- GSVA:::.isPackageLoaded("parallel")
 	haveSnow <- GSVA:::.isPackageLoaded("snow")
 	
-	if(parallel.sz > 0 || haveParallel) {
-		if(!haveParallel && !haveSnow) {
+	if (parallel.sz > 1 || haveParallel) {
+		if (!haveParallel && !haveSnow) {
 			stop("In order to run calculations in parallel either the 'snow', or the 'parallel' library, should be loaded first")
 		}
 
@@ -401,7 +411,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
         }
       }
 	
-		  m <- t(parSapp(cl, gset.idx.list, ks_test_m, 
+		  m <- t(parSapp(cl, gset.idx.list, ks_test_m,
 						  gene.density=rank.scores, 
 						  sort.idxs=sort.sgn.idxs,
 						  mx.diff=mx.diff, tau=tau, verbose=FALSE))
@@ -458,6 +468,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
                   mx.diff=mx.diff, tau=tau, verbose=verbose))
 
     if (verbose) {
+      setTxtProgressBar(get("progressBar", envir=globalenv()), 1)
       close(get("progressBar", envir=globalenv()))
     }
 	}
@@ -558,8 +569,8 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz, parallel.type, verbose)
 	haveSnow <- GSVA:::.isPackageLoaded("snow")
 	
   cl <- makeCl <- parSapp <- stopCl <- mclapp <- detCor <- nCores <- NA
-	if(parallel.sz > 0 || haveParallel) {
-		if(!haveParallel && !haveSnow) {
+	if (parallel.sz > 1 || haveParallel) {
+		if (!haveParallel && !haveSnow) {
 			stop("In order to run calculations in parallel either the 'snow', or the 'parallel' library, should be loaded first")
 		}
 
@@ -581,6 +592,8 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz, parallel.type, verbose)
       options(mc.cores=nCores)
       if (parallel.sz > 0 && parallel.sz < nCores)
         options(mc.cores=parallel.sz)
+      if (verbose)
+        cat("Using parallel with", getOption("mc.cores"), "cores\n")
     }
   }
 
@@ -592,7 +605,7 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz, parallel.type, verbose)
                       }
                       geneRanking <- order(R[, j], decreasing=TRUE)
                       es_sample <- NA
-                      if (is.na(cl) && !haveParallel)
+                      if (parallel.sz == 1 || (is.na(cl) && !haveParallel))
                         es_sample <- sapply(geneSets, rndWalk, geneRanking, j, R, alpha)
                       else {
                         if (is.na(cl))
@@ -607,13 +620,18 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz, parallel.type, verbose)
   if (length(geneSets) == 1)
     es <- matrix(es, nrow=1)
 
-  colnames(es) <- colnames(X)
-
   ## normalize enrichment scores by using the entire data set, as indicated
   ## by Barbie et al., 2009, online methods, pg. 2
   es <- apply(es, 2, function(x, es) x / (range(es)[2] - range(es)[1]), es)
 
+  if (length(geneSets) == 1)
+    es <- matrix(es, nrow=1)
+
+  rownames(es) <- names(geneSets)
+  colnames(es) <- colnames(X)
+
   if (verbose) {
+    setTxtProgressBar(get("progressBar", envir=globalenv()), 1)
     close(get("progressBar", envir=globalenv()))
   }
 
@@ -642,8 +660,8 @@ zscore <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
 	haveSnow <- GSVA:::.isPackageLoaded("snow")
 	
   cl <- makeCl <- parSapp <- stopCl <- mclapp <- detCor <- nCores <- NA
-	if(parallel.sz > 0 || haveParallel) {
-		if(!haveParallel && !haveSnow) {
+	if (parallel.sz > 1 || haveParallel) {
+		if (!haveParallel && !haveSnow) {
 			stop("In order to run calculations in parallel either the 'snow', or the 'parallel' library, should be loaded first")
 		}
 
@@ -665,6 +683,8 @@ zscore <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
       options(mc.cores=nCores)
       if (parallel.sz > 0 && parallel.sz < nCores)
         options(mc.cores=parallel.sz)
+      if (verbose)
+        cat("Using parallel with", getOption("mc.cores"), "cores\n")
     }
   }
 
@@ -675,7 +695,7 @@ zscore <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
                                           get("iSample", envir=globalenv()) / get("nSamples", envir=globalenv()))
                       }
                       es_sample <- NA
-                      if (is.na(cl) && !haveParallel)
+                      if (parallel.sz == 1 || (is.na(cl) && !haveParallel))
                         es_sample <- sapply(geneSets, combinez, j, Z)
                       else {
                         if (is.na(cl))
@@ -690,9 +710,116 @@ zscore <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
   if (length(geneSets) == 1)
     es <- matrix(es, nrow=1)
 
+  rownames(es) <- names(geneSets)
   colnames(es) <- colnames(X)
 
   if (verbose) {
+    setTxtProgressBar(get("progressBar", envir=globalenv()), 1)
+    close(get("progressBar", envir=globalenv()))
+  }
+
+  if (!is.na(cl))
+    stopCl(cl)
+
+  es
+}
+
+rightsingularsvdvectorgset <- function(gSetIdx, Z) {
+    s <- svd(Z[gSetIdx, ])
+  s$v[, 1]
+}
+
+plage <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
+
+  p <- nrow(X)
+  n <- ncol(X)
+
+  if (verbose) {
+    assign("progressBar", txtProgressBar(style=3), envir=globalenv()) ## show progress if verbose=TRUE
+    assign("nGeneSets", length(geneSets), envir=globalenv())
+    assign("iGeneSet", 0, envir=globalenv())
+  }
+
+  Z <- t(apply(X, 1, function(x) (x-mean(x))/sd(x)))
+
+	haveParallel <- GSVA:::.isPackageLoaded("parallel")
+	haveSnow <- GSVA:::.isPackageLoaded("snow")
+	
+  cl <- makeCl <- parSapp <- stopCl <- mclapp <- detCor <- nCores <-masterDesc <- NA
+	if(parallel.sz > 1 || haveParallel) {
+		if(!haveParallel && !haveSnow) {
+			stop("In order to run calculations in parallel either the 'snow', or the 'parallel' library, should be loaded first")
+		}
+
+    if (!haveParallel) {  ## use snow
+      ## copying ShortRead's strategy, the calls to the 'get()' are
+      ## employed to quieten R CMD check, and for no other reason
+      makeCl <- get("makeCluster", mode="function")
+      parSapp <- get("parSapply", mode="function")
+      stopCl <- get("stopCluster", mode="function")
+
+      if (verbose)
+        cat("Allocating cluster\n")
+		  cl <- makeCl(parallel.sz, type = parallel.type) 
+    } else {             ## use parallel
+
+      mclapp <- get('mclapply', envir=getNamespace('parallel'))
+      detCor <- get('detectCores', envir=getNamespace('parallel'))
+      masterDesc <- get('masterDescriptor', envir=getNamespace('parallel'))
+      nCores <- detCor()
+      options(mc.cores=nCores)
+      if (parallel.sz > 0 && parallel.sz < nCores)
+        options(mc.cores=parallel.sz)
+      if (verbose)
+        cat("Using parallel with", getOption("mc.cores"), "cores\n")
+    }
+  }
+
+  if (parallel.sz == 1 || (is.na(cl) && !haveParallel))
+    es <- t(sapply(geneSets, function(gset, Z) {
+                             if (verbose) {
+                               assign("iGeneSet", get("iGeneSet", envir=globalenv()) + 1, envir=globalenv())
+                               setTxtProgressBar(get("progressBar", envir=globalenv()),
+                                                 get("iGeneSet", envir=globalenv()) / get("nGeneSets", envir=globalenv()))
+                             }
+                             rightsingularsvdvectorgset(gset, Z)
+                           }, Z))
+  else {
+    if (is.na(cl)) {
+      firstproc <- mclapp(as.list(1:(options("mc.cores")$mc.cores)), function(x) masterDesc())[[1]]
+      es <- mclapp(geneSets, function(gset, Z, firstproc) {
+                                 if (verbose && masterDesc() == firstproc) {
+                                   assign("iGeneSet", get("iGeneSet", envir=globalenv()) + 1, envir=globalenv())
+                                   setTxtProgressBar(get("progressBar", envir=globalenv()),
+                                                     get("iGeneSet", envir=globalenv()) / get("nGeneSets", envir=globalenv()))
+                                 }
+                                 rightsingularsvdvectorgset(gset, Z)
+                               }, Z, firstproc)
+      es <- do.call(rbind, es)
+    } else {
+      if (verbose)
+        message("Progress reporting for plage with a snow cluster not yet implemented")
+
+      es <- parSapp(geneSets, function(gset, Z) {
+                                  if (verbose) {
+                                    assign("iGeneSet", get("iGeneSet", envir=globalenv()) + 1, envir=globalenv())
+                                    setTxtProgressBar(get("progressBar", envir=globalenv()),
+                                                      get("iGeneSet", envir=globalenv()) / get("nGeneSets", envir=globalenv()))
+                                  }
+                                  rightsingularsvdvectorgset(gset, Z)
+                                }, Z)
+      es <- do.call(rbind, es)
+    }
+  }
+
+  if (length(geneSets) == 1)
+    es <- matrix(es, nrow=1)
+
+  rownames(es) <- names(geneSets)
+  colnames(es) <- colnames(X)
+
+  if (verbose) {
+    setTxtProgressBar(get("progressBar", envir=globalenv()), 1)
     close(get("progressBar", envir=globalenv()))
   }
 
@@ -769,7 +896,7 @@ setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGen
 setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGenes="ExpressionSet"),
           function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
   ## map gene identifiers of the gene sets to the features in the chip
-  gSets <- GSEABase::mapIdentifiers(gSets, GSEABase::AnnoOrEntrezIdentifier(annotation(uniqGenes)))
+  gSets <- GSEABase::mapIdentifiers(gSets, GSEABase::AnnoOrEntrezIdentifier(Biobase::annotation(uniqGenes)))
   
   uniqGenes <- Biobase::featureNames(uniqGenes)
 

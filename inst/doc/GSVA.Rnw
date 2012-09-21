@@ -260,13 +260,32 @@ serve to explicitly filter gene sets by size and by pair-wise overlap,
 respectively. Note that the size filter can also be applied within the
 \Rfunction{gsva()} function call.
 
-The \Rfunction{gsva()} function also offers two other different unsupervised
-GSE methods that yield single sample enrichment scores and can be selected
-through the \Robject{method} argument. One of them is a combined z-score
-approach \citep{lee_inferring_2008} (\Robject{method="zscore"}) and the other
-is the single-sample GSEA approach \citep{barbie_systematic_2009}
-(\Robject{method="ssgsea"}). By default \Robject{method="gsva"} and the
-\Rfunction{gsva()} function uses the GSVA algorithm.
+The \Rfunction{gsva()} function also offers the following three other unsupervised
+GSE methods that calculate single sample pathway summaries of expression and which
+can be selected through the \Robject{method} argument:
+
+\begin{itemize}
+  \item \Robject{method="plage"} \citep{tomfohr_pathway_2005}. Pathway level analysis
+        of gene expression (PLAGE) standardizes first expression profiles into z-scores
+        over the samples and then calculates the singular value decomposition
+        $Z_\gamma=UDV'$ on the z-scores of the genes in the gene set. The coefficients
+        of the first right-singular vector (first column of $V$) are taken as the gene
+        set summaries of expression over the samples.
+  \item \Robject{method="zscore"} \citep{lee_inferring_2008}. The combined z-score method
+        also, as PLAGE, standardizes first expression profiles into z-scores over the samples,
+        but combines them together for each gene set at each individual sample as follows.
+        Given a gene set $\gamma=\{1,\dots,k\}$ with z-scores $Z_1,\dots,Z_k$ for each gene,
+        the combined z-score $Z_\gamma$ for the gene set $\gamma$ is defined as:
+        \begin{equation}
+        Z_\gamma = \frac{\sum_{i=1}^k Z_i}{\sqrt{k}}\,.
+        \end{equation}
+  \item \Robject{method="ssgsea"} \citep{barbie_systematic_2009}. Single sample GSEA (ssGSEA)
+        calculates a gene set enrichment score per sample as the normalized difference in
+        empirical cumulative distribution functions of gene expression ranks inside and
+        outside the gene set.
+\end{itemize}
+
+By default \Robject{method="gsva"} and the \Rfunction{gsva()} function uses the GSVA algorithm.
 
 \section{Applications}
 
@@ -900,145 +919,136 @@ This risk was most pronounced for cases with the \textit{MLL} translocation \cit
 
 \section{Comparison with other methods}
 
-In this section we compare the performance of GSVA with the two other methods (\Robject{ssgsea}
-and \Robject{zscore}) available through the argument \Robject{method} of the function
-\Rfunction{gsva()} to condense gene-level expression into sample-wise pathway-level
-enrichment scores. We start by calculating fold changes using limma:
+In this section we compare with simulated data the performance of GSVA with other methods
+producing pathway summaries of gene expression, concretely, PLAGE, the combined z-score and
+ssGSEA which are available through the argument \Robject{method} of the function
+\Rfunction{gsva()}. We employ the following simple linear additive model for simulating
+normalized microarray data on $p$ genes and $n$ samples divided in two groups representing
+a case-control scenario:
+
+\begin{equation}
+y_{ij} = \alpha_i + \beta_j + \epsilon_{ij}\,,
+\end{equation}
+where $\alpha_i\sim\mathcal{N}(0, 1)$ is a gene-specific effect, such as a probe-effect,
+with $i=1,\dots,p$, $\beta_j\sim\mathcal{N}(\mu_j, 0.5)$ is a sample-effect with $j=1,2$ and
+$e_{ij}\sim\mathcal{N}(0,0.1)$ corresponds to random noise.
+
+We will assess the statistical power to detect one differentially expressed gene set formed by
+30 genes, out of $p=1000$, as a function of the sample size and two varying conditions: the
+fraction of differentially expressed genes in the gene set (50\% and 80\%) and the signal-to-noise
+ratio expressed as the magnitude of the mean sample effect for one of the sample groups
+($\mu_1=0$ and either $\mu_2=0.2$ or $\mu_2=1$).
+
+The following function enables simulating such data, computes the corresponding GSE scores with
+each method, performs a $t$-test on the tested gene set between the two groups of samples for each
+method and returns the corresponding $p$-values:
 
 <<>>=
-design <- model.matrix(~ factor(leukemia_eset$subtype))
-fitGenes <- lmFit(leukemia_eset, design)
-fitGenes <- eBayes(fitGenes)
-ttgenes <- topTable(fitGenes, coef=2, n=Inf)
-@
-Next, we split all \Sexpr{nrow(ttgenes)} genes into three equally sized fractions
-of the ranking by fold change:
+runSim <- function(p, n, gs.sz, S2N, fracDEgs) {
+  sizeDEgs <- round(fracDEgs * gs.sz)
+  group.n <- round(n / 2)
 
-<<>>=
-abslogfc <- abs(ttgenes$logFC)
-names(abslogfc) <- ttgenes$ID
-qtlsabslogfc <- quantile(abslogfc, p=seq(0, 1, by=1/3))
-abslogfccutoff <- cut(abslogfc, qtlsabslogfc, include.lowest=TRUE)
-genesbyabslogfccutoff <- split(ttgenes$ID, abslogfccutoff)
-@
-We want compare the performance of GSVA in producing enrichment scores that enable
-the signature identification of a dichotomous phenotype under an scenario of subtle
-changes. For this purpose we will use the genes in the second tercile of fold-changes
-to form gene sets and calculate enrichment scores for them with each of the three
-methods. Using these enrichment scores and the package \Rpackage{limma} we will select
-the top five differentially expressed gene sets:
+  sampleEffect <- rnorm(n, mean=0, sd=1)
+  sampleEffectDE <- rnorm(n, mean=S2N, sd=0.5)
+  probeEffect <- rnorm(p, mean=0, sd=1)
+  noise <- matrix(rnorm(p*n, mean=0, sd=0.1), nrow=p, ncol=n)
+  noiseDE <- matrix(rnorm(p*n, mean=0, sd=0.1), nrow=p, ncol=n)
+  M <- outer(probeEffect, sampleEffect, "+") + noise
+  M2 <- outer(probeEffect, sampleEffectDE, "+") + noiseDE
+  M[1:sizeDEgs, 1:group.n] <- M2[1:sizeDEgs, 1:group.n]
 
-<<>>=
-ntopgenesets <- 5
-@
-and use them to build a hierarchical clustering of the samples whose two main branches
-define the predicted sample classification. The accuracy of this classification
-is then measured in terms of the adjusted rand index (ARI); see \citet{hubert_ari_1985}.
-We will apply this procedure to data sets of 10 samples per condition bootstrapped
-from the original leukemia data set. This entire strategy is coded in the following function:
+  rownames(M) <- paste("g", 1:nrow(M), sep="")
+  geneSets <- list(testGeneSet=paste0("g", 1:(gs.sz)))
 
-<<>>=
-computeARI <- function(geneSets, eset, selGenes, ntopgenesets) {
-  eset <- eset[selGenes, c(sample(which(eset$subtype == "ALL"), size=10),
-                           sample(which(eset$subtype == "MLL"), size=10))]
-  e <- exprs(eset)
-  design <- model.matrix(~ factor(eset$subtype))
+  es.gsva <- gsva(M, geneSets, verbose=FALSE)$es.obs
+  es.plage <- gsva(M, geneSets, method="plage", verbose=FALSE)
+  es.zscore <- gsva(M, geneSets, method="zscore", verbose=FALSE)
+  es.ssgsea <- gsva(M, geneSets, method="ssgsea", verbose=FALSE)
 
-  es.gsva <- gsva(e, geneSets, min.sz=10, max.sz=500, verbose=FALSE)$es.obs
-  fit <- lmFit(es.gsva, design)
-  fit <- eBayes(fit)
-  topgeneset <- topTable(fit, coef=2)$ID[1:ntopgenesets]
+  gsva.pval <- t.test(es.gsva[1:group.n],es.gsva[(group.n+1):length(es.gsva)])$p.value
+  plage.pval <- t.test(es.plage[1:group.n],es.plage[(group.n+1):length(es.plage)])$p.value
+  zscore.pval <- t.test(es.zscore[1:group.n],es.zscore[(group.n+1):length(es.zscore)])$p.value
+  ssgsea.pval <- t.test(es.ssgsea[1:group.n],es.ssgsea[(group.n+1):length(es.ssgsea)])$p.value
 
-  sampleClustering <- hclust(as.dist(1-cor(es.gsva[topgeneset, ], method="spearman")), method="complete")
-  ari.gsva <- mclust::adjustedRandIndex(as.vector(cutree(sampleClustering, k=2)),
-                                        as.integer(factor(eset$subtype)))
-
-  es.ss <- gsva(e, geneSets, method="ssgsea", min.sz=10, max.sz=500, verbose=FALSE)
-  fit <- lmFit(es.ss, design)
-  fit <- eBayes(fit)
-  topgeneset <- topTable(fit, coef=2)$ID[1:ntopgenesets]
-
-  sampleClustering <- hclust(as.dist(1-cor(es.ss[topgeneset, ], method="spearman")), method="complete")
-  ari.ss <- mclust::adjustedRandIndex(as.vector(cutree(sampleClustering, k=2)),
-                                      as.integer(factor(eset$subtype)))
-
-  es.z <- gsva(e, geneSets, method="zscore", min.sz=10, max.sz=500, verbose=FALSE)
-  fit <- lmFit(es.z, design)
-  fit <- eBayes(fit)
-  topgeneset <- topTable(fit, coef=2)$ID[1:ntopgenesets]
-
-  sampleClustering <- hclust(as.dist(1-cor(es.z[topgeneset, ], method="spearman")), method="complete")
-  ari.z <- mclust::adjustedRandIndex(as.vector(cutree(sampleClustering, k=2)),
-                                     as.integer(factor(eset$subtype)))
-
-  c(ari.gsva, ari.ss, ari.z)
+  c(gsva.pval, ssgsea.pval, zscore.pval, plage.pval)
 }
 @
-
-In order to make computations feasible for this vignette we consider only gene sets in the C2 Broad
-Collection whose name includes either the word \verb+LEUKEMIA+ or \verb+MLL+ which should makes them
-more relevant to the ALL/MLL leukemia data we are using:
-
-<<>>=
-mappedGeneSets <- geneIds(mapIdentifiers(c2BroadSets[grep("LEUKEMIA|MLL", names(c2BroadSets))],
-                                         GSEABase::AnnoOrEntrezIdentifier(annotation(leukemia_eset))))
-length(mappedGeneSets)
-names(mappedGeneSets)
-@
-Finally, we carry the simulation on 50 bootstrapped data sets out, as follows:
+The next function takes the $p$-values of the output of the previous function and
+estimates the statistical power as the fraction of non-rejections at a significant level
+$\alpha=0.05$. It assumes the $p$-values were generated under the alternative hypothesis
+of differential expression.
 
 <<>>=
-set.seed(123)
-ari <- replicate(50, computeARI(mappedGeneSets, leukemia_eset,
-                                genesbyabslogfccutoff[[2]], ntopgenesets))
-@
-where we have set the seed on the random number generator to enable reproducing the exact result.
-In Figure~\ref{comp_methods} we can see the 50 ARI values per method which are higher in GSVA than with
-ssGSEA or with the combined z-score approach. On top of each of the boxplots for these two compared
-methods we show the p-values of the Kruskal-Wallis rank sum test of the null hypothesis that the location
-parameters of the GSVA ARI values are the same than those from ssGSEA and the combined z-score,
-respectively. Both p-values indicate that GSVA provides larger power than ssGSEA and z-score to
-detect subtle changes in pathway activity.
-
-<<perf, echo=FALSE, results=hide>>=
-png(filename="GSVA-perf.png", width=1000, height=500, res=150)
-par(mfrow=c(1,2), mar=c(4, 4, 1, 1))
-design <- model.matrix(~ factor(leukemia_eset$subtype))
-fitGenes <- lmFit(leukemia_eset, design)
-fitGenes <- eBayes(fitGenes)
-ttgenes_leu <- topTable(fitGenes, coef=2, n=Inf)
-abslogfc_leu <- abs(ttgenes_leu$logFC)
-names(abslogfc_leu) <- ttgenes_leu$ID
-qtlsabslogfc_leu <- quantile(abslogfc_leu, p=seq(0, 1, by=1/3))
-abslogfccutoff_leu <- cut(abslogfc_leu, qtlsabslogfc_leu, include.lowest=TRUE)
-genesbyabslogfccutoff_leu <- split(ttgenes_leu$ID, abslogfccutoff_leu)
-M <- ttgenes_leu$logFC
-P <- -log10(ttgenes_leu$P.Value)
-names(M) <- names(P) <- ttgenes_leu$ID
-plot(M, P, pch=".", cex=1, type="n",
-     xlim=c(-2, 2), ylim=c(0, 15), xlab=expression(paste(log[2], " ALL", -log[2], " MLL")),
-     ylab=expression(paste(-log[10], " P-value")), main="", las=1)
-colrs <- c("blue", "violet", "red")
-for (i in length(genesbyabslogfccutoff_leu):1) {
-  points(M[genesbyabslogfccutoff_leu[[i]]], P[genesbyabslogfccutoff_leu[[i]]], pch=".", cex=1, col=colrs[i])
+estimatePower <- function(pvals, alpha=0.05) {
+  N <- ncol(pvals)
+  c(1 - sum(pvals[1, ] > alpha)/N, 1 - sum(pvals[2, ] > alpha)/N,
+    1 - sum(pvals[3, ] > alpha)/N, 1 - sum(pvals[4, ] > alpha)/N)
 }
-boxplot(t(ari), names=c("GSVA", "ssGSEA", "zscore"), las=1,
-        xlab="Method", ylab="Adjusted Rand Index (ARI)", col="violet")
-points(1:3+0.25, rowMeans(ari), pch=23, col="black", bg="black")
-pp <- c(kruskal.test(list(ari[1,], ari[2,]))$p.value, kruskal.test(list(ari[1,], ari[3,]))$p.value)
-pp <- sprintf("P=%.3g", pp)
-text(1:3, 0.9*rep(max(ari), 3), c(" ", paste("Kruskal-Wallis", pp, sep="\n")), cex=0.5)
-dev.off()
+@
+Finally, we perform the simulation on each of the four described scenarios 50 times using
+the code below. The results in Fig.~\ref{simpower} show that GSVA attains higher statistical
+power than the other three methods in each of the simulated scenarios.
+
+<<>>=
+set.seed(1234)
+
+exp1 <- cbind(estimatePower(replicate(50, runSim(1000, 10, gs.sz=30, S2N=0.2, fracDEgs=0.5))),
+              estimatePower(replicate(50, runSim(1000, 20, gs.sz=30, S2N=0.2, fracDEgs=0.5))),
+              estimatePower(replicate(50, runSim(1000, 40, gs.sz=30, S2N=0.2, fracDEgs=0.5))),
+              estimatePower(replicate(50, runSim(1000, 60, gs.sz=30, S2N=0.2, fracDEgs=0.5))))
+
+exp2 <- cbind(estimatePower(replicate(50, runSim(1000, 10, gs.sz=30, S2N=1.0, fracDEgs=0.5))),
+              estimatePower(replicate(50, runSim(1000, 20, gs.sz=30, S2N=1.0, fracDEgs=0.5))),
+              estimatePower(replicate(50, runSim(1000, 40, gs.sz=30, S2N=1.0, fracDEgs=0.5))),
+              estimatePower(replicate(50, runSim(1000, 60, gs.sz=30, S2N=1.0, fracDEgs=0.5))))
+
+exp3 <- cbind(estimatePower(replicate(50, runSim(1000, 10, gs.sz=30, S2N=0.2, fracDEgs=0.8))),
+              estimatePower(replicate(50, runSim(1000, 20, gs.sz=30, S2N=0.2, fracDEgs=0.8))),
+              estimatePower(replicate(50, runSim(1000, 40, gs.sz=30, S2N=0.2, fracDEgs=0.8))),
+              estimatePower(replicate(50, runSim(1000, 60, gs.sz=30, S2N=0.2, fracDEgs=0.8))))
+
+exp4 <- cbind(estimatePower(replicate(50, runSim(1000, 10, gs.sz=30, S2N=1.0, fracDEgs=0.8))),
+              estimatePower(replicate(50, runSim(1000, 20, gs.sz=30, S2N=1.0, fracDEgs=0.8))),
+              estimatePower(replicate(50, runSim(1000, 40, gs.sz=30, S2N=1.0, fracDEgs=0.8))),
+              estimatePower(replicate(50, runSim(1000, 60, gs.sz=30, S2N=1.0, fracDEgs=0.8))))
+@
+
+<<powersim, fig=TRUE, echo=FALSE, results=hide, include=FALSE, height=7, width=7>>=
+plotPower <- function(statpower, main, legendposition) {
+  plot(statpower[1,], ylim=c(0, 1.0), type="b", lwd=2, pch=1, main=main,
+       col="blue", ylab="Statistcal Power", xlab="Sample Size", xaxt="n")
+  lines(statpower[2,], col="red", type="b", lwd=2, pch=2)
+  lines(statpower[3,], col="darkgreen", type="b", lwd=2, pch=3)
+  lines(statpower[4,], col="lightgreen", type="b", lwd=2, pch=4)
+  legend(legendposition, c("GSVA","ssGSEA","z-score","PLAGE"),
+         col=c("blue","red","darkgreen","lightgreen"),pch=1:4,lty=1,lwd=2,inset=0.02)
+  axis(1,at=1:4, labels=c("10","20","40","60"))
+}
+
+par(mfrow=c(2,2), mar=c(4, 4, 4, 1))
+plotPower(exp1, main="Weak signal-to-noise ratio\n50% DE genes in gene set",
+          legendposition="topleft")
+plotPower(exp2, main="Strong signal-to-noise ratio\n50% DE genes in gene set",
+          legendposition="bottomright")
+plotPower(exp3, main="Weak signal-to-noise ratio\n80% DE genes in gene set",
+          legendposition="topleft")
+plotPower(exp4, main="Strong signal-to-noise ratio\n80% DE genes in gene set",
+          legendposition="bottomright")
 @
 \begin{figure}[ht]
-\centerline{\includegraphics[width=\textwidth]{GSVA-perf}}
-\caption{{\bf Comparison of GSVA with single sample GSEA (ssGSEA) and combined z-score (zscore).}
-         On the left, a volcano plot is shown where genes highlighted in red form the first tercile
-         of largest absolute fold changes, violet indicates the second tercile and blue the third
-         tercile. On the right, boxplots of the adjusted rand index (ARI) values are shown for each
-         method using gene sets formed from genes belonging to the second tercile of fold change
-         magnitude (violet in the volcano plot). Diamonds indicate the mean value.}
-\label{comp_methods}
+\centerline{\includegraphics[width=0.7\textwidth]{GSVA-powersim}}
+\caption{{\bf Comparison of the statistical power of GSVA, PLAGE, single sample GSEA (ssGSEA)
+and combined z-score (zscore).} Each panel shows the statistical power in the $y$-axis as
+function of the sample size in the $x$-axis. GSE scores were calculated with each method with
+respect to a single DE gene set. The two panels on top correspond to simulations where 50\% of
+the genes in the gene set were DE while the two at the bottom contained 80\% of DE genes. The
+two panels on the left correspond to a weak signal-to-noise ratio in the DE magnitude while the
+two on the right correspond to a strong one. Data were simulated from a linear model with additive
+sample and probe effects reflecting the previous four different scenarios. The statistical power
+was estimated as 1 minus the fraction of non-rejections on the DE gene set at $\alpha=0.05$.
+GSVA provides in general higher power than the other three methods, specially under a weak
+signal-to-noise ratio.}
+\label{simpower}
 \end{figure}
 
 \section{GSVA for RNA-Seq data}

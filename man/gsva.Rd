@@ -13,7 +13,7 @@ Estimates GSVA enrichment scores.
 }
 \usage{
 \S4method{gsva}{ExpressionSet,list,missing}(expr, gset.idx.list, annotation=NULL,
-    method=c("gsva", "ssgsea", "zscore"),
+    method=c("gsva", "ssgsea", "zscore", "plage"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
@@ -27,7 +27,7 @@ Estimates GSVA enrichment scores.
     kernel=TRUE,
     verbose=TRUE)
 \S4method{gsva}{ExpressionSet,GeneSetCollection,missing}(expr, gset.idx.list, annotation=NULL,
-    method=c("gsva", "ssgsea", "zscore"),
+    method=c("gsva", "ssgsea", "zscore", "plage"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
@@ -41,7 +41,7 @@ Estimates GSVA enrichment scores.
     kernel=TRUE,
     verbose=TRUE)
 \S4method{gsva}{matrix,GeneSetCollection,character}(expr, gset.idx.list, annotation=NA,
-    method=c("gsva", "ssgsea", "zscore"),
+    method=c("gsva", "ssgsea", "zscore", "plage"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
@@ -55,7 +55,7 @@ Estimates GSVA enrichment scores.
     kernel=TRUE,
     verbose=TRUE)
 \S4method{gsva}{matrix,list,missing}(expr, gset.idx.list, annotation=NULL,
-    method=c("gsva", "ssgsea", "zscore"),
+    method=c("gsva", "ssgsea", "zscore", "plage"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
@@ -84,9 +84,13 @@ Estimates GSVA enrichment scores.
                     in \code{gset.idx.list} just as they are.}
   \item{method}{Method to employ in the estimation of gene-set enrichment scores per sample. By default
                 this is set to \code{gsva} (H\"anzelmann et al, submitted) and other options are
-                \code{ssgsea} (Barbie et al, 2009) and \code{zscore}. The latter standardizes expression
-                profiles into z-scores and combines them together (Stouffer et al, 1949). This has been
-                used in this context, for instance, by Lee et al. (2008).}
+                \code{ssgsea} (Barbie et al, 2009), \code{zscore} (Lee et al, 2008) or \code{plage}
+                (Tomfohr et al, 2005). The latter two standardize first expression profiles into z-scores
+                over the samples and, in the case of \code{zscore}, it combines them together as their sum
+                divided by the square-root of the size of the gene set,
+                while in the case of \code{plage} they are used to calculate the singular value decomposition
+                (SVD) over the genes in the gene set and use the coefficients of the first right-singular vector
+                as pathway activity profile.}
   \item{rnaseq}{Flag to inform whether the input gene expression data comes from microarray
                 (\code{rnaseq=FALSE}, default) or RNA-Seq (\code{rnaseq=TRUE}) experiments.}
   \item{abs.ranking}{Flag to determine whether genes should be ranked according to 
@@ -140,16 +144,16 @@ A gene-set by sample matrix of GSVA enrichment scores.
 }
 \references{
 Barbie, D.A. et al. Systematic RNA interference reveals that oncogenic KRAS-driven
-cancers require TBK1, \emph{Nature}, 462(5):108-112, 2009.
+cancers require TBK1. \emph{Nature}, 462(5):108-112, 2009.
 
 H\"anzelmann, S., Castelo, R. and Guinney, J.
 GSVA: Gene Set Variation Analysis, \emph{submitted}
 
-Lee, E. et al. Inferring pathway activity toward precise disease classification,
+Lee, E. et al. Inferring pathway activity toward precise disease classification.
 \emph{PLoS Comp Biol}, 4(11):e1000217, 2008.
 
-Stouffer, S.A. et al. The American Soldier, Vol.1: Adjustment during Army Life.
-Princeton University press, Princeton, 1949.
+Tomfohr, J. et al. Pathway level analysis of gene expression using singular value decomposition.
+\emph{BMC Bioinformatics}, 6:225, 2005.
 }
 \author{J. Guinney and R. Castelo}
 \seealso{
