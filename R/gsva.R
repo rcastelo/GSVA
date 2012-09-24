@@ -38,8 +38,10 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list", annotati
                        no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
                        mx.diff, tau, kernel, verbose)
   eScoEset <- expr
-  eScoEset <- Biobase::`exprs<-`(eScoEset, eSco$es.obs)
-  eScoEset <- Biobase::`annotation<-`(eScoEset, value="")
+  ## eScoEset <- Biobase::`exprs<-`(eScoEset, eSco$es.obs)
+  ## eScoEset <- Biobase::`annotation<-`(eScoEset, value="")
+  Biobase::exprs(eScoEset) <- eSco$es.obs
+  Biobase::annotation(eScoEset) <- ""
 
 	return(list(es.obs=eScoEset,
 				      bootstrap=eSco$bootstrap,
@@ -86,8 +88,10 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
                        no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
                        mx.diff, tau, kernel, verbose)
   eScoEset <- expr
-  eScoEset <- Biobase::`exprs<-`(eScoEset, eSco$es.obs)
-  eScoEset <- Biobase::`annotation<-`(eScoEset, value="")
+  ## eScoEset <- Biobase::`exprs<-`(eScoEset, eSco$es.obs)
+  ## eScoEset <- Biobase::`annotation<-`(eScoEset, value="")
+  Biobase::exprs(eScoEset) <- eSco$es.obs
+  Biobase::annotation(eScoEset) <- ""
 
 	return(list(es.obs=eScoEset,
 				      bootstrap=eSco$bootstrap,
