@@ -749,7 +749,12 @@ plage <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
 	haveParallel <- GSVA:::.isPackageLoaded("parallel")
 	haveSnow <- GSVA:::.isPackageLoaded("snow")
 	
-  cl <- makeCl <- parSapp <- stopCl <- mclapp <- detCor <- nCores <-masterDesc <- NA
+  ## the masterDescriptor() calls are disabled since they are not available in windows
+  ## they would help to report progress by just one of the processors. now all processors
+  ## will reporting progress. while this might not be the right way to report progress in
+  ## parallel it should not affect a correct execution and progress should be more or less
+  ## being reported to some extent.
+  cl <- makeCl <- parSapp <- stopCl <- mclapp <- detCor <- nCores <- NA ## masterDesc <- NA
 	if(parallel.sz > 1 || haveParallel) {
 		if(!haveParallel && !haveSnow) {
 			stop("In order to run calculations in parallel either the 'snow', or the 'parallel' library, should be loaded first")
@@ -769,7 +774,7 @@ plage <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
 
       mclapp <- get('mclapply', envir=getNamespace('parallel'))
       detCor <- get('detectCores', envir=getNamespace('parallel'))
-      masterDesc <- get('masterDescriptor', envir=getNamespace('parallel'))
+      ## masterDesc <- get('masterDescriptor', envir=getNamespace('parallel'))
       nCores <- detCor()
       options(mc.cores=nCores)
       if (parallel.sz > 0 && parallel.sz < nCores)
@@ -790,15 +795,15 @@ plage <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
                            }, Z))
   else {
     if (is.na(cl)) {
-      firstproc <- mclapp(as.list(1:(options("mc.cores")$mc.cores)), function(x) masterDesc())[[1]]
-      es <- mclapp(geneSets, function(gset, Z, firstproc) {
-                                 if (verbose && masterDesc() == firstproc) {
+      ## firstproc <- mclapp(as.list(1:(options("mc.cores")$mc.cores)), function(x) masterDesc())[[1]]
+      es <- mclapp(geneSets, function(gset, Z) { ##, firstproc) {
+                                 if (verbose) { ## && masterDesc() == firstproc) {
                                    assign("iGeneSet", get("iGeneSet", envir=globalenv()) + 1, envir=globalenv())
                                    setTxtProgressBar(get("progressBar", envir=globalenv()),
                                                      get("iGeneSet", envir=globalenv()) / get("nGeneSets", envir=globalenv()))
                                  }
                                  rightsingularsvdvectorgset(gset, Z)
-                               }, Z, firstproc)
+                               }, Z) ##, firstproc)
       es <- do.call(rbind, es)
     } else {
       if (verbose)
