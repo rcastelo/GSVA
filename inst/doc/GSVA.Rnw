@@ -1105,10 +1105,12 @@ function from the \Rpackage{edgeR} package. Note that RPKMs can only be calculat
 genes for which the gene length and G+C content information is available:
 
 <<>>=
+library(edgeR)
+
 data(annotEntrez220212)
 head(annotEntrez220212)
 
-cpm <- edgeR::cpm(exprs(pickrellCountsArgonneCQNcommon_eset))
+cpm <- cpm(exprs(pickrellCountsArgonneCQNcommon_eset))
 dim(cpm)
 
 common <- intersect(rownames(cpm), rownames(annotEntrez220212))
