@@ -1,5 +1,6 @@
 #include <R.h>
 #include <Rinternals.h>
+#include <Rdefines.h>
 #include <R_ext/Rdynload.h>
 
 /* prototypes of functions to be registered */
@@ -9,6 +10,9 @@ matrix_density_R(double* X, double* Y, double* R, int* n_density_samples,int* n_
 
 void
 ks_matrix_R(double* X, double* R, int* sidxs, int* n_genes, int* geneset_idxs, int* n_geneset, double* tau,  int* n_samples, int* mx_diff);
+
+SEXP
+rndWalk_R(SEXP gSetIdxR, SEXP geneRankingR, SEXP jR, SEXP RR, SEXP alphaR);
 
 /* registration of C-entry points */
 
@@ -25,7 +29,13 @@ cMethods[] = {
   {NULL, NULL, 0}
 };
 
+static const R_CallMethodDef
+callMethods[] = {
+  {"rndWalk_R", (DL_FUNC) &rndWalk_R, 5},
+  {NULL}
+};
+
 void
 R_init_GSVA(DllInfo *info) {
-  R_registerRoutines(info, cMethods, NULL, NULL, NULL);
+  R_registerRoutines(info, cMethods, callMethods, NULL, NULL);
 }

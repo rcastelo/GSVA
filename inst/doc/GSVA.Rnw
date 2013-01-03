@@ -49,6 +49,7 @@ pre-processed and stored in the companion experimental data package
 
 <<options, echo=FALSE>>=
 options(width=60)
+pdf.options(useDingbats=FALSE)
 @
 
 \section{Introduction}
@@ -88,7 +89,7 @@ functional enrichment.
 
 In the rest of this vignette we describe briefly the methodology behind GSVA,
 give an overview of the functions implemented in the package and show a few
-applications. The interested reader is referred to \citep{GSVA_submitted} for
+applications. The interested reader is referred to \citep{GSVA_in_press} for
 more comprehensive explanations and more complete data analysis examples with
 GSVA, as well as for citing GSVA if you use it in your own work.
 
@@ -132,7 +133,7 @@ where $h_i$ is the gene-specific bandwidth parameter that controls the resolutio
 \end{equation}
 where $r=0.5$ in order to set the mode of the Poisson kernel at each $x_{ik}$, because the mode of a Poisson distribution with an integer mean $\lambda$ occurs at $\lambda$ and $\lambda-1$ and at the largest integer smaller than $\lambda$ when $\lambda$ is continuous.
 
-Let $z_{ij}$ denote the previous expression-level statistic $\hat{F}_{h_i}(x_{ij})$, or $\hat{F}_r(x_{ij})$, depending on whether $x_{ij}$ are continuous microarray, or discrete count RNA-seq values, respectively. The following step condenses expression-level statistics into gene sets by calculating sample-wise enrichment scores. To reduce the influence of potential outliers, we first convert $z_{ij}$ to ranks $z_{(i)j}$ for each sample $j$ and normalize further $r_{ij}=|p/2-z_{(i)j}|$ to make the ranks symmetric around zero (Figure~\ref{methods}, step 2).
+Let $z_{ij}$ denote the previous expression-level statistic $\hat{F}_{h_i}(x_{ij})$, or $\hat{F}_r(x_{ij})$, depending on whether $x_{ij}$ are continuous microarray, or discrete count RNA-seq values, respectively. The following step condenses expression-level statistics into gene sets by calculating sample-wise enrichment scores. To reduce the influence of potential outliers, we first convert $z_{ij}$ to ranks $z_{(i)j}$ for each sample $j$ and normalize further $r_{ij}=|p/2-z_{(i)j}|$ to make the ranks symmetric around zero (Figure~\ref{methods}, step 2). This is done to up-weight the two tails of the rank distribution when computing the final enrichment score.
 
 We assess the enrichment score similar to the GSEA and ASSESS methods \cite{subramanian_gene_2005,edelman_analysis_2006} using the Kolmogorov-Smirnov (KS) like random walk statistic (Figure~\ref{methods}, step 3):
 \begin{equation}
@@ -141,7 +142,7 @@ We assess the enrichment score similar to the GSEA and ASSESS methods \cite{subr
 \gamma_k)}{\sum_{i=1}^p |r_{ij}|^{\tau}I(g_{(i)} \in \gamma_k)} -
 \frac{\sum_{i=1}^\ell I(g_{(i)} \not\in \gamma_k)}{p-|\gamma_k|},
 \end{equation}
-where $\tau$ is a parameter describing the weight of the tail in the random walk (default $\tau = 1$), $\gamma_k$ is the $k$-th gene set, $I(g_{(i)} \in \gamma_k)$ is the indicator function on whether the $i$-th gene (the gene corresponding to the $i$-th ranked expression-level statistic) belongs to gene set $\gamma_k$, $|\gamma_k|$ is the number of genes in the $k$-th gene set, and $p$ is the number of genes in the data set. 
+where $\tau$ is a parameter describing the weight of the tail in the random walk (default $\tau = 1$), $\gamma_k$ is the $k$-th gene set, $I(g_{(i)} \in \gamma_k)$ is the indicator function on whether the $i$-th gene (the gene corresponding to the $i$-th ranked expression-level statistic) belongs to gene set $\gamma_k$, $|\gamma_k|$ is the number of genes in the $k$-th gene set, and $p$ is the number of genes in the data set. Conceptually, Eq.~\ref{walk} produces a distribution over the genes to assess if the genes in the gene set are more likely to be found at either tail of the rank distribution (see \cite{subramanian_gene_2005,edelman_analysis_2006} for a more detailed description).
 
 We offer two approaches for turning the KS like random walk statistic into an enrichment statistic (ES) (also called GSVA score), the classical maximum deviation method \cite{subramanian_gene_2005,edelman_analysis_2006,verhaak_integrated_2010} and a normalized ES. The first ES is the maximum deviation from zero of the random walk of the $j$-th sample with respect to the $k$-th gene set :
 
@@ -171,8 +172,8 @@ X <- matrix(rnorm(p*n), nrow=p, dimnames=list(1:p, 1:n))
 dim(X)
 gs <- as.list(sample(min.sz:max.sz, size=nGS, replace=TRUE)) ## sample gene set sizes
 gs <- lapply(gs, function(n, p) sample(1:p, size=n, replace=FALSE), p) ## sample gene sets
-es.max <- gsva(X, gs, mx.diff=FALSE, verbose=FALSE)$es.obs
-es.dif <- gsva(X, gs, mx.diff=TRUE, verbose=FALSE)$es.obs
+es.max <- gsva(X, gs, mx.diff=FALSE, verbose=FALSE, parallel.sz=1)$es.obs
+es.dif <- gsva(X, gs, mx.diff=TRUE, verbose=FALSE, parallel.sz=1)$es.obs
 @
 
 \begin{center}
@@ -294,7 +295,6 @@ In this section we illustrate the following applications of \Rpackage{GSVA}:
 \begin{itemize}
   \item Functional enrichment between two subtypes of leukemia.
   \item Identification of molecular signatures in distinct glioblastoma subtypes.
-  \item Meta-pathway analysis in the leukemia data.
 \end{itemize}
 
 Throughout this vignette we will use the C2 collection of curated gene sets that
@@ -575,7 +575,7 @@ GSVA enrichment scores for the gene sets contained in \Robject{brainTxDbSets}
 are calculated, in this case using \Robject{mx.diff=FALSE},  as follows:
 
 <<>>=
-gbm_es <- gsva(gbm_eset, brainTxDbSets, mx.diff=FALSE, verbose=FALSE)$es.obs
+gbm_es <- gsva(gbm_eset, brainTxDbSets, mx.diff=FALSE, verbose=FALSE, parallel.sz=1)$es.obs
 @
 Figure \ref{gbmSignature} shows the GSVA enrichment scores obtained for the
 up-regulated gene sets across the samples of the four GBM subtypes. As expected,
@@ -622,301 +622,6 @@ across GBM samples grouped by GBM subtype.}
 \label{gbmSignature}
 \end{figure}
 
-
-
-%========================================================================================
-
-\subsection{Meta-pathway analysis}
-
-In biological systems, pathways do not operate independently and can have diverse
-degrees of cross-talk between them. In this subsection we show how to identify
-pathways that have a highly-coordinated activity but whose gene sets have little
-or no overlap. We apply this type of analysis, which we call meta-pathway analysis,
-to the leukemia data set we previously analyzed for differential pathway activation.
-
-For this analysis we consider the subset of canonical pathways from the C2
-collection of MSigDB Gene Sets. These correspond to the following pathways from
-KEGG, REACTOME and BIOCARTA:
-
-<<>>=
-canonicalC2BroadSets <- c2BroadSets[c(grep("^KEGG", names(c2BroadSets)),
-                                      grep("^REACTOME", names(c2BroadSets)),
-                                      grep("^BIOCARTA", names(c2BroadSets)))]
-canonicalC2BroadSets
-@
-We calculate GSVA enrichment scores discarding gene sets with less than 10
-genes and more than 500. Note that we do not filter for variability as we are not
-interested for differential pathway activation:
-
-<<>>=
-cache(leukemia_canonicalPwy_es <- gsva(leukemia_eset, canonicalC2BroadSets,
-       min.sz=10, max.sz=500, mx.diff=TRUE, verbose=TRUE)$es.obs,
-       dir=cacheDir, prefix=cachePrefix)
-@
-We are interested in those pathways that have little overlap between their sets
-of genes but are highly correlated. For the purpose of applying such a filter
-we need to calculate the fraction of genes that overlap between every pair of
-gene sets which is possible to do with the function
-\verb+computeGeneSetsOverlap()+:
-
-<<>>=
-overlapMatrix <- computeGeneSetsOverlap(canonicalC2BroadSets, leukemia_eset,
-                                        min.sz=10, max.sz=500)
-@
-We could quickly obtain a network of cross-talk associations by calculating
-marginal pair-wise correlations, like Pearson correlation coefficients (PCCs),
-and selecting those pairs of pathways that are highly correlated. However,
-potentially many of the marginal pair-wise associations could be spurious,
-that is, indirectly mediated by other pathways.
-
-In order to select direct (non-spurious) relationships we have carried out a
-Gaussian graphical modeling (GGM) analysis of the cross-talk associations between
-pathways that follow from the GSVA enrichment score data. A GGM analysis assumes
-that the data forms a multivariate normal sample from a distribution
-$\mathcal{N}(\mu, \Sigma)$ and that the underlying network can be represented by
-an undirected graph $G$ whose missing edges match the pattern of zeroes in the
-inverse covariance matrix $\Sigma^{-1}$ \citep[see][]{Lauritzen_1996}. Since the
-dimension of the data with $p=$\Sexpr{dim(leukemia_canonicalPwy_es)[1]} and
-$n=$\Sexpr{dim(leukemia_canonicalPwy_es)[2]} precludes the application of classical
-GGM techniques \citep[pg.~126]{Lauritzen_1996} we will follow a limited-order partial
-correlation based approach described in \citep{Castelo_qpgraph_2006,
-Castelo_qpgraph_2009} and implemented in the Bioconductor package \Rpackage{qpgraph}:
-
-<<>>=
-library(qpgraph)
-@
-In this approach one calculates a measure of linear association over all marginal
-distributions of size $(q+2) < n$, called the non-rejection rate \citep{Castelo_qpgraph_2006}.
-However, the stratification of samples into the two leukemia subtypes ALL and MLL
-introduces a covariate which could be confounding the estimated linear associations.
-To take this structure of the data into account, we can employ the so-called
-generalized non-rejection rate \citep{Roverato_gnrr_2010}, which aims at identifying
-associations that are common through multiple data sets or experimental conditions.
-We calculate generalized non-rejection rates using $q=15$ for ALL and $q=12$ for MLL,
-i.e., $q=n-5$ in each condition:
-
-<<>>=
-cache(gennrr <- qpGenNrr(leukemia_canonicalPwy_es, datasetIdx="subtype",
-                         qOrders=c(ALL=15, MLL=12),
-                         identicalQs=FALSE, clusterSize=2)$genNrr,
-      dir=cacheDir, prefix=cachePrefix)
-@
-We do not consider the associations involving pairs of pathways with an overlap of
-genes larger than 5\%:
-
-<<>>=
-gennrr[overlapMatrix > 0.05] <- NA
-@
-By considering a cut-off on the generalized non-rejection rate we could directly
-obtain an estimated $q$-order partial correlation graph, or qp-graph, denoted by
-$\hat{G}^{(q)}$, which would constitute an approximation to the underlying
-undirected graph $G$. However, following the model-based strategy proposed in
-\citep{Castelo_qpgraph_2006}, we will first examine the maximum boundary size,
-denoted by $bd(G)$, of the possible resulting graphs as function of different
-cut-offs applied to the non-rejection rates. This can be done by using the
-function \verb+qpBoundary()+ whose result is displayed in
-Figure~\ref{fig:gennrrcliquenr}
-
-<<gennrrmaxbd, echo=FALSE, results=hide>>=
-png(filename="GSVA-gennrrmaxbd.png", width=800, height=800, res=150)
-qpbd <- qpBoundary(gennrr, n=ncol(leukemia_canonicalPwy_es), breaks=20)
-dev.off()
-@
-\begin{figure}[ht]
-\centerline{\includegraphics[width=0.5\textwidth]{GSVA-gennrrmaxbd}}
-\caption{Maximum boundary as function of non-rejection rate cut-offs. The red
-line indicates the sample size of the leukemia data set
-($n=$\Sexpr{dim(leukemia_canonicalPwy_es)[2]}) and next to each point the graph
-density is indicated.}
-\label{fig:gennrrcliquenr}
-\end{figure}
-
-This function also returns the largest cut-off $\beta^*$, among those considered
-in the plot, whose resulting estimated graph $\hat{G}$ has $bd(\hat{G}) < n$. In
-this case $\beta^*=$\Sexpr{round(qpbd$threshold, digits=2)} and using this
-cut-off we obtain a resulting qp-graph $\hat{G}^{(q)}$ which has
-$bd(\hat{G}^{(q)})=$\Sexpr{qpbd$bdsizeunderN} as shown here below:
-
-<<>>=
-g <- qpGraph(gennrr, threshold=qpbd$threshold, return.type="graphNEL")
-g
-max(degree(g))
-@
-Since $bd(\hat{G}^{(q)})=$\Sexpr{qpbd$bdsizeunderN} is smaller than
-$n=$\Sexpr{dim(leukemia_eset)[2]} there is a chance that the maximum
-likelihood estimate (MLE) of the sample covariance matrix $S$ exists
-\citep[pg.~133]{Lauritzen_1996}, under the restrictions imposed by the
-qp-graph $\hat{G}^{(q)}$. Once a MLE of $S$ is obtained, its inverse
-$\Sigma^{-1}=K=\{\kappa_{ij}\}$ can be calculated and, therefore, the
-corresponding partial correlation coefficients (PACs) as follows:
-
-\begin{equation}
-\rho_{ij.R}=\frac{-\kappa_{ij}}{\sqrt{\kappa_{ii}\,\kappa_{jj}}}\,\,\,
-\mathrm{where}\,\, R=V\backslash\{i,j\}\,.
-\end{equation}
-Since these PACs come from a MLE of the sample covariance matrix $S$,
-p-values for the null hypothesis of zero partial correlation can be
-calculated following \citep{Roverato_1996}. All these computations can
-be made in one single call to the function \verb+qpPAC()+:
-
-<<>>=
-pac <- qpPAC(leukemia_canonicalPwy_es, g, return.K=TRUE, tol=0.01,
-             verbose=FALSE)
-@
-We employ the estimated PACs and their p-values to select a final estimate
-$\hat{G}$ of the underlying undirected graph $G$ whose FDR of wrongly included
-edges is below a desired network-wide significance level. This FDR control at
-network-wide level helps in discarding spurious associations with a large marginal
-strength (i.e., a large Pearson correlation coefficient) but which in fact are
-indirectly occurring. Note below that PCCs are not directly estimated from the data
-but by scaling the MLE of the sample covariance matrix, obtaining in this way more
-precise estimates of the PCCs.
-
-<<>>=
-gAM <- qpGraph(gennrr, threshold=qpbd$threshold)
-ridx <- row(pac$P)[as.matrix(upper.tri(pac$P) & gAM)]
-cidx <- col(pac$P)[as.matrix(upper.tri(pac$P) & gAM)]
-
-allEdges <- data.frame(PWYi=colnames(pac$P)[ridx],
-                       PWYj=colnames(pac$P)[cidx],
-                       PAC=pac$R[cbind(ridx, cidx)],
-                       PAC.P.value=pac$P[cbind(ridx, cidx)],
-                       PAC.adj.P.value=p.adjust(pac$P[cbind(ridx, cidx)], method="fdr"),
-                       PCC=cov2cor(solve(pac$K))[cbind(ridx, cidx)])
-
-allEdges <- allEdges[sort(allEdges$PAC.adj.P.value, index.return=TRUE)$ix, ]
-dim(allEdges)
-@
-From the \Sexpr{dim(allEdges)[1]} associations we select those with an
-absolute PCC larger than 0.7 and a PAC p-value leading to a network-wide FDR
-below 10\%:
-
-<<>>=
-sigEdges <- allEdges[which(allEdges$PAC.adj.P.value < 0.1 & abs(allEdges$PCC) > 0.7) , ]
-dim(sigEdges)
-@
-Using these significant edges we build a \Rclass{graphNEL} object representing this
-network:
-
-<<>>=
-vtc <- unique(as.character(unlist(sigEdges[, c("PWYi", "PWYj")], use.names=FALSE)))
-g <- new("graphNEL", nodes=vtc, edgemode="undirected")
-g <- addEdge(from=as.character(sigEdges[, "PWYi"]),
-             to=as.character(sigEdges[, "PWYj"]),
-             graph=g)
-g
-@
-
-<<leukemiaNet, echo=FALSE, results=hide>>=
-png(filename="GSVA-leukemiaNet.png", width=800, height=800, res=150)
-nodlab <- gsub("_", " ", gsub("KEGG_|REACTOME_|BIOCARTA_", "", vtc))
-nodlab <- sapply(nodlab, function(x) { v <- unlist(strsplit(x, ' ')) ; t <- ""; l <- 0; for (w in v) { t <- paste(t,w,sep=" ") ; if (nchar(t)-l > 5) { t <- paste(t, "\ \n", sep="") ; l <- nchar(t) } } ; t })
-names(nodlab) <- vtc
-nodeRenderInfo(g) <- list(shape="ellipse", label=nodlab, fill="lightgrey", lwd=1)
-edgeRenderInfo(g) <- list(lwd=1)
-g <- layoutGraph(g, layoutType="fdp")
-renderGraph(g)
-dev.off()
-@
-\begin{figure}[ht]
-\centerline{\includegraphics{GSVA-leukemiaNet}}
-\caption{Network of cross-talk associations between Broad C2 canonical pathways
-         of the leukemia data set obtained by a Gaussian graphical modeling approach
-         by which edges are included in the graph with a minimum absolute PCC > 0.7
-         at a FDR < 10\%.}
-\label{fig:LeukemiaNet}
-\end{figure}
-
-The network is divided in connected components of the following sizes:
-
-<<>>=
-cct <- table(listLen(connComp(g)))
-cct
-@
-Thus, there is one very large connected component of \Sexpr{max(as.integer(names(cct)))}
-pathways in which we are going to focus our analysis. In order to dissect the larger
-component of \Sexpr{max(as.integer(names(cct)))} pathways, we are going to look to its
-degree distribution:
-
-<<>>=
-vtcCCmax <- connComp(g)[[which(sapply(connComp(g), length) == max(as.integer(names(cct))))]]
-gCCmax <- subGraph(vtcCCmax, g)
-gCCmax
-table(degree(gCCmax))
-@
-We can observe that four pathways, representing less than 3\% of the total, have a
-connectivity degree higher than \Sexpr{sort(degree(gCCmax), decreasing=TRUE)[5]}.
-These highly connected pathways are the following:
-
-<<>>=
-sort(degree(gCCmax), decreasing=TRUE)[1:4]
-@
-We are going to display the subnetwork formed by these highly-connected pathways, the
-paths that connect them and their interacting partners. We start by extracting the
-corresponding subgraph:
-
-<<>>=
-vtcHubNet <- names(sort(degree(gCCmax), decreasing=TRUE)[1:4])
-pairs <- combn(vtcHubNet, 2)
-sp <- sp.between(gCCmax, pairs[1, ], pairs[2, ])
-vtcInShortestPaths <- unlist(sapply(sp, function(x) x$path_detail), use.names=FALSE)
-vtcHubNet <- unique(c(vtcHubNet,
-                      unlist(boundary(vtcHubNet, gCCmax), use.names=FALSE),
-                      vtcInShortestPaths))
-gHubNet <- subGraph(vtcHubNet, gCCmax)
-gHubNet
-@
-
-The resulting network is shown in Figure~\ref{fig:selectedGGMhighDeg}. The gene sets connected by
-the meta-pathway analysis show a clear structure, forming four distinct groups with each having a
-hub gene set. The gene sets surrounding each hub gene set are functionally related to each other
-and associated with cancer. Most of the gene sets are related to genome stability, cell cycle and
-cell proliferation, have an effect on the regulation of cell differentiation processes, and pertain
-to the escape of apoptosis. Also, the members of the \textit{NUCLEAR RECEPTOR TRANSCRIPTION PATHWAY}
--estrogen receptors, retinoic acid receptor and nuclear receptors- have been indicated as potential
-drug targets in disease \cite{gronemeyer_principles_2004}. Among them, Nr4a3 and Nr4a1 are proteins
-whose function is not very well understood. However, they have been implicated as tumor suppressors
-in myeloid leukemogenesis \cite{mullican_abrogation_2007}. Also, the decreased expression of retinoic
-acid receptor $\alpha$ plays a role in leukemogenesis \cite{glasow_dna_2008}. In fact, a recent
-review enumerating all genes known to be involved in MLL, includes nuclear-, retinoic acid- and
-estrogen receptors \cite{ansari_mixed_2010}. The \textit{FGFR LIGAND BINDING AND ACTIVATION} pathway
-contains members of the fibroblast growth factor family which are involved in oncogenic mechanisms
-\cite{turner_fibroblast_2010} and have been investigated as therapeutic targets
-\cite{greulich_targeting_2011}.
-
-<<selectedGGMhighDeg, fig=TRUE, include=FALSE, height=4, width=4>>=
-nodlab <- gsub("_", " ", gsub("KEGG_|REACTOME_|BIOCARTA_", "", vtcHubNet))
-nodlab <- sapply(nodlab, function(x) { v <- unlist(strsplit(x, ' ')) ; t <- ""; l <- 0; for (w in v) { t <- paste(t,w,sep=" ") ; if (nchar(t)-l > 5) { t <- paste(t, "\ \n", sep="") ; l <- nchar(t) } } ; t })
-names(nodlab) <- vtcHubNet
-nodeRenderInfo(gHubNet) <- list(shape="ellipse", label=nodlab, fill="lightgrey", lwd=1)
-edgeRenderInfo(gHubNet) <- list(lwd=1)
-gHubNet <- layoutGraph(gHubNet, layoutType="fdp")
-renderGraph(gHubNet)
-@
-\begin{figure}[p]
-\centerline{\includegraphics[height=0.9\textheight]{GSVA-selectedGGMhighDeg}}
-\caption{Network of cross-talk associations between Broad C2 canonical pathways
-         of the leukemia data set obtained by a Gaussian graphical modeling approach
-         by which edges are included in the graph with a minimum absolute PCC > 0.7
-         at a FDR < 10\%. The displayed network only includes edges connecting the
-         4 hub genes with highest degree and their interaction partners.}
-\label{fig:selectedGGMhighDeg}
-\end{figure}
-
-Another gene set that comes to attention is \textit{ONE CARBON POOL BY FOLATE} because it is not
-directly associated with proliferation or mitosis. Genetic variation in folate metabolism has been
-reported to be associated with childhood leukemia \cite{thompson_maternal_2001}. The genes that
-form this pathway, and form part of the analyzed data set, are:
-<<>>=
-ids <- geneIds(c2BroadSets["KEGG_ONE_CARBON_POOL_BY_FOLATE"])[[1]]
-unlist(mget(ids[!is.na(match(ids, unlist(mget(featureNames(leukemia_eset),
-                                              hgu95aENTREZID))))], org.Hs.egSYMBOL),
-       use.names=FALSE)
-@
-Among the genes forming this KEGG pathway, the {\it MTR} gene encodes an enzyme that catalyzes
-the final step in methionine biosynthesis and has been associated to an increased risk of ALL.
-This risk was most pronounced for cases with the \textit{MLL} translocation \cite{lightfoot_genetic_2010}.
-
 \section{Comparison with other methods}
 
 In this section we compare with simulated data the performance of GSVA with other methods
@@ -931,16 +636,17 @@ y_{ij} = \alpha_i + \beta_j + \epsilon_{ij}\,,
 \end{equation}
 where $\alpha_i\sim\mathcal{N}(0, 1)$ is a gene-specific effect, such as a probe-effect,
 with $i=1,\dots,p$, $\beta_j\sim\mathcal{N}(\mu_j, 0.5)$ is a sample-effect with $j=1,2$ and
-$e_{ij}\sim\mathcal{N}(0,0.1)$ corresponds to random noise.
+$e_{ij}\sim\mathcal{N}(0,1)$ corresponds to random noise.
 
-We will assess the statistical power to detect one differentially expressed gene set formed by
+We will assess the statistical power to detect one differentially expressed (DE) gene set formed by
 30 genes, out of $p=1000$, as a function of the sample size and two varying conditions: the
 fraction of differentially expressed genes in the gene set (50\% and 80\%) and the signal-to-noise
 ratio expressed as the magnitude of the mean sample effect for one of the sample groups
-($\mu_1=0$ and either $\mu_2=0.2$ or $\mu_2=1$).
+($\mu_1=0$ and either $\mu_2=0.5$ or $\mu_2=1$). Simulatenously, we will assess the empirical
+type-I error rate by building using one gene set of 30 non-DE genes.
 
 The following function enables simulating such data, computes the corresponding GSE scores with
-each method, performs a $t$-test on the tested gene set between the two groups of samples for each
+each method, performs a $t$-test on the tested gene sets between the two groups of samples for each
 method and returns the corresponding $p$-values:
 
 <<>>=
@@ -951,103 +657,144 @@ runSim <- function(p, n, gs.sz, S2N, fracDEgs) {
   sampleEffect <- rnorm(n, mean=0, sd=1)
   sampleEffectDE <- rnorm(n, mean=S2N, sd=0.5)
   probeEffect <- rnorm(p, mean=0, sd=1)
-  noise <- matrix(rnorm(p*n, mean=0, sd=0.1), nrow=p, ncol=n)
-  noiseDE <- matrix(rnorm(p*n, mean=0, sd=0.1), nrow=p, ncol=n)
+  noise <- matrix(rnorm(p*n, mean=0, sd=1), nrow=p, ncol=n)
+  noiseDE <- matrix(rnorm(p*n, mean=0, sd=1), nrow=p, ncol=n)
   M <- outer(probeEffect, sampleEffect, "+") + noise
   M2 <- outer(probeEffect, sampleEffectDE, "+") + noiseDE
   M[1:sizeDEgs, 1:group.n] <- M2[1:sizeDEgs, 1:group.n]
 
-  rownames(M) <- paste("g", 1:nrow(M), sep="")
-  geneSets <- list(testGeneSet=paste0("g", 1:(gs.sz)))
+  rownames(M) <- paste0("g", 1:nrow(M))
+  geneSets <- list(H1GeneSet=paste0("g", 1:(gs.sz)),
+                   H0GeneSet=paste0("g", (gs.sz+1):(2*gs.sz)))
 
-  es.gsva <- gsva(M, geneSets, verbose=FALSE)$es.obs
-  es.plage <- gsva(M, geneSets, method="plage", verbose=FALSE)
-  es.zscore <- gsva(M, geneSets, method="zscore", verbose=FALSE)
-  es.ssgsea <- gsva(M, geneSets, method="ssgsea", verbose=FALSE)
+  es.gsva <- gsva(M, geneSets, verbose=FALSE, parallel.sz=1)$es.obs
+  es.ss <- gsva(M, geneSets, method="ssgsea", verbose=FALSE, parallel.sz=1)
+  es.z <- gsva(M, geneSets, method="zscore", verbose=FALSE, parallel.sz=1)
+  es.plage <- gsva(M, geneSets, method="plage", verbose=FALSE, parallel.sz=1)
 
-  gsva.pval <- t.test(es.gsva[1:group.n],es.gsva[(group.n+1):length(es.gsva)])$p.value
-  plage.pval <- t.test(es.plage[1:group.n],es.plage[(group.n+1):length(es.plage)])$p.value
-  zscore.pval <- t.test(es.zscore[1:group.n],es.zscore[(group.n+1):length(es.zscore)])$p.value
-  ssgsea.pval <- t.test(es.ssgsea[1:group.n],es.ssgsea[(group.n+1):length(es.ssgsea)])$p.value
+  h1.gsva.pval <- t.test(es.gsva["H1GeneSet", 1:group.n],es.gsva["H1GeneSet", (group.n+1):n])$p.value
+  h1.ssgsea.pval <- t.test(es.ss["H1GeneSet", 1:group.n],es.ss["H1GeneSet", (group.n+1):n])$p.value
+  h1.zscore.pval <- t.test(es.z["H1GeneSet", 1:group.n],es.z["H1GeneSet", (group.n+1):n])$p.value
+  h1.plage.pval <- t.test(es.plage["H1GeneSet", 1:group.n],es.plage["H1GeneSet", (group.n+1):n])$p.value
 
-  c(gsva.pval, ssgsea.pval, zscore.pval, plage.pval)
+  h0.gsva.pval <- t.test(es.gsva["H0GeneSet", 1:group.n],es.gsva["H0GeneSet", (group.n+1):n])$p.value
+  h0.ssgsea.pval <- t.test(es.ss["H0GeneSet", 1:group.n],es.ss["H0GeneSet", (group.n+1):n])$p.value
+  h0.zscore.pval <- t.test(es.z["H0GeneSet", 1:group.n],es.z["H0GeneSet", (group.n+1):n])$p.value
+  h0.plage.pval <- t.test(es.plage["H0GeneSet", 1:group.n],es.plage["H0GeneSet", (group.n+1):n])$p.value
+
+  c(h1.gsva.pval, h1.ssgsea.pval, h1.zscore.pval, h1.plage.pval,
+    h0.gsva.pval, h0.ssgsea.pval, h0.zscore.pval, h0.plage.pval)
 }
 @
 The next function takes the $p$-values of the output of the previous function and
-estimates the statistical power as the fraction of non-rejections at a significant level
-$\alpha=0.05$. It assumes the $p$-values were generated under the alternative hypothesis
-of differential expression.
+estimates the statistical power as the fraction of non-rejections on the DE gene set,
+and the empirical type-I error rate as the fraction of rejections on the non-DE gene set,
+at a significant level $\alpha=0.05$.
 
 <<>>=
-estimatePower <- function(pvals, alpha=0.05) {
+estPwrTypIerr <- function(pvals, alpha=0.05) {
   N <- ncol(pvals)
-  c(1 - sum(pvals[1, ] > alpha)/N, 1 - sum(pvals[2, ] > alpha)/N,
-    1 - sum(pvals[3, ] > alpha)/N, 1 - sum(pvals[4, ] > alpha)/N)
+  c(1 - sum(pvals[1, ] > alpha)/N, 1 - sum(pvals[2, ] > alpha)/N,1 - sum(pvals[3, ] > alpha)/N, 1 - sum(pvals[4, ] > alpha)/N,
+        sum(pvals[5, ] <= alpha)/N, sum(pvals[6, ] <= alpha)/N, sum(pvals[7, ] <= alpha)/N, sum(pvals[8, ] <= alpha)/N)
 }
 @
-Finally, we perform the simulation on each of the four described scenarios 50 times using
+Finally, we perform the simulation on each of the four described scenarios 60 times using
 the code below. The results in Fig.~\ref{simpower} show that GSVA attains higher statistical
-power than the other three methods in each of the simulated scenarios.
+power than the other three methods in each of the simulated scenarios, while providing a
+similar control of the type-I error rate. Note that the fluctuations of this latter estimate
+are due to the limited number of times we repeat the simulation; see \citet{GSVA_in_press}
+for more stable estimates obtained with a much larger number of repeated simulations.
 
 <<>>=
 set.seed(1234)
 
-exp1 <- cbind(estimatePower(replicate(50, runSim(1000, 10, gs.sz=30, S2N=0.2, fracDEgs=0.5))),
-              estimatePower(replicate(50, runSim(1000, 20, gs.sz=30, S2N=0.2, fracDEgs=0.5))),
-              estimatePower(replicate(50, runSim(1000, 40, gs.sz=30, S2N=0.2, fracDEgs=0.5))),
-              estimatePower(replicate(50, runSim(1000, 60, gs.sz=30, S2N=0.2, fracDEgs=0.5))))
+exp1 <- cbind(estPwrTypIerr(replicate(60, runSim(1000, 10, gs.sz=30, S2N=0.5, fracDEgs=0.5))),
+              estPwrTypIerr(replicate(60, runSim(1000, 20, gs.sz=30, S2N=0.5, fracDEgs=0.5))),
+              estPwrTypIerr(replicate(60, runSim(1000, 40, gs.sz=30, S2N=0.5, fracDEgs=0.5))),
+              estPwrTypIerr(replicate(60, runSim(1000, 60, gs.sz=30, S2N=0.5, fracDEgs=0.5))))
 
-exp2 <- cbind(estimatePower(replicate(50, runSim(1000, 10, gs.sz=30, S2N=1.0, fracDEgs=0.5))),
-              estimatePower(replicate(50, runSim(1000, 20, gs.sz=30, S2N=1.0, fracDEgs=0.5))),
-              estimatePower(replicate(50, runSim(1000, 40, gs.sz=30, S2N=1.0, fracDEgs=0.5))),
-              estimatePower(replicate(50, runSim(1000, 60, gs.sz=30, S2N=1.0, fracDEgs=0.5))))
+exp2 <- cbind(estPwrTypIerr(replicate(60, runSim(1000, 10, gs.sz=30, S2N=1.0, fracDEgs=0.5))),
+              estPwrTypIerr(replicate(60, runSim(1000, 20, gs.sz=30, S2N=1.0, fracDEgs=0.5))),
+              estPwrTypIerr(replicate(60, runSim(1000, 40, gs.sz=30, S2N=1.0, fracDEgs=0.5))),
+              estPwrTypIerr(replicate(60, runSim(1000, 60, gs.sz=30, S2N=1.0, fracDEgs=0.5))))
 
-exp3 <- cbind(estimatePower(replicate(50, runSim(1000, 10, gs.sz=30, S2N=0.2, fracDEgs=0.8))),
-              estimatePower(replicate(50, runSim(1000, 20, gs.sz=30, S2N=0.2, fracDEgs=0.8))),
-              estimatePower(replicate(50, runSim(1000, 40, gs.sz=30, S2N=0.2, fracDEgs=0.8))),
-              estimatePower(replicate(50, runSim(1000, 60, gs.sz=30, S2N=0.2, fracDEgs=0.8))))
+exp3 <- cbind(estPwrTypIerr(replicate(60, runSim(1000, 10, gs.sz=30, S2N=0.5, fracDEgs=0.8))),
+              estPwrTypIerr(replicate(60, runSim(1000, 20, gs.sz=30, S2N=0.5, fracDEgs=0.8))),
+              estPwrTypIerr(replicate(60, runSim(1000, 40, gs.sz=30, S2N=0.5, fracDEgs=0.8))),
+              estPwrTypIerr(replicate(60, runSim(1000, 60, gs.sz=30, S2N=0.5, fracDEgs=0.8))))
 
-exp4 <- cbind(estimatePower(replicate(50, runSim(1000, 10, gs.sz=30, S2N=1.0, fracDEgs=0.8))),
-              estimatePower(replicate(50, runSim(1000, 20, gs.sz=30, S2N=1.0, fracDEgs=0.8))),
-              estimatePower(replicate(50, runSim(1000, 40, gs.sz=30, S2N=1.0, fracDEgs=0.8))),
-              estimatePower(replicate(50, runSim(1000, 60, gs.sz=30, S2N=1.0, fracDEgs=0.8))))
+exp4 <- cbind(estPwrTypIerr(replicate(60, runSim(1000, 10, gs.sz=30, S2N=1.0, fracDEgs=0.8))),
+              estPwrTypIerr(replicate(60, runSim(1000, 20, gs.sz=30, S2N=1.0, fracDEgs=0.8))),
+              estPwrTypIerr(replicate(60, runSim(1000, 40, gs.sz=30, S2N=1.0, fracDEgs=0.8))),
+              estPwrTypIerr(replicate(60, runSim(1000, 60, gs.sz=30, S2N=1.0, fracDEgs=0.8))))
 @
 
-<<powersim, fig=TRUE, echo=FALSE, results=hide, include=FALSE, height=7, width=7>>=
-plotPower <- function(statpower, main, legendposition) {
+<<powertype1errsim, fig=TRUE, echo=FALSE, results=hide, include=FALSE, height=8, width=5>>=
+plotPower <- function(statpower, main, legendposition="bottomright", ...) {
   plot(statpower[1,], ylim=c(0, 1.0), type="b", lwd=2, pch=1, main=main,
        col="blue", ylab="Statistcal Power", xlab="Sample Size", xaxt="n")
   lines(statpower[2,], col="red", type="b", lwd=2, pch=2)
   lines(statpower[3,], col="darkgreen", type="b", lwd=2, pch=3)
   lines(statpower[4,], col="lightgreen", type="b", lwd=2, pch=4)
-  legend(legendposition, c("GSVA","ssGSEA","z-score","PLAGE"),
-         col=c("blue","red","darkgreen","lightgreen"),pch=1:4,lty=1,lwd=2,inset=0.02)
+  if (!is.null(legendposition))
+    legend(legendposition, c("GSVA","ssGSEA","z-score","PLAGE"),
+           col=c("blue","red","darkgreen","lightgreen"),pch=1:4,lty=1,lwd=2,inset=0.02)
   axis(1,at=1:4, labels=c("10","20","40","60"))
 }
 
-par(mfrow=c(2,2), mar=c(4, 4, 4, 1))
-plotPower(exp1, main="Weak signal-to-noise ratio\n50% DE genes in gene set",
-          legendposition="topleft")
-plotPower(exp2, main="Strong signal-to-noise ratio\n50% DE genes in gene set",
-          legendposition="bottomright")
-plotPower(exp3, main="Weak signal-to-noise ratio\n80% DE genes in gene set",
-          legendposition="topleft")
-plotPower(exp4, main="Strong signal-to-noise ratio\n80% DE genes in gene set",
-          legendposition="bottomright")
+plotType1Error <- function(tmp, title, legendposition="bottomright", alpha=0.05, ...){
+  plot(tmp[5,],ylim=c(0, 0.2),type="b",lwd=2,pch=1,
+       col="blue",ylab="Empirical Type-I Error",xlab="Sample Size",xaxt="n",main=title, ...)
+  lines(tmp[6,],col="red",type="b",lwd=2,pch=2)
+  lines(tmp[7,],col="darkgreen",type="b",lwd=2,pch=3)
+  lines(tmp[8,],col="lightgreen",type="b",lwd=2,pch=4)
+  if (!is.null(legendposition))
+    legend(legendposition,c("GSVA","ssGSEA","z-score","PLAGE"),col=c("blue","red","darkgreen","lightgreen"),pch=1:4,lty=1,lwd=2,inset=0.02)
+  axis(1,at=c(1:dim(tmp)[2]), labels=c("10","20","40","60"))
+  abline(h=alpha, lty=2)
+}
+
+labelPlot <- function(lab, font, cex, offsetx=0.05, offsety=0.05) {
+  par(xpd=TRUE)
+  w <- par("usr")[2] - par("usr")[1]
+  h <- par("usr")[4] - par("usr")[3]
+  text(par("usr")[1]-w*offsetx, par("usr")[4]+h*offsety, lab, font=font, cex=cex)
+  par(xpd=FALSE)
+}
+
+par(mfrow=c(4,2), mar=c(4, 4, 2, 1))
+plotPower(exp1, main="", legendposition=NULL, las=1)
+labelPlot("A", 2, 2, 0.2, 0.15)
+plotType1Error(exp1,"",legendposition="topright", las=1)
+labelPlot("B", 2, 2, 0.2, 0.15)
+plotPower(exp2, main="", legendposition=NULL, las=1)
+labelPlot("C", 2, 2, 0.2, 0.15)
+plotType1Error(exp2,"",legendposition="topright", las=1)
+labelPlot("D", 2, 2, 0.2, 0.15)
+plotPower(exp3, main="", legendposition=NULL, las=1)
+labelPlot("E", 2, 2, 0.2, 0.15)
+plotType1Error(exp3,"",legendposition="topright", las=1)
+labelPlot("F", 2, 2, 0.2, 0.15)
+plotPower(exp4, main="", legendposition=NULL, las=1)
+labelPlot("G", 2, 2, 0.2, 0.15)
+plotType1Error(exp4,"",legendposition="topright", las=1)
+labelPlot("H", 2, 2, 0.2, 0.15)
 @
-\begin{figure}[ht]
-\centerline{\includegraphics[width=0.7\textwidth]{GSVA-powersim}}
-\caption{{\bf Comparison of the statistical power of GSVA, PLAGE, single sample GSEA (ssGSEA)
-and combined z-score (zscore).} Each panel shows the statistical power in the $y$-axis as
-function of the sample size in the $x$-axis. GSE scores were calculated with each method with
-respect to a single DE gene set. The two panels on top correspond to simulations where 50\% of
-the genes in the gene set were DE while the two at the bottom contained 80\% of DE genes. The
-two panels on the left correspond to a weak signal-to-noise ratio in the DE magnitude while the
-two on the right correspond to a strong one. Data were simulated from a linear model with additive
-sample and probe effects reflecting the previous four different scenarios. The statistical power
-was estimated as 1 minus the fraction of non-rejections on the DE gene set at $\alpha=0.05$.
-GSVA provides in general higher power than the other three methods, specially under a weak
-signal-to-noise ratio.}
+\begin{figure}[p]
+\centerline{\includegraphics[height=0.8\textheight]{GSVA-powertype1errsim}}
+\caption{{\bf Comparison of the statistical power and type-I error rate between GSVA, PLAGE,
+single sample GSEA (ssGSEA) and combined z-score (zscore).}
+The averaged results of 60 simulations are depicted as function of the sample size on the
+$x$-axis, for each of the GSE methods. On the $y$-axis either the statistical power (A, C, E, G)
+or the empirical type-I error rate (B, D, F, H) is shown. GSE scores were calculated with each
+method with respect to two gene sets, one of them differentially expressed (DE) and the other one
+not. Statistical power and empirical type-I error rates were estimated by performing a $t$-test on
+the DE and non-DE gene sets, respectively, at a significance level of $\alpha=0.05$. These
+simulations were carried out under the following four different scenarios for the DE gene set:
+(A,B) weak signal-to-noise ratio, 50\% of DE genes in the DE gene set; (C,D) strong
+signal-to-noise ratio, 50\% of DE genes in the DE gene set; (E, F) weak signal-to-noise ratio,
+80\% of DE genes in the DE gene set; (G, H) strong signal-to-noise ratio, 80\% of DE gene in the
+DE gene set.}
 \label{simpower}
 \end{figure}
 
@@ -1069,8 +816,18 @@ stopifnot(identical(featureNames(huangArrayRMAnoBatchCommon_eset),
 stopifnot(identical(sampleNames(huangArrayRMAnoBatchCommon_eset),
                     sampleNames(pickrellCountsArgonneCQNcommon_eset)))
 @
-Next, for the current analysis we use the previously defined collection of canonical C2
-Broad Sets extended with two gene sets formed by genes with sex-specific expression:
+Next, for the current analysis we use the subset of canonical pathways from the C2
+collection of MSigDB Gene Sets. These correspond to the following pathways from
+KEGG, REACTOME and BIOCARTA:
+
+<<>>=
+canonicalC2BroadSets <- c2BroadSets[c(grep("^KEGG", names(c2BroadSets)),
+                                      grep("^REACTOME", names(c2BroadSets)),
+                                      grep("^BIOCARTA", names(c2BroadSets)))]
+canonicalC2BroadSets
+@
+Additionally, we extend this collection of gene sets with two formed by genes
+with sex-specific expression:
 
 <<<>>=
 data(genderGenesEntrez)
@@ -1092,10 +849,10 @@ set the argument \Robject{rnaseq=TRUE} which is \Robject{FALSE} by default.
 
 <<<>>=
 esmicro <- gsva(huangArrayRMAnoBatchCommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500,
-                mx.diff=TRUE, verbose=FALSE, rnaseq=FALSE)$es.obs
+                mx.diff=TRUE, verbose=FALSE, rnaseq=FALSE, parallel.sz=1)$es.obs
 dim(esmicro)
 esrnaseq <- gsva(pickrellCountsArgonneCQNcommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500,
-                 mx.diff=TRUE, verbose=FALSE, rnaseq=TRUE)$es.obs
+                 mx.diff=TRUE, verbose=FALSE, rnaseq=TRUE, parallel.sz=1)$es.obs
 dim(esrnaseq)
 @
 To compare expression values from both technologies we are going to transform

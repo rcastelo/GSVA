@@ -27,7 +27,7 @@ A collection of gene sets that meet the given minimum and maximum set size.
 }
 \references{
 H\"anzelmann, S., Castelo, R. and Guinney, J.
-GSVA: Gene Set Variation Analysis, \emph{submitted}
+GSVA: Gene Set Variation Analysis for microarray and RNA-Seq data, \emph{BMC Bioinformatics, in press, 2013.}
 }
 \author{J. Guinney}
 \seealso{

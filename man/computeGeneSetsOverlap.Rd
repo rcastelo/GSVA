@@ -39,7 +39,7 @@ A gene-set by gene-set matrix of the overlap among every pair of gene sets.
 }
 \references{
 H\"anzelmann, S., Castelo, R. and Guinney, J.
-GSVA: Gene Set Variation Analysis, \emph{submitted}
+GSVA: Gene Set Variation Analysis for microarray and RNA-Seq data, \emph{BMC Bioinformatics, in press, 2013.}
 }
 \author{J. Guinney}
 \seealso{

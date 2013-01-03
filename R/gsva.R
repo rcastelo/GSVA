@@ -386,7 +386,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
 	
 	rank.scores <- apply(sort.sgn.idxs, 2, compute_rank_score)
 	
-	haveParallel <- GSVA:::.isPackageLoaded("parallel")
+	haveParallel <- GSVA:::.isPackageLoaded("parallel") ## parallel is since 2.15 part of base R, thus always available
 	haveSnow <- GSVA:::.isPackageLoaded("snow")
 	
 	if (parallel.sz > 1 || haveParallel) {
@@ -542,6 +542,13 @@ ks_test_Rcode <- function(gene.density, gset_idxs, tau=1, make.plot=FALSE){
 }
 
 rndWalk <- function(gSetIdx, geneRanking, j, R, alpha) {
+  return(.Call("rndWalk_R", as.integer(gSetIdx), as.integer(geneRanking),
+               as.integer(j), R, alpha));
+
+  ## 03.01.13
+  ## this was the former slower R code, we leave it here to facilitate
+  ## the understanding of what is doing the C code executed in the line before
+
   indicatorFunInsideGeneSet <- match(geneRanking, gSetIdx)
   indicatorFunInsideGeneSet[!is.na(indicatorFunInsideGeneSet)] <- 1
   indicatorFunInsideGeneSet[is.na(indicatorFunInsideGeneSet)] <- 0
@@ -567,7 +574,7 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz, parallel.type, verbose)
     assign("iSample", 0, envir=globalenv())
   }
 
-  R <- apply(X, 2, function(x,p) rank(x), p)
+  R <- apply(X, 2, function(x,p) as.integer(rank(x)), p)
 
 	haveParallel <- GSVA:::.isPackageLoaded("parallel")
 	haveSnow <- GSVA:::.isPackageLoaded("snow")

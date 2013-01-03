@@ -147,7 +147,7 @@ Barbie, D.A. et al. Systematic RNA interference reveals that oncogenic KRAS-driv
 cancers require TBK1. \emph{Nature}, 462(5):108-112, 2009.
 
 H\"anzelmann, S., Castelo, R. and Guinney, J.
-GSVA: Gene Set Variation Analysis, \emph{submitted}
+GSVA: Gene Set Variation Analysis for microarray and RNA-Seq data, \emph{BMC Bioinformatics, in press, 2013.}
 
 Lee, E. et al. Inferring pathway activity toward precise disease classification.
 \emph{PLoS Comp Biol}, 4(11):e1000217, 2008.
