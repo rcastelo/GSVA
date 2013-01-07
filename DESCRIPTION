@@ -1,6 +1,6 @@
 Package: GSVA
-Version: 1.7.3
-Date: 2013-1-3
+Version: 1.7.4
+Date: 2013-1-7
 Title: Gene Set Variation Analysis for microarray and RNA-seq data
 Author: Justin Guinney <justin.guinney@sagebase.org> (with contributions from Robert Castelo <robert.castelo@upf.edu> and Sonja Haenzelmann <shanzelmann@imim.es)
 Maintainer: Justin Guinney <justin.guinney@sagebase.org>
