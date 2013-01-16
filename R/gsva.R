@@ -27,7 +27,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list", annotati
   sdGenes <- Biobase::esApply(expr, 1, sd)
   if (any(sdGenes == 0)) {
     if (verbose)
-      cat("Filtering out ", sum(sdGenes), " genes with constant expression values throuhgout the samples\n")
+      cat("Filtering out", sum(sdGenes == 0), "genes with constant expression values throuhgout the samples\n")
     expr <- expr[sdGenes > 0, ]
   } 
 
@@ -81,7 +81,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   sdGenes <- Biobase::esApply(expr, 1, sd)
   if (any(sdGenes == 0)) {
     if (verbose)
-      cat("Filtering out ", sum(sdGenes), " genes with constant expression values throuhgout the samples\n")
+      cat("Filtering out", sum(sdGenes == 0), "genes with constant expression values throuhgout the samples\n")
     expr <- expr[sdGenes > 0, ]
   } 
 
@@ -142,7 +142,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", an
   sdGenes <- apply(expr, 1, sd)
   if (any(sdGenes == 0)) {
     if (verbose)
-      cat("Filtering out ", sum(sdGenes), " genes with constant expression values throuhgout the samples\n")
+      cat("Filtering out", sum(sdGenes == 0), "genes with constant expression values throuhgout the samples\n")
     expr <- expr[sdGenes > 0, ]
   } 
 
@@ -198,7 +198,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
   sdGenes <- apply(expr, 1, sd)
   if (any(sdGenes == 0)) {
     if (verbose)
-      cat("Filtering out ", sum(sdGenes), " genes with constant expression values throuhgout the samples\n")
+      cat("Filtering out", sum(sdGenes == 0), "genes with constant expression values throuhgout the samples\n")
     expr <- expr[sdGenes > 0, ]
   } 
 
