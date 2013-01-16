@@ -1,13 +1,17 @@
 citHeader("To cite package 'GSVA' in publications use:")
 
 citEntry(entry="Article",
-  author = personList(as.person("Sonja H\"anzelmann"),
+  title = "{GSVA}: gene set variation analysis for microarray and {RNA-Seq} data",
+  author = personList(as.person("Sonja H{\\\"a}nzelmann"),
                       as.person("Robert Castelo"),
                       as.person("Justin Guinney")),
-  title = "GSVA: Gene Set Variation Analysis for microarray and RNA-Seq data",
-  journal = "BMC Bioinformatics, in press",
+  journal = "BMC Bioinformatics",
+  volume = "14",
+  pages = "7",
   year = "2013",
-  textVersion = paste("Hanzelmann, S., Castelo, R. and Guinney, A.",
-                      "GSVA: Gene Set Variation Analysis for microarray and RNA-seq data",
-                      "BMC Bioinformatics, in press, 2013.")
+  url = "http://www.biomedcentral.com/1471-2105/14/7",
+  doi = "10.1186/1471-2105-14-7",
+  textVersion = paste("Hänzelmann, S., Castelo, R. and Guinney, A.",
+                      "GSVA: gene set variation analysis for microarray and RNA-seq data.",
+                      "BMC Bioinformatics, 14:7, 2013.")
 )

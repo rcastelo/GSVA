@@ -3,6 +3,8 @@
 \alias{filterGeneSets,list-method}
 \alias{filterGeneSets,GeneSetCollection-method}
 
+\encoding{latin1}
+
 \title{
 Filter gene sets
 }
@@ -26,8 +28,9 @@ This function filters the input gene sets according to a given minimum and maxim
 A collection of gene sets that meet the given minimum and maximum set size.
 }
 \references{
-H\"anzelmann, S., Castelo, R. and Guinney, J.
-GSVA: Gene Set Variation Analysis for microarray and RNA-Seq data, \emph{BMC Bioinformatics, in press, 2013.}
+\enc{Hänzelmann}{Hanzelmann}, S., Castelo, R. and Guinney, J.
+GSVA: Gene set variation analysis for microarray and RNA-Seq data.
+\emph{BMC Bioinformatics}, 14:7, 2013.
 }
 \author{J. Guinney}
 \seealso{

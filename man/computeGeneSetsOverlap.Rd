@@ -5,6 +5,8 @@
 \alias{computeGeneSetsOverlap,GeneSetCollection,character-method}
 \alias{computeGeneSetsOverlap,GeneSetCollection,ExpressionSet-method}
 
+\encoding{latin1}
+
 \title{
 Compute gene-sets overlap
 }
@@ -38,8 +40,9 @@ size of the two gene sets.
 A gene-set by gene-set matrix of the overlap among every pair of gene sets.
 }
 \references{
-H\"anzelmann, S., Castelo, R. and Guinney, J.
-GSVA: Gene Set Variation Analysis for microarray and RNA-Seq data, \emph{BMC Bioinformatics, in press, 2013.}
+\enc{Hänzelmann}{Hanzelmann}, S., Castelo, R. and Guinney, J.
+GSVA: Gene set variation analysis for microarray and RNA-Seq data.
+\emph{BMC Bioinformatics}, 14:7, 2013.
 }
 \author{J. Guinney}
 \seealso{

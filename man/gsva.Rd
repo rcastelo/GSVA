@@ -5,6 +5,8 @@
 \alias{gsva,matrix,GeneSetCollection,character-method}
 \alias{gsva,matrix,list,missing-method}
 
+\encoding{latin1}
+
 \title{
 Gene Set Variation Analysis
 }
@@ -146,8 +148,9 @@ A gene-set by sample matrix of GSVA enrichment scores.
 Barbie, D.A. et al. Systematic RNA interference reveals that oncogenic KRAS-driven
 cancers require TBK1. \emph{Nature}, 462(5):108-112, 2009.
 
-H\"anzelmann, S., Castelo, R. and Guinney, J.
-GSVA: Gene Set Variation Analysis for microarray and RNA-Seq data, \emph{BMC Bioinformatics, in press, 2013.}
+\enc{Hänzelmann}{Hanzelmann}, S., Castelo, R. and Guinney, J.
+GSVA: Gene set variation analysis for microarray and RNA-Seq data.
+\emph{BMC Bioinformatics}, 14:7, 2013.
 
 Lee, E. et al. Inferring pathway activity toward precise disease classification.
 \emph{PLoS Comp Biol}, 4(11):e1000217, 2008.
