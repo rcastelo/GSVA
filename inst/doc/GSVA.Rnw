@@ -89,7 +89,7 @@ functional enrichment.
 
 In the rest of this vignette we describe briefly the methodology behind GSVA,
 give an overview of the functions implemented in the package and show a few
-applications. The interested reader is referred to \citep{GSVA_in_press} for
+applications. The interested reader is referred to \citep{haenzelmann_castelo_guinney_2013} for
 more comprehensive explanations and more complete data analysis examples with
 GSVA, as well as for citing GSVA if you use it in your own work.
 
@@ -702,7 +702,7 @@ Finally, we perform the simulation on each of the four described scenarios 60 ti
 the code below. The results in Fig.~\ref{simpower} show that GSVA attains higher statistical
 power than the other three methods in each of the simulated scenarios, while providing a
 similar control of the type-I error rate. Note that the fluctuations of this latter estimate
-are due to the limited number of times we repeat the simulation; see \citet{GSVA_in_press}
+are due to the limited number of times we repeat the simulation; see \citet{haenzelmann_castelo_guinney_2013}
 for more stable estimates obtained with a much larger number of repeated simulations.
 
 <<>>=
