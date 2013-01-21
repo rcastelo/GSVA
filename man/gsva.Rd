@@ -85,7 +85,7 @@ Estimates GSVA enrichment scores.
                     \code{gsva()} will try to match the identifiers in \code{expr} to the identifiers
                     in \code{gset.idx.list} just as they are.}
   \item{method}{Method to employ in the estimation of gene-set enrichment scores per sample. By default
-                this is set to \code{gsva} (H\"anzelmann et al, submitted) and other options are
+                this is set to \code{gsva} (\enc{Hänzelmann}{Hanzelmann} et al, 2013) and other options are
                 \code{ssgsea} (Barbie et al, 2009), \code{zscore} (Lee et al, 2008) or \code{plage}
                 (Tomfohr et al, 2005). The latter two standardize first expression profiles into z-scores
                 over the samples and, in the case of \code{zscore}, it combines them together as their sum
@@ -118,7 +118,7 @@ Estimates GSVA enrichment scores.
                  is calculated as the magnitude difference between the largest positive
                  and negative random walk deviations.}
   \item{tau}{Exponent defining the weight of the tail in the random walk performed by both the \code{gsva}
-             (H\"anzelmann et al., submitted) and the \code{ssgsea} (Barbie et al., 2009) methods. By default,
+             (\enc{Hänzelmann}{Hanzelmann} et al., 2013) and the \code{ssgsea} (Barbie et al., 2009) methods. By default,
              this \code{tau=1} when \code{method="gsva"} and \code{tau=0.25} when \code{method="ssgsea"} just
              as specified by Barbie et al. (2009) where this parameter is called \code{alpha}.}
   \item{kernel}{Logical, set to \code{TRUE} when the GSVA method employes a kernel non-parametric
