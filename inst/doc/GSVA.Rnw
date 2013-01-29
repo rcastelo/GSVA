@@ -319,9 +319,6 @@ library(Biobase)
 library(genefilter)
 library(limma)
 library(RColorBrewer)
-library(RBGL)
-library(graph)
-library(Rgraphviz)
 library(GSVA)
 @
 As a final setup step for this vignette, we will employ the
