@@ -466,8 +466,8 @@ plot(allGeneSets$logFC, -log10(allGeneSets$P.Value), pch=".", cex=4, col=grey(0.
      main="Gene sets", xlab="GSVA enrichment score difference", ylab=expression(-log[10]~~~Raw~P-value))
 abline(h=-log10(max(allGeneSets$P.Value[allGeneSets$adj.P.Val <= adjPvalueCutoff])),
        col=grey(0.5), lwd=1, lty=2)
-points(allGeneSets$logFC[match(DEgeneSets$ID, allGeneSets$ID)],
-       -log10(allGeneSets$P.Value[match(DEgeneSets$ID, allGeneSets$ID)]), pch=".",
+points(allGeneSets$logFC[match(rownames(DEgeneSets), rownames(allGeneSets))],
+       -log10(allGeneSets$P.Value[match(rownames(DEgeneSets), rownames(allGeneSets))]), pch=".",
        cex=4, col="red")
 text(max(allGeneSets$logFC)*0.85,
          -log10(max(allGeneSets$P.Value[allGeneSets$adj.P.Val <= adjPvalueCutoff])),
@@ -478,8 +478,8 @@ plot(allGenes$logFC, -log10(allGenes$P.Value), pch=".", cex=4, col=grey(0.75),
 abline(h=-log10(max(allGenes$P.Value[allGenes$adj.P.Val <= adjPvalueCutoff])),
        col=grey(0.5), lwd=1, lty=2)
 abline(v=c(-logFCcutoff, logFCcutoff), col=grey(0.5), lwd=1, lty=2)
-points(allGenes$logFC[match(DEgenes$ID, allGenes$ID)],
-       -log10(allGenes$P.Value[match(DEgenes$ID, allGenes$ID)]), pch=".",
+points(allGenes$logFC[match(rownames(DEgenes), rownames(allGenes))],
+       -log10(allGenes$P.Value[match(rownames(DEgenes), rownames(allGenes))]), pch=".",
        cex=4, col="red")
 text(max(allGenes$logFC)*0.85,
          -log10(max(allGenes$P.Value[allGenes$adj.P.Val <= adjPvalueCutoff])),
@@ -501,7 +501,7 @@ are directly related to ALL and MLL.
 
 <<leukemiaHeatmapGeneSets, echo=FALSE, results=hide>>=
 png(filename="GSVA-leukemiaHeatmapGeneSets.png", width=500, height=500)
-GSVAsco <- exprs(leukemia_es[DEgeneSets$ID, ])
+GSVAsco <- exprs(leukemia_es[rownames(DEgeneSets), ])
 colorLegend <- c("darkred", "darkblue")
 names(colorLegend) <- c("ALL", "MLL")
 sample.color.map <- colorLegend[pData(leukemia_es)[, "subtype"]]
@@ -526,7 +526,7 @@ in the Leukemia data set.}
 
 <<leukemiaHeatmapGenes, echo=FALSE, results=hide>>=
 png(filename="GSVA-leukemiaHeatmapGenes.png", width=500, height=500)
-exps <- exprs(leukemia_eset[DEgenes$ID, ])
+exps <- exprs(leukemia_eset[rownames(DEgenes), ])
 colorLegend <- c("darkred", "darkblue")
 names(colorLegend) <- c("ALL", "MLL")
 sample.color.map <- colorLegend[pData(leukemia_eset)[, "subtype"]]
