@@ -1,6 +1,8 @@
 useDynLib(GSVA)
 
 import(methods)
+import(BiocGenerics)
+
 importClassesFrom(Biobase, ExpressionSet)
 importClassesFrom(GSEABase, GeneSetCollection)
 importFrom(Biobase, exprs)

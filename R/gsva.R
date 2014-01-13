@@ -45,14 +45,11 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list", annotati
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
-  eSco <- GSVA:::.gsva(Biobase::exprs(expr), mapped.gset.idx.list, method, rnaseq, abs.ranking,
+  eSco <- GSVA:::.gsva(exprs(expr), mapped.gset.idx.list, method, rnaseq, abs.ranking,
                        no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
                        mx.diff, tau, kernel, verbose)
-  eScoEset <- expr
-  ## eScoEset <- Biobase::`exprs<-`(eScoEset, eSco$es.obs)
-  ## eScoEset <- Biobase::`annotation<-`(eScoEset, value="")
-  Biobase::exprs(eScoEset) <- eSco$es.obs
-  Biobase::annotation(eScoEset) <- ""
+  eScoEset <- new("ExpressionSet", exprs=eSco$es.obs, phenoData=phenoData(expr),
+                  experimentData=experimentData(expr), annotation="")
 
 	return(list(es.obs=eScoEset,
 				      bootstrap=eSco$bootstrap,
@@ -93,7 +90,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
 
   ## map gene identifiers of the gene sets to the features in the chip
   mapped.gset.idx.list <- GSEABase::mapIdentifiers(gset.idx.list,
-                                                   GSEABase::AnnoOrEntrezIdentifier(Biobase::annotation(expr)))
+                                                   GSEABase::AnnoOrEntrezIdentifier(annotation(expr)))
   
   ## map to the actual features for which expression data is available
   tmp <- lapply(geneIds(mapped.gset.idx.list),
@@ -106,14 +103,11 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
-  eSco <- GSVA:::.gsva(Biobase::exprs(expr), mapped.gset.idx.list, method, rnaseq, abs.ranking,
+  eSco <- GSVA:::.gsva(exprs(expr), mapped.gset.idx.list, method, rnaseq, abs.ranking,
                        no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
                        mx.diff, tau, kernel, verbose)
-  eScoEset <- expr
-  ## eScoEset <- Biobase::`exprs<-`(eScoEset, eSco$es.obs)
-  ## eScoEset <- Biobase::`annotation<-`(eScoEset, value="")
-  Biobase::exprs(eScoEset) <- eSco$es.obs
-  Biobase::annotation(eScoEset) <- ""
+  eScoEset <- new("ExpressionSet", exprs=eSco$es.obs, phenoData=phenoData(expr),
+                  experimentData=experimentData(expr), annotation="")
 
 	return(list(es.obs=eScoEset,
 				      bootstrap=eSco$bootstrap,
@@ -949,7 +943,7 @@ setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGen
 setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGenes="ExpressionSet"),
           function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
   ## map gene identifiers of the gene sets to the features in the chip
-  gSets <- GSEABase::mapIdentifiers(gSets, GSEABase::AnnoOrEntrezIdentifier(Biobase::annotation(uniqGenes)))
+  gSets <- GSEABase::mapIdentifiers(gSets, GSEABase::AnnoOrEntrezIdentifier(annotation(uniqGenes)))
   
   uniqGenes <- Biobase::featureNames(uniqGenes)
 
