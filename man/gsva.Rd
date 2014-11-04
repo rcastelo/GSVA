@@ -1,9 +1,9 @@
 \name{gsva}
 \alias{gsva}
-\alias{gsva,ExpressionSet,list,missing-method}
-\alias{gsva,ExpressionSet,GeneSetCollection,missing-method}
-\alias{gsva,matrix,GeneSetCollection,character-method}
-\alias{gsva,matrix,list,missing-method}
+\alias{gsva,ExpressionSet,list-method}
+\alias{gsva,ExpressionSet,GeneSetCollection-method}
+\alias{gsva,matrix,GeneSetCollection-method}
+\alias{gsva,matrix,list-method}
 
 \encoding{latin1}
 
@@ -14,7 +14,7 @@ Gene Set Variation Analysis
 Estimates GSVA enrichment scores.
 }
 \usage{
-\S4method{gsva}{ExpressionSet,list,missing}(expr, gset.idx.list, annotation=NULL,
+\S4method{gsva}{ExpressionSet,list}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
@@ -27,8 +27,9 @@ Estimates GSVA enrichment scores.
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     kernel=TRUE,
+    ssgsea.norm=TRUE,
     verbose=TRUE)
-\S4method{gsva}{ExpressionSet,GeneSetCollection,missing}(expr, gset.idx.list, annotation=NULL,
+\S4method{gsva}{ExpressionSet,GeneSetCollection}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
@@ -41,8 +42,9 @@ Estimates GSVA enrichment scores.
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     kernel=TRUE,
+    ssgsea.norm=TRUE,
     verbose=TRUE)
-\S4method{gsva}{matrix,GeneSetCollection,character}(expr, gset.idx.list, annotation=NA,
+\S4method{gsva}{matrix,GeneSetCollection}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
@@ -55,8 +57,9 @@ Estimates GSVA enrichment scores.
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     kernel=TRUE,
+    ssgsea.norm=TRUE,
     verbose=TRUE)
-\S4method{gsva}{matrix,list,missing}(expr, gset.idx.list, annotation=NULL,
+\S4method{gsva}{matrix,list}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
@@ -69,6 +72,7 @@ Estimates GSVA enrichment scores.
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     kernel=TRUE,
+    ssgsea.norm=TRUE,
     verbose=TRUE)
 }
 \arguments{
@@ -81,9 +85,9 @@ Estimates GSVA enrichment scores.
                     and gene sets as a \code{GeneSetCollection} object, the \code{annotation} argument
                     can be used to supply the name of the Bioconductor package that contains
                     annotations for the class of gene identifiers occurring in the row names of
-                    the expression data matrix. By default \code{annotation=NULL} which implies that
-                    \code{gsva()} will try to match the identifiers in \code{expr} to the identifiers
-                    in \code{gset.idx.list} just as they are.}
+                    the expression data matrix. By default \code{gsva()} will try to match the
+                    identifiers in \code{expr} to the identifiers in \code{gset.idx.list} just as
+                    they are, unless the \code{annotation} argument is set.}
   \item{method}{Method to employ in the estimation of gene-set enrichment scores per sample. By default
                 this is set to \code{gsva} (\enc{Hänzelmann}{Hanzelmann} et al, 2013) and other options are
                 \code{ssgsea} (Barbie et al, 2009), \code{zscore} (Lee et al, 2008) or \code{plage}
@@ -125,6 +129,10 @@ Estimates GSVA enrichment scores.
                 estimation of the empirical cumulative distribution function (default) and \code{FALSE}
                 when this function is directly estimated from the observed data. This last option is
                 justified in the limit of the size of the sample by the so-called Glivenko-Cantelli theorem.}
+  \item{ssgsea.norm}{Logical, set to \code{TRUE} (default) with \code{method="ssgsea"} runs the SSGSEA method
+                     from Barbie et al. (2009) normalizing the scores by the absolute difference between
+                     the minimum and the maximum, as described in their paper. When \code{ssgsea.norm=FALSE}
+                     this last normalization step is skipped.}
   \item{verbose}{Gives information about each calculation step. Default: \code{FALSE}.}
 }
 

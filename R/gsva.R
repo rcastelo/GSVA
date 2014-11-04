@@ -3,10 +3,10 @@
 ## purpose: main function of the package which estimates activity
 ##          scores for each given gene-set
 
-setGeneric("gsva", function(expr, gset.idx.list, annotation=NULL, ...) standardGeneric("gsva"))
+setGeneric("gsva", function(expr, gset.idx.list, ...) standardGeneric("gsva"))
 
-setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list", annotation="missing"),
-          function(expr, gset.idx.list, annotation=NULL,
+setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
+          function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
@@ -19,16 +19,20 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list", annotati
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
   kernel=TRUE,
+  ssgsea.norm=TRUE,
   verbose=TRUE)
 {
   method <- match.arg(method)
 
   ## filter out genes with constant expression values
   sdGenes <- Biobase::esApply(expr, 1, sd)
-  if (any(sdGenes == 0)) {
-    if (verbose)
-      cat("Filtering out", sum(sdGenes == 0), "genes with constant expression values throuhgout the samples\n")
-    expr <- expr[sdGenes > 0, ]
+  if (any(sdGenes == 0) || any(is.na(sdGenes))) {
+    warning(sum(sdGenes == 0 | is.na(sdGenes)),
+            "genes with constant expression values throuhgout the samples.")
+    if (method != "ssgsea") {
+      warning("Since argument method!=\"ssgsea\", genes with constant expression values are discarded.")
+      expr <- expr[sdGenes > 0 & !is.na(sdGenes), ]
+    }
   } 
 
   if (nrow(expr) < 2)
@@ -39,15 +43,18 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list", annotati
                                  function(x, y) na.omit(match(x, y)),
                                  featureNames(expr))
 
+  if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
+    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
-  eSco <- GSVA:::.gsva(exprs(expr), mapped.gset.idx.list, method, rnaseq, abs.ranking,
-                       no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
-                       mx.diff, tau, kernel, verbose)
+  eSco <- .gsva(exprs(expr), mapped.gset.idx.list, method, rnaseq, abs.ranking,
+                no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
+                mx.diff, tau, kernel, ssgsea.norm, verbose)
 
   if (method != "gsva")
     eSco <- list(es.obs=eSco, bootstrap=NULL, p.vals.sign=NULL)
@@ -60,8 +67,8 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list", annotati
               p.vals.sign=eSco$p.vals.sign))
 })
 
-setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollection", annotation="missing"),
-          function(expr, gset.idx.list, annotation=NULL,
+setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollection"),
+          function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
@@ -74,16 +81,20 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
   kernel=TRUE,
+  ssgsea.norm=TRUE,
   verbose=TRUE)
 {
   method <- match.arg(method)
 
   ## filter out genes with constant expression values
   sdGenes <- Biobase::esApply(expr, 1, sd)
-  if (any(sdGenes == 0)) {
-    if (verbose)
-      cat("Filtering out", sum(sdGenes == 0), "genes with constant expression values throuhgout the samples\n")
-    expr <- expr[sdGenes > 0, ]
+  if (any(sdGenes == 0) || any(is.na(sdGenes))) {
+    warning(sum(sdGenes == 0 | is.na(sdGenes)),
+            "genes with constant expression values throuhgout the samples.")
+    if (method != "ssgsea") {
+      warning("Since argument method!=\"ssgsea\", genes with constant expression values are discarded.")
+      expr <- expr[sdGenes > 0 & !is.na(sdGenes), ]
+    }
   } 
 
   if (nrow(expr) < 2)
@@ -94,7 +105,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
 
   ## map gene identifiers of the gene sets to the features in the chip
   mapped.gset.idx.list <- GSEABase::mapIdentifiers(gset.idx.list,
-                                                   GSEABase::AnnoOrEntrezIdentifier(annotation(expr)))
+                                                   GSEABase::AnnoOrEntrezIdentifier(Biobase::annotation(expr)))
   
   ## map to the actual features for which expression data is available
   tmp <- lapply(geneIds(mapped.gset.idx.list),
@@ -107,9 +118,9 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
-  eSco <- GSVA:::.gsva(exprs(expr), mapped.gset.idx.list, method, rnaseq, abs.ranking,
-                       no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
-                       mx.diff, tau, kernel, verbose)
+  eSco <- .gsva(exprs(expr), mapped.gset.idx.list, method, rnaseq, abs.ranking,
+                no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
+                mx.diff, tau, kernel, ssgsea.norm, verbose)
 
   if (method != "gsva")
     eSco <- list(es.obs=eSco, bootstrap=NULL, p.vals.sign=NULL)
@@ -122,8 +133,8 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
               p.vals.sign=eSco$p.vals.sign))
 })
 
-setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", annotation="character"),
-          function(expr, gset.idx.list, annotation=NA,
+setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
+          function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
@@ -136,16 +147,20 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", an
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
   kernel=TRUE,
+  ssgsea.norm=TRUE,
   verbose=TRUE)
 {
   method <- match.arg(method)
 
   ## filter out genes with constant expression values
   sdGenes <- apply(expr, 1, sd)
-  if (any(sdGenes == 0)) {
-    if (verbose)
-      cat("Filtering out", sum(sdGenes == 0), "genes with constant expression values throuhgout the samples\n")
-    expr <- expr[sdGenes > 0, ]
+  if (any(sdGenes == 0) || any(is.na(sdGenes))) {
+    warning(sum(sdGenes == 0 | is.na(sdGenes)),
+            "genes with constant expression values throuhgout the samples.")
+    if (method != "ssgsea") {
+      warning("Since argument method!=\"ssgsea\", genes with constant expression values are discarded.")
+      expr <- expr[sdGenes > 0 & !is.na(sdGenes), , drop=FALSE]
+    }
   } 
 
   if (nrow(expr) < 2)
@@ -153,7 +168,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", an
 
   ## map gene identifiers of the gene sets to the features in the matrix
   mapped.gset.idx.list <- gset.idx.list
-  if (!is.na(annotation)) {
+  if (!missing(annotation)) {
     if (verbose)
       cat("Mapping identifiers between gene sets and feature names\n")
 
@@ -167,19 +182,22 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", an
                                  rownames(expr))
   names(tmp) <- names(mapped.gset.idx.list)
 
+  if (length(unlist(tmp, use.names=FALSE)) == 0)
+    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
   mapped.gset.idx.list <- filterGeneSets(tmp,
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
-  GSVA:::.gsva(expr, mapped.gset.idx.list, method, rnaseq, abs.ranking,
-               no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
-               mx.diff, tau, kernel, verbose)
+  .gsva(expr, mapped.gset.idx.list, method, rnaseq, abs.ranking,
+        no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
+        mx.diff, tau, kernel, ssgsea.norm, verbose)
 })
 
-setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="missing"),
-          function(expr, gset.idx.list, annotation=NULL,
+setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
+          function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
@@ -192,16 +210,20 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
   kernel=TRUE,
+  ssgsea.norm=TRUE,
   verbose=TRUE)
 {
   method <- match.arg(method)
 
   ## filter out genes with constant expression values
   sdGenes <- apply(expr, 1, sd)
-  if (any(sdGenes == 0)) {
-    if (verbose)
-      cat("Filtering out", sum(sdGenes == 0), "genes with constant expression values throuhgout the samples\n")
-    expr <- expr[sdGenes > 0, ]
+  if (any(sdGenes == 0) || any(is.na(sdGenes))) {
+    warning(sum(sdGenes == 0 | is.na(sdGenes)),
+            "genes with constant expression values throuhgout the samples.")
+    if (method != "ssgsea") {
+      warning("Since argument method!=\"ssgsea\", genes with constant expression values are discarded.")
+      expr <- expr[sdGenes > 0 & !is.na(sdGenes), , drop=FALSE]
+    }
   } 
 
   if (nrow(expr) < 2)
@@ -211,15 +233,18 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
                                  function(x ,y) na.omit(match(x, y)),
                                  rownames(expr))
 
+  if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
+    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
-  GSVA:::.gsva(expr, mapped.gset.idx.list, method, rnaseq, abs.ranking, no.bootstraps,
-               bootstrap.percent, parallel.sz, parallel.type,
-               mx.diff, tau, kernel, verbose)
+  .gsva(expr, mapped.gset.idx.list, method, rnaseq, abs.ranking, no.bootstraps,
+        bootstrap.percent, parallel.sz, parallel.type,
+        mx.diff, tau, kernel, ssgsea.norm, verbose)
 })
 
 .gsva <- function(expr, gset.idx.list,
@@ -233,6 +258,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
   mx.diff=TRUE,
   tau=1,
   kernel=TRUE,
+  ssgsea.norm=TRUE,
   verbose=TRUE)
 {
 	if(length(gset.idx.list) == 0){
@@ -242,9 +268,10 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
   if (method == "ssgsea") {
 	  if(verbose)
 		  cat("Estimating ssGSEA scores for", length(gset.idx.list),"gene sets.\n")
-	
+
     return(ssgsea(expr, gset.idx.list, alpha=tau, parallel.sz=parallel.sz,
-                  parallel.type=parallel.type, verbose=verbose))
+                  parallel.type=parallel.type, normalization=ssgsea.norm,
+                  verbose=verbose))
   }
 
   if (method == "zscore") {
@@ -299,12 +326,13 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", annotation="mis
 		if(verbose) cat("Computing bootstrap enrichment scores\n")
 		bootstrap.nsamples <- floor(bootstrap.percent * n.samples)
 		
-		p.vals.sign <- matrix(NaN, n.gset, n.samples,dimnames=list(names(gset.idx.list),colnames(expr)))
+		p.vals.sign <- matrix(NaN, n.gset, n.samples,
+                          dimnames=list(names(gset.idx.list), colnames(expr)))
 		
 		es.bootstraps <- array(NaN, c(n.gset, n.samples, no.bootstraps))
 		if(parallel.sz > 0){
 			
-		  if(!GSVA:::.isPackageLoaded("snow")) {
+		  if(!.isPackageLoaded("snow")) {
 			  stop("Please load the 'snow' library")
 		  }
       ## copying ShortRead's strategy, the calls to the 'get()' are
@@ -382,7 +410,7 @@ compute.gene.density <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
   gene.density <- NA
   if (kernel) {
 	  A = .C("matrix_density_R",
-			as.double(t(expr[,sample.idxs])),
+			as.double(t(expr[ ,sample.idxs, drop=FALSE])),
 			as.double(t(expr)),
 			R = double(n.test.samples * n.genes),
 			n.density.samples,
@@ -432,8 +460,8 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
 	
 	rank.scores <- apply(sort.sgn.idxs, 2, compute_rank_score)
 	
-	haveParallel <- GSVA:::.isPackageLoaded("parallel")
-	haveSnow <- GSVA:::.isPackageLoaded("snow")
+	haveParallel <- .isPackageLoaded("parallel")
+	haveSnow <- .isPackageLoaded("snow")
 	
 	if (parallel.sz > 1 || haveParallel) {
 		if (!haveParallel && !haveSnow) {
@@ -486,7 +514,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
         assign("iGeneSet", 0, envir=globalenv())
       }
 
-      m <- mclapp(gset.idx.list, GSVA:::ks_test_m,
+      m <- mclapp(gset.idx.list, ks_test_m,
                   gene.density=rank.scores,
                   sort.idxs=sort.sgn.idxs,
                   mx.diff=mx.diff, tau=tau, verbose=verbose)
@@ -602,7 +630,8 @@ rndWalk <- function(gSetIdx, geneRanking, j, R, alpha) {
   sum(walkStat) 
 }
 
-ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz, parallel.type, verbose) {
+ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
+                   parallel.type, normalization=TRUE, verbose) {
 
   p <- nrow(X)
   n <- ncol(X)
@@ -615,8 +644,8 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz, parallel.type, verbose)
 
   R <- apply(X, 2, function(x,p) as.integer(rank(x)), p)
 
-	haveParallel <- GSVA:::.isPackageLoaded("parallel")
-	haveSnow <- GSVA:::.isPackageLoaded("snow")
+	haveParallel <- .isPackageLoaded("parallel")
+	haveSnow <- .isPackageLoaded("snow")
 	
   cl <- makeCl <- parSapp <- stopCl <- mclapp <- detCor <- nCores <- NA
 	if (parallel.sz > 1 || haveParallel) {
@@ -670,9 +699,11 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz, parallel.type, verbose)
   if (length(geneSets) == 1)
     es <- matrix(es, nrow=1)
 
-  ## normalize enrichment scores by using the entire data set, as indicated
-  ## by Barbie et al., 2009, online methods, pg. 2
-  es <- apply(es, 2, function(x, es) x / (range(es)[2] - range(es)[1]), es)
+  if (normalization) {
+    ## normalize enrichment scores by using the entire data set, as indicated
+    ## by Barbie et al., 2009, online methods, pg. 2
+    es <- apply(es, 2, function(x, es) x / (range(es)[2] - range(es)[1]), es)
+  }
 
   if (length(geneSets) == 1)
     es <- matrix(es, nrow=1)
@@ -706,8 +737,8 @@ zscore <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
 
   Z <- t(apply(X, 1, function(x) (x-mean(x))/sd(x)))
 
-	haveParallel <- GSVA:::.isPackageLoaded("parallel")
-	haveSnow <- GSVA:::.isPackageLoaded("snow")
+	haveParallel <- .isPackageLoaded("parallel")
+	haveSnow <- .isPackageLoaded("snow")
 	
   cl <- makeCl <- parSapp <- stopCl <- mclapp <- detCor <- nCores <- NA
 	if (parallel.sz > 1 || haveParallel) {
@@ -792,8 +823,8 @@ plage <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
 
   Z <- t(apply(X, 1, function(x) (x-mean(x))/sd(x)))
 
-	haveParallel <- GSVA:::.isPackageLoaded("parallel")
-	haveSnow <- GSVA:::.isPackageLoaded("snow")
+	haveParallel <- .isPackageLoaded("parallel")
+	haveSnow <- .isPackageLoaded("snow")
 	
   ## the masterDescriptor() calls are disabled since they are not available in windows
   ## they would help to report progress by just one of the processors. now all processors
@@ -917,7 +948,7 @@ setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="character
   members <- cbind(unlist(gSets, use.names=FALSE), rep(1:totalGsets, times=lenGsets))
   gSetsMembershipMatrix[members] <- 1
 
-  GSVA:::.computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
+  .computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
 })
 
 setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="ExpressionSet"),
@@ -936,7 +967,7 @@ setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="Expressio
   members <- cbind(unlist(gSets, use.names=FALSE), rep(1:totalGsets, times=lenGsets))
   gSetsMembershipMatrix[members] <- 1
 
-  GSVA:::.computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
+  .computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
 })
 
 setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGenes="character"),
@@ -945,20 +976,20 @@ setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGen
   gSetsMembershipMatrix <- incidence(gSets)
   gSetsMembershipMatrix <- t(gSetsMembershipMatrix[, colnames(gSetsMembershipMatrix) %in% uniqGenes])
 
-  GSVA:::.computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
+  .computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
 })
 
 setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGenes="ExpressionSet"),
           function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
   ## map gene identifiers of the gene sets to the features in the chip
-  gSets <- GSEABase::mapIdentifiers(gSets, GSEABase::AnnoOrEntrezIdentifier(annotation(uniqGenes)))
+  gSets <- GSEABase::mapIdentifiers(gSets, GSEABase::AnnoOrEntrezIdentifier(Biobase::annotation(uniqGenes)))
   
   uniqGenes <- Biobase::featureNames(uniqGenes)
 
   gSetsMembershipMatrix <- incidence(gSets)
   gSetsMembershipMatrix <- t(gSetsMembershipMatrix[, colnames(gSetsMembershipMatrix) %in% uniqGenes])
 
-  GSVA:::.computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
+  .computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
 })
 
 .computeGeneSetsOverlap <- function(gSetsMembershipMatrix, min.sz=1, max.sz=Inf) {

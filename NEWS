@@ -1,3 +1,14 @@
+CHANGES IN VERSION 1.14
+-----------------------
+
+USER VISIBLE CHANGES
+
+    o added an argument 'ssgsea.norm' to the 'gsva()' function to enable disabling the default score normalization of the original SSGSEA method by Barbie et al. (2009).
+
+BUG FIXES
+
+    o Better error handling of the situation when no gene identifiers match between gene sets and expression data.
+
 CHANGES IN VERSION 1.4
 ----------------------
 
