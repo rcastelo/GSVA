@@ -352,6 +352,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 			clExport(cl,"bootstrap.nsamples")
 			clExport(cl, "n.samples")
 			clExport(cl, "gset.idx.list")
+			clExport(cl, "compute.geneset.es")
 			clEvalQ(cl, library(GSVA))
 			
 			clSetupRNG(cl)
