@@ -330,7 +330,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
                           dimnames=list(names(gset.idx.list), colnames(expr)))
 		
 		es.bootstraps <- array(NaN, c(n.gset, n.samples, no.bootstraps))
-		if(parallel.sz > 0){
+		if(parallel.sz > 1){
 			
 		  if(!.isPackageLoaded("snow")) {
 			  stop("Please load the 'snow' library")
