@@ -299,7 +299,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 	
 	if(parallel.sz > 0 && no.bootstraps > 0){
 		if((no.bootstraps %% parallel.sz) != 0){
-			stop("'parrallel.sz' must be an integer divisor of 'no.bootsraps'" )
+			stop("'parallel.sz' must be an integer divisor of 'no.bootsraps'" )
 		}
 	}
 	n.samples <- ncol(expr)
@@ -332,7 +332,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 		es.bootstraps <- array(NaN, c(n.gset, n.samples, no.bootstraps))
 		if(parallel.sz > 1){
 			
-		  if(!.isPackageLoaded("snow")) {
+		  if(!.isPackageLoaded("snow")) { ## FIXME: should also open parallelism via 'parallel'
 			  stop("Please load the 'snow' library")
 		  }
       ## copying ShortRead's strategy, the calls to the 'get()' are
@@ -344,15 +344,16 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
       stopCl <- get("stopCluster", mode="function")
 			
 			cl <- makeCl(parallel.sz, type = parallel.type) 
-			.GlobalEnv[["expr"]] <- expr
-			.GlobalEnv[["bootstrap.nsamples"]] <- bootstrap.nsamples
-			.GlobalEnv[["n.samples"]] <- n.samples
-			.GlobalEnv[["gset.idx.list"]] <- gset.idx.list
-			clExport(cl,"expr")
-			clExport(cl,"bootstrap.nsamples")
-			clExport(cl, "n.samples")
-			clExport(cl, "gset.idx.list")
-			clExport(cl, "compute.geneset.es")
+			clExport(cl,"expr", envir=environment())
+			clExport(cl,"bootstrap.nsamples", envir=environment())
+			clExport(cl, "n.samples", envir=environment())
+			clExport(cl, "gset.idx.list", envir=environment())
+			clExport(cl, "rnaseq", envir=environment())
+			clExport(cl, "abs.ranking", envir=environment())
+			clExport(cl, "mx.diff", envir=environment())
+			clExport(cl, "tau", envir=environment())
+			clExport(cl, "kernel", envir=environment())
+			clExport(cl, "verbose", envir=environment())
 			clEvalQ(cl, library(GSVA))
 			
 			clSetupRNG(cl)
@@ -362,10 +363,10 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 			n.cycles <- floor(no.bootstraps / parallel.sz)
 			for(i in 1:n.cycles){
 				if(verbose) cat("bootstrap cycle ", i, "\n")
-				r <- clEvalQ(cl, compute.geneset.es(expr, gset.idx.list, 
+				r <- clEvalQ(cl, GSVA:::compute.geneset.es(expr, gset.idx.list, 
 								sample(n.samples, bootstrap.nsamples, replace=T),
 								rnaseq=rnaseq, abs.ranking=abs.ranking, mx.diff=mx.diff,
-                tau=tau, kernel=kernel, verbose=verbose))
+                tau=tau, kernel=kernel, verbose=FALSE, parallel.sz=1))
 				for(j in 1:length(r)){
 					es.bootstraps[,,(parallel.sz * (i-1) + j)] <- r[[j]]
 				}	
@@ -377,7 +378,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 				es.bootstraps[,,i] <- compute.geneset.es(expr, gset.idx.list,
 						sample(n.samples, bootstrap.nsamples, replace=T),
 						rnaseq=rnaseq, abs.ranking=abs.ranking, mx.diff=mx.diff,
-            tau=tau, kernel=kernel, verbose=verbose)
+            tau=tau, kernel=kernel, verbose=verbose, parallel.sz=1)
 			}
 		}
 	
@@ -469,7 +470,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
 			stop("In order to run calculations in parallel either the 'snow', or the 'parallel' library, should be loaded first")
 		}
 
-    if (!haveParallel) {  ## use snow
+    if (haveSnow) {  ## use snow
       ## copying ShortRead's strategy, the calls to the 'get()' are
       ## employed to quieten R CMD check, and for no other reason
       makeCl <- get("makeCluster", mode="function")
@@ -498,7 +499,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
         cat("Cleaning up\n")
 		  stopCl(cl)
 
-    } else {             ## use parallel
+    } else if (haveParallel) {             ## use parallel
 
       mclapp <- get('mclapply', envir=getNamespace('parallel'))
       detCor <- get('detectCores', envir=getNamespace('parallel'))
@@ -525,7 +526,8 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
       if (verbose) {
         close(get("progressBar", envir=globalenv()))
       }
-    }
+    } else
+			stop("In order to run calculations in parallel either the 'snow', or the 'parallel' library, should be loaded first")
 
 	} else {
 		if (verbose) {
