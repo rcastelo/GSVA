@@ -266,6 +266,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 	}
 	
   if (method == "ssgsea") {
+    if (no.bootstraps > 0)
+      stop("no.bootstraps > 0 does not work with method='ssgsea'")
+
 	  if(verbose)
 		  cat("Estimating ssGSEA scores for", length(gset.idx.list),"gene sets.\n")
 
@@ -275,6 +278,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   }
 
   if (method == "zscore") {
+    if (no.bootstraps > 0)
+      stop("no.bootstraps > 0 does not work with method='zscore'")
+
     if (rnaseq)
       stop("rnaseq=TRUE does not work with method='zscore'.")
 
@@ -285,6 +291,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   }
 
   if (method == "plage") {
+    if (no.bootstraps > 0)
+      stop("no.bootstraps > 0 does not work with method='plage'")
+
     if (rnaseq)
       stop("rnaseq=TRUE does not work with method='plage'.")
 
