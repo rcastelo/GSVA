@@ -1,3 +1,10 @@
+CHANGES IN VERSION 1.24
+-----------------------
+
+BUG FIXES
+
+    o Bugfixes on the parallel execution of gsva() with bootstrap calculations.
+
 CHANGES IN VERSION 1.14
 -----------------------
 
