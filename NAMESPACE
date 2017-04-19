@@ -5,6 +5,19 @@ import(BiocGenerics)
 
 importClassesFrom(Biobase, ExpressionSet)
 importClassesFrom(GSEABase, GeneSetCollection)
+
+importMethodsFrom(Biobase, featureNames,
+                           phenoData,
+                           experimentData)
+
+importMethodsFrom(GSEABase, geneIds,
+                            incidence)
+
+importFrom(graphics, plot)
+importFrom(stats, ecdf,
+                  na.omit)
+importFrom(utils, setTxtProgressBar,
+                  txtProgressBar)
 importFrom(Biobase, exprs)
 importFrom(Biobase, annotation)
 importFrom(GSEABase, AnnoOrEntrezIdentifier)

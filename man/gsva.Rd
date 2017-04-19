@@ -97,8 +97,12 @@ Estimates GSVA enrichment scores.
                 while in the case of \code{plage} they are used to calculate the singular value decomposition
                 (SVD) over the genes in the gene set and use the coefficients of the first right-singular vector
                 as pathway activity profile.}
-  \item{rnaseq}{Flag to inform whether the input gene expression data comes from microarray
-                (\code{rnaseq=FALSE}, default) or RNA-Seq (\code{rnaseq=TRUE}) experiments.}
+  \item{rnaseq}{Logical flag set by default to \code{rnaseq=FALSE} to inform whether the input gene
+                expression data are continues values, such as fluorescent units in logarithmic scale
+                from microarray experiments or some other kind of continuous value derived from
+                RNA-seq counts such as log-CPMs, log-RPKMs or log-TPMs. This flag should be set to
+                \code{rnaseq=TRUE} only when the values of the input gene expression data are integer
+                counts.}
   \item{abs.ranking}{Flag to determine whether genes should be ranked according to 
   					their sign (\code{abs.ranking=FALSE}) or by absolute value (\code{abs.ranking=TRUE}). 
   					In the latter, pathways with genes enriched on either extreme
@@ -148,6 +152,16 @@ identifiers in the input expression data leading to a filtered collection of
 gene sets. This collection can be further filtered to require a minimun and/or
 maximum size of the gene sets for which we want to calculate GSVA enrichment
 scores, by using the arguments \code{min.sz} and \code{max.sz}.
+
+The name of the argument \code{rnaseq} can be misleading. When set to \code{rnaseq=FALSE}, the
+nonparametric estimation of the cumulative density function of the expression profile of
+each gene across samples is done using Gaussian kernels suited for continuous values. These were
+initially thought to be only microarray fluorescent units in logarithmic scale but nowadays these
+may also correspond to continuous values derived from RNA-seq experiments such as log-CPMs,
+log-RPKMs or log-TPMs. When \code{rnaseq=TRUE}, Poisson kernels are used instead and therefore,
+this option is only suitable when the input gene expression matrix is formed by integer counts.
+This implies that \code{rnaseq=FALSE} may also be used even when the expression data comes from
+a RNA-seq experiment. The name of this argument may change in the future to avoid this confusion.
 }
 \value{
 A gene-set by sample matrix of GSVA enrichment scores.
