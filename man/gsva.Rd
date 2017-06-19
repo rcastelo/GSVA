@@ -103,10 +103,12 @@ Estimates GSVA enrichment scores.
                 RNA-seq counts such as log-CPMs, log-RPKMs or log-TPMs. This flag should be set to
                 \code{rnaseq=TRUE} only when the values of the input gene expression data are integer
                 counts.}
-  \item{abs.ranking}{Flag to determine whether genes should be ranked according to 
-  					their sign (\code{abs.ranking=FALSE}) or by absolute value (\code{abs.ranking=TRUE}). 
-  					In the latter, pathways with genes enriched on either extreme
-  					(high or low) will be regarded as 'highly' activated. }
+  \item{abs.ranking}{Flag used only when \code{mx.diff=TRUE}. When \code{abs.ranking=FALSE} (default)
+            a modified Kuiper statistic is used to calculate enrichment scores, taking the magnitude
+            difference between the largest positive and negative random walk deviations. When
+            \code{abs.ranking=TRUE} the original Kuiper statistic that sums the largest positive and
+            negative random walk deviations, is used. In this latter case, gene sets with genes
+            enriched on either extreme (high or low) will be regarded as 'highly' activated.}
   \item{min.sz}{Minimum size of the resulting gene sets.}
   \item{max.sz}{Maximum size of the resulting gene sets.}
   \item{no.bootstraps}{Number of bootstrap iterations to perform.}
@@ -203,7 +205,7 @@ geneSets <- list(set1=paste("g", 1:3, sep=""),
 y <- matrix(rnorm(n*p), nrow=p, ncol=n,
             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
 
-## genes in set1 are expressed at higher levels in the last 10 samples
+## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
 y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
 
 ## build design matrix

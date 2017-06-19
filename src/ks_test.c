@@ -6,10 +6,12 @@
 
 
 void
-ks_matrix_R(double* X, double* R, int* sidxs, int* n_genes, int* geneset_idxs, int* n_geneset, double* tau,  int* n_samples, int* mx_diff);
+ks_matrix_R(double* X, double* R, int* sidxs, int* n_genes, int* geneset_idxs,
+            int* n_geneset, double* tau,  int* n_samples, int* mx_diff, int* abs_rnk);
 
 double
-ks_sample(double* x, int* x_sort_indxs, int n_genes, int* geneset_mask, int* geneset_idxs, int n_geneset, double tau, int mx_diff){
+ks_sample(double* x, int* x_sort_indxs, int n_genes, int* geneset_mask,
+          int* geneset_idxs, int n_geneset, double tau, int mx_diff, int abs_rnk){
 
 
 	double dec = 1.0 / (n_genes - n_geneset);
@@ -40,9 +42,11 @@ ks_sample(double* x, int* x_sort_indxs, int n_genes, int* geneset_mask, int* gen
 		if(cum_sum < mx_neg){ mx_neg = cum_sum; }
 	}
 
-	if(mx_diff!=0){
+	if (mx_diff != 0) {
 		mx_value_sign = mx_pos + mx_neg;
-	}else{
+    if (abs_rnk != 0)
+      mx_value_sign = mx_pos - mx_neg;
+	} else {
 		mx_value_sign = (mx_pos > fabs(mx_neg)) ? mx_pos : mx_neg;
 	}
 	return mx_value_sign;
@@ -54,7 +58,8 @@ ks_sample(double* x, int* x_sort_indxs, int n_genes, int* geneset_mask, int* gen
  * R <- result
  * sidxs <- sorted gene densities idxs
  */
-void ks_matrix(double* X, double* R, int* sidxs, int n_genes, int* geneset_idxs, int n_geneset, double tau, int n_samples, int mx_diff){
+void ks_matrix(double* X, double* R, int* sidxs, int n_genes, int* geneset_idxs,
+               int n_geneset, double tau, int n_samples, int mx_diff, int abs_rnk){
 	int geneset_mask[n_genes];
 	for(int i = 0; i < n_genes; ++i){
 		geneset_mask[i] = 0;
@@ -66,11 +71,13 @@ void ks_matrix(double* X, double* R, int* sidxs, int n_genes, int* geneset_idxs,
 
 	for(int j = 0; j < n_samples; ++j){
 		int offset = j * n_genes;
-		R[j] = ks_sample(&X[offset], &sidxs[offset], n_genes, &geneset_mask[0], geneset_idxs, n_geneset, tau, mx_diff);
+    R[j] = ks_sample(&X[offset], &sidxs[offset], n_genes, &geneset_mask[0],
+                     geneset_idxs, n_geneset, tau, mx_diff, abs_rnk);
 	}
 }
 
-void ks_matrix_R(double* X, double* R, int* sidxs, int* n_genes, int* geneset_idxs, int* n_geneset, double* tau,  int* n_samples, int* mx_diff){
-	ks_matrix(X,R, sidxs, *n_genes, geneset_idxs, *n_geneset, *tau, *n_samples, *mx_diff);
+void ks_matrix_R(double* X, double* R, int* sidxs, int* n_genes,
+                 int* geneset_idxs, int* n_geneset, double* tau,
+                 int* n_samples, int* mx_diff, int* abs_rnk) {
+	ks_matrix(X,R, sidxs, *n_genes, geneset_idxs, *n_geneset, *tau, *n_samples, *mx_diff, *abs_rnk);
 }
-

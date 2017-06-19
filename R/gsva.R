@@ -463,11 +463,15 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
 	}
 	
 	rank.scores <- rep(0, num_genes)
-	if(abs.ranking){
-		sort.sgn.idxs <- apply(abs(gene.density), 2, order, decreasing=TRUE) # n.genes * n.samples	
-	}else{
-		sort.sgn.idxs <- apply(gene.density, 2, order, decreasing=TRUE) # n.genes * n.samples
-	}
+  ## 19.06.17 disable current functioning of abs.ranking flag
+  ## to switch to a different approach to implement it during
+  ## the KS random walk based on the Kuiper statistic
+	## if(abs.ranking){
+  ##   sort.sgn.idxs <- apply(abs(gene.density), 2, order, decreasing=TRUE) # n.genes * n.samples	
+  ## }else{
+  ##   sort.sgn.idxs <- apply(gene.density, 2, order, decreasing=TRUE) # n.genes * n.samples
+  ## }
+  sort.sgn.idxs <- apply(gene.density, 2, order, decreasing=TRUE) # n.genes * n.samples
 	
 	rank.scores <- apply(sort.sgn.idxs, 2, compute_rank_score)
 	
@@ -503,7 +507,8 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
 		  m <- t(parSapp(cl, gset.idx.list, ks_test_m,
 						  gene.density=rank.scores, 
 						  sort.idxs=sort.sgn.idxs,
-						  mx.diff=mx.diff, tau=tau, verbose=FALSE))
+						  mx.diff=mx.diff, abs.ranking=abs.ranking,
+              tau=tau, verbose=FALSE))
 		  if(verbose)
         cat("Cleaning up\n")
 		  stopCl(cl)
@@ -528,7 +533,8 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
       m <- mclapp(gset.idx.list, ks_test_m,
                   gene.density=rank.scores,
                   sort.idxs=sort.sgn.idxs,
-                  mx.diff=mx.diff, tau=tau, verbose=verbose)
+                  mx.diff=mx.diff, abs.ranking=abs.ranking,
+                  tau=tau, verbose=verbose)
       m <- do.call("rbind", m)
       colnames(m) <- colnames(expr)
 
@@ -555,7 +561,8 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
     }
 
 		m <- t(sapply(gset.idx.list, ks_test_m, rank.scores, sort.sgn.idxs,
-                  mx.diff=mx.diff, tau=tau, verbose=verbose))
+                  mx.diff=mx.diff, abs.ranking=abs.ranking,
+                  tau=tau, verbose=verbose))
 
     if (verbose) {
       setTxtProgressBar(get("progressBar", envir=globalenv()), 1)
@@ -566,7 +573,8 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
 }
 
 
-ks_test_m <- function(gset_idxs, gene.density, sort.idxs, mx.diff=TRUE, tau=1, verbose=TRUE){
+ks_test_m <- function(gset_idxs, gene.density, sort.idxs, mx.diff=TRUE,
+                      abs.ranking=FALSE, tau=1, verbose=TRUE){
 	
 	n.genes <- nrow(gene.density)
 	n.samples <- ncol(gene.density)
@@ -581,7 +589,8 @@ ks_test_m <- function(gset_idxs, gene.density, sort.idxs, mx.diff=TRUE, tau=1, v
 			n.geneset,
 			as.double(tau),
 			n.samples,
-			as.integer(mx.diff))$R
+			as.integer(mx.diff),
+      as.integer(abs.ranking))$R
 
   if (verbose) {
     assign("iGeneSet", get("iGeneSet", envir=globalenv()) + 1, envir=globalenv())
