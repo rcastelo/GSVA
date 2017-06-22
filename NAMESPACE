@@ -2,6 +2,7 @@ useDynLib(GSVA)
 
 import(methods)
 import(BiocGenerics)
+import(shiny)
 
 importClassesFrom(Biobase, ExpressionSet)
 importClassesFrom(GSEABase, GeneSetCollection)
@@ -17,12 +18,19 @@ importFrom(graphics, plot)
 importFrom(stats, ecdf,
                   na.omit)
 importFrom(utils, setTxtProgressBar,
-                  txtProgressBar)
-importFrom(Biobase, exprs)
-importFrom(Biobase, annotation)
-importFrom(GSEABase, AnnoOrEntrezIdentifier)
-importFrom(GSEABase, mapIdentifiers)
+                  txtProgressBar,
+                  read.csv,
+                  write.csv)
+importFrom(Biobase, exprs,
+                    annotation)
+importFrom(GSEABase, AnnoOrEntrezIdentifier,
+                     mapIdentifiers,
+                     getGmt)
+importFrom(geneplotter, multidensity)
+importFrom(shinythemes, shinytheme)
 
-exportMethods("gsva",
-              "filterGeneSets",
-              "computeGeneSetsOverlap")
+exportMethods(gsva,
+              filterGeneSets,
+              computeGeneSetsOverlap)
+
+export(igsva)
