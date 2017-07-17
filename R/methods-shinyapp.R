@@ -98,16 +98,13 @@ argumentsDataInput <- function(id) {
           12,
           selectInput("method", "Choose method:",
                       c("gsva","ssgsea","zscore","plage")),
-          radioButtons("rnaseq", "Rnaseq:",
-                       c("False" = FALSE,
-                         "True" = TRUE)),
+          selectInput("kcdf", "Choose kcdf:",
+                      c("Gaussian","Poisson","none")),
           radioButtons("absRanking", "abs.ranking:",
                        c("False" = FALSE,
                          "True" = TRUE)),
           numericInput("minSz","min.sz:",value = 1),
           numericInput("maxSz","max.sz (Write 0 for infinite):",value = 0),
-          numericInput("noBootstraps","no.bootstraps:",value = 0),
-          numericInput("bootstrapPercent","bootstrap.percent:",value = .632),
           numericInput("parallelSz","parallel.sz:",value = 0),
           selectInput("parallelType", "parallel.type:",
                       c("SOCK","MPI","NWS")),
@@ -125,9 +122,6 @@ argumentsDataInput <- function(id) {
           conditionalPanel(
             condition = "input.method == 'zscore' || input.method == 'plage'"
           ),
-          radioButtons("kernel", "kernel:",
-                       c("True" = TRUE,
-                         "False" = FALSE)),
           radioButtons("ssgseaNorm", "ssgsea.norm:",
                        c("True" = TRUE,
                          "False" = FALSE)),
@@ -255,10 +249,10 @@ gsva_generation <- function(input, output, session, newY, genes,varMaxsz) {
   #GSVA Generation
   withProgress(message = 'Runing GSVA', value = 0, {
     incProgress(1, detail = "This may take a while...")
-    generated_gsva <<- gsva(newY, genes, method = input$method, rnaseq = as.logical(input$rnaseq), abs.ranking = as.logical(input$absRanking),
-                            min.sz = input$minSz, max.sz = varMaxsz, no.bootstraps = input$noBootstraps, bootstrap.percent = input$bootstrapPercent, 
-                            parallel.sz = input$parallelSz, parallel.type = input$parallelType, mx.diff = as.logical(input$mxDiff), tau = selectedTau, kernel = as.logical(input$kernel),
-                            ssgsea.norm = as.logical(input$ssgseaNorm), verbose = as.logical(input$verbose)) #Result asignation
+    generated_gsva <<- gsva(newY, genes, method=input$method, kcdf=input$kcdf, abs.ranking=as.logical(input$absRanking),
+                            min.sz=input$minSz, max.sz=varMaxsz, parallel.sz=input$parallelSz, parallel.type=input$parallelType,
+                            mx.diff=as.logical(input$mxDiff), tau=selectedTau, ssgsea.norm=as.logical(input$ssgseaNorm),
+                            verbose=as.logical(input$verbose))
   })
 }
 

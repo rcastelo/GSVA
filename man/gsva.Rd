@@ -16,6 +16,7 @@ Estimates GSVA enrichment scores.
 \usage{
 \S4method{gsva}{ExpressionSet,list}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
+    kcdf=c("Gaussian", "Poisson", "none"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
@@ -31,6 +32,7 @@ Estimates GSVA enrichment scores.
     verbose=TRUE)
 \S4method{gsva}{ExpressionSet,GeneSetCollection}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
+    kcdf=c("Gaussian", "Poisson", "none"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
@@ -46,6 +48,7 @@ Estimates GSVA enrichment scores.
     verbose=TRUE)
 \S4method{gsva}{matrix,GeneSetCollection}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
+    kcdf=c("Gaussian", "Poisson", "none"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
@@ -61,6 +64,7 @@ Estimates GSVA enrichment scores.
     verbose=TRUE)
 \S4method{gsva}{matrix,list}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
+    kcdf=c("Gaussian", "Poisson", "none"),
     rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
@@ -97,12 +101,15 @@ Estimates GSVA enrichment scores.
                 while in the case of \code{plage} they are used to calculate the singular value decomposition
                 (SVD) over the genes in the gene set and use the coefficients of the first right-singular vector
                 as pathway activity profile.}
-  \item{rnaseq}{Logical flag set by default to \code{rnaseq=FALSE} to inform whether the input gene
-                expression data are continues values, such as fluorescent units in logarithmic scale
-                from microarray experiments or some other kind of continuous value derived from
-                RNA-seq counts such as log-CPMs, log-RPKMs or log-TPMs. This flag should be set to
-                \code{rnaseq=TRUE} only when the values of the input gene expression data are integer
-                counts.}
+  \item{kcdf}{Character string denoting the kernel to use during the non-parametric estimation of the
+              cumulative distribution function of expression levels across samples when \code{method="gsva"}.
+              By default, \code{kcdf="Gaussian"} which is suitable when input expression values are continuous,
+              such as microarray fluorescent units in logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs.
+              When input expression values are integer counts, such as those derived from RNA-seq experiments,
+              then this argument should be set to \code{kcdf="Poisson"}. This argument supersedes arguments
+              \code{rnaseq} and \code{kernel}, which are deprecated and will be removed in the next release.}
+  \item{rnaseq}{This argument has been deprecated and will be removed in the next release. Please use the
+                argument \code{kcdf} instead.}
   \item{abs.ranking}{Flag used only when \code{mx.diff=TRUE}. When \code{abs.ranking=FALSE} (default)
             a modified Kuiper statistic is used to calculate enrichment scores, taking the magnitude
             difference between the largest positive and negative random walk deviations. When
@@ -131,10 +138,8 @@ Estimates GSVA enrichment scores.
              (\enc{Hänzelmann}{Hanzelmann} et al., 2013) and the \code{ssgsea} (Barbie et al., 2009) methods. By default,
              this \code{tau=1} when \code{method="gsva"} and \code{tau=0.25} when \code{method="ssgsea"} just
              as specified by Barbie et al. (2009) where this parameter is called \code{alpha}.}
-  \item{kernel}{Logical, set to \code{TRUE} when the GSVA method employes a kernel non-parametric
-                estimation of the empirical cumulative distribution function (default) and \code{FALSE}
-                when this function is directly estimated from the observed data. This last option is
-                justified in the limit of the size of the sample by the so-called Glivenko-Cantelli theorem.}
+  \item{kernel}{This argument has been deprecated and will be removed in the next release. Please use the
+                argument \code{kcdf} instead.}
   \item{ssgsea.norm}{Logical, set to \code{TRUE} (default) with \code{method="ssgsea"} runs the SSGSEA method
                      from Barbie et al. (2009) normalizing the scores by the absolute difference between
                      the minimum and the maximum, as described in their paper. When \code{ssgsea.norm=FALSE}
@@ -154,16 +159,6 @@ identifiers in the input expression data leading to a filtered collection of
 gene sets. This collection can be further filtered to require a minimun and/or
 maximum size of the gene sets for which we want to calculate GSVA enrichment
 scores, by using the arguments \code{min.sz} and \code{max.sz}.
-
-The name of the argument \code{rnaseq} can be misleading. When set to \code{rnaseq=FALSE}, the
-nonparametric estimation of the cumulative density function of the expression profile of
-each gene across samples is done using Gaussian kernels suited for continuous values. These were
-initially thought to be only microarray fluorescent units in logarithmic scale but nowadays these
-may also correspond to continuous values derived from RNA-seq experiments such as log-CPMs,
-log-RPKMs or log-TPMs. When \code{rnaseq=TRUE}, Poisson kernels are used instead and therefore,
-this option is only suitable when the input gene expression matrix is formed by integer counts.
-This implies that \code{rnaseq=FALSE} may also be used even when the expression data comes from
-a RNA-seq experiment. The name of this argument may change in the future to avoid this confusion.
 }
 \value{
 A gene-set by sample matrix of GSVA enrichment scores.

@@ -8,6 +8,7 @@ setGeneric("gsva", function(expr, gset.idx.list, ...) standardGeneric("gsva"))
 setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
+  kcdf=c("Gaussian", "Poisson", "none"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
   min.sz=1,
@@ -23,6 +24,13 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
   verbose=TRUE)
 {
   method <- match.arg(method)
+  kcdf <- match.arg(kcdf)
+
+  if (!missing(rnaseq))
+    warning("The argument 'rnaseq' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
+
+  if (!missing(kernel))
+    warning("The argument 'kernel' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
 
   ## filter out genes with constant expression values
   sdGenes <- Biobase::esApply(expr, 1, sd)
@@ -52,7 +60,18 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
-  eSco <- .gsva(exprs(expr), mapped.gset.idx.list, method, rnaseq, abs.ranking,
+  if (!missing(kcdf)) {
+    if (kcdf == "Gaussian") {
+      rnaseq <- FALSE
+      kernel <- TRUE
+    } else if (kcdf == "Poisson") {
+      rnaseq <- TRUE
+      kernel <- TRUE
+    } else
+      kernel <- FALSE
+  }
+
+  eSco <- .gsva(exprs(expr), mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
                 no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
                 mx.diff, tau, kernel, ssgsea.norm, verbose)
 
@@ -70,6 +89,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
 setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollection"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
+  kcdf=c("Gaussian", "Poisson", "none"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
   min.sz=1,
@@ -85,6 +105,13 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   verbose=TRUE)
 {
   method <- match.arg(method)
+  kcdf <- match.arg(kcdf)
+
+  if (!missing(rnaseq))
+    warning("The argument 'rnaseq' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
+
+  if (!missing(kernel))
+    warning("The argument 'kernel' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
 
   ## filter out genes with constant expression values
   sdGenes <- Biobase::esApply(expr, 1, sd)
@@ -118,7 +145,18 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
-  eSco <- .gsva(exprs(expr), mapped.gset.idx.list, method, rnaseq, abs.ranking,
+  if (!missing(kcdf)) {
+    if (kcdf == "Gaussian") {
+      rnaseq <- FALSE
+      kernel <- TRUE
+    } else if (kcdf == "Poisson") {
+      rnaseq <- TRUE
+      kernel <- TRUE
+    } else
+      kernel <- FALSE
+  }
+
+  eSco <- .gsva(exprs(expr), mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
                 no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
                 mx.diff, tau, kernel, ssgsea.norm, verbose)
 
@@ -136,6 +174,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
 setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
+  kcdf=c("Gaussian", "Poisson", "none"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
   min.sz=1,
@@ -151,6 +190,13 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
   verbose=TRUE)
 {
   method <- match.arg(method)
+  kcdf <- match.arg(kcdf)
+
+  if (!missing(rnaseq))
+    warning("The argument 'rnaseq' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
+
+  if (!missing(kernel))
+    warning("The argument 'kernel' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
 
   ## filter out genes with constant expression values
   sdGenes <- apply(expr, 1, sd)
@@ -191,7 +237,18 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
-  .gsva(expr, mapped.gset.idx.list, method, rnaseq, abs.ranking,
+  if (!missing(kcdf)) {
+    if (kcdf == "Gaussian") {
+      rnaseq <- FALSE
+      kernel <- TRUE
+    } else if (kcdf == "Poisson") {
+      rnaseq <- TRUE
+      kernel <- TRUE
+    } else
+      kernel <- FALSE
+  }
+
+  .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
         no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
         mx.diff, tau, kernel, ssgsea.norm, verbose)
 })
@@ -199,6 +256,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
 setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
+  kcdf=c("Gaussian", "Poisson", "none"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
   min.sz=1,
@@ -214,6 +272,13 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   verbose=TRUE)
 {
   method <- match.arg(method)
+  kcdf <- match.arg(kcdf)
+
+  if (!missing(rnaseq))
+    warning("The argument 'rnaseq' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
+
+  if (!missing(kernel))
+    warning("The argument 'kernel' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
 
   ## filter out genes with constant expression values
   sdGenes <- apply(expr, 1, sd)
@@ -242,13 +307,25 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
-  .gsva(expr, mapped.gset.idx.list, method, rnaseq, abs.ranking, no.bootstraps,
+  if (!missing(kcdf)) {
+    if (kcdf == "Gaussian") {
+      rnaseq <- FALSE
+      kernel <- TRUE
+    } else if (kcdf == "Poisson") {
+      rnaseq <- TRUE
+      kernel <- TRUE
+    } else
+      kernel <- FALSE
+  }
+
+  .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking, no.bootstraps,
         bootstrap.percent, parallel.sz, parallel.type,
         mx.diff, tau, kernel, ssgsea.norm, verbose)
 })
 
 .gsva <- function(expr, gset.idx.list,
   method=c("gsva", "ssgsea", "zscore", "plage"),
+  kcdf=c("Gaussian", "Poisson", "none"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
   no.bootstraps=0, 
@@ -261,6 +338,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   ssgsea.norm=TRUE,
   verbose=TRUE)
 {
+  if (no.bootstraps > 0)
+    warning("The 'no.bootstraps' and 'bootstrap.percent' arguments are experimental and will be deprecated and will dissapear in the following release of GSVA.")
+
 	if(length(gset.idx.list) == 0){
 		stop("The gene set list is empty!  Filter may be too stringent.")
 	}

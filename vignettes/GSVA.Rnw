@@ -841,15 +841,18 @@ canonicalC2BroadSets <- GeneSetCollection(c(canonicalC2BroadSets, MSY, XiE))
 canonicalC2BroadSets
 @
 We calculate now GSVA enrichment scores for these gene sets using first the microarray
-data and then the RNA-seq data. Note that the only requirement to do the latter is to
-set the argument \Robject{rnaseq=TRUE} which is \Robject{FALSE} by default.
+data and then the RNA-seq integer count data. Note that the only requirement to do the
+latter is to set the argument \Robject{kcdf="Poisson"} which is \Robject{"Gaussian"} by
+default. Note, however, that if our RNA-seq derived expression levels would be continous,
+such as log-CPMs, log-RPKMs or log-TPMs, the the default value of the \Robject{kcdf}
+argument should remain unchanged.
 
 <<<>>=
 esmicro <- gsva(huangArrayRMAnoBatchCommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500,
-                mx.diff=TRUE, verbose=FALSE, rnaseq=FALSE, parallel.sz=1)$es.obs
+                mx.diff=TRUE, verbose=FALSE, parallel.sz=1)$es.obs
 dim(esmicro)
 esrnaseq <- gsva(pickrellCountsArgonneCQNcommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500,
-                 mx.diff=TRUE, verbose=FALSE, rnaseq=TRUE, parallel.sz=1)$es.obs
+                 kcdf="Poisson", mx.diff=TRUE, verbose=FALSE, parallel.sz=1)$es.obs
 dim(esrnaseq)
 @
 To compare expression values from both technologies we are going to transform
