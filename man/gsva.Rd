@@ -29,7 +29,8 @@ Estimates GSVA enrichment scores.
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     kernel=TRUE,
     ssgsea.norm=TRUE,
-    verbose=TRUE)
+    verbose=TRUE,
+    return.old.value=FALSE)
 \S4method{gsva}{ExpressionSet,GeneSetCollection}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
@@ -45,7 +46,8 @@ Estimates GSVA enrichment scores.
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     kernel=TRUE,
     ssgsea.norm=TRUE,
-    verbose=TRUE)
+    verbose=TRUE,
+    return.old.value=FALSE)
 \S4method{gsva}{matrix,GeneSetCollection}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
@@ -61,7 +63,8 @@ Estimates GSVA enrichment scores.
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     kernel=TRUE,
     ssgsea.norm=TRUE,
-    verbose=TRUE)
+    verbose=TRUE,
+    return.old.value=FALSE)
 \S4method{gsva}{matrix,list}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
@@ -77,7 +80,8 @@ Estimates GSVA enrichment scores.
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     kernel=TRUE,
     ssgsea.norm=TRUE,
-    verbose=TRUE)
+    verbose=TRUE,
+    return.old.value=FALSE)
 }
 \arguments{
   \item{expr}{Gene expression data which can be given either as an \code{ExpressionSet}
@@ -118,8 +122,10 @@ Estimates GSVA enrichment scores.
             enriched on either extreme (high or low) will be regarded as 'highly' activated.}
   \item{min.sz}{Minimum size of the resulting gene sets.}
   \item{max.sz}{Maximum size of the resulting gene sets.}
-  \item{no.bootstraps}{Number of bootstrap iterations to perform.}
-  \item{bootstrap.percent}{.632 is the ideal percent samples bootstrapped.}
+  \item{no.bootstraps}{Number of bootstrap iterations to perform. This argument has been deprecated and will
+                       be removed in the next release.}
+  \item{bootstrap.percent}{.632 is the ideal percent samples bootstrapped. This argument has been deprecated and
+                           will be removed in the next release.}
   \item{parallel.sz}{Number of processors to use when doing the calculations in parallel.
                      This requires to previously load either the \code{parallel} or the
                      \code{snow} library. If \code{parallel} is loaded and this argument
@@ -145,6 +151,11 @@ Estimates GSVA enrichment scores.
                      the minimum and the maximum, as described in their paper. When \code{ssgsea.norm=FALSE}
                      this last normalization step is skipped.}
   \item{verbose}{Gives information about each calculation step. Default: \code{FALSE}.}
+  \item{return.old.value}{Logical, set to \code{FALSE} (default) has no effect but when \code{return.old.value=TRUE},
+                          then the return value takes form of a \code{list} object as in previous versions of
+                          GSVA. This argument will be present only in this release for backward compability
+                          purposes during the deprecation of the arguments \code{no.bootstraps} and \code{bootstrap.percent}
+                          and will dissappear in the next release.}
 }
 
 \details{
@@ -216,7 +227,7 @@ fit <- eBayes(fit)
 topTable(fit, coef="sampleGroup2vs1")
 
 ## estimate GSVA enrichment scores for the three sets
-gsva_es <- gsva(y, geneSets, mx.diff=1)$es.obs
+gsva_es <- gsva(y, geneSets, mx.diff=1)
 
 ## fit the same linear model now to the GSVA enrichment scores
 fit <- lmFit(gsva_es, design)

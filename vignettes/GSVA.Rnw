@@ -172,8 +172,8 @@ X <- matrix(rnorm(p*n), nrow=p, dimnames=list(1:p, 1:n))
 dim(X)
 gs <- as.list(sample(min.sz:max.sz, size=nGS, replace=TRUE)) ## sample gene set sizes
 gs <- lapply(gs, function(n, p) sample(1:p, size=n, replace=FALSE), p) ## sample gene sets
-es.max <- gsva(X, gs, mx.diff=FALSE, verbose=FALSE, parallel.sz=1)$es.obs
-es.dif <- gsva(X, gs, mx.diff=TRUE, verbose=FALSE, parallel.sz=1)$es.obs
+es.max <- gsva(X, gs, mx.diff=FALSE, verbose=FALSE, parallel.sz=1)
+es.dif <- gsva(X, gs, mx.diff=TRUE, verbose=FALSE, parallel.sz=1)
 @
 
 \begin{center}
@@ -409,7 +409,7 @@ GSVA enrichment scores, we leave deliberately unchanged the default argument
 
 <<>>=
 cache(leukemia_es <- gsva(leukemia_filtered_eset, c2BroadSets,
-                           min.sz=10, max.sz=500, verbose=TRUE)$es.obs,
+                           min.sz=10, max.sz=500, verbose=TRUE),
                            dir=cacheDir, prefix=cachePrefix)
 @
 We test whether there is a difference between the GSVA enrichment scores from each
@@ -572,7 +572,7 @@ GSVA enrichment scores for the gene sets contained in \Robject{brainTxDbSets}
 are calculated, in this case using \Robject{mx.diff=FALSE},  as follows:
 
 <<>>=
-gbm_es <- gsva(gbm_eset, brainTxDbSets, mx.diff=FALSE, verbose=FALSE, parallel.sz=1)$es.obs
+gbm_es <- gsva(gbm_eset, brainTxDbSets, mx.diff=FALSE, verbose=FALSE, parallel.sz=1)
 @
 Figure \ref{gbmSignature} shows the GSVA enrichment scores obtained for the
 up-regulated gene sets across the samples of the four GBM subtypes. As expected,
@@ -664,7 +664,7 @@ runSim <- function(p, n, gs.sz, S2N, fracDEgs) {
   geneSets <- list(H1GeneSet=paste0("g", 1:(gs.sz)),
                    H0GeneSet=paste0("g", (gs.sz+1):(2*gs.sz)))
 
-  es.gsva <- gsva(M, geneSets, verbose=FALSE, parallel.sz=1)$es.obs
+  es.gsva <- gsva(M, geneSets, verbose=FALSE, parallel.sz=1)
   es.ss <- gsva(M, geneSets, method="ssgsea", verbose=FALSE, parallel.sz=1)
   es.z <- gsva(M, geneSets, method="zscore", verbose=FALSE, parallel.sz=1)
   es.plage <- gsva(M, geneSets, method="plage", verbose=FALSE, parallel.sz=1)
@@ -849,10 +849,10 @@ argument should remain unchanged.
 
 <<<>>=
 esmicro <- gsva(huangArrayRMAnoBatchCommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500,
-                mx.diff=TRUE, verbose=FALSE, parallel.sz=1)$es.obs
+                mx.diff=TRUE, verbose=FALSE, parallel.sz=1)
 dim(esmicro)
 esrnaseq <- gsva(pickrellCountsArgonneCQNcommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500,
-                 kcdf="Poisson", mx.diff=TRUE, verbose=FALSE, parallel.sz=1)$es.obs
+                 kcdf="Poisson", mx.diff=TRUE, verbose=FALSE, parallel.sz=1)
 dim(esrnaseq)
 @
 To compare expression values from both technologies we are going to transform

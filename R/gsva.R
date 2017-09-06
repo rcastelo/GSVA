@@ -9,19 +9,20 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
-  rnaseq=FALSE,
+  rnaseq=FALSE, ## deprecated
   abs.ranking=FALSE,
   min.sz=1,
   max.sz=Inf,
-  no.bootstraps=0, 
-  bootstrap.percent = .632, 
+  no.bootstraps=0, ## deprecated
+  bootstrap.percent = .632, ## deprecated
   parallel.sz=0, 
   parallel.type="SOCK",
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  kernel=TRUE,
+  kernel=TRUE, ## deprecated
   ssgsea.norm=TRUE,
-  verbose=TRUE)
+  verbose=TRUE,
+  return.old.value=FALSE) ## transient argument for deprecating 'no.bootstraps' and 'bootstrap.percent'
 {
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
@@ -31,6 +32,9 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
 
   if (!missing(kernel))
     warning("The argument 'kernel' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
+
+  if (no.bootstraps > 0)
+    warning("The argument 'no.bootstraps' is deprecated and will be removed in the next release of GSVA. This implies that the 'gsva()' function with the default argument 'method=\"gsva\"' only returns a matrix of GSVA enrichment scores. To obtain the same output in the form of a list as in previous versions you can set 'return.old.value=TRUE' during this release but this argument will not be available anymore in the next release.")
 
   ## filter out genes with constant expression values
   sdGenes <- Biobase::esApply(expr, 1, sd)
@@ -81,28 +85,31 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
   eScoEset <- new("ExpressionSet", exprs=eSco$es.obs, phenoData=phenoData(expr),
                   experimentData=experimentData(expr), annotation="")
 
-	return(list(es.obs=eScoEset,
-				      bootstrap=eSco$bootstrap,
-              p.vals.sign=eSco$p.vals.sign))
+  rval <- eScoEset
+  if (return.old.value) ## to be removed in the next release
+    rval <- list(es.obs=eScoEset, bootstrap=eSco$bootstrap, p.vals.sign=eSco$p.vals.sign)
+
+  rval
 })
 
 setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollection"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
-  rnaseq=FALSE,
+  rnaseq=FALSE, ## deprecated
   abs.ranking=FALSE,
   min.sz=1,
   max.sz=Inf,
-  no.bootstraps=0, 
-  bootstrap.percent = .632, 
+  no.bootstraps=0, ## deprecated
+  bootstrap.percent = .632, ## deprecated
   parallel.sz=0, 
   parallel.type="SOCK",
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  kernel=TRUE,
+  kernel=TRUE, ## deprecated
   ssgsea.norm=TRUE,
-  verbose=TRUE)
+  verbose=TRUE,
+  return.old.value=FALSE) ## transient argument for deprecating 'no.bootstraps' and 'bootstrap.percent'
 {
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
@@ -112,6 +119,9 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
 
   if (!missing(kernel))
     warning("The argument 'kernel' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
+
+  if (no.bootstraps > 0)
+    warning("The argument 'no.bootstraps' is deprecated and will be removed in the next release of GSVA. This implies that the 'gsva()' function with the default argument 'method=\"gsva\"' only returns a matrix of GSVA enrichment scores. To obtain the same output in the form of a list as in previous versions you can set 'return.old.value=TRUE' during this release but this argument will not be available anymore in the next release.")
 
   ## filter out genes with constant expression values
   sdGenes <- Biobase::esApply(expr, 1, sd)
@@ -166,28 +176,31 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   eScoEset <- new("ExpressionSet", exprs=eSco$es.obs, phenoData=phenoData(expr),
                   experimentData=experimentData(expr), annotation="")
 
-	return(list(es.obs=eScoEset,
-				      bootstrap=eSco$bootstrap,
-              p.vals.sign=eSco$p.vals.sign))
+  rval <- eScoEset
+  if (return.old.value) ## to be removed in the next release
+    rval <- list(es.obs=eScoEset, bootstrap=eSco$bootstrap, p.vals.sign=eSco$p.vals.sign)
+
+  rval
 })
 
 setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
-  rnaseq=FALSE,
+  rnaseq=FALSE, ## deprecated
   abs.ranking=FALSE,
   min.sz=1,
   max.sz=Inf,
-  no.bootstraps=0, 
-  bootstrap.percent = .632, 
+  no.bootstraps=0, ## deprecated
+  bootstrap.percent = .632,  ## deprecated
   parallel.sz=0, 
   parallel.type="SOCK",
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  kernel=TRUE,
+  kernel=TRUE, ## deprecated
   ssgsea.norm=TRUE,
-  verbose=TRUE)
+  verbose=TRUE,
+  return.old.value=FALSE) ## transient argument for deprecating 'no.bootstraps' and 'bootstrap.percent'
 {
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
@@ -197,6 +210,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
 
   if (!missing(kernel))
     warning("The argument 'kernel' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
+
+  if (no.bootstraps > 0)
+    warning("The argument 'no.bootstraps' is deprecated and will be removed in the next release of GSVA. This implies that the 'gsva()' function with the default argument 'method=\"gsva\"' only returns a matrix of GSVA enrichment scores. To obtain the same output in the form of a list as in previous versions you can set 'return.old.value=TRUE' during this release but this argument will not be available anymore in the next release.")
 
   ## filter out genes with constant expression values
   sdGenes <- apply(expr, 1, sd)
@@ -248,28 +264,34 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
       kernel <- FALSE
   }
 
-  .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-        no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
-        mx.diff, tau, kernel, ssgsea.norm, verbose)
+  rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+                no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
+                mx.diff, tau, kernel, ssgsea.norm, verbose)
+
+  if (method == "gsva" && !return.old.value) ## to be removed in the next release
+    rval <- rval$es.obs
+
+  rval
 })
 
 setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
-  rnaseq=FALSE,
+  rnaseq=FALSE, ## deprecated
   abs.ranking=FALSE,
   min.sz=1,
   max.sz=Inf,
-  no.bootstraps=0, 
-  bootstrap.percent = .632, 
+  no.bootstraps=0, ## deprecated
+  bootstrap.percent = .632, ## deprecated
   parallel.sz=0, 
   parallel.type="SOCK",
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  kernel=TRUE,
+  kernel=TRUE, ## deprecated
   ssgsea.norm=TRUE,
-  verbose=TRUE)
+  verbose=TRUE,
+  return.old.value=FALSE) ## transient argument for deprecating 'no.bootstraps' and 'bootstrap.percent'
 {
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
@@ -279,6 +301,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 
   if (!missing(kernel))
     warning("The argument 'kernel' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
+
+  if (no.bootstraps > 0)
+    warning("The argument 'no.bootstraps' is deprecated and will be removed in the next release of GSVA. This implies that the 'gsva()' function with the default argument 'method=\"gsva\"' only returns a matrix of GSVA enrichment scores. To obtain the same output in the form of a list as in previous versions you can set 'return.old.value=TRUE' during this release but this argument will not be available anymore in the next release.")
 
   ## filter out genes with constant expression values
   sdGenes <- apply(expr, 1, sd)
@@ -318,9 +343,14 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
       kernel <- FALSE
   }
 
-  .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking, no.bootstraps,
-        bootstrap.percent, parallel.sz, parallel.type,
-        mx.diff, tau, kernel, ssgsea.norm, verbose)
+  rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking, no.bootstraps,
+                bootstrap.percent, parallel.sz, parallel.type,
+                mx.diff, tau, kernel, ssgsea.norm, verbose)
+
+  if (method == "gsva" && !return.old.value) ## to be removed in the next release
+    rval <- rval$es.obs
+
+  rval
 })
 
 .gsva <- function(expr, gset.idx.list,
@@ -452,7 +482,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 			n.cycles <- floor(no.bootstraps / parallel.sz)
 			for(i in 1:n.cycles){
 				if(verbose) cat("bootstrap cycle ", i, "\n")
-				r <- clEvalQ(cl, GSVA:::compute.geneset.es(expr, gset.idx.list, 
+				r <- clEvalQ(cl, compute.geneset.es(expr, gset.idx.list, 
 								sample(n.samples, bootstrap.nsamples, replace=T),
 								rnaseq=rnaseq, abs.ranking=abs.ranking, mx.diff=mx.diff,
                 tau=tau, kernel=kernel, verbose=FALSE, parallel.sz=1))

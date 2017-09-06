@@ -271,17 +271,17 @@ gsva_information <- function(input, output, session) {
   else
   {
 
-    resultInformation <- matrix(data = c(input$matrixVar,input$genesetVar,ncol(generated_gsva$es.obs),nrow(generated_gsva$es.obs)), nrow = 1, ncol = 4)
+    resultInformation <- matrix(data = c(input$matrixVar,input$genesetVar,ncol(generated_gsva),nrow(generated_gsva)), nrow = 1, ncol = 4)
     colnames(resultInformation) <- c("Matrix used","GeneSet used", "Col num", "Row num")
     output$result <- renderTable(resultInformation)
-    if(class(generated_gsva$es.obs) == "ExpressionSet") #If the generated gsva is an ExpressionSet
+    if(class(generated_gsva) == "ExpressionSet") #If the generated gsva is an ExpressionSet
     {
-      expressionSetObs <- exprs(generated_gsva$es.obs)
+      expressionSetObs <- exprs(generated_gsva)
       output$plot <- renderPlot(multidensity(as.list(as.data.frame(expressionSetObs)), legend=NA, las=1, xlab=sprintf("%s scores", input$method), main="", lwd=2)) 
     }
     else
     {
-      output$plot <- renderPlot(multidensity(as.list(as.data.frame(generated_gsva$es.obs)), legend=NA, las=1, xlab=sprintf("%s scores", input$method), main="", lwd=2))
+      output$plot <- renderPlot(multidensity(as.list(as.data.frame(generated_gsva)), legend=NA, las=1, xlab=sprintf("%s scores", input$method), main="", lwd=2))
     }
     tagList(
       downloadButton('downloadData', 'Download'),
@@ -304,15 +304,15 @@ download_handler <- function(input, output, session) {
       }
       else
       {
-        if(class(generated_gsva$es.obs) == "ExpressionSet") #If the generated gsva es.obs is an ExpressionSet
+        if(class(generated_gsva) == "ExpressionSet") #If the generated gsva result value is an ExpressionSet
         {
-          expressionSetObs <- exprs(generated_gsva$es.obs)
+          expressionSetObs <- exprs(generated_gsva)
           dataFrameObs <- as.data.frame(expressionSetObs)
           write.csv(dataFrameObs, file)
         }
         else
         {
-          dataFrameObs <- as.data.frame(generated_gsva$es.obs)
+          dataFrameObs <- as.data.frame(generated_gsva)
           write.csv(dataFrameObs, file)
         } 
       }
