@@ -1,3 +1,18 @@
+CHANGES IN VERSION 1.26
+-----------------------
+
+USER VISIBLE CHANGES
+
+    o Updated implementation of the option 'abs.ranking=TRUE' to use the original Kuiper statistic.
+
+    o Arguments 'rnaseq' and 'kernel' have been deprecated and replaced by a new argument 'kcdf'.
+
+    o Arguments 'no.bootstraps' and 'bootstrap.percent' have been deprecated.
+
+    o The return value with the default argument 'method="gsva"' has been simplified and it is not a list object anymore. Now the 'gsva()' function return always a matrix or an 'ExpressionSet' object, when the input expression data is also an 'ExpressionSet' object.
+
+    o The 'gsva()' function can now be used through a shiny app that runs through the function 'igsva()'.
+
 CHANGES IN VERSION 1.24
 -----------------------
 
