@@ -9,32 +9,18 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
-  rnaseq=FALSE, ## deprecated
   abs.ranking=FALSE,
   min.sz=1,
   max.sz=Inf,
-  no.bootstraps=0, ## deprecated
-  bootstrap.percent = .632, ## deprecated
   parallel.sz=0, 
   parallel.type="SOCK",
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  kernel=TRUE, ## deprecated
   ssgsea.norm=TRUE,
-  verbose=TRUE,
-  return.old.value=FALSE) ## transient argument for deprecating 'no.bootstraps' and 'bootstrap.percent'
+  verbose=TRUE)
 {
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
-
-  if (!missing(rnaseq))
-    warning("The argument 'rnaseq' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
-
-  if (!missing(kernel))
-    warning("The argument 'kernel' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
-
-  if (no.bootstraps > 0)
-    warning("The argument 'no.bootstraps' is deprecated and will be removed in the next release of GSVA. This implies that the 'gsva()' function with the default argument 'method=\"gsva\"' only returns a matrix of GSVA enrichment scores. To obtain the same output in the form of a list as in previous versions you can set 'return.old.value=TRUE' during this release but this argument will not be available anymore in the next release.")
 
   ## filter out genes with constant expression values
   sdGenes <- Biobase::esApply(expr, 1, sd)
@@ -76,18 +62,12 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
   }
 
   eSco <- .gsva(exprs(expr), mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
-                mx.diff, tau, kernel, ssgsea.norm, verbose)
+                parallel.sz, parallel.type, mx.diff, tau, kernel, ssgsea.norm, verbose)
 
-  if (method != "gsva")
-    eSco <- list(es.obs=eSco, bootstrap=NULL, p.vals.sign=NULL)
-
-  eScoEset <- new("ExpressionSet", exprs=eSco$es.obs, phenoData=phenoData(expr),
+  eScoEset <- new("ExpressionSet", exprs=eSco, phenoData=phenoData(expr),
                   experimentData=experimentData(expr), annotation="")
 
   rval <- eScoEset
-  if (return.old.value) ## to be removed in the next release
-    rval <- list(es.obs=eScoEset, bootstrap=eSco$bootstrap, p.vals.sign=eSco$p.vals.sign)
 
   rval
 })
@@ -96,32 +76,18 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
-  rnaseq=FALSE, ## deprecated
   abs.ranking=FALSE,
   min.sz=1,
   max.sz=Inf,
-  no.bootstraps=0, ## deprecated
-  bootstrap.percent = .632, ## deprecated
   parallel.sz=0, 
   parallel.type="SOCK",
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  kernel=TRUE, ## deprecated
   ssgsea.norm=TRUE,
-  verbose=TRUE,
-  return.old.value=FALSE) ## transient argument for deprecating 'no.bootstraps' and 'bootstrap.percent'
+  verbose=TRUE)
 {
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
-
-  if (!missing(rnaseq))
-    warning("The argument 'rnaseq' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
-
-  if (!missing(kernel))
-    warning("The argument 'kernel' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
-
-  if (no.bootstraps > 0)
-    warning("The argument 'no.bootstraps' is deprecated and will be removed in the next release of GSVA. This implies that the 'gsva()' function with the default argument 'method=\"gsva\"' only returns a matrix of GSVA enrichment scores. To obtain the same output in the form of a list as in previous versions you can set 'return.old.value=TRUE' during this release but this argument will not be available anymore in the next release.")
 
   ## filter out genes with constant expression values
   sdGenes <- Biobase::esApply(expr, 1, sd)
@@ -167,18 +133,12 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   }
 
   eSco <- .gsva(exprs(expr), mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
-                mx.diff, tau, kernel, ssgsea.norm, verbose)
+                parallel.sz, parallel.type, mx.diff, tau, kernel, ssgsea.norm, verbose)
 
-  if (method != "gsva")
-    eSco <- list(es.obs=eSco, bootstrap=NULL, p.vals.sign=NULL)
-
-  eScoEset <- new("ExpressionSet", exprs=eSco$es.obs, phenoData=phenoData(expr),
+  eScoEset <- new("ExpressionSet", exprs=eSco, phenoData=phenoData(expr),
                   experimentData=experimentData(expr), annotation="")
 
   rval <- eScoEset
-  if (return.old.value) ## to be removed in the next release
-    rval <- list(es.obs=eScoEset, bootstrap=eSco$bootstrap, p.vals.sign=eSco$p.vals.sign)
 
   rval
 })
@@ -187,32 +147,18 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
-  rnaseq=FALSE, ## deprecated
   abs.ranking=FALSE,
   min.sz=1,
   max.sz=Inf,
-  no.bootstraps=0, ## deprecated
-  bootstrap.percent = .632,  ## deprecated
   parallel.sz=0, 
   parallel.type="SOCK",
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  kernel=TRUE, ## deprecated
   ssgsea.norm=TRUE,
-  verbose=TRUE,
-  return.old.value=FALSE) ## transient argument for deprecating 'no.bootstraps' and 'bootstrap.percent'
+  verbose=TRUE)
 {
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
-
-  if (!missing(rnaseq))
-    warning("The argument 'rnaseq' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
-
-  if (!missing(kernel))
-    warning("The argument 'kernel' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
-
-  if (no.bootstraps > 0)
-    warning("The argument 'no.bootstraps' is deprecated and will be removed in the next release of GSVA. This implies that the 'gsva()' function with the default argument 'method=\"gsva\"' only returns a matrix of GSVA enrichment scores. To obtain the same output in the form of a list as in previous versions you can set 'return.old.value=TRUE' during this release but this argument will not be available anymore in the next release.")
 
   ## filter out genes with constant expression values
   sdGenes <- apply(expr, 1, sd)
@@ -265,11 +211,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
   }
 
   rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                no.bootstraps, bootstrap.percent, parallel.sz, parallel.type,
-                mx.diff, tau, kernel, ssgsea.norm, verbose)
-
-  if (method == "gsva" && !return.old.value) ## to be removed in the next release
-    rval <- rval$es.obs
+                parallel.sz, parallel.type, mx.diff, tau, kernel, ssgsea.norm, verbose)
 
   rval
 })
@@ -278,32 +220,18 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
-  rnaseq=FALSE, ## deprecated
   abs.ranking=FALSE,
   min.sz=1,
   max.sz=Inf,
-  no.bootstraps=0, ## deprecated
-  bootstrap.percent = .632, ## deprecated
   parallel.sz=0, 
   parallel.type="SOCK",
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  kernel=TRUE, ## deprecated
   ssgsea.norm=TRUE,
-  verbose=TRUE,
-  return.old.value=FALSE) ## transient argument for deprecating 'no.bootstraps' and 'bootstrap.percent'
+  verbose=TRUE)
 {
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
-
-  if (!missing(rnaseq))
-    warning("The argument 'rnaseq' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
-
-  if (!missing(kernel))
-    warning("The argument 'kernel' is deprecated and will be removed in the next release of GSVA. Please use the 'kcdf' argument instead.")
-
-  if (no.bootstraps > 0)
-    warning("The argument 'no.bootstraps' is deprecated and will be removed in the next release of GSVA. This implies that the 'gsva()' function with the default argument 'method=\"gsva\"' only returns a matrix of GSVA enrichment scores. To obtain the same output in the form of a list as in previous versions you can set 'return.old.value=TRUE' during this release but this argument will not be available anymore in the next release.")
 
   ## filter out genes with constant expression values
   sdGenes <- apply(expr, 1, sd)
@@ -343,12 +271,8 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
       kernel <- FALSE
   }
 
-  rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking, no.bootstraps,
-                bootstrap.percent, parallel.sz, parallel.type,
-                mx.diff, tau, kernel, ssgsea.norm, verbose)
-
-  if (method == "gsva" && !return.old.value) ## to be removed in the next release
-    rval <- rval$es.obs
+  rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+                parallel.sz, parallel.type, mx.diff, tau, kernel, ssgsea.norm, verbose)
 
   rval
 })
@@ -358,8 +282,6 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   kcdf=c("Gaussian", "Poisson", "none"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
-  no.bootstraps=0, 
-  bootstrap.percent = .632, 
   parallel.sz=0, 
   parallel.type="SOCK",
   mx.diff=TRUE,
@@ -368,17 +290,11 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   ssgsea.norm=TRUE,
   verbose=TRUE)
 {
-  if (no.bootstraps > 0)
-    warning("The 'no.bootstraps' and 'bootstrap.percent' arguments are experimental and will be deprecated and will dissapear in the following release of GSVA.")
-
 	if(length(gset.idx.list) == 0){
 		stop("The gene set list is empty!  Filter may be too stringent.")
 	}
 	
   if (method == "ssgsea") {
-    if (no.bootstraps > 0)
-      stop("no.bootstraps > 0 does not work with method='ssgsea'")
-
 	  if(verbose)
 		  cat("Estimating ssGSEA scores for", length(gset.idx.list),"gene sets.\n")
 
@@ -388,9 +304,6 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   }
 
   if (method == "zscore") {
-    if (no.bootstraps > 0)
-      stop("no.bootstraps > 0 does not work with method='zscore'")
-
     if (rnaseq)
       stop("rnaseq=TRUE does not work with method='zscore'.")
 
@@ -401,9 +314,6 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   }
 
   if (method == "plage") {
-    if (no.bootstraps > 0)
-      stop("no.bootstraps > 0 does not work with method='plage'")
-
     if (rnaseq)
       stop("rnaseq=TRUE does not work with method='plage'.")
 
@@ -416,11 +326,6 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 	if(verbose)
 		cat("Estimating GSVA scores for", length(gset.idx.list),"gene sets.\n")
 	
-	if(parallel.sz > 0 && no.bootstraps > 0){
-		if((no.bootstraps %% parallel.sz) != 0){
-			stop("'parallel.sz' must be an integer divisor of 'no.bootsraps'" )
-		}
-	}
 	n.samples <- ncol(expr)
 	n.genes <- nrow(expr)
 	n.gset <- length(gset.idx.list)
@@ -436,90 +341,10 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
                                parallel.type=parallel.type, mx.diff=mx.diff, tau=tau,
                                kernel=kernel, verbose=verbose)
 	
-	# es.bootstraps -> n.gset by n.samples by n.resamples
-	es.bootstraps=NULL
-	p.vals.wilcoxon=NULL
-	p.vals.sign=NULL
-	
-	if(no.bootstraps > 0){
-		if(verbose) cat("Computing bootstrap enrichment scores\n")
-		bootstrap.nsamples <- floor(bootstrap.percent * n.samples)
-		
-		p.vals.sign <- matrix(NaN, n.gset, n.samples,
-                          dimnames=list(names(gset.idx.list), colnames(expr)))
-		
-		es.bootstraps <- array(NaN, c(n.gset, n.samples, no.bootstraps))
-		if(parallel.sz > 1){
-			
-		  if(!.isPackageLoaded("snow")) { ## FIXME: should also open parallelism via 'parallel'
-			  stop("Please load the 'snow' library")
-		  }
-      ## copying ShortRead's strategy, the calls to the 'get()' are
-      ## employed to quieten R CMD check, and for no other reason
-      makeCl <- get("makeCluster", mode="function")
-      clSetupRNG <- get("clusterSetupRNG", mode="function")
-      clEvalQ <- get("clusterEvalQ", mode="function")
-      clExport <- get("clusterExport", mode="function")
-      stopCl <- get("stopCluster", mode="function")
-			
-			cl <- makeCl(parallel.sz, type = parallel.type) 
-			clExport(cl,"expr", envir=environment())
-			clExport(cl,"bootstrap.nsamples", envir=environment())
-			clExport(cl, "n.samples", envir=environment())
-			clExport(cl, "gset.idx.list", envir=environment())
-			clExport(cl, "rnaseq", envir=environment())
-			clExport(cl, "abs.ranking", envir=environment())
-			clExport(cl, "mx.diff", envir=environment())
-			clExport(cl, "tau", envir=environment())
-			clExport(cl, "kernel", envir=environment())
-			clExport(cl, "verbose", envir=environment())
-			clEvalQ(cl, library(GSVA))
-			
-			clSetupRNG(cl)
-			
-			if(verbose) cat("Parallel bootstrap...\n")
-			## parallelized bootstrap
-			n.cycles <- floor(no.bootstraps / parallel.sz)
-			for(i in 1:n.cycles){
-				if(verbose) cat("bootstrap cycle ", i, "\n")
-				r <- clEvalQ(cl, compute.geneset.es(expr, gset.idx.list, 
-								sample(n.samples, bootstrap.nsamples, replace=T),
-								rnaseq=rnaseq, abs.ranking=abs.ranking, mx.diff=mx.diff,
-                tau=tau, kernel=kernel, verbose=FALSE, parallel.sz=1))
-				for(j in 1:length(r)){
-					es.bootstraps[,,(parallel.sz * (i-1) + j)] <- r[[j]]
-				}	
-			}
-			stopCl(cl)
-		}else{
-			if(verbose) cat("Sequential bootstrap...\n")
-			for(i in 1:no.bootstraps){
-				es.bootstraps[,,i] <- compute.geneset.es(expr, gset.idx.list,
-						sample(n.samples, bootstrap.nsamples, replace=T),
-						rnaseq=rnaseq, abs.ranking=abs.ranking, mx.diff=mx.diff,
-            tau=tau, kernel=kernel, verbose=verbose, parallel.sz=1)
-			}
-		}
-	
-		
-		for(i in 1:n.gset){
-			
-			for(j in 1:n.samples){
-				# non-parametric test if median of empirical dist is 0 
-				if(es.obs[i,j] > 0){
-					p.vals.sign[i,j] <- (1 + sum(es.bootstraps[i,j,] < 0)) / (1 + no.bootstraps)
-				}else{
-					p.vals.sign[i,j] <- (1 + sum(es.bootstraps[i,j,] > 0)) / (1 + no.bootstraps)
-				}
-			}
-		}
-	}
-	
 	colnames(es.obs) <- colnames(expr)
 	rownames(es.obs) <- names(gset.idx.list)
-	return(list(es.obs=es.obs,
-				      bootstrap=list(es.bootstraps=es.bootstraps,
-              p.vals.sign=p.vals.sign)))
+
+	es.obs
 }
 
 
@@ -548,7 +373,7 @@ compute.gene.density <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
     gene.density <- log(gene.density / (1-gene.density))
   }
 
-	return (gene.density)	
+	return(gene.density)	
 }
 
 compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
@@ -558,9 +383,9 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
 	if (verbose) {
     if (kernel) {
       if (rnaseq)
-        cat("Estimating ECDFs in rnaseq data with Poisson kernels\n")
+        cat("Estimating ECDFs with Poisson kernels\n")
       else
-        cat("Estimating ECDFs in microarray data with Gaussian kernels\n")
+        cat("Estimating ECDFs with Gaussian kernels\n")
     } else
       cat("Estimating ECDFs directly\n")
   }
@@ -573,14 +398,6 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
 	}
 	
 	rank.scores <- rep(0, num_genes)
-  ## 19.06.17 disable current functioning of abs.ranking flag
-  ## to switch to a different approach to implement it during
-  ## the KS random walk based on the Kuiper statistic
-	## if(abs.ranking){
-  ##   sort.sgn.idxs <- apply(abs(gene.density), 2, order, decreasing=TRUE) # n.genes * n.samples	
-  ## }else{
-  ##   sort.sgn.idxs <- apply(gene.density, 2, order, decreasing=TRUE) # n.genes * n.samples
-  ## }
   sort.sgn.idxs <- apply(gene.density, 2, order, decreasing=TRUE) # n.genes * n.samples
 	
 	rank.scores <- apply(sort.sgn.idxs, 2, compute_rank_score)
@@ -708,7 +525,7 @@ ks_test_m <- function(gset_idxs, gene.density, sort.idxs, mx.diff=TRUE,
                       get("iGeneSet", envir=globalenv()) / get("nGeneSets", envir=globalenv()))
   }
 	
-	return (geneset.sample.es)
+	return(geneset.sample.es)
 }
 
 

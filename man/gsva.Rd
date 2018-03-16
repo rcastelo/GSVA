@@ -17,71 +17,51 @@ Estimates GSVA enrichment scores.
 \S4method{gsva}{ExpressionSet,list}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
-    rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
-    no.bootstraps=0,
-    bootstrap.percent = .632,
     parallel.sz=0,
     parallel.type="SOCK",
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
-    kernel=TRUE,
     ssgsea.norm=TRUE,
-    verbose=TRUE,
-    return.old.value=FALSE)
+    verbose=TRUE)
 \S4method{gsva}{ExpressionSet,GeneSetCollection}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
-    rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
-    no.bootstraps=0,
-    bootstrap.percent = .632,
     parallel.sz=0,
     parallel.type="SOCK",
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
-    kernel=TRUE,
     ssgsea.norm=TRUE,
-    verbose=TRUE,
-    return.old.value=FALSE)
+    verbose=TRUE)
 \S4method{gsva}{matrix,GeneSetCollection}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
-    rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
-    no.bootstraps=0,
-    bootstrap.percent = .632,
     parallel.sz=0,
     parallel.type="SOCK",
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
-    kernel=TRUE,
     ssgsea.norm=TRUE,
-    verbose=TRUE,
-    return.old.value=FALSE)
+    verbose=TRUE)
 \S4method{gsva}{matrix,list}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
-    rnaseq=FALSE,
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
-    no.bootstraps=0,
-    bootstrap.percent = .632,
     parallel.sz=0,
     parallel.type="SOCK",
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
-    kernel=TRUE,
     ssgsea.norm=TRUE,
-    verbose=TRUE,
-    return.old.value=FALSE)
+    verbose=TRUE)
 }
 \arguments{
   \item{expr}{Gene expression data which can be given either as an \code{ExpressionSet}
@@ -110,10 +90,7 @@ Estimates GSVA enrichment scores.
               By default, \code{kcdf="Gaussian"} which is suitable when input expression values are continuous,
               such as microarray fluorescent units in logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs.
               When input expression values are integer counts, such as those derived from RNA-seq experiments,
-              then this argument should be set to \code{kcdf="Poisson"}. This argument supersedes arguments
-              \code{rnaseq} and \code{kernel}, which are deprecated and will be removed in the next release.}
-  \item{rnaseq}{This argument has been deprecated and will be removed in the next release. Please use the
-                argument \code{kcdf} instead.}
+              then this argument should be set to \code{kcdf="Poisson"}.}
   \item{abs.ranking}{Flag used only when \code{mx.diff=TRUE}. When \code{abs.ranking=FALSE} (default)
             a modified Kuiper statistic is used to calculate enrichment scores, taking the magnitude
             difference between the largest positive and negative random walk deviations. When
@@ -122,10 +99,6 @@ Estimates GSVA enrichment scores.
             enriched on either extreme (high or low) will be regarded as 'highly' activated.}
   \item{min.sz}{Minimum size of the resulting gene sets.}
   \item{max.sz}{Maximum size of the resulting gene sets.}
-  \item{no.bootstraps}{Number of bootstrap iterations to perform. This argument has been deprecated and will
-                       be removed in the next release.}
-  \item{bootstrap.percent}{.632 is the ideal percent samples bootstrapped. This argument has been deprecated and
-                           will be removed in the next release.}
   \item{parallel.sz}{Number of processors to use when doing the calculations in parallel.
                      This requires to previously load either the \code{parallel} or the
                      \code{snow} library. If \code{parallel} is loaded and this argument
@@ -144,18 +117,11 @@ Estimates GSVA enrichment scores.
              (\enc{Hänzelmann}{Hanzelmann} et al., 2013) and the \code{ssgsea} (Barbie et al., 2009) methods. By default,
              this \code{tau=1} when \code{method="gsva"} and \code{tau=0.25} when \code{method="ssgsea"} just
              as specified by Barbie et al. (2009) where this parameter is called \code{alpha}.}
-  \item{kernel}{This argument has been deprecated and will be removed in the next release. Please use the
-                argument \code{kcdf} instead.}
   \item{ssgsea.norm}{Logical, set to \code{TRUE} (default) with \code{method="ssgsea"} runs the SSGSEA method
                      from Barbie et al. (2009) normalizing the scores by the absolute difference between
                      the minimum and the maximum, as described in their paper. When \code{ssgsea.norm=FALSE}
                      this last normalization step is skipped.}
   \item{verbose}{Gives information about each calculation step. Default: \code{FALSE}.}
-  \item{return.old.value}{Logical, set to \code{FALSE} (default) has no effect but when \code{return.old.value=TRUE},
-                          then the return value takes form of a \code{list} object as in previous versions of
-                          GSVA. This argument will be present only in this release for backward compability
-                          purposes during the deprecation of the arguments \code{no.bootstraps} and \code{bootstrap.percent}
-                          and will dissappear in the next release.}
 }
 
 \details{
