@@ -1,7 +1,7 @@
 # GSVA: gene set variation analysis for microarray and RNA-seq data
 
 [![Bioconductor Time](http://bioconductor.org/shields/years-in-bioc/GSVA.svg)](http://bioconductor.org/packages/release/bioc/html/GSVA.html "How long has been GSVA in a release of Bioconductor")
-[![Bioconductor Downloads](http://bioconductor.org/shields/downloads/GSVA.svg)](http://bioconductor.org/packages/stats/bioc/GSVA.html "Percentile (top 5/20/50% or 'available') of downloads over the last 6 full months")
+[![Bioconductor Downloads](http://bioconductor.org/shields/downloads/GSVA.svg)](http://bioconductor.org/packages/stats/bioc/GSVA/ "Percentile (top 5/20/50% or 'available') of downloads over the last 6 full months")
 [![Bioconductor Commits](http://bioconductor.org/shields/commits/bioc/GSVA.svg)](http://bioconductor.org/packages/devel/bioc/html/GSVA.html#svn_source "Average SVN commits (to the devel branch) per month over the last 6 months")
 [![Support posts](http://bioconductor.org/shields/posts/GSVA.svg)](https://support.bioconductor.org/t/GSVA/ "Bioconductor support site activity on GSVA, last 6 months: tagged questions/avg. answers per question/avg. comments per question/accepted answers, or 0 if no tagged posts.")
 <img align="right" src="https://raw.githubusercontent.com/Bioconductor/BiocStickers/master/GSVA/GSVA.png" height="200"/>
