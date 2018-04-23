@@ -1,3 +1,10 @@
+CHANGES IN VERSION 1.28
+-----------------------
+
+USER VISIBLE CHANGES
+
+   o Arguments 'rnaseq', 'kernel', 'no.bootstraps' and 'bootstrap.percent' have become defunct.
+
 CHANGES IN VERSION 1.26
 -----------------------
 
