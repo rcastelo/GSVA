@@ -5,6 +5,8 @@ USER VISIBLE CHANGES
 
    o Arguments 'rnaseq', 'kernel', 'no.bootstraps' and 'bootstrap.percent' have become defunct.
 
+   o A Bioconductor sticker has been created and it is available at https://github.com/Bioconductor/BiocStickers/tree/master/GSVA
+
 CHANGES IN VERSION 1.26
 -----------------------
 
