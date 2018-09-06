@@ -25,9 +25,7 @@ need first to install the development version of R that you can find at [http://
 
 ```r
 install.packages("BiocManager")
-BiocManager::install("BiocInstaller", version="devel")
-BiocInstaller::useDevel()
-BiocManager::install("GSVA")
+BiocManager::install("GSVA", version = "devel")
 ```
 
 Alternatively, you can install it from GitHub using the [devtools](https://github.com/hadley/devtools "devtools") package.
