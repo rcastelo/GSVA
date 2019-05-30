@@ -576,7 +576,7 @@ rndWalk <- function(gSetIdx, geneRanking, j, R, alpha) {
   sum(walkStat) 
 }
 
-setCores <- function() {
+setCores <- function(nCores) {
   if(is.na(nCores)) {
     if (parallel.sz > 0) {
       options(mc.cores=parallel.sz)
