@@ -445,9 +445,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
       mclapp <- get('mclapply', envir=getNamespace('parallel'))
       detCor <- get('detectCores', envir=getNamespace('parallel'))
       nCores <- detCor()
-      options(mc.cores=nCores)
-      if (parallel.sz > 0 && parallel.sz < nCores)
-        options(mc.cores=parallel.sz)
+      setCores(nCores, parallel.sz)
 
       pb <- NULL
       if (verbose){
@@ -578,6 +576,22 @@ rndWalk <- function(gSetIdx, geneRanking, j, R, alpha) {
   sum(walkStat) 
 }
 
+setCores <- function(nCores, parallel.sz) {
+  if(is.na(nCores)) {
+    if (parallel.sz > 0) {
+      options(mc.cores=parallel.sz)
+    } else {
+      options(mc.cores=1)
+    }
+  } else {
+    if (parallel.sz > 0 && parallel.sz < nCores) {
+      options(mc.cores=parallel.sz)
+    } else {
+      options(mc.cores=nCores)
+    }
+  }
+}
+
 ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
                    parallel.type, normalization=TRUE, verbose) {
 
@@ -616,9 +630,7 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
       mclapp <- get('mclapply', envir=getNamespace('parallel'))
       detCor <- get('detectCores', envir=getNamespace('parallel'))
       nCores <- detCor()
-      options(mc.cores=nCores)
-      if (parallel.sz > 0 && parallel.sz < nCores)
-        options(mc.cores=parallel.sz)
+      setCores(nCores, parallel.sz)
       if (verbose)
         cat("Using parallel with", getOption("mc.cores"), "cores\n")
     }
@@ -709,9 +721,7 @@ zscore <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
       mclapp <- get('mclapply', envir=getNamespace('parallel'))
       detCor <- get('detectCores', envir=getNamespace('parallel'))
       nCores <- detCor()
-      options(mc.cores=nCores)
-      if (parallel.sz > 0 && parallel.sz < nCores)
-        options(mc.cores=parallel.sz)
+      setCores(nCores, parallel.sz)
       if (verbose)
         cat("Using parallel with", getOption("mc.cores"), "cores\n")
     }
@@ -801,9 +811,7 @@ plage <- function(X, geneSets, parallel.sz, parallel.type, verbose) {
       detCor <- get('detectCores', envir=getNamespace('parallel'))
       ## masterDesc <- get('masterDescriptor', envir=getNamespace('parallel'))
       nCores <- detCor()
-      options(mc.cores=nCores)
-      if (parallel.sz > 0 && parallel.sz < nCores)
-        options(mc.cores=parallel.sz)
+      setCores(nCores, parallel.sz)
       if (verbose)
         cat("Using parallel with", getOption("mc.cores"), "cores\n")
     }
