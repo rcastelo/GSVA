@@ -12,7 +12,7 @@
 - `development` [![Bioconductor Availability](http://bioconductor.org/shields/availability/devel/GSVA.svg)](http://bioconductor.org/packages/devel/bioc/html/GSVA.html#archives "Whether GSVA devel is available on all platforms") 
 [![Bioconductor Devel Build](http://bioconductor.org/shields/build/devel/bioc/GSVA.svg)](http://bioconductor.org/checkResults/devel/bioc-LATEST/GSVA/ "Bioconductor devel build")
 
-The `GSVA` package allows one to perform a change in coordinate systems of molecular measurements, transforming the data from a gene by sample matrix to a gene-set by sample matrix, thereby allowing the evaluation of pathway enrichment for each sample. This new matrix of GSVA enrichment scores facilitates applying standard analytical methods like functional enrichment, survival analysis, clustering, CNV-pathway analysis or cross-tissue pathway analysis, in a pathway-centric manner. For citing `GSVA` as a software package, please use the following reference:
+The `GSVA` package allows one to perform a change in coordinate systems of molecular measurements, transforming the data from a gene by sample matrix to a gene-set by sample matrix, thereby allowing the evaluation of pathway enrichment for each sample. This new matrix of GSVA enrichment scores facilitates applying standard analytical methods such as functional enrichment, survival analysis, clustering, CNV-pathway analysis or cross-tissue pathway analysis, in a pathway-centric manner. For citing `GSVA` as a software package, please use the following reference:
 
   H&auml;nzelmann S., Castelo R. and Guinney J. GSVA: gene set variation analysis for microarray and RNA-Seq data. BMC _Bioinformatics_, 14:7, 2013.
 
