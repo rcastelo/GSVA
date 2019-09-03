@@ -1,16 +1,18 @@
 # GSVA: gene set variation analysis for microarray and RNA-seq data
 
-[![Bioconductor Time](http://bioconductor.org/shields/years-in-bioc/GSVA.svg)](http://bioconductor.org/packages/release/bioc/html/GSVA.html "How long has been GSVA in a release of Bioconductor")
-[![Bioconductor Downloads](http://bioconductor.org/shields/downloads/GSVA.svg)](http://bioconductor.org/packages/stats/bioc/GSVA/ "Percentile (top 5/20/50% or 'available') of downloads over the last 6 full months")
-[![Bioconductor Commits](http://bioconductor.org/shields/commits/bioc/GSVA.svg)](http://bioconductor.org/packages/devel/bioc/html/GSVA.html#svn_source "Average SVN commits (to the devel branch) per month over the last 6 months")
-[![Support posts](http://bioconductor.org/shields/posts/GSVA.svg)](https://support.bioconductor.org/t/GSVA/ "Bioconductor support site activity on GSVA, last 6 months: tagged questions/avg. answers per question/avg. comments per question/accepted answers, or 0 if no tagged posts.")
+[![Bioconductor Time](https://bioconductor.org/shields/years-in-bioc/GSVA.svg)](https://bioconductor.org/packages/release/bioc/html/GSVA.html "How long has been GSVA in a release of Bioconductor")
+[![Bioconductor Downloads](https://bioconductor.org/shields/downloads/GSVA.svg)](https://bioconductor.org/packages/stats/bioc/GSVA/ "Ranking by number of downloads. A lower number means the package is downloaded more frequently. Determined within a package type (software, experiment, annotation, workflow) and uses the number of distinct IPs for the last 12 months")
+[![Bioconductor Commits](https://bioconductor.org/shields/lastcommit/release/bioc/GSVA.svg)](https://bioconductor.org/checkResults/devel/bioc-LATEST/GSVA "Time since last commit, possible values: today, < 1 week, < 1 month, < 3 months, since release, before release")
+[![Support posts](https://bioconductor.org/shields/posts/GSVA.svg)](https://support.bioconductor.org/t/GSVA/ "Support site activity on GSVA, last 6 months: tagged questions/avg. answers per question/avg. comments per question/accepted answers, or 0 if no tagged posts.")
 <img align="right" src="https://raw.githubusercontent.com/Bioconductor/BiocStickers/master/GSVA/GSVA.png" height="200"/>
 
 **Current build status**
 - `release` [![Bioconductor Availability](http://bioconductor.org/shields/availability/release/GSVA.svg)](http://bioconductor.org/packages/release/bioc/html/GSVA.html#archives "Whether GSVA release is available on all platforms") 
 [![Bioconductor Release Build](http://bioconductor.org/shields/build/release/bioc/GSVA.svg)](http://bioconductor.org/checkResults/release/bioc-LATEST/GSVA/ "Bioconductor release build")
+[![Bioconductor Dependencies](http://bioconductor.org/shields/dependencies/release/GSVA.svg)](http://bioconductor.org/packages/release/bioc/html/GSVA.html#since "Number of recursive dependencies needed to install package")
 - `development` [![Bioconductor Availability](http://bioconductor.org/shields/availability/devel/GSVA.svg)](http://bioconductor.org/packages/devel/bioc/html/GSVA.html#archives "Whether GSVA devel is available on all platforms") 
 [![Bioconductor Devel Build](http://bioconductor.org/shields/build/devel/bioc/GSVA.svg)](http://bioconductor.org/checkResults/devel/bioc-LATEST/GSVA/ "Bioconductor devel build")
+[![Bioconductor Dependencies](http://bioconductor.org/shields/dependencies/devel/GSVA.svg)](http://bioconductor.org/packages/devel/bioc/html/GSVA.html#since "Number of recursive dependencies needed to install package")
 
 The `GSVA` package allows one to perform a change in coordinate systems of molecular measurements, transforming the data from a gene by sample matrix to a gene-set by sample matrix, thereby allowing the evaluation of pathway enrichment for each sample. This new matrix of GSVA enrichment scores facilitates applying standard analytical methods such as functional enrichment, survival analysis, clustering, CNV-pathway analysis or cross-tissue pathway analysis, in a pathway-centric manner. For citing `GSVA` as a software package, please use the following reference:
 
