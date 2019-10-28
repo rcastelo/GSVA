@@ -1,10 +1,10 @@
 Package: GSVA
-Version: 1.33.4
+Version: 1.33.5
 Title: Gene Set Variation Analysis for microarray and RNA-seq data
 Authors@R: c(person("Justin", "Guinney", role=c("aut", "cre"), email="justin.guinney@sagebase.org"),
              person("Robert", "Castelo", role="aut", email="robert.castelo@upf.edu"),
              person("Joan", "Fernandez", role="ctb", email="joanfernandez1331@gmail.com"))
-Depends: R (>= 3.0.0)
+Depends: R (>= 3.5.0)
 Imports: methods, BiocGenerics, Biobase, GSEABase (>= 1.17.4),
          geneplotter, shiny, shinythemes
 Suggests: limma, RColorBrewer, genefilter,

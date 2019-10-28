@@ -1,3 +1,12 @@
+CHANGES IN VERSION 1.34
+-----------------------
+
+BUG FIXES
+
+   o Bugfix to handle when parallel::detectCores() returns NA instead of an integer number of cores, which may happen when running GSVA in a docker container. Bug reporting and pull request fix thanks to Aaron (https://github.com/rcastelo/GSVA/pull/10).
+
+   o Bugfix to handle when arguments 'method="ssgsea"' and 'tau=0'. Bug reporting thanks to Lena Morill (https://github.com/rcastelo/GSVA/issues/4).
+
 CHANGES IN VERSION 1.28
 -----------------------
 

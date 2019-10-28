@@ -28,9 +28,9 @@ argumentsDataInput <- function(id) {
                          "True" = TRUE)),
           numericInput("minSz","min.sz:",value = 1),
           numericInput("maxSz","max.sz (Write 0 for infinite):",value = 0),
-          numericInput("parallelSz","parallel.sz:",value = 0),
-          selectInput("parallelType", "parallel.type:",
-                      c("SOCK","MPI","NWS")),
+          ## numericInput("parallelSz","parallel.sz:",value = 0),
+          ## selectInput("parallelType", "parallel.type:",
+          ##             c("SOCK","MPI","NWS")),
           radioButtons("mxDiff", "mx.diff:",
                        c("True" = TRUE,
                          "False" = FALSE)),
@@ -172,9 +172,14 @@ gsva_generation <- function(input, output, session, newY, genes,varMaxsz) {
   #GSVA Generation
   withProgress(message = 'Runing GSVA', value = 0, {
     incProgress(1, detail = "This may take a while...")
-    generated_gsva <<- gsva(newY, genes, method=input$method, kcdf=input$kcdf, abs.ranking=as.logical(input$absRanking),
-                            min.sz=input$minSz, max.sz=varMaxsz, parallel.sz=input$parallelSz, parallel.type=input$parallelType,
-                            mx.diff=as.logical(input$mxDiff), tau=selectedTau, ssgsea.norm=as.logical(input$ssgseaNorm),
+    generated_gsva <<- gsva(newY, genes, method=input$method, kcdf=input$kcdf,
+                            abs.ranking=as.logical(input$absRanking),
+                            min.sz=input$minSz, max.sz=varMaxsz,
+                            ## parallel.sz=input$parallelSz, parallel.type=input$parallelType,
+                            parallel.sz=1, ## disable parallelism
+                            mx.diff=as.logical(input$mxDiff),
+                            tau=selectedTau,
+                            ssgsea.norm=as.logical(input$ssgseaNorm),
                             verbose=as.logical(input$verbose))
   })
 }
