@@ -389,7 +389,27 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
     } else
       cat("Estimating ECDFs directly\n")
   }
-	gene.density <- compute.gene.density(expr, sample.idxs, rnaseq, kernel)
+  if (parallel.sz > 0 && length(sample.idxs > 100) && nrow(expr) > 100) {
+    cat(sprintf("Using %d cores in parallel for ECDFs estimation\n", parallel.sz))
+    iter <- function(Y, n_chunks=BiocParallel::multicoreWorkers()) {
+      idx <- parallel::splitIndices(nrow(Y), min(nrow(Y), n_chunks))
+      i <- 0L
+      function() {
+        if (i == length(idx))
+          return(NULL)
+        i <<- i + 1L
+        Y[idx[[i]], , drop=FALSE]
+      }
+    }
+    gene.density <- BiocParallel::bpiterate(iter(expr, 100),
+                        GSVA:::compute.gene.density,
+                        sample.idxs=sample.idxs, rnaseq=rnaseq, kernel=kernel,
+                        REDUCE=rbind, reduce.in.order=TRUE,
+                        BPPARAM=BiocParallel::MulticoreParam(workers=parallel.sz,
+                                                             progressbar=TRUE,
+                                                             tasks=100))
+  } else 
+	  gene.density <- compute.gene.density(expr, sample.idxs, rnaseq, kernel)
 	
 	compute_rank_score <- function(sort_idx_vec){
 		tmp <- rep(0, num_genes)
