@@ -20,48 +20,52 @@ Estimates GSVA enrichment scores.
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
-    parallel.sz=0,
+    parallel.sz=1L,
     parallel.type="SOCK",
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     ssgsea.norm=TRUE,
-    verbose=TRUE)
+    verbose=TRUE,
+    BPPARAM=SerialParam(progressbar=verbose))
 \S4method{gsva}{ExpressionSet,GeneSetCollection}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
-    parallel.sz=0,
+    parallel.sz=1L,
     parallel.type="SOCK",
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     ssgsea.norm=TRUE,
-    verbose=TRUE)
+    verbose=TRUE,
+    BPPARAM=SerialParam(progressbar=verbose))
 \S4method{gsva}{matrix,GeneSetCollection}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
-    parallel.sz=0,
+    parallel.sz=1L,
     parallel.type="SOCK",
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     ssgsea.norm=TRUE,
-    verbose=TRUE)
+    verbose=TRUE,
+    BPPARAM=SerialParam(progressbar=verbose))
 \S4method{gsva}{matrix,list}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
     abs.ranking=FALSE,
     min.sz=1,
     max.sz=Inf,
-    parallel.sz=0,
+    parallel.sz=1L,
     parallel.type="SOCK",
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     ssgsea.norm=TRUE,
-    verbose=TRUE)
+    verbose=TRUE,
+    BPPARAM=SerialParam(progressbar=verbose))
 }
 \arguments{
   \item{expr}{Gene expression data which can be given either as an \code{ExpressionSet}
@@ -99,14 +103,9 @@ Estimates GSVA enrichment scores.
             enriched on either extreme (high or low) will be regarded as 'highly' activated.}
   \item{min.sz}{Minimum size of the resulting gene sets.}
   \item{max.sz}{Maximum size of the resulting gene sets.}
-  \item{parallel.sz}{Number of processors to use when doing the calculations in parallel.
-                     This requires to previously load either the \code{parallel} or the
-                     \code{snow} library. If \code{parallel} is loaded and this argument
-                     is left with its default value (\code{parallel.sz=0}) then it will use
-                     all available core processors unless we set this argument with a
-                     smaller number. If \code{snow} is loaded then we must set this argument
-                     to a positive integer number that specifies the number of processors to
-                     employ in the parallel calculation.}
+  \item{parallel.sz}{Number of threads of execution to use when doing the calculations in parallel.
+                     The argument \code{BPPARAM} allows one to set the parallel back-end and fine
+                     tune its configuration.}
   \item{parallel.type}{Type of cluster architecture when using \code{snow}.}
   \item{mx.diff}{Offers two approaches to calculate the enrichment statistic (ES)
                  from the KS random walk statistic. \code{mx.diff=FALSE}: ES is calculated as
@@ -122,6 +121,7 @@ Estimates GSVA enrichment scores.
                      the minimum and the maximum, as described in their paper. When \code{ssgsea.norm=FALSE}
                      this last normalization step is skipped.}
   \item{verbose}{Gives information about each calculation step. Default: \code{FALSE}.}
+  \item{BPPARAM}{An object of class \code{\link[BiocParallel]{BiocParallelParam}} specifiying parameters related to the parallel execution of some of the tasks and calculations within this function.}
 }
 
 \details{

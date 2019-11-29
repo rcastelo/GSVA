@@ -9,10 +9,16 @@ importClassesFrom(GSEABase, GeneSetCollection)
 
 importMethodsFrom(Biobase, featureNames,
                            phenoData,
-                           experimentData)
+                           experimentData,
+                           esApply,
+                           exprs,
+                           annotation)
 
 importMethodsFrom(GSEABase, geneIds,
                             incidence)
+
+importMethodsFrom(BiocParallel, bpiterate,
+                                "bpworkers<-")
 
 importFrom(graphics, plot)
 importFrom(stats, ecdf,
@@ -21,11 +27,14 @@ importFrom(utils, setTxtProgressBar,
                   txtProgressBar,
                   read.csv,
                   write.csv)
-importFrom(Biobase, exprs,
-                    annotation)
 importFrom(GSEABase, AnnoOrEntrezIdentifier,
                      mapIdentifiers,
                      getGmt)
+importFrom(parallel, splitIndices)
+importFrom(BiocParallel, SerialParam,
+                         MulticoreParam,
+                         multicoreWorkers,
+                         bpnworkers)
 importFrom(geneplotter, multidensity)
 importFrom(shinythemes, shinytheme)
 

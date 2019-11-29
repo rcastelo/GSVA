@@ -43,6 +43,6 @@ install_github("rcastelo/GSVA")
 
 For questions and bug reports regarding the __release__ version of **GSVA**
 please use the [Bioconductor support site](https://support.bioconductor.org "Bioconductor support site").
-For bug reports and issues regarding this __development__ version of **GSVA**
+For feature requests or bug reports and issues regarding this __development__ version of **GSVA**
 please use the GitHub issues link at the top-right of this page
 ([https://github.com/rcastelo/GSVA/issues](https://github.com/rcastelo/GSVA/issues)).
