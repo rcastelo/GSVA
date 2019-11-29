@@ -18,7 +18,9 @@ importMethodsFrom(GSEABase, geneIds,
                             incidence)
 
 importMethodsFrom(BiocParallel, bpiterate,
-                                "bpworkers<-")
+                                "bpworkers<-",
+                                bplapply,
+                                "bpprogressbar<-")
 
 importFrom(graphics, plot)
 importFrom(stats, ecdf,

@@ -313,20 +313,15 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   ## we need to harmonize it with the contents of BPPARAM
   if (parallel.sz > 1L && class(BPPARAM) == "SerialParam") {
     BPPARAM=MulticoreParam(progressbar=verbose, workers=parallel.sz, tasks=100)
-    if (verbose)
-      message(sprintf("Setting parallel calculations through a multicore back-end with workers=%d and tasks=100.",
-              parallel.sz))
   } else if (parallel.sz == 1L && class(BPPARAM) != "SerialParam") {
     parallel.sz <- bpnworkers(BPPARAM)
-    if (verbose)
-      message(sprintf("Setting parallel calculations through a %s back-end with %d workers.",
-              class(BPPARAM), parallel.sz))
   } else if (parallel.sz > 1L && class(BPPARAM) != "SerialParam") {
     bpworkers(BPPARAM) <- parallel.sz
-    if (verbose)
-      message(sprintf("Setting parallel calculations through a %s back-end with %d workers.",
-              class(BPPARAM), parallel.sz))
   }
+
+  if (class(BPPARAM) != "SerialParam" && verbose)
+    cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
+                    class(BPPARAM), parallel.sz))
 
   if (method == "ssgsea") {
 	  if(verbose)
@@ -342,7 +337,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
       stop("rnaseq=TRUE does not work with method='zscore'.")
 
 	  if(verbose)
-		  cat("Estimating combined z-scores for", length(gset.idx.list),"gene sets.\n")
+		  cat("Estimating combined z-scores for", length(gset.idx.list), "gene sets.\n")
 
     return(zscore(expr, gset.idx.list, parallel.sz, parallel.type,
                   verbose, BPPARAM=BPPARAM))
@@ -370,8 +365,6 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 	colnames(es.obs) <- colnames(expr)
 	rownames(es.obs) <- names(gset.idx.list)
 	
-	if (verbose)
-    cat("Computing GSVA enrichment scores\n")
 	es.obs <- compute.geneset.es(expr, gset.idx.list, 1:n.samples,
                                rnaseq=rnaseq, abs.ranking=abs.ranking,
                                parallel.sz=parallel.sz, parallel.type=parallel.type,
@@ -427,8 +420,12 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
     } else
       cat("Estimating ECDFs directly\n")
   }
-  if (parallel.sz > 0 && length(sample.idxs > 100) && nrow(expr) > 100) {
-    cat(sprintf("Using %d cores in parallel for ECDFs estimation\n", parallel.sz))
+
+  ## open parallelism only if ECDFs have to be estimated for
+  ## more than 100 genes on more than 100 samples
+  if (parallel.sz > 1 && length(sample.idxs > 100) && nrow(expr) > 100) {
+    if (verbose)
+      cat(sprintf("Estimating ECDFs in parallel\n", parallel.sz))
     iter <- function(Y, n_chunks=BiocParallel::multicoreWorkers()) {
       idx <- splitIndices(nrow(Y), min(nrow(Y), n_chunks))
       i <- 0L
@@ -458,99 +455,16 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
   sort.sgn.idxs <- apply(gene.density, 2, order, decreasing=TRUE) # n.genes * n.samples
 	
 	rank.scores <- apply(sort.sgn.idxs, 2, compute_rank_score)
-	
-	haveParallel <- .isPackageLoaded("parallel")
-	haveSnow <- .isPackageLoaded("snow")
-	
-	if (parallel.sz > 1 || haveParallel) {
-		if (!haveParallel && !haveSnow) {
-			stop("In order to run calculations in parallel either the 'snow', or the 'parallel' library, should be loaded first")
-		}
 
-    if (haveSnow) {  ## use snow
-      ## copying ShortRead's strategy, the calls to the 'get()' are
-      ## employed to quieten R CMD check, and for no other reason
-      makeCl <- get("makeCluster", mode="function")
-      parSapp <- get("parSapply", mode="function")
-      clEvalQ <- get("clusterEvalQ", mode="function")
-      stopCl <- get("stopCluster", mode="function")
+  m <- bplapply(gset.idx.list, ks_test_m,
+                gene.density=rank.scores,
+                sort.idxs=sort.sgn.idxs,
+                mx.diff=mx.diff, abs.ranking=abs.ranking,
+                tau=tau, verbose=verbose,
+                BPPARAM=BPPARAM)
+  m <- do.call("rbind", m)
+  colnames(m) <- colnames(expr)
 
-      if (verbose)
-        cat("Allocating cluster\n")
-		  cl <- makeCl(parallel.sz, type = parallel.type) 
-		  clEvalQ(cl, library(GSVA))
-		  if (verbose) {
-		    cat("Estimating enrichment scores in parallel\n")
-	      if(mx.diff) {
-          cat("Taking diff of max KS.\n")
-        } else{
-          cat("Evaluting max KS.\n")
-        }
-      }
-	
-		  m <- t(parSapp(cl, gset.idx.list, ks_test_m,
-						  gene.density=rank.scores, 
-						  sort.idxs=sort.sgn.idxs,
-						  mx.diff=mx.diff, abs.ranking=abs.ranking,
-              tau=tau, verbose=FALSE))
-		  if(verbose)
-        cat("Cleaning up\n")
-		  stopCl(cl)
-
-    } else if (haveParallel) {             ## use parallel
-
-      mclapp <- get('mclapply', envir=getNamespace('parallel'))
-      detCor <- get('detectCores', envir=getNamespace('parallel'))
-      nCores <- detCor()
-      setCores(nCores, parallel.sz)
-
-      pb <- NULL
-      if (verbose){
-        cat("Using parallel with", getOption("mc.cores"), "cores\n")
-        assign("progressBar", txtProgressBar(style=3), envir=globalenv()) ## show progress if verbose=TRUE
-        assign("nGeneSets", ceiling(length(gset.idx.list) / getOption("mc.cores")), envir=globalenv())
-        assign("iGeneSet", 0, envir=globalenv())
-      }
-
-      m <- mclapp(gset.idx.list, ks_test_m,
-                  gene.density=rank.scores,
-                  sort.idxs=sort.sgn.idxs,
-                  mx.diff=mx.diff, abs.ranking=abs.ranking,
-                  tau=tau, verbose=verbose)
-      m <- do.call("rbind", m)
-      colnames(m) <- colnames(expr)
-
-      if (verbose) {
-        close(get("progressBar", envir=globalenv()))
-      }
-    } else
-			stop("In order to run calculations in parallel either the 'snow', or the 'parallel' library, should be loaded first")
-
-	} else {
-		if (verbose) {
-      cat("Estimating enrichment scores\n")
-	    if (mx.diff) {
-        cat("Taking diff of max KS.\n")
-      } else{
-        cat("Evaluting max KS.\n")
-      }
-    }
-    pb <- NULL
-    if (verbose){
-      assign("progressBar", txtProgressBar(style=3), envir=globalenv()) ## show progress if verbose=TRUE
-      assign("nGeneSets", length(gset.idx.list), envir=globalenv())
-      assign("iGeneSet", 0, envir=globalenv())
-    }
-
-		m <- t(sapply(gset.idx.list, ks_test_m, rank.scores, sort.sgn.idxs,
-                  mx.diff=mx.diff, abs.ranking=abs.ranking,
-                  tau=tau, verbose=verbose))
-
-    if (verbose) {
-      setTxtProgressBar(get("progressBar", envir=globalenv()), 1)
-      close(get("progressBar", envir=globalenv()))
-    }
-	}
 	return (m)
 }
 
@@ -574,12 +488,6 @@ ks_test_m <- function(gset_idxs, gene.density, sort.idxs, mx.diff=TRUE,
 			as.integer(mx.diff),
       as.integer(abs.ranking))$R
 
-  if (verbose) {
-    assign("iGeneSet", get("iGeneSet", envir=globalenv()) + 1, envir=globalenv())
-    setTxtProgressBar(get("progressBar", envir=globalenv()),
-                      get("iGeneSet", envir=globalenv()) / get("nGeneSets", envir=globalenv()))
-  }
-	
 	return(geneset.sample.es)
 }
 
@@ -656,63 +564,44 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
   p <- nrow(X)
   n <- ncol(X)
 
-  if (verbose) {
-    assign("progressBar", txtProgressBar(style=3), envir=globalenv()) ## show progress if verbose=TRUE
-    assign("nSamples", n, envir=globalenv())
-    assign("iSample", 0, envir=globalenv())
-  }
-
   R <- apply(X, 2, function(x,p) as.integer(rank(x)), p)
 
-	haveParallel <- .isPackageLoaded("parallel")
-	haveSnow <- .isPackageLoaded("snow")
-	
-  cl <- makeCl <- parSapp <- stopCl <- mclapp <- detCor <- nCores <- NA
-	if (parallel.sz > 1 || haveParallel) {
-		if (!haveParallel && !haveSnow) {
-			stop("In order to run calculations in parallel either the 'snow', or the 'parallel' library, should be loaded first")
-		}
+  es <- matrix(NA, nrow=length(geneSets), ncol=ncol(X))
 
-    if (!haveParallel) {  ## use snow
-      ## copying ShortRead's strategy, the calls to the 'get()' are
-      ## employed to quieten R CMD check, and for no other reason
-      makeCl <- get("makeCluster", mode="function")
-      parSapp <- get("parSapply", mode="function")
-      stopCl <- get("stopCluster", mode="function")
-
-      if (verbose)
-        cat("Allocating cluster\n")
-		  cl <- makeCl(parallel.sz, type = parallel.type) 
-    } else {             ## use parallel
-
-      mclapp <- get('mclapply', envir=getNamespace('parallel'))
-      detCor <- get('detectCores', envir=getNamespace('parallel'))
-      nCores <- detCor()
-      setCores(nCores, parallel.sz)
-      if (verbose)
-        cat("Using parallel with", getOption("mc.cores"), "cores\n")
+  ## if there are more gene sets than samples, then
+  ## parallelization is done throughout gene sets
+  if (length(geneSets) > n) {
+    if (verbose) {
+      assign("progressBar", txtProgressBar(style=3), envir=globalenv())
+      assign("nSamples", n, envir=globalenv())
+      assign("iSample", 0, envir=globalenv())
     }
+
+    es <- sapply(1:n, function(j, R, geneSets, alpha) {
+                   if (verbose) {
+                     assign("iSample", get("iSample", envir=globalenv()) + 1, envir=globalenv())
+                     setTxtProgressBar(get("progressBar", envir=globalenv()),
+                                       get("iSample", envir=globalenv()) / get("nSamples",
+                                                                               envir=globalenv()))
+                   }
+                   geneRanking <- order(R[, j], decreasing=TRUE)
+                   bpprogressbar(BPPARAM) <- FALSE ## since progress is reported by sample
+                   es_sample <- bplapply(geneSets, rndWalk, geneRanking, j, R, alpha,
+                                         BPPARAM=BPPARAM)
+
+                   unlist(es_sample)
+                 }, R, geneSets, alpha)
+
+  } else { ## otherwise, parallelization is done throughout samples
+
+    es <- bplapply(as.list(1:n), function(j, R, geneSets, alpha) {
+                     geneRanking <- order(R[, j], decreasing=TRUE)
+                     es_sample <- lapply(geneSets, rndWalk, geneRanking, j, R, alpha)
+
+                     unlist(es_sample)
+                   }, R, geneSets, alpha, BPPARAM=BPPARAM)
+    es <- do.call("cbind", es)
   }
-
-  es <- sapply(1:n, function(j, R, geneSets, alpha) {
-                      if (verbose) {
-                        assign("iSample", get("iSample", envir=globalenv()) + 1, envir=globalenv())
-                        setTxtProgressBar(get("progressBar", envir=globalenv()),
-                                          get("iSample", envir=globalenv()) / get("nSamples", envir=globalenv()))
-                      }
-                      geneRanking <- order(R[, j], decreasing=TRUE)
-                      es_sample <- NA
-                      if (parallel.sz == 1 || (is.na(cl) && !haveParallel))
-                        es_sample <- sapply(geneSets, rndWalk, geneRanking, j, R, alpha)
-                      else {
-                        if (is.na(cl))
-                          es_sample <- mclapp(geneSets, rndWalk, geneRanking, j, R, alpha)
-                        else
-                          es_sample <- parSapp(cl, geneSets, rndWalk, geneRanking, j, R, alpha)
-                      }
-
-                      unlist(es_sample)
-                    }, R, geneSets, alpha)
 
   if (length(geneSets) == 1)
     es <- matrix(es, nrow=1)
@@ -729,13 +618,10 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
   rownames(es) <- names(geneSets)
   colnames(es) <- colnames(X)
 
-  if (verbose) {
+  if (verbose && length(geneSets) > n) {
     setTxtProgressBar(get("progressBar", envir=globalenv()), 1)
     close(get("progressBar", envir=globalenv()))
   }
-
-  if (!is.na(cl))
-    stopCl(cl)
 
   es
 }
@@ -748,62 +634,43 @@ zscore <- function(X, geneSets, parallel.sz, parallel.type,
   p <- nrow(X)
   n <- ncol(X)
 
-  if (verbose) {
-    assign("progressBar", txtProgressBar(style=3), envir=globalenv()) ## show progress if verbose=TRUE
-    assign("nSamples", n, envir=globalenv())
-    assign("iSample", 0, envir=globalenv())
-  }
+  Z <- t(scale(t(X)))
 
-  Z <- t(apply(X, 1, function(x) (x-mean(x))/sd(x)))
+  es <- matrix(NA, nrow=length(geneSets), ncol=ncol(X))
 
-	haveParallel <- .isPackageLoaded("parallel")
-	haveSnow <- .isPackageLoaded("snow")
-	
-  cl <- makeCl <- parSapp <- stopCl <- mclapp <- detCor <- nCores <- NA
-	if (parallel.sz > 1 || haveParallel) {
-		if (!haveParallel && !haveSnow) {
-			stop("In order to run calculations in parallel either the 'snow', or the 'parallel' library, should be loaded first")
-		}
-
-    if (!haveParallel) {  ## use snow
-      ## copying ShortRead's strategy, the calls to the 'get()' are
-      ## employed to quieten R CMD check, and for no other reason
-      makeCl <- get("makeCluster", mode="function")
-      parSapp <- get("parSapply", mode="function")
-      stopCl <- get("stopCluster", mode="function")
-
-      if (verbose)
-        cat("Allocating cluster\n")
-		  cl <- makeCl(parallel.sz, type = parallel.type) 
-    } else {             ## use parallel
-
-      mclapp <- get('mclapply', envir=getNamespace('parallel'))
-      detCor <- get('detectCores', envir=getNamespace('parallel'))
-      nCores <- detCor()
-      setCores(nCores, parallel.sz)
-      if (verbose)
-        cat("Using parallel with", getOption("mc.cores"), "cores\n")
+  ## if there are more gene sets than samples, then
+  ## parallelization is done throughout gene sets
+  if (length(geneSets) > n) {
+    if (verbose) {
+      assign("progressBar", txtProgressBar(style=3), envir=globalenv())
+      assign("nSamples", n, envir=globalenv())
+      assign("iSample", 0, envir=globalenv())
     }
+
+    es <- sapply(1:n, function(j, Z, geneSets) {
+                   if (verbose) {
+                     assign("iSample", get("iSample", envir=globalenv()) + 1, envir=globalenv())
+                     setTxtProgressBar(get("progressBar", envir=globalenv()),
+                                       get("iSample", envir=globalenv()) / get("nSamples",
+                                                                               envir=globalenv())) }
+
+                     bpprogressbar(BPPARAM) <- FALSE ## since progress is reported by sample
+                     es_sample <- bplapply(geneSets, combinez, j, Z,
+                                           BPPARAM=BPPARAM)
+
+                     unlist(es_sample)
+                   }, Z, geneSets)
+
+  } else { ## otherwise, parallelization is done throughout samples
+
+    es <- bplapply(as.list(1:n), function(j, Z, geneSets) {
+                     es_sample <- lapply(geneSets, combinez, j, Z)
+
+                     unlist(es_sample)
+                   }, Z, geneSets, BPPARAM=BPPARAM)
+    es <- do.call("cbind", es)
   }
 
-  es <- sapply(1:n, function(j, Z, geneSets) {
-                      if (verbose) {
-                        assign("iSample", get("iSample", envir=globalenv()) + 1, envir=globalenv())
-                        setTxtProgressBar(get("progressBar", envir=globalenv()),
-                                          get("iSample", envir=globalenv()) / get("nSamples", envir=globalenv()))
-                      }
-                      es_sample <- NA
-                      if (parallel.sz == 1 || (is.na(cl) && !haveParallel))
-                        es_sample <- sapply(geneSets, combinez, j, Z)
-                      else {
-                        if (is.na(cl))
-                          es_sample <- mclapp(geneSets, combinez, j, Z)
-                        else
-                          es_sample <- parSapp(cl, geneSets, combinez, j, Z)
-                      }
-
-                      unlist(es_sample)
-                    }, Z, geneSets)
 
   if (length(geneSets) == 1)
     es <- matrix(es, nrow=1)
@@ -811,13 +678,10 @@ zscore <- function(X, geneSets, parallel.sz, parallel.type,
   rownames(es) <- names(geneSets)
   colnames(es) <- colnames(X)
 
-  if (verbose) {
+  if (verbose && length(geneSets) > n) {
     setTxtProgressBar(get("progressBar", envir=globalenv()), 1)
     close(get("progressBar", envir=globalenv()))
   }
-
-  if (!is.na(cl))
-    stopCl(cl)
 
   es
 }
@@ -833,100 +697,18 @@ plage <- function(X, geneSets, parallel.sz, parallel.type,
   p <- nrow(X)
   n <- ncol(X)
 
-  if (verbose) {
-    assign("progressBar", txtProgressBar(style=3), envir=globalenv()) ## show progress if verbose=TRUE
-    assign("nGeneSets", length(geneSets), envir=globalenv())
-    assign("iGeneSet", 0, envir=globalenv())
-  }
+  Z <- t(scale(t(X)))
 
-  Z <- t(apply(X, 1, function(x) (x-mean(x))/sd(x)))
+  es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
+                 BPPARAM=BPPARAM)
 
-	haveParallel <- .isPackageLoaded("parallel")
-	haveSnow <- .isPackageLoaded("snow")
-	
-  ## the masterDescriptor() calls are disabled since they are not available in windows
-  ## they would help to report progress by just one of the processors. now all processors
-  ## will reporting progress. while this might not be the right way to report progress in
-  ## parallel it should not affect a correct execution and progress should be more or less
-  ## being reported to some extent.
-  cl <- makeCl <- parSapp <- stopCl <- mclapp <- detCor <- nCores <- NA ## masterDesc <- NA
-	if(parallel.sz > 1 || haveParallel) {
-		if(!haveParallel && !haveSnow) {
-			stop("In order to run calculations in parallel either the 'snow', or the 'parallel' library, should be loaded first")
-		}
-
-    if (!haveParallel) {  ## use snow
-      ## copying ShortRead's strategy, the calls to the 'get()' are
-      ## employed to quieten R CMD check, and for no other reason
-      makeCl <- get("makeCluster", mode="function")
-      parSapp <- get("parSapply", mode="function")
-      stopCl <- get("stopCluster", mode="function")
-
-      if (verbose)
-        cat("Allocating cluster\n")
-		  cl <- makeCl(parallel.sz, type = parallel.type) 
-    } else {             ## use parallel
-
-      mclapp <- get('mclapply', envir=getNamespace('parallel'))
-      detCor <- get('detectCores', envir=getNamespace('parallel'))
-      ## masterDesc <- get('masterDescriptor', envir=getNamespace('parallel'))
-      nCores <- detCor()
-      setCores(nCores, parallel.sz)
-      if (verbose)
-        cat("Using parallel with", getOption("mc.cores"), "cores\n")
-    }
-  }
-
-  if (parallel.sz == 1 || (is.na(cl) && !haveParallel))
-    es <- t(sapply(geneSets, function(gset, Z) {
-                             if (verbose) {
-                               assign("iGeneSet", get("iGeneSet", envir=globalenv()) + 1, envir=globalenv())
-                               setTxtProgressBar(get("progressBar", envir=globalenv()),
-                                                 get("iGeneSet", envir=globalenv()) / get("nGeneSets", envir=globalenv()))
-                             }
-                             rightsingularsvdvectorgset(gset, Z)
-                           }, Z))
-  else {
-    if (is.na(cl)) {
-      ## firstproc <- mclapp(as.list(1:(options("mc.cores")$mc.cores)), function(x) masterDesc())[[1]]
-      es <- mclapp(geneSets, function(gset, Z) { ##, firstproc) {
-                                 if (verbose) { ## && masterDesc() == firstproc) {
-                                   assign("iGeneSet", get("iGeneSet", envir=globalenv()) + 1, envir=globalenv())
-                                   setTxtProgressBar(get("progressBar", envir=globalenv()),
-                                                     get("iGeneSet", envir=globalenv()) / get("nGeneSets", envir=globalenv()))
-                                 }
-                                 rightsingularsvdvectorgset(gset, Z)
-                               }, Z) ##, firstproc)
-      es <- do.call(rbind, es)
-    } else {
-      if (verbose)
-        message("Progress reporting for plage with a snow cluster not yet implemented")
-
-      es <- parSapp(geneSets, function(gset, Z) {
-                                  if (verbose) {
-                                    assign("iGeneSet", get("iGeneSet", envir=globalenv()) + 1, envir=globalenv())
-                                    setTxtProgressBar(get("progressBar", envir=globalenv()),
-                                                      get("iGeneSet", envir=globalenv()) / get("nGeneSets", envir=globalenv()))
-                                  }
-                                  rightsingularsvdvectorgset(gset, Z)
-                                }, Z)
-      es <- do.call(rbind, es)
-    }
-  }
+  es <- do.call(rbind, es)
 
   if (length(geneSets) == 1)
     es <- matrix(es, nrow=1)
 
   rownames(es) <- names(geneSets)
   colnames(es) <- colnames(X)
-
-  if (verbose) {
-    setTxtProgressBar(get("progressBar", envir=globalenv()), 1)
-    close(get("progressBar", envir=globalenv()))
-  }
-
-  if (!is.na(cl))
-    stopCl(cl)
 
   es
 }
