@@ -5,6 +5,8 @@ import(BiocGenerics)
 import(shiny)
 
 importClassesFrom(Biobase, ExpressionSet)
+importClassesFrom(SummarizedExperiment, SummarizedExperiment)
+importClassesFrom(SingleCellExperiment, SingleCellExperiment)
 importClassesFrom(GSEABase, GeneSetCollection)
 
 importMethodsFrom(Biobase, featureNames,
@@ -37,7 +39,6 @@ importFrom(BiocParallel, SerialParam,
                          MulticoreParam,
                          multicoreWorkers,
                          bpnworkers)
-importFrom(geneplotter, multidensity)
 importFrom(shinythemes, shinytheme)
 
 exportMethods(gsva,

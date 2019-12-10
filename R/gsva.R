@@ -13,7 +13,6 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
   min.sz=1,
   max.sz=Inf,
   parallel.sz=1L, 
-  parallel.type="SOCK",
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
   ssgsea.norm=TRUE,
@@ -63,8 +62,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
   }
 
   eSco <- .gsva(exprs(expr), mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                parallel.sz, parallel.type, mx.diff, tau, kernel, ssgsea.norm,
-                verbose, BPPARAM) 
+                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
 
   eScoEset <- new("ExpressionSet", exprs=eSco, phenoData=phenoData(expr),
                   experimentData=experimentData(expr), annotation="")
@@ -82,7 +80,6 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   min.sz=1,
   max.sz=Inf,
   parallel.sz=1L, 
-  parallel.type="SOCK",
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
   ssgsea.norm=TRUE,
@@ -138,8 +135,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   }
 
   eSco <- .gsva(exprs(expr), mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                parallel.sz, parallel.type, mx.diff, tau, kernel, ssgsea.norm,
-                verbose, BPPARAM)
+                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
 
   eScoEset <- new("ExpressionSet", exprs=eSco, phenoData=phenoData(expr),
                   experimentData=experimentData(expr), annotation="")
@@ -157,7 +153,6 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
   min.sz=1,
   max.sz=Inf,
   parallel.sz=1L, 
-  parallel.type="SOCK",
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
   ssgsea.norm=TRUE,
@@ -218,7 +213,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
   }
 
   rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                parallel.sz, parallel.type, mx.diff, tau, kernel, ssgsea.norm,
+                parallel.sz, mx.diff, tau, kernel, ssgsea.norm,
                 verbose, BPPARAM)
 
   rval
@@ -232,7 +227,6 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   min.sz=1,
   max.sz=Inf,
   parallel.sz=1L, 
-  parallel.type="SOCK",
   mx.diff=TRUE,
   tau=switch(method, gsva=1, ssgsea=0.25, NA),
   ssgsea.norm=TRUE,
@@ -281,8 +275,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   }
 
   rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                parallel.sz, parallel.type, mx.diff, tau, kernel, ssgsea.norm,
-                verbose, BPPARAM)
+                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
 
   rval
 })
@@ -293,7 +286,6 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   rnaseq=FALSE,
   abs.ranking=FALSE,
   parallel.sz=1L,
-  parallel.type="SOCK",
   mx.diff=TRUE,
   tau=1,
   kernel=TRUE,
@@ -328,8 +320,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 		  cat("Estimating ssGSEA scores for", length(gset.idx.list),"gene sets.\n")
 
     return(ssgsea(expr, gset.idx.list, alpha=tau, parallel.sz=parallel.sz,
-                  parallel.type=parallel.type, normalization=ssgsea.norm,
-                  verbose=verbose, BPPARAM=BPPARAM))
+                  normalization=ssgsea.norm, verbose=verbose, BPPARAM=BPPARAM))
   }
 
   if (method == "zscore") {
@@ -339,8 +330,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 	  if(verbose)
 		  cat("Estimating combined z-scores for", length(gset.idx.list), "gene sets.\n")
 
-    return(zscore(expr, gset.idx.list, parallel.sz, parallel.type,
-                  verbose, BPPARAM=BPPARAM))
+    return(zscore(expr, gset.idx.list, parallel.sz, verbose, BPPARAM=BPPARAM))
   }
 
   if (method == "plage") {
@@ -350,8 +340,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 	  if(verbose)
 		  cat("Estimating PLAGE scores for", length(gset.idx.list),"gene sets.\n")
 
-    return(plage(expr, gset.idx.list, parallel.sz, parallel.type,
-                 verbose, BPPARAM=BPPARAM))
+    return(plage(expr, gset.idx.list, parallel.sz, verbose, BPPARAM=BPPARAM))
   }
 
 	if(verbose)
@@ -367,7 +356,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 	
 	es.obs <- compute.geneset.es(expr, gset.idx.list, 1:n.samples,
                                rnaseq=rnaseq, abs.ranking=abs.ranking,
-                               parallel.sz=parallel.sz, parallel.type=parallel.type,
+                               parallel.sz=parallel.sz,
                                mx.diff=mx.diff, tau=tau, kernel=kernel,
                                verbose=verbose, BPPARAM=BPPARAM)
 	
@@ -407,7 +396,7 @@ compute.gene.density <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
 }
 
 compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
-                               abs.ranking, parallel.sz=1L, parallel.type="SOCK",
+                               abs.ranking, parallel.sz=1L, 
                                mx.diff=TRUE, tau=1, kernel=TRUE,
                                verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose)) {
 	num_genes <- nrow(expr)
@@ -558,8 +547,8 @@ setCores <- function(nCores, parallel.sz) {
 }
 
 ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
-                   parallel.type, normalization=TRUE,
-                   verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose)) {
+                   normalization=TRUE, verbose=TRUE,
+                   BPPARAM=SerialParam(progressbar=verbose)) {
 
   p <- nrow(X)
   n <- ncol(X)
@@ -628,8 +617,8 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
 
 combinez <- function(gSetIdx, j, Z) sum(Z[gSetIdx, j]) / sqrt(length(gSetIdx))
 
-zscore <- function(X, geneSets, parallel.sz, parallel.type,
-                   verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose)) {
+zscore <- function(X, geneSets, parallel.sz, verbose=TRUE,
+                   BPPARAM=SerialParam(progressbar=verbose)) {
 
   p <- nrow(X)
   n <- ncol(X)
@@ -691,8 +680,8 @@ rightsingularsvdvectorgset <- function(gSetIdx, Z) {
   s$v[, 1]
 }
 
-plage <- function(X, geneSets, parallel.sz, parallel.type,
-                  verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose)) {
+plage <- function(X, geneSets, parallel.sz, verbose=TRUE,
+                  BPPARAM=SerialParam(progressbar=verbose)) {
 
   p <- nrow(X)
   n <- ncol(X)

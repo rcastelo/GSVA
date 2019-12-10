@@ -21,7 +21,6 @@ Estimates GSVA enrichment scores.
     min.sz=1,
     max.sz=Inf,
     parallel.sz=1L,
-    parallel.type="SOCK",
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     ssgsea.norm=TRUE,
@@ -34,7 +33,6 @@ Estimates GSVA enrichment scores.
     min.sz=1,
     max.sz=Inf,
     parallel.sz=1L,
-    parallel.type="SOCK",
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     ssgsea.norm=TRUE,
@@ -47,7 +45,6 @@ Estimates GSVA enrichment scores.
     min.sz=1,
     max.sz=Inf,
     parallel.sz=1L,
-    parallel.type="SOCK",
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     ssgsea.norm=TRUE,
@@ -60,7 +57,6 @@ Estimates GSVA enrichment scores.
     min.sz=1,
     max.sz=Inf,
     parallel.sz=1L,
-    parallel.type="SOCK",
     mx.diff=TRUE,
     tau=switch(method, gsva=1, ssgsea=0.25, NA),
     ssgsea.norm=TRUE,
@@ -106,7 +102,6 @@ Estimates GSVA enrichment scores.
   \item{parallel.sz}{Number of threads of execution to use when doing the calculations in parallel.
                      The argument \code{BPPARAM} allows one to set the parallel back-end and fine
                      tune its configuration.}
-  \item{parallel.type}{Type of cluster architecture when using \code{snow}.}
   \item{mx.diff}{Offers two approaches to calculate the enrichment statistic (ES)
                  from the KS random walk statistic. \code{mx.diff=FALSE}: ES is calculated as
                  the maximum distance of the random walk from 0. \code{mx.diff=TRUE} (default): ES
