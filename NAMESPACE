@@ -6,15 +6,19 @@ import(shiny)
 
 importClassesFrom(Biobase, ExpressionSet)
 importClassesFrom(SummarizedExperiment, SummarizedExperiment)
-importClassesFrom(SingleCellExperiment, SingleCellExperiment)
 importClassesFrom(GSEABase, GeneSetCollection)
 
 importMethodsFrom(Biobase, featureNames,
                            phenoData,
                            experimentData,
-                           esApply,
                            exprs,
                            annotation)
+
+importMethodsFrom(S4Vectors, metadata,
+                             "metadata<-")
+
+importMethodsFrom(SummarizedExperiment, assays,
+                                        colData)
 
 importMethodsFrom(GSEABase, geneIds,
                             incidence)
@@ -27,13 +31,16 @@ importMethodsFrom(BiocParallel, bpiterate,
 importFrom(graphics, plot)
 importFrom(stats, ecdf,
                   na.omit)
-importFrom(utils, setTxtProgressBar,
+importFrom(utils, installed.packages,
+                  setTxtProgressBar,
                   txtProgressBar,
                   read.csv,
                   write.csv)
+importFrom(S4Vectors, SimpleList)
 importFrom(GSEABase, AnnoOrEntrezIdentifier,
                      mapIdentifiers,
                      getGmt)
+importFrom(SummarizedExperiment, SummarizedExperiment)
 importFrom(parallel, splitIndices)
 importFrom(BiocParallel, SerialParam,
                          MulticoreParam,

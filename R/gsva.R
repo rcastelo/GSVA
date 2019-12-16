@@ -5,7 +5,7 @@
 
 setGeneric("gsva", function(expr, gset.idx.list, ...) standardGeneric("gsva"))
 
-setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
+setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetCollection"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
@@ -22,24 +22,56 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
 
-  ## filter out genes with constant expression values
-  sdGenes <- esApply(expr, 1, sd)
-  if (any(sdGenes == 0) || any(is.na(sdGenes))) {
-    warning(sum(sdGenes == 0 | is.na(sdGenes)),
-            " genes with constant expression values throuhgout the samples.")
-    if (method != "ssgsea") {
-      warning("Since argument method!=\"ssgsea\", genes with constant expression values are discarded.")
-      expr <- expr[sdGenes > 0 & !is.na(sdGenes), ]
-    }
-  } 
+  if (length(assays(expr)) == 0L)
+    stop("The input SummarizedExperiment object has no assay data.")
+
+  if (missing(annotation))
+    annotation <- names(assays(se))[1]
+  else {
+    if (!is.character(annotation))
+      stop("The 'annotation' argument must contain a character string.")
+    annotation <- annotation[1]
+
+    if (!annotation %in% names(assays(se)))
+      stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
+  }
+
+  se <- expr
+  expr <- assays(se)[[annotation]]
+
+  ## filter genes according to verious criteria,
+  ## e.g., constant expression
+  expr <- .filterFeatures(expr, method)
 
   if (nrow(expr) < 2)
     stop("Less than two genes in the input ExpressionSet object\n")
 
+  annotpkg <- metadata(se)$annotation
+  if (!is.null(annotpkg) && length(annotpkg) > 0 && is.character(annotpkg) && annotpkg != "") {
+    if (!annotpkg %in% installed.packages())
+      stop(sprintf("Please install the nnotation package %s", annotpkg))
+
+    if (verbose)
+      cat("Mapping identifiers between gene sets and feature names\n")
+
+    ## map gene identifiers of the gene sets to the features in the chip
+    ## Biobase::annotation() is necessary to disambiguate from the
+    ## 'annotation' argument
+    mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
+                                           AnnoOrEntrezIdentifier(annotpkg))
+    mapped.gset.idx.list <- geneIds(mapped.gset.idx.list) 
+  } else {
+    mapped.gset.idx.list <- gset.idx.list
+    if (verbose) {
+      cat("No annotation package name available in the input 'SummarizedExperiment' object 'expr'.",
+          "Attempting to directly match identifiers in 'expr' to gene sets.", sep="\n")
+    }
+  }
+
   ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- lapply(gset.idx.list,
+  mapped.gset.idx.list <- lapply(mapped.gset.idx.list,
                                  function(x, y) na.omit(match(x, y)),
-                                 featureNames(expr))
+                                 rownames(se))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
     stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
@@ -61,13 +93,150 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
       kernel <- FALSE
   }
 
-  eSco <- .gsva(exprs(expr), mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+  eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
 
-  eScoEset <- new("ExpressionSet", exprs=eSco, phenoData=phenoData(expr),
-                  experimentData=experimentData(expr), annotation="")
+  rval <- SummarizedExperiment(assays=SimpleList(es=eSco),
+                               colData=colData(se),
+                               metadata=metadata(se))
+  metadata(rval)$annotation <- NULL
 
-  rval <- eScoEset
+  rval
+})
+
+setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
+          function(expr, gset.idx.list, annotation,
+  method=c("gsva", "ssgsea", "zscore", "plage"),
+  kcdf=c("Gaussian", "Poisson", "none"),
+  abs.ranking=FALSE,
+  min.sz=1,
+  max.sz=Inf,
+  parallel.sz=1L, 
+  mx.diff=TRUE,
+  tau=switch(method, gsva=1, ssgsea=0.25, NA),
+  ssgsea.norm=TRUE,
+  verbose=TRUE,
+  BPPARAM=SerialParam(progressbar=verbose))
+{
+  method <- match.arg(method)
+  kcdf <- match.arg(kcdf)
+
+  if (length(assays(expr)) == 0L)
+    stop("The input SummarizedExperiment object has no assay data.")
+
+  if (missing(annotation))
+    annotation <- names(assays(se))[1]
+  else {
+    if (!is.character(annotation))
+      stop("The 'annotation' argument must contain a character string.")
+    annotation <- annotation[1]
+
+    if (!annotation %in% names(assays(se)))
+      stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
+  }
+
+  se <- expr
+  expr <- assays(se)[[annotation]]
+
+  ## filter genes according to verious criteria,
+  ## e.g., constant expression
+  expr <- .filterFeatures(expr, method)
+
+  if (nrow(expr) < 2)
+    stop("Less than two genes in the input ExpressionSet object\n")
+
+  ## map to the actual features for which expression data is available
+  mapped.gset.idx.list <- lapply(gset.idx.list,
+                                 function(x, y) na.omit(match(x, y)),
+                                 rownames(se))
+
+  if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
+    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+
+  ## remove gene sets from the analysis for which no features are available
+  ## and meet the minimum and maximum gene-set size specified by the user
+  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+                                         min.sz=max(1, min.sz),
+                                         max.sz=max.sz)
+
+  if (!missing(kcdf)) {
+    if (kcdf == "Gaussian") {
+      rnaseq <- FALSE
+      kernel <- TRUE
+    } else if (kcdf == "Poisson") {
+      rnaseq <- TRUE
+      kernel <- TRUE
+    } else
+      kernel <- FALSE
+  }
+
+  eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
+
+  rval <- SummarizedExperiment(assays=SimpleList(es=eSco),
+                               colData=colData(se),
+                               metadata=metadata(se))
+  metadata(rval)$annotation <- NULL
+
+  rval
+})
+
+setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
+          function(expr, gset.idx.list, annotation,
+  method=c("gsva", "ssgsea", "zscore", "plage"),
+  kcdf=c("Gaussian", "Poisson", "none"),
+  abs.ranking=FALSE,
+  min.sz=1,
+  max.sz=Inf,
+  parallel.sz=1L, 
+  mx.diff=TRUE,
+  tau=switch(method, gsva=1, ssgsea=0.25, NA),
+  ssgsea.norm=TRUE,
+  verbose=TRUE,
+  BPPARAM=SerialParam(progressbar=verbose))
+{
+  method <- match.arg(method)
+  kcdf <- match.arg(kcdf)
+
+  eset <- expr
+  expr <- exprs(eset)
+  ## filter genes according to verious criteria,
+  ## e.g., constant expression
+  expr <- .filterFeatures(expr, method)
+
+  if (nrow(expr) < 2)
+    stop("Less than two genes in the input ExpressionSet object\n")
+
+  ## map to the actual features for which expression data is available
+  mapped.gset.idx.list <- lapply(gset.idx.list,
+                                 function(x, y) na.omit(match(x, y)),
+                                 featureNames(eset))
+
+  if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
+    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+
+  ## remove gene sets from the analysis for which no features are available
+  ## and meet the minimum and maximum gene-set size specified by the user
+  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+                                         min.sz=max(1, min.sz),
+                                         max.sz=max.sz)
+
+  if (!missing(kcdf)) {
+    if (kcdf == "Gaussian") {
+      rnaseq <- FALSE
+      kernel <- TRUE
+    } else if (kcdf == "Poisson") {
+      rnaseq <- TRUE
+      kernel <- TRUE
+    } else
+      kernel <- FALSE
+  }
+
+  eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
+
+  rval <- new("ExpressionSet", exprs=eSco, phenoData=phenoData(eset),
+              experimentData=experimentData(eset), annotation="")
 
   rval
 })
@@ -89,34 +258,43 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
 
-  ## filter out genes with constant expression values
-  sdGenes <- esApply(expr, 1, sd)
-  if (any(sdGenes == 0) || any(is.na(sdGenes))) {
-    warning(sum(sdGenes == 0 | is.na(sdGenes)),
-            " genes with constant expression values throuhgout the samples.")
-    if (method != "ssgsea") {
-      warning("Since argument method!=\"ssgsea\", genes with constant expression values are discarded.")
-      expr <- expr[sdGenes > 0 & !is.na(sdGenes), ]
-    }
-  } 
+  eset <- expr
+  expr <- exprs(eset)
+  ## filter genes according to verious criteria,
+  ## e.g., constant expression
+  expr <- .filterFeatures(expr, method)
 
   if (nrow(expr) < 2)
     stop("Less than two genes in the input ExpressionSet object\n")
 
-  if (verbose)
-    cat("Mapping identifiers between gene sets and feature names\n")
+  annotpkg <- Biobase::annotation(eset)
+  if (length(annotpkg) > 0 && annotpkg != "") {
+    if (!annotpkg %in% installed.packages())
+      stop(sprintf("Please install the nnotation package %s", annotpkg))
 
-  ## map gene identifiers of the gene sets to the features in the chip
-  ## Biobase::annotation() is necessary to disambiguate from the
-  ## 'annotation' argument
-  mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
-                                         AnnoOrEntrezIdentifier(Biobase::annotation(expr)))
-  
+    if (verbose)
+      cat("Mapping identifiers between gene sets and feature names\n")
+
+    ## map gene identifiers of the gene sets to the features in the chip
+    ## Biobase::annotation() is necessary to disambiguate from the
+    ## 'annotation' argument
+    mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
+                                           AnnoOrEntrezIdentifier(annotpkg))
+    mapped.gset.idx.list <- geneIds(mapped.gset.idx.list) 
+  } else {
+    mapped.gset.idx.list <- gset.idx.list
+    if (verbose) {
+      cat("No annotation package name available in the input 'ExpressionSet' object 'expr'.",
+        "Attempting to directly match identifiers in 'expr' to gene sets.", sep="\n")
+    }
+  }
+
   ## map to the actual features for which expression data is available
-  tmp <- lapply(geneIds(mapped.gset.idx.list),
-                                 function(x, y) na.omit(match(x, y)),
-                                 featureNames(expr))
+  tmp <- lapply(mapped.gset.idx.list,
+                function(x, y) na.omit(match(x, y)),
+                featureNames(eset))
   names(tmp) <- names(mapped.gset.idx.list)
+
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
   mapped.gset.idx.list <- filterGeneSets(tmp,
@@ -134,13 +312,11 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
       kernel <- FALSE
   }
 
-  eSco <- .gsva(exprs(expr), mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+  eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
 
-  eScoEset <- new("ExpressionSet", exprs=eSco, phenoData=phenoData(expr),
-                  experimentData=experimentData(expr), annotation="")
-
-  rval <- eScoEset
+  rval <- new("ExpressionSet", exprs=eSco, phenoData=phenoData(eset),
+              experimentData=experimentData(eset), annotation="")
 
   rval
 })
@@ -162,16 +338,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
 
-  ## filter out genes with constant expression values
-  sdGenes <- apply(expr, 1, sd)
-  if (any(sdGenes == 0) || any(is.na(sdGenes))) {
-    warning(sum(sdGenes == 0 | is.na(sdGenes)),
-            " genes with constant expression values throuhgout the samples.")
-    if (method != "ssgsea") {
-      warning("Since argument method!=\"ssgsea\", genes with constant expression values are discarded.")
-      expr <- expr[sdGenes > 0 & !is.na(sdGenes), , drop=FALSE]
-    }
-  } 
+  ## filter genes according to verious criteria,
+  ## e.g., constant expression
+  expr <- .filterFeatures(expr, method)
 
   if (nrow(expr) < 2)
     stop("Less than two genes in the input expression data matrix\n")
@@ -236,16 +405,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
 
-  ## filter out genes with constant expression values
-  sdGenes <- apply(expr, 1, sd)
-  if (any(sdGenes == 0) || any(is.na(sdGenes))) {
-    warning(sum(sdGenes == 0 | is.na(sdGenes)),
-            " genes with constant expression values throuhgout the samples.")
-    if (method != "ssgsea") {
-      warning("Since argument method!=\"ssgsea\", genes with constant expression values are discarded.")
-      expr <- expr[sdGenes > 0 & !is.na(sdGenes), , drop=FALSE]
-    }
-  } 
+  ## filter genes according to verious criteria,
+  ## e.g., constant expression
+  expr <- .filterFeatures(expr, method)
 
   if (nrow(expr) < 2)
     stop("Less than two genes in the input expression data matrix\n")

@@ -1,5 +1,7 @@
 \name{gsva}
 \alias{gsva}
+\alias{gsva,SummarizedExperiment,list-method}
+\alias{gsva,SummarizedExperiment,GeneSetCollection-method}
 \alias{gsva,ExpressionSet,list-method}
 \alias{gsva,ExpressionSet,GeneSetCollection-method}
 \alias{gsva,matrix,GeneSetCollection-method}
@@ -14,6 +16,30 @@ Gene Set Variation Analysis
 Estimates GSVA enrichment scores.
 }
 \usage{
+\S4method{gsva}{SummarizedExperiment,GeneSetCollection}(expr, gset.idx.list, annotation,
+    method=c("gsva", "ssgsea", "zscore", "plage"),
+    kcdf=c("Gaussian", "Poisson", "none"),
+    abs.ranking=FALSE,
+    min.sz=1,
+    max.sz=Inf,
+    parallel.sz=1L,
+    mx.diff=TRUE,
+    tau=switch(method, gsva=1, ssgsea=0.25, NA),
+    ssgsea.norm=TRUE,
+    verbose=TRUE,
+    BPPARAM=SerialParam(progressbar=verbose))
+\S4method{gsva}{SummarizedExperiment,list}(expr, gset.idx.list, annotation,
+    method=c("gsva", "ssgsea", "zscore", "plage"),
+    kcdf=c("Gaussian", "Poisson", "none"),
+    abs.ranking=FALSE,
+    min.sz=1,
+    max.sz=Inf,
+    parallel.sz=1L,
+    mx.diff=TRUE,
+    tau=switch(method, gsva=1, ssgsea=0.25, NA),
+    ssgsea.norm=TRUE,
+    verbose=TRUE,
+    BPPARAM=SerialParam(progressbar=verbose))
 \S4method{gsva}{ExpressionSet,list}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
@@ -64,18 +90,26 @@ Estimates GSVA enrichment scores.
     BPPARAM=SerialParam(progressbar=verbose))
 }
 \arguments{
-  \item{expr}{Gene expression data which can be given either as an \code{ExpressionSet}
-              object or as a matrix of expression values where rows correspond
-              to genes and columns correspond to samples.}
+  \item{expr}{Gene expression data which can be given either as a
+              \code{SummarizedExperiment} or \code{ExpressionSet} object,
+              or as a matrix of expression values where rows correspond to genes
+              and columns correspond to samples.}
   \item{gset.idx.list}{Gene sets provided either as a \code{list} object or as a
                        \code{GeneSetCollection} object.}
-  \item{annotation}{In the case of calling \code{gsva()} with expression data in a \code{matrix}
-                    and gene sets as a \code{GeneSetCollection} object, the \code{annotation} argument
-                    can be used to supply the name of the Bioconductor package that contains
-                    annotations for the class of gene identifiers occurring in the row names of
-                    the expression data matrix. By default \code{gsva()} will try to match the
-                    identifiers in \code{expr} to the identifiers in \code{gset.idx.list} just as
-                    they are, unless the \code{annotation} argument is set.}
+  \item{annotation}{In the case of calling \code{gsva()} on a
+                    \code{SummarizedExperiment} object, the \code{annotation}
+                    argument can be used to select the assay containing the
+                    molecular data we want as input to the \code{gsva()}
+                    function, otherwise the first assay is selected.
+                    In the case of calling \code{gsva()} with expression data in
+                    a \code{matrix} and gene sets as a \code{GeneSetCollection}
+                    object, the \code{annotation} argument can be used to supply
+                    the name of the Bioconductor package that contains
+                    annotations for the class of gene identifiers occurring in
+                    the row names of the expression data matrix.
+                    In the case of calling \code{gsva()} on a
+                    \code{ExpressionSet} object, the \code{annotation} argument
+                    is ignored. See details information below.}
   \item{method}{Method to employ in the estimation of gene-set enrichment scores per sample. By default
                 this is set to \code{gsva} (\enc{Hänzelmann}{Hanzelmann} et al, 2013) and other options are
                 \code{ssgsea} (Barbie et al, 2009), \code{zscore} (Lee et al, 2008) or \code{plage}
@@ -126,11 +160,32 @@ gene expression matrix into a g-geneset by n-sample pathway enrichment matrix.
 This facilitates many forms of statistical analysis in the 'space' of pathways
 rather than genes, providing a higher level of interpretability.
 
-The \code{gsva()} function first maps the identifiers in the gene sets to the
-identifiers in the input expression data leading to a filtered collection of
-gene sets. This collection can be further filtered to require a minimun and/or
-maximum size of the gene sets for which we want to calculate GSVA enrichment
-scores, by using the arguments \code{min.sz} and \code{max.sz}.
+By default, \code{gsva()} will try to match the identifiers in \code{expr} to
+the identifiers in \code{gset.idx.list} just as they are, unless the \code{annotation} argument is set.
+
+The \code{gsva()} function first maps the identifiers in the gene sets in
+\code{gset.idx.list} to the identifiers in the input expression data \code{expr}.
+When the input gene sets in \code{gset.idx.list} is provided as a \code{list}
+object, \code{gsva()} will try to match the identifiers in \code{expr} directly
+to the identifiers in \code{gset.idx.list} just as they are. Because unmatching
+identifiers will be discarded in both, \code{expr} and \code{gset.idx.list},
+\code{gsva()} may prompt an error if no identifiers can be matched as in the case
+of different types of identifiers (e.g., gene symbols vs Entrez identitifers).
+
+However, then the input gene sets in \code{gset.idx.list} is provided as a
+\code{GeneSetCollection} object, \code{gsva()} will try to automatically convert
+those identifiers to the type of identifier in the input expression data \code{expr}.
+Such an automatic conversion, however, will only occur in three scenarios: 1. when
+\code{expr} is an \code{ExpressionSet} object with an appropriately set
+\code{annotation} slot; 2. when \code{expr} is a \code{SummarizedExperiment} object
+with an appropriately set \code{annotation} slot in the metadata of \code{expr};
+3. when \code{expr} is a \code{matrix} and the \code{annotation} argument of the
+\code{gsva()} function is set to the name of the annotation package that provides
+the relationships between the type of identifiers in \code{expr} and \code{gset.idx.list}.
+
+The collection of gene sets resulting from the previous identifier matching,
+can be further filtered to require a minimun and/or maximum size by using the
+arguments \code{min.sz} and \code{max.sz}.
 }
 \value{
 A gene-set by sample matrix of GSVA enrichment scores.
