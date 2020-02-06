@@ -8,13 +8,13 @@ selectDataInput <- function(id) {
   #UI declaration
   column(
     3,
-    h3("Select data source:"),
+    h3("Data input:"),
     #Select data source
     wellPanel(fluidRow(
       column(
         12,
-        #Select matrix
-        radioButtons("matrixSourceType", "Select matrix:",
+        #Select expression data matrix
+        radioButtons("matrixSourceType", "Select expression data matrix:",
                      c("From file" = "fileMatrix",
                        "From workspace" = "varMatrix"))
         ,
@@ -37,7 +37,7 @@ selectDataInput <- function(id) {
         fluidRow(column(12,
                         HTML("<br>"))),
         #Select geneset
-        radioButtons("genesetSourceType", "Select GeneSet:",
+        radioButtons("genesetSourceType", "Select gene sets:",
                      c("From file" = "fileGeneset",
                        "From workspace" = "varGeneset"))
         ,
@@ -54,7 +54,7 @@ selectDataInput <- function(id) {
                       ls(envir=.GlobalEnv))
         ),
         HTML("<br>"),
-        radioButtons("arg", "Control arguments:",
+        radioButtons("arg", "Change default settings:",
                      c("No" = "no",
                        "Yes" = "yes"))
       )
@@ -69,7 +69,7 @@ mainDataInput <- function(id) {
   
   #UI Definition
   mainPanel(width = 6,
-            h2("Generated GSVA data:"),
+            ## h2("GSVA: gene set variation analysis"),
             textOutput("information"),
             plotOutput("plot"),
             tableOutput("result"),
@@ -85,7 +85,7 @@ argumentsDataInput <- function(id) {
     3,
     conditionalPanel(
       condition = "input.arg == 'yes'",
-      h3("Select arguments:"),
+      h3("Parameters:"),
       wellPanel(fluidRow(
         column(
           12,
@@ -98,9 +98,6 @@ argumentsDataInput <- function(id) {
                          "True" = TRUE)),
           numericInput("minSz","min.sz:",value = 1),
           numericInput("maxSz","max.sz (Write 0 for infinite):",value = 0),
-          numericInput("parallelSz","parallel.sz:",value = 0),
-          selectInput("parallelType", "parallel.type:",
-                      c("SOCK","MPI","NWS")),
           radioButtons("mxDiff", "mx.diff:",
                        c("True" = TRUE,
                          "False" = FALSE)),
@@ -110,14 +107,11 @@ argumentsDataInput <- function(id) {
           ),
           conditionalPanel(
             condition = "input.method == 'ssgsea'",
-            numericInput("tau2","tau:",value = 0.25)
+            numericInput("tau2","tau:",value = 0.25),
+            radioButtons("ssgseaNorm", "ssgsea.norm:",
+                         c("True" = TRUE,
+                           "False" = FALSE)),
           ),
-          conditionalPanel(
-            condition = "input.method == 'zscore' || input.method == 'plage'"
-          ),
-          radioButtons("ssgseaNorm", "ssgsea.norm:",
-                       c("True" = TRUE,
-                         "False" = FALSE)),
           radioButtons("verbose", "verbose:",
                        c("True" = TRUE,
                          "False" = FALSE))
@@ -126,7 +120,14 @@ argumentsDataInput <- function(id) {
   )
 }
 
-fluidPage(theme = shinytheme("simplex"),	
+fluidPage(
+  theme = shinytheme("spacelab"),	
+  tags$head(
+    tags$link(rel = "stylesheet", type = "text/css", href = "style.css")
+  ),
+  titlePanel(div(h2("GSVA WebApp", align="left"),
+             tags$img(src="GSVA.png", align="center", height=75, width=75)),
+             windowTitle="GSVA"),
 	fluidRow(
 	  selectDataInput("dataInput"),
 	  mainDataInput("mainInput")
