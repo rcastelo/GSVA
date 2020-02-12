@@ -677,7 +677,24 @@ ks_test_Rcode <- function(gene.density, gset_idxs, tau=1, make.plot=FALSE){
 	return (mx.value)
 }
 
-rndWalk <- function(gSetIdx, geneRanking, j, R, alpha) {
+
+rndWalk <- function(gSetIdx, geneRanking, j, Ra) {
+    n <- length(geneRanking)
+    k <- length(gSetIdx)
+    idxs <- sort(fastmatch::fmatch(gSetIdx, geneRanking))
+    
+    stepCDFinGeneSet2 <- 
+        sum(Ra[geneRanking[idxs], j] * (n - idxs + 1)) /
+        sum((Ra[geneRanking[idxs], j]))    
+    
+    
+    stepCDFoutGeneSet2 <- (n * (n + 1) / 2 - sum(n - idxs + 1)) / (n - k)
+    
+    walkStat <- stepCDFinGeneSet2 - stepCDFoutGeneSet2
+}
+
+
+rndWalkOld <- function(gSetIdx, geneRanking, j, R, alpha) {
   indicatorFunInsideGeneSet <- match(geneRanking, gSetIdx)
   indicatorFunInsideGeneSet[!is.na(indicatorFunInsideGeneSet)] <- 1
   indicatorFunInsideGeneSet[is.na(indicatorFunInsideGeneSet)] <- 0
@@ -716,41 +733,18 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
   n <- ncol(X)
 
   R <- apply(X, 2, function(x,p) as.integer(rank(x)), p)
+  Ra <- abs(R)^alpha
 
   es <- matrix(NA, nrow=length(geneSets), ncol=ncol(X))
 
-  ## if there are more gene sets than samples, then
-  ## parallelization is done throughout gene sets
-  if (length(geneSets) > n) {
-    if (verbose) {
-      assign("progressBar", txtProgressBar(style=3), envir=globalenv())
-      assign("nSamples", n, envir=globalenv())
-      assign("iSample", 0, envir=globalenv())
-    }
+  { # parallelization is done throughout samples
 
-    es <- sapply(1:n, function(j, R, geneSets, alpha) {
-                   if (verbose) {
-                     assign("iSample", get("iSample", envir=globalenv()) + 1, envir=globalenv())
-                     setTxtProgressBar(get("progressBar", envir=globalenv()),
-                                       get("iSample", envir=globalenv()) / get("nSamples",
-                                                                               envir=globalenv()))
-                   }
-                   geneRanking <- order(R[, j], decreasing=TRUE)
-                   bpprogressbar(BPPARAM) <- FALSE ## since progress is reported by sample
-                   es_sample <- bplapply(geneSets, rndWalk, geneRanking, j, R, alpha,
-                                         BPPARAM=BPPARAM)
-
-                   unlist(es_sample)
-                 }, R, geneSets, alpha)
-
-  } else { ## otherwise, parallelization is done throughout samples
-
-    es <- bplapply(as.list(1:n), function(j, R, geneSets, alpha) {
+    es <- bplapply(as.list(1:n), function(j) {
                      geneRanking <- order(R[, j], decreasing=TRUE)
-                     es_sample <- lapply(geneSets, rndWalk, geneRanking, j, R, alpha)
+                     es_sample <- lapply(geneSets, rndWalk, geneRanking, j, Ra)
 
                      unlist(es_sample)
-                   }, R, geneSets, alpha, BPPARAM=BPPARAM)
+                   }, BPPARAM=BPPARAM)
     es <- do.call("cbind", es)
   }
 
