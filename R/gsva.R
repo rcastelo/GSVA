@@ -70,7 +70,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
 
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(mapped.gset.idx.list,
-                                 function(x, y) na.omit(match(x, y)),
+                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
                                  rownames(se))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
@@ -147,7 +147,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
 
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(gset.idx.list,
-                                 function(x, y) na.omit(match(x, y)),
+                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
                                  rownames(se))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
@@ -209,7 +209,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
 
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(gset.idx.list,
-                                 function(x, y) na.omit(match(x, y)),
+                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
                                  featureNames(eset))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
@@ -291,7 +291,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
 
   ## map to the actual features for which expression data is available
   tmp <- lapply(mapped.gset.idx.list,
-                function(x, y) na.omit(match(x, y)),
+                function(x, y) na.omit(fastmatch::fmatch(x, y)),
                 featureNames(eset))
   names(tmp) <- names(mapped.gset.idx.list)
 
@@ -357,7 +357,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
   
   ## map to the actual features for which expression data is available
   tmp <- lapply(geneIds(mapped.gset.idx.list),
-                                 function(x, y) na.omit(match(x, y)),
+                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
                                  rownames(expr))
   names(tmp) <- names(mapped.gset.idx.list)
 
@@ -413,7 +413,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
     stop("Less than two genes in the input expression data matrix\n")
 
   mapped.gset.idx.list <- lapply(gset.idx.list,
-                                 function(x ,y) na.omit(match(x, y)),
+                                 function(x ,y) na.omit(fastmatch::fmatch(x, y)),
                                  rownames(expr))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
@@ -681,7 +681,7 @@ ks_test_Rcode <- function(gene.density, gset_idxs, tau=1, make.plot=FALSE){
 rndWalk <- function(gSetIdx, geneRanking, j, Ra) {
     n <- length(geneRanking)
     k <- length(gSetIdx)
-    idxs <- sort(fastmatch::fmatch(gSetIdx, geneRanking))
+    idxs <- sort.int(fastmatch::fmatch(gSetIdx, geneRanking))
     
     stepCDFinGeneSet2 <- 
         sum(Ra[geneRanking[idxs], j] * (n - idxs + 1)) /
@@ -881,7 +881,7 @@ setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="character
   totalGenes <- length(uniqGenes)
 
   ## map to the features requested
-  gSets <- lapply(gSets, function(x, y) as.vector(na.omit(match(x, y))), uniqGenes)
+  gSets <- lapply(gSets, function(x, y) as.vector(na.omit(fastmatch::fmatch(x, y))), uniqGenes)
 
   lenGsets <- sapply(gSets, length)
   totalGsets <- length(gSets)
@@ -900,7 +900,7 @@ setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="Expressio
   totalGenes <- length(uniqGenes)
 
   ## map to the actual features for which expression data is available
-  gSets <- lapply(gSets, function(x, y) as.vector(na.omit(match(x, y))), uniqGenes)
+  gSets <- lapply(gSets, function(x, y) as.vector(na.omit(fastmatch::fmatch(x, y))), uniqGenes)
 
   lenGsets <- sapply(gSets, length)
   totalGsets <- length(gSets)
