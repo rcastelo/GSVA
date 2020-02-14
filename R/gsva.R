@@ -70,7 +70,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
 
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(mapped.gset.idx.list,
-                                 function(x, y) na.omit(match(x, y)),
+                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
                                  rownames(se))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
@@ -147,7 +147,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
 
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(gset.idx.list,
-                                 function(x, y) na.omit(match(x, y)),
+                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
                                  rownames(se))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
@@ -209,7 +209,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
 
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(gset.idx.list,
-                                 function(x, y) na.omit(match(x, y)),
+                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
                                  featureNames(eset))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
@@ -291,7 +291,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
 
   ## map to the actual features for which expression data is available
   tmp <- lapply(mapped.gset.idx.list,
-                function(x, y) na.omit(match(x, y)),
+                function(x, y) na.omit(fastmatch::fmatch(x, y)),
                 featureNames(eset))
   names(tmp) <- names(mapped.gset.idx.list)
 
@@ -357,7 +357,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
   
   ## map to the actual features for which expression data is available
   tmp <- lapply(geneIds(mapped.gset.idx.list),
-                                 function(x, y) na.omit(match(x, y)),
+                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
                                  rownames(expr))
   names(tmp) <- names(mapped.gset.idx.list)
 
@@ -413,7 +413,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
     stop("Less than two genes in the input expression data matrix\n")
 
   mapped.gset.idx.list <- lapply(gset.idx.list,
-                                 function(x ,y) na.omit(match(x, y)),
+                                 function(x ,y) na.omit(fastmatch::fmatch(x, y)),
                                  rownames(expr))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
@@ -677,7 +677,8 @@ ks_test_Rcode <- function(gene.density, gset_idxs, tau=1, make.plot=FALSE){
 	return (mx.value)
 }
 
-rndWalk <- function(gSetIdx, geneRanking, j, R, alpha) {
+
+.rndWalk <- function(gSetIdx, geneRanking, j, R, alpha) {
   indicatorFunInsideGeneSet <- match(geneRanking, gSetIdx)
   indicatorFunInsideGeneSet[!is.na(indicatorFunInsideGeneSet)] <- 1
   indicatorFunInsideGeneSet[is.na(indicatorFunInsideGeneSet)] <- 0
@@ -692,21 +693,26 @@ rndWalk <- function(gSetIdx, geneRanking, j, R, alpha) {
   sum(walkStat) 
 }
 
-setCores <- function(nCores, parallel.sz) {
-  if(is.na(nCores)) {
-    if (parallel.sz > 0) {
-      options(mc.cores=parallel.sz)
-    } else {
-      options(mc.cores=1)
-    }
-  } else {
-    if (parallel.sz > 0 && parallel.sz < nCores) {
-      options(mc.cores=parallel.sz)
-    } else {
-      options(mc.cores=nCores)
-    }
-  }
+## optimized version of the function .rndWalk by Alexey Sergushichev
+## https://github.com/rcastelo/GSVA/pull/15
+## based on his paper https://doi.org/10.1101/060012
+.fastRndWalk <- function(gSetIdx, geneRanking, j, Ra) {
+    n <- length(geneRanking)
+    k <- length(gSetIdx)
+    idxs <- sort.int(fastmatch::fmatch(gSetIdx, geneRanking))
+    
+    stepCDFinGeneSet2 <- 
+        sum(Ra[geneRanking[idxs], j] * (n - idxs + 1)) /
+        sum((Ra[geneRanking[idxs], j]))    
+    
+    
+    stepCDFoutGeneSet2 <- (n * (n + 1) / 2 - sum(n - idxs + 1)) / (n - k)
+    
+    walkStat <- stepCDFinGeneSet2 - stepCDFoutGeneSet2
+
+    walkStat
 }
+
 
 ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
                    normalization=TRUE, verbose=TRUE,
@@ -715,44 +721,18 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
   p <- nrow(X)
   n <- ncol(X)
 
-  R <- apply(X, 2, function(x,p) as.integer(rank(x)), p)
+  R <- apply(X, 2, function(x, p) as.integer(rank(x)), p)
+  Ra <- abs(R)^alpha
 
   es <- matrix(NA, nrow=length(geneSets), ncol=ncol(X))
 
-  ## if there are more gene sets than samples, then
-  ## parallelization is done throughout gene sets
-  if (length(geneSets) > n) {
-    if (verbose) {
-      assign("progressBar", txtProgressBar(style=3), envir=globalenv())
-      assign("nSamples", n, envir=globalenv())
-      assign("iSample", 0, envir=globalenv())
-    }
-
-    es <- sapply(1:n, function(j, R, geneSets, alpha) {
-                   if (verbose) {
-                     assign("iSample", get("iSample", envir=globalenv()) + 1, envir=globalenv())
-                     setTxtProgressBar(get("progressBar", envir=globalenv()),
-                                       get("iSample", envir=globalenv()) / get("nSamples",
-                                                                               envir=globalenv()))
-                   }
-                   geneRanking <- order(R[, j], decreasing=TRUE)
-                   bpprogressbar(BPPARAM) <- FALSE ## since progress is reported by sample
-                   es_sample <- bplapply(geneSets, rndWalk, geneRanking, j, R, alpha,
-                                         BPPARAM=BPPARAM)
-
-                   unlist(es_sample)
-                 }, R, geneSets, alpha)
-
-  } else { ## otherwise, parallelization is done throughout samples
-
-    es <- bplapply(as.list(1:n), function(j, R, geneSets, alpha) {
+  es <- bplapply(as.list(1:n), function(j) {
                      geneRanking <- order(R[, j], decreasing=TRUE)
-                     es_sample <- lapply(geneSets, rndWalk, geneRanking, j, R, alpha)
+                     es_sample <- lapply(geneSets, .fastRndWalk, geneRanking, j, Ra)
 
                      unlist(es_sample)
-                   }, R, geneSets, alpha, BPPARAM=BPPARAM)
-    es <- do.call("cbind", es)
-  }
+                   }, BPPARAM=BPPARAM)
+  es <- do.call("cbind", es)
 
   if (length(geneSets) == 1)
     es <- matrix(es, nrow=1)
@@ -768,11 +748,6 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
 
   rownames(es) <- names(geneSets)
   colnames(es) <- colnames(X)
-
-  if (verbose && length(geneSets) > n) {
-    setTxtProgressBar(get("progressBar", envir=globalenv()), 1)
-    close(get("progressBar", envir=globalenv()))
-  }
 
   es
 }
@@ -887,7 +862,7 @@ setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="character
   totalGenes <- length(uniqGenes)
 
   ## map to the features requested
-  gSets <- lapply(gSets, function(x, y) as.vector(na.omit(match(x, y))), uniqGenes)
+  gSets <- lapply(gSets, function(x, y) as.vector(na.omit(fastmatch::fmatch(x, y))), uniqGenes)
 
   lenGsets <- sapply(gSets, length)
   totalGsets <- length(gSets)
@@ -906,7 +881,7 @@ setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="Expressio
   totalGenes <- length(uniqGenes)
 
   ## map to the actual features for which expression data is available
-  gSets <- lapply(gSets, function(x, y) as.vector(na.omit(match(x, y))), uniqGenes)
+  gSets <- lapply(gSets, function(x, y) as.vector(na.omit(fastmatch::fmatch(x, y))), uniqGenes)
 
   lenGsets <- sapply(gSets, length)
   totalGsets <- length(gSets)

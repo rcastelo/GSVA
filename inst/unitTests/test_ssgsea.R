@@ -24,4 +24,24 @@ test_ssgsea <- function() {
 
   checkTrue(max(abs(rowMeans(es) - c(0.22893323, -0.04400744, -0.08289233))) < 1e-08)
   checkTrue(max(abs(apply(es, 1,sd) - c(0.2562903, 0.2260589, 0.2268853))) < 1e-07)
+
+  gset.idx.list <- lapply(geneSets,
+                          function(x, y) na.omit(match(x, y)),
+                          rownames(y))
+  fast.gset.idx.list <- lapply(geneSets,
+                               function(x, y) na.omit(fastmatch::fmatch(x, y)),
+                               rownames(y))
+  checkIdentical(gset.idx.list, fast.gset.idx.list)
+
+  R <- apply(y, 2, function(x ,p) as.integer(rank(x)), p)
+  alpha <- 0.25
+  Ra <- abs(R)^alpha
+
+  for (i in 1:n) {
+    geneRanking <- order(R[, i], decreasing=TRUE)
+    frw <- GSVA:::.fastRndWalk(gset.idx.list[[1]], geneRanking, i, Ra)
+    rw <- GSVA:::.rndWalk(gset.idx.list[[1]], geneRanking, i, R, alpha)
+    checkEqualsNumeric(rw, frw)
+  }
 }
+
