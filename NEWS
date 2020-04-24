@@ -1,3 +1,14 @@
+CHANGES IN VERSION 1.36
+-----------------------
+
+USER VISIBLE CHANGES
+
+   o Improved management of parallel calculations by using the BiocParallel package. This facilitates calculating GSVA scores from gene expression data matrices with thousands of samples. See arguments 'parallel.sz' and 'BPPARAM' in the manual page of the 'gsva()' function.
+
+   o Improved implementation of the SSGSEA method ('method="ssgsea" in the call to 'gsva()') that makes calculations with this option about one order of magnitude faster. Improvement thanks to Alexey Sergushichev (https://github.com/rcastelo/GSVA/pull/15).
+
+   o The function 'gsva()' now issues a warning when one or more gene sets are singletons, i.e., they are formed by just one feature/gene.
+
 CHANGES IN VERSION 1.34
 -----------------------
 

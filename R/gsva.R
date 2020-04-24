@@ -455,9 +455,11 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   verbose=TRUE,
   BPPARAM=SerialParam(progressbar=verbose)) {
 
-	if (length(gset.idx.list) == 0) {
+	if (length(gset.idx.list) == 0)
 		stop("The gene set list is empty! Filter may be too stringent.")
-	}
+
+  if (any(lengths(gset.idx.list) == 1))
+    warning("Some gene sets have size one. Consider setting 'min.sz > 1'.")
 
   parallel.sz <- as.integer(parallel.sz)
   if (parallel.sz < 1L)
