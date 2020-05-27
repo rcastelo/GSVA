@@ -1,5 +1,6 @@
 library(shiny)
 library(shinythemes)
+library(plotly)
 
 selectDataInput <- function(id) {
   # Create a namespace function using the provided id
@@ -68,12 +69,17 @@ mainDataInput <- function(id) {
   ns <- NS(id)
   
   #UI Definition
-  mainPanel(width = 6,
-            ## h2("GSVA: gene set variation analysis"),
-            textOutput("information"),
-            plotOutput("plot"),
-            tableOutput("result"),
-            uiOutput("download"))
+  mainPanel( width = 6,
+            tabsetPanel(type="tabs",
+                        tabPanel("Graphics",
+                                 textOutput("information"),
+                                 plotlyOutput("plot"),
+                                 tableOutput("result"),
+                                 uiOutput("download")),
+                        tabPanel("Session Info",
+                                 verbatimTextOutput("sessionInfo"))
+                                 )
+            )
 }
 
 argumentsDataInput <- function(id) {
@@ -130,10 +136,7 @@ fluidPage(
              windowTitle="GSVA"),
 	fluidRow(
 	  selectDataInput("dataInput"),
-	  mainDataInput("mainInput")
-	  ,
-	  fluidRow(
-	    argumentsDataInput("argumentsInput")
-	  )
+	  mainDataInput("mainInput"),
+	  argumentsDataInput("argumentsInput")
 	)
 )
