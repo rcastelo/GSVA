@@ -25,6 +25,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
   if (length(assays(expr)) == 0L)
     stop("The input SummarizedExperiment object has no assay data.")
 
+  se <- expr
   if (missing(annotation))
     annotation <- names(assays(se))[1]
   else {
@@ -35,8 +36,6 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
     if (!annotation %in% names(assays(se)))
       stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
   }
-
-  se <- expr
   expr <- assays(se)[[annotation]]
 
   ## filter genes according to verious criteria,
@@ -124,6 +123,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
   if (length(assays(expr)) == 0L)
     stop("The input SummarizedExperiment object has no assay data.")
 
+  se <- expr
   if (missing(annotation))
     annotation <- names(assays(se))[1]
   else {
@@ -134,8 +134,6 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
     if (!annotation %in% names(assays(se)))
       stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
   }
-
-  se <- expr
   expr <- assays(se)[[annotation]]
 
   ## filter genes according to verious criteria,

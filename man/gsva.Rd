@@ -150,7 +150,7 @@ Estimates GSVA enrichment scores.
                      the minimum and the maximum, as described in their paper. When \code{ssgsea.norm=FALSE}
                      this last normalization step is skipped.}
   \item{verbose}{Gives information about each calculation step. Default: \code{FALSE}.}
-  \item{BPPARAM}{An object of class \code{\link[BiocParallel]{BiocParallelParam}} specifiying parameters related to the parallel execution of some of the tasks and calculations within this function.}
+  \item{BPPARAM}{An object of class \code{\link{BiocParallelParam}} specifiying parameters related to the parallel execution of some of the tasks and calculations within this function.}
 }
 
 \details{
