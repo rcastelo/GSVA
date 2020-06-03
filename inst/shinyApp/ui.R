@@ -71,11 +71,13 @@ mainDataInput <- function(id) {
   #UI Definition
   mainPanel( width = 6,
             tabsetPanel(type="tabs",
-                        tabPanel("Graphics",
-                                 textOutput("information"),
+                        tabPanel("Samples",
+                                 htmlOutput("text1"),
                                  plotlyOutput("plot"),
                                  tableOutput("result"),
                                  uiOutput("download")),
+                        tabPanel("Gene Sets",
+                                 plotlyOutput("plot2")),
                         tabPanel("Session Info",
                                  verbatimTextOutput("sessionInfo"))
                                  )
