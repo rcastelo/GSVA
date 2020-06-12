@@ -150,7 +150,7 @@ gsva_validation <- function(input, output, session) {
   if(success==TRUE)
   {
     gsva_generation(input, output, session, newY, genes,varMaxsz)
-    gsva_information(input,output,session)
+    gsva_information(input,output,session, newY, genes)
   }
 }
 
@@ -186,7 +186,7 @@ gsva_generation <- function(input, output, session, newY, genes,varMaxsz) {
 
 }
 
-gsva_information <- function(input, output, session) {
+gsva_information <- function(input, output, session, newY, genes) {
   gsva_es <- NA
   if("matrix" %in% class(generated_gsva))
     gsva_es <- as.data.frame(generated_gsva)
