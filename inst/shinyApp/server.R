@@ -207,11 +207,16 @@ gsva_information <- function(input, output, session, newY, genes) {
   # Rendering graph1
   dat.t <- melt(as.data.table(generated_gsva, keep.rownames = "gene.sets"), 
                 variable.name = "Sample", id.vars="gene.sets")
+  n <- length(levels(dat.t$Sample))
+  dd.col <- hcl(h = seq(15, 375, length=n), l = 65, c = 100)[1:n]
+  names(dd.col)  <- levels(dat.t$Sample)
+  
   
   output$plot <- renderPlotly({
     p <- ggplot(data = dat.t, aes(x=value, color=Sample)) +
       stat_density(geom="line", position = "identity") +
-      theme(legend.position = "none") + labs(x="GSVA Scores", y="Density")
+      theme(legend.position = "none") + labs(x="GSVA Scores", y="Density") +
+      scale_color_manual("Legend", values = dd.col)
     ggplotly(p, tooltip = "Sample", source = "click1")
   })
   
@@ -224,6 +229,12 @@ gsva_information <- function(input, output, session, newY, genes) {
   
   #Rendering text2
   output$text2 <- renderUI({
+    title1 <- sample.c()
+    h2(tags$b(title1), align ="center")
+  })
+  
+  #Rendering text3
+  output$text3 <- renderUI({
     HTML(paste("<br/>", "\t To see the Kernel Density Estimation of genes of 
     any given Gene Set in this Sample,  click on any point in this plot and a
     second plot will appear bellow it", "<br/>", sep="<br/>"))
@@ -245,10 +256,9 @@ gsva_information <- function(input, output, session, newY, genes) {
     data <- dat.t[Sample==sample.c()]
     p <- ggplot(data = data, aes(x=value, color=Sample)) +
       stat_ecdf(geom="point") + theme(legend.position = "none") + 
-      labs(x=paste0("GSVA Scores of ", sample.c()), y="Empirical Cumulative Density") +
-      scale_color_discrete(drop=TRUE, limits=levels(dat.t$Sample))
-    p <- ggplotly(p, source="click2")
-    style(p, text=data$gene.sets)
+      labs(x="GSVA Scores in selected sample", y="Empirical Cumulative Density") +
+      scale_color_manual("Legend", values = dd.col)
+    p <- ggplotly(p, source="click2") %>% style(text=data$gene.sets)
   })
   
   output$plot2 <- renderPlotly({
@@ -273,12 +283,16 @@ gsva_information <- function(input, output, session, newY, genes) {
     df <- as.data.frame(x)
     df$x <- as.numeric(df$x)
     df$Gene <- rownames(df)
-    p1 <- ggplot(data = df, aes(x=x)) +
+    df$Sample <- sample.c()
+    p1 <- ggplot(data = df, aes(x=x, color = Sample, label = Gene)) +
       stat_density(geom="line", position = "identity") +
-      geom_rug(aes(color=Gene)) +
-      theme(legend.position = "none") + 
-      labs(x=paste0("Gene Expressions from GeneSet ", gene.set()), y="Density") 
-    ggplotly(p1) %>% style(hoverinfo="none", traces = 1)
+      geom_rug() + theme(legend.position = "none") + 
+      labs(x="Gene Expressions in selected sample", y="Density") +
+      xlim(as.numeric(range(newY))) +
+      scale_color_manual("legend", values= dd.col)
+    ggplotly(p1, tooltip = c("Gene", "x")) %>% style(hoverinfo="none", traces = 1) %>%
+      layout(title = list(text = paste0('<br><sup><i>', gene.set(), '</i></sup>'),
+                          font = list(size=15)))
   })
   
   # Rendering Session Info
