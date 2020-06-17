@@ -77,7 +77,10 @@ mainDataInput <- function(id) {
                                  tableOutput("result"),
                                  uiOutput("download")),
                         tabPanel("Gene Sets",
-                                 plotlyOutput("plot2")),
+                                 uiOutput("text2"),
+                                 htmlOutput("text3"),
+                                 plotlyOutput("plot2"),
+                                 plotlyOutput("plot3")),
                         tabPanel("Session Info",
                                  verbatimTextOutput("sessionInfo"))
                                  )
