@@ -2,7 +2,6 @@ useDynLib(GSVA)
 
 import(methods)
 import(BiocGenerics)
-import(shiny)
 
 importClassesFrom(Biobase, ExpressionSet)
 importClassesFrom(SummarizedExperiment, SummarizedExperiment)
@@ -46,7 +45,6 @@ importFrom(BiocParallel, SerialParam,
                          MulticoreParam,
                          multicoreWorkers,
                          bpnworkers)
-importFrom(shinythemes, shinytheme)
 
 exportMethods(gsva,
               filterGeneSets,

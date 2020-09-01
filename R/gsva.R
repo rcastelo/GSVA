@@ -764,39 +764,12 @@ zscore <- function(X, geneSets, parallel.sz, verbose=TRUE,
 
   es <- matrix(NA, nrow=length(geneSets), ncol=ncol(X))
 
-  ## if there are more gene sets than samples, then
-  ## parallelization is done throughout gene sets
-  if (length(geneSets) > n) {
-    if (verbose) {
-      assign("progressBar", txtProgressBar(style=3), envir=globalenv())
-      assign("nSamples", n, envir=globalenv())
-      assign("iSample", 0, envir=globalenv())
-    }
+  es <- bplapply(as.list(1:n), function(j, Z, geneSets) {
+                   es_sample <- lapply(geneSets, combinez, j, Z)
 
-    es <- sapply(1:n, function(j, Z, geneSets) {
-                   if (verbose) {
-                     assign("iSample", get("iSample", envir=globalenv()) + 1, envir=globalenv())
-                     setTxtProgressBar(get("progressBar", envir=globalenv()),
-                                       get("iSample", envir=globalenv()) / get("nSamples",
-                                                                               envir=globalenv())) }
-
-                     bpprogressbar(BPPARAM) <- FALSE ## since progress is reported by sample
-                     es_sample <- bplapply(geneSets, combinez, j, Z,
-                                           BPPARAM=BPPARAM)
-
-                     unlist(es_sample)
-                   }, Z, geneSets)
-
-  } else { ## otherwise, parallelization is done throughout samples
-
-    es <- bplapply(as.list(1:n), function(j, Z, geneSets) {
-                     es_sample <- lapply(geneSets, combinez, j, Z)
-
-                     unlist(es_sample)
-                   }, Z, geneSets, BPPARAM=BPPARAM)
+                   unlist(es_sample)
+                 }, Z, geneSets, BPPARAM=BPPARAM)
     es <- do.call("cbind", es)
-  }
-
 
   if (length(geneSets) == 1)
     es <- matrix(es, nrow=1)
