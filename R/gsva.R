@@ -70,7 +70,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(mapped.gset.idx.list,
                                  function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                                 rownames(se))
+                                 rownames(expr))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
     stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
@@ -146,7 +146,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(gset.idx.list,
                                  function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                                 rownames(se))
+                                 rownames(expr))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
     stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
@@ -208,7 +208,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(gset.idx.list,
                                  function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                                 featureNames(eset))
+                                 rownames(expr))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
     stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
@@ -290,7 +290,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   ## map to the actual features for which expression data is available
   tmp <- lapply(mapped.gset.idx.list,
                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                featureNames(eset))
+                rownames(expr))
   names(tmp) <- names(mapped.gset.idx.list)
 
   ## remove gene sets from the analysis for which no features are available
