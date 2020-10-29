@@ -6,6 +6,7 @@ import(BiocGenerics)
 importClassesFrom(Biobase, ExpressionSet)
 importClassesFrom(SummarizedExperiment, SummarizedExperiment)
 importClassesFrom(GSEABase, GeneSetCollection)
+importClassesFrom(SingleCellExperiment, SingleCellExperiment)
 
 importMethodsFrom(Biobase, featureNames,
                            phenoData,
@@ -45,6 +46,7 @@ importFrom(BiocParallel, SerialParam,
                          MulticoreParam,
                          multicoreWorkers,
                          bpnworkers)
+importFrom(SingleCellExperiment, SingleCellExperiment)
 
 exportMethods(gsva,
               filterGeneSets,
