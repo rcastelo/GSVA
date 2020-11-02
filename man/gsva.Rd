@@ -104,15 +104,15 @@ Estimates GSVA enrichment scores.
 }
 \arguments{
   \item{expr}{Gene expression data which can be given either as a
-              \code{SingleCellExperiment}, \code{SummarizedExperiment} or
-              \code{ExpressionSet} object, or as a matrix of expression 
+              \code{SummarizedExperiment}, \code{SingleCellExperiment}
+              \code{ExpressionSet} object, or as a matrix of expression
               values where rows correspond to genes and columns correspond to samples.}
   \item{gset.idx.list}{Gene sets provided either as a \code{list} object or as a
                        \code{GeneSetCollection} object.}
-  \item{annotation}{In the case of calling \code{gsva()} on a \code{SingleCellExperiment}
-                    or a \code{SummarizedExperiment} object, the \code{annotation}
-                    argument can be used to select the assay containing the
-                    molecular data we want as input to the \code{gsva()}
+  \item{annotation}{In the case of calling \code{gsva()} on a
+                    \code{SummarizedExperiment} or \code{SingleCellExperiment} object,
+                    the \code{annotation} argument can be used to select the assay
+                    containing the molecular data we want as input to the \code{gsva()}
                     function, otherwise the first assay is selected.
                     In the case of calling \code{gsva()} with expression data in
                     a \code{matrix} and gene sets as a \code{GeneSetCollection}
@@ -124,7 +124,7 @@ Estimates GSVA enrichment scores.
                     \code{ExpressionSet} object, the \code{annotation} argument
                     is ignored. See details information below.}
   \item{method}{Method to employ in the estimation of gene-set enrichment scores per sample. By default
-                this is set to \code{gsva} (\enc{H?nzelmann}{Hanzelmann} et al, 2013) and other options are
+                this is set to \code{gsva} (\enc{Hänzelmann}{Hanzelmann} et al, 2013) and other options are
                 \code{ssgsea} (Barbie et al, 2009), \code{zscore} (Lee et al, 2008) or \code{plage}
                 (Tomfohr et al, 2005). The latter two standardize first expression profiles into z-scores
                 over the samples and, in the case of \code{zscore}, it combines them together as their sum
@@ -155,7 +155,7 @@ Estimates GSVA enrichment scores.
                  is calculated as the magnitude difference between the largest positive
                  and negative random walk deviations.}
   \item{tau}{Exponent defining the weight of the tail in the random walk performed by both the \code{gsva}
-             (\enc{H?nzelmann}{Hanzelmann} et al., 2013) and the \code{ssgsea} (Barbie et al., 2009) methods. By default,
+             (\enc{Hänzelmann}{Hanzelmann} et al., 2013) and the \code{ssgsea} (Barbie et al., 2009) methods. By default,
              this \code{tau=1} when \code{method="gsva"} and \code{tau=0.25} when \code{method="ssgsea"} just
              as specified by Barbie et al. (2009) where this parameter is called \code{alpha}.}
   \item{ssgsea.norm}{Logical, set to \code{TRUE} (default) with \code{method="ssgsea"} runs the SSGSEA method
@@ -207,7 +207,7 @@ A gene-set by sample matrix of GSVA enrichment scores.
 Barbie, D.A. et al. Systematic RNA interference reveals that oncogenic KRAS-driven
 cancers require TBK1. \emph{Nature}, 462(5):108-112, 2009.
 
-\enc{H?nzelmann}{Hanzelmann}, S., Castelo, R. and Guinney, J.
+\enc{Hänzelmann}{Hanzelmann}, S., Castelo, R. and Guinney, J.
 GSVA: Gene set variation analysis for microarray and RNA-Seq data.
 \emph{BMC Bioinformatics}, 14:7, 2013.
 
