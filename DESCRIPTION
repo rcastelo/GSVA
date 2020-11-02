@@ -7,7 +7,7 @@ Authors@R: c(person("Justin", "Guinney", role=c("aut", "cre"), email="justin.gui
              person("Pablo Sebastian", "Rodriguez", role="ctb", email="pablosebastian.rodriguez@upf.edu"))
 Depends: R (>= 3.5.0)
 Imports: methods, stats, utils, graphics, BiocGenerics, S4Vectors,
-         Biobase, SummarizedExperiment, GSEABase,
+         Biobase, SummarizedExperiment, GSEABase, Matrix,
          parallel, BiocParallel, fastmatch, SingleCellExperiment
 Suggests: RUnit, limma, RColorBrewer, genefilter, edgeR, GSVAdata,
           shiny, shinythemes, ggplot2, data.table, plotly
