@@ -7,6 +7,7 @@ importClassesFrom(Biobase, ExpressionSet)
 importClassesFrom(SummarizedExperiment, SummarizedExperiment)
 importClassesFrom(GSEABase, GeneSetCollection)
 importClassesFrom(SingleCellExperiment, SingleCellExperiment)
+importClassesFrom(Matrix, dgCMatrix)
 
 importMethodsFrom(Biobase, featureNames,
                            phenoData,

@@ -1,6 +1,7 @@
 \name{gsva}
 \alias{gsva}
 \alias{gsva,SingleCellExperiment,list-method}
+\alias{gsva,dgCMatrix,list-method}
 \alias{gsva,SummarizedExperiment,list-method}
 \alias{gsva,SummarizedExperiment,GeneSetCollection-method}
 \alias{gsva,ExpressionSet,list-method}
@@ -18,6 +19,18 @@ Estimates GSVA enrichment scores.
 }
 \usage{
 \S4method{gsva}{SingleCellExperiment,list}(expr, gset.idx.list, annotation,
+    method=c("gsva", "ssgsea", "zscore", "plage"),
+    kcdf=c("Gaussian", "Poisson", "none"),
+    abs.ranking=FALSE,
+    min.sz=1,
+    max.sz=Inf,
+    parallel.sz=1L,
+    mx.diff=TRUE,
+    tau=switch(method, gsva=1, ssgsea=0.25, NA),
+    ssgsea.norm=TRUE,
+    verbose=TRUE,
+    BPPARAM=SerialParam(progressbar=verbose))
+\S4method{gsva}{dgCMatrix,list}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
     abs.ranking=FALSE,
@@ -106,7 +119,8 @@ Estimates GSVA enrichment scores.
   \item{expr}{Gene expression data which can be given either as a
               \code{SummarizedExperiment}, \code{SingleCellExperiment}
               \code{ExpressionSet} object, or as a matrix of expression
-              values where rows correspond to genes and columns correspond to samples.}
+              values where rows correspond to genes and columns correspond to samples.
+              This matrix can be also in a sparse format, as a \code{dgCMatrix}.}
   \item{gset.idx.list}{Gene sets provided either as a \code{list} object or as a
                        \code{GeneSetCollection} object.}
   \item{annotation}{In the case of calling \code{gsva()} on a
@@ -190,10 +204,11 @@ However, then the input gene sets in \code{gset.idx.list} is provided as a
 those identifiers to the type of identifier in the input expression data \code{expr}.
 Such an automatic conversion, however, will only occur in three scenarios: 1. when
 \code{expr} is an \code{ExpressionSet} object with an appropriately set
-\code{annotation} slot; 2. when \code{expr} is a \code{SummarizedExperiment} object
-with an appropriately set \code{annotation} slot in the metadata of \code{expr};
-3. when \code{expr} is a \code{matrix} and the \code{annotation} argument of the
-\code{gsva()} function is set to the name of the annotation package that provides
+\code{annotation} slot; 2. when \code{expr} is a \code{SummarizedExperiment} or a
+\code{SingleCellExperiment} object with an appropriately set \code{annotation} slot
+in the metadata of \code{expr}; 3. when \code{expr} is a \code{matrix} or a 
+\code{dgCMatrix} and the \code{annotation} argument of the \code{gsva()} function
+is set to the name of the annotation package that provides
 the relationships between the type of identifiers in \code{expr} and \code{gset.idx.list}.
 
 The collection of gene sets resulting from the previous identifier matching,
@@ -201,7 +216,8 @@ can be further filtered to require a minimun and/or maximum size by using the
 arguments \code{min.sz} and \code{max.sz}.
 }
 \value{
-A gene-set by sample matrix of GSVA enrichment scores.
+A gene-set by sample matrix (of \code{matrix} or \code{dgCMatrix} type, 
+depending on the input) of GSVA enrichment scores.
 }
 \references{
 Barbie, D.A. et al. Systematic RNA interference reveals that oncogenic KRAS-driven
