@@ -47,7 +47,7 @@ test_inputdatacontainers <- function() {
   checkTrue(identical(es.mat, SummarizedExperiment::assays(es.se)[[1]]))
 
   ## estimate GSVA enrichment scores with input as a dgCMatrix object
-  yMat <- Matrix::as(y, "dgCMatrix")
+  yMat <- Matrix::Matrix(y, sparse=TRUE)
   es.dgCMat <- gsva(yMat, geneSets, verbose=FALSE)
 
   checkTrue(identical(es.mat, es.dgCMat))
