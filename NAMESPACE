@@ -29,6 +29,8 @@ importMethodsFrom(BiocParallel, bpiterate,
                                 bplapply,
                                 "bpprogressbar<-")
 
+importMethodsFrom(BiocSingular, runExactSVD)
+
 importFrom(graphics, plot)
 importFrom(stats, ecdf,
                   na.omit)
