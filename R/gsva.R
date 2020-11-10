@@ -934,9 +934,10 @@ rightsingularsvdvectorgset <- function(gSetIdx, Z) {
 plage <- function(X, geneSets, parallel.sz, verbose=TRUE,
                   BPPARAM=SerialParam(progressbar=verbose)) {
   if(is(X, "dgCMatrix")){
-    message("Please bear in mind that this method first scale the values of the gene expression data.
-            In order to take advantage of the sparse Matrix type, the scaling will only be applied
-            to the non-zero values of the data.")
+    message("Please bear in mind that this method first scale
+    the values of the gene expression data. In order to take
+    advantage of the sparse Matrix type, the scaling will only
+    be applied to the non-zero values of the data.")
     
     Z <- Matrix::t(X)
     Z <- .dgCapply(Z, scale, 2)
