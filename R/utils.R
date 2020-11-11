@@ -35,6 +35,12 @@
   result
 }
 
+.dgCapply<-function(m,f, MARGIN){
+  x <- lapply(.sparseToList(m, MARGIN), f)
+  m@x <- unlist(x, use.names=FALSE)
+  m
+}
+
 ## filter out genes which non-zero values have
 ## constant expression values
 .filterFeaturesSparse <- function(expr, method) {

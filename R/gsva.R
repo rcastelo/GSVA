@@ -41,7 +41,12 @@ setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
   
   ## filter genes according to verious criteria,
   ## e.g., constant expression
-  expr <- .filterFeatures(expr, method)
+  if(is(expr, "dgCMatrix")){
+    expr <- .filterFeaturesSparse(expr, method)
+  } else {
+    expr <- .filterFeatures(expr, method)
+  }
+  
   
   if (nrow(expr) < 2)
     stop("Less than two genes in the input ExpressionSet object\n")
@@ -918,29 +923,49 @@ zscore <- function(X, geneSets, parallel.sz, verbose=TRUE,
 }
 
 rightsingularsvdvectorgset <- function(gSetIdx, Z) {
+  if(is(Z, "dgCMatrix")){
+    s <- BiocSingular::runExactSVD(Z[gSetIdx, ])
+  } else {
     s <- svd(Z[gSetIdx, ])
+  }
   s$v[, 1]
 }
 
 plage <- function(X, geneSets, parallel.sz, verbose=TRUE,
                   BPPARAM=SerialParam(progressbar=verbose)) {
-
-  p <- nrow(X)
-  n <- ncol(X)
-
-  Z <- t(scale(t(X)))
-
-  es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
-                 BPPARAM=BPPARAM)
-
-  es <- do.call(rbind, es)
-
-  if (length(geneSets) == 1)
-    es <- matrix(es, nrow=1)
-
-  rownames(es) <- names(geneSets)
-  colnames(es) <- colnames(X)
-
+  if(is(X, "dgCMatrix")){
+    message("Please bear in mind that this method first scale
+    the values of the gene expression data. In order to take
+    advantage of the sparse Matrix type, the scaling will only
+    be applied to the non-zero values of the data.")
+    
+    Z <- Matrix::t(X)
+    Z <- .dgCapply(Z, scale, 2)
+    Z <- Matrix::t(Z)
+    
+    es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
+                   BPPARAM=BPPARAM)
+    
+    es <- do.call(rbind, es)
+    
+    es <- as(es, "dgCMatrix")
+    
+  } else {
+    
+    Z <- t(scale(t(X)))
+    
+    es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
+                   BPPARAM=BPPARAM)
+    
+    es <- do.call(rbind, es)
+    
+    if (length(geneSets) == 1)
+      es <- matrix(es, nrow=1)
+    
+    rownames(es) <- names(geneSets)
+    colnames(es) <- colnames(X)
+  }
+  
   es
 }
 

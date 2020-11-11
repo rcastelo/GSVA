@@ -48,6 +48,7 @@ importFrom(BiocParallel, SerialParam,
                          multicoreWorkers,
                          bpnworkers)
 importFrom(SingleCellExperiment, SingleCellExperiment)
+importFrom(BiocSingular, runExactSVD)
 
 exportMethods(gsva,
               filterGeneSets,
