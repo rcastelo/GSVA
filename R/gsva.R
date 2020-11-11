@@ -894,22 +894,32 @@ combinez <- function(gSetIdx, j, Z) sum(Z[gSetIdx, j]) / sqrt(length(gSetIdx))
 zscore <- function(X, geneSets, parallel.sz, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose)) {
 
-  p <- nrow(X)
   n <- ncol(X)
 
-  Z <- t(scale(t(X)))
-
-  es <- matrix(NA, nrow=length(geneSets), ncol=ncol(X))
+  if(is(X, "dgCMatrix")){
+    message("Please bear in mind that this method first scales the values of the gene
+    expression data. In order to take advantage of the sparse Matrix type, the scaling
+    will only be applied to the non-zero values of the data. This is a provisional 
+    solution in order to give support to the dgCMatrix format.")
+    
+    Z <- t(X)
+    Z <- .dgCapply(Z, scale, 2)
+    Z <- t(Z)
+    
+  } else {
+    Z <- t(scale(t(X)))
+  }
 
   es <- bplapply(as.list(1:n), function(j, Z, geneSets) {
-                   es_sample <- lapply(geneSets, combinez, j, Z)
+    es_sample <- lapply(geneSets, combinez, j, Z)
+    unlist(es_sample)
+  }, Z, geneSets, BPPARAM=BPPARAM)
 
-                   unlist(es_sample)
-                 }, Z, geneSets, BPPARAM=BPPARAM)
-    es <- do.call("cbind", es)
-
-  if (length(geneSets) == 1)
-    es <- matrix(es, nrow=1)
+  es <- do.call("cbind", es)
+  
+  if(is(X, "dgCMatrix")){
+    es <- as(es, "dgCMatrix")
+  }
 
   rownames(es) <- names(geneSets)
   colnames(es) <- colnames(X)
@@ -934,10 +944,10 @@ rightsingularsvdvectorgset <- function(gSetIdx, Z) {
 plage <- function(X, geneSets, parallel.sz, verbose=TRUE,
                   BPPARAM=SerialParam(progressbar=verbose)) {
   if(is(X, "dgCMatrix")){
-    message("Please bear in mind that this method first scale
-    the values of the gene expression data. In order to take
-    advantage of the sparse Matrix type, the scaling will only
-    be applied to the non-zero values of the data.")
+    message("Please bear in mind that this method first scales the values of the gene
+    expression data. In order to take advantage of the sparse Matrix type, the scaling
+    will only be applied to the non-zero values of the data. This is a provisional 
+    solution in order to give support to the dgCMatrix format.")
     
     Z <- Matrix::t(X)
     Z <- .dgCapply(Z, scale, 2)
