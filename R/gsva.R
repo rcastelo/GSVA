@@ -855,37 +855,43 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
                    normalization=TRUE, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose)) {
 
-  p <- nrow(X)
   n <- ncol(X)
-
-  R <- apply(X, 2, function(x, p) as.integer(rank(x)), p)
+  
+  if(is(X, "dgCMatrix")){
+    R <- t(sparseMatrixStats::colRanks(X, ties.method = "average"))
+    mode(R) <- "integer"
+  } else {
+    R <- apply(X, 2, function(x, p) as.integer(rank(x)))
+  }
+  
   Ra <- abs(R)^alpha
-
-  es <- matrix(NA, nrow=length(geneSets), ncol=ncol(X))
-
+  
   es <- bplapply(as.list(1:n), function(j) {
-                     geneRanking <- order(R[, j], decreasing=TRUE)
-                     es_sample <- lapply(geneSets, .fastRndWalk, geneRanking, j, Ra)
-
-                     unlist(es_sample)
-                   }, BPPARAM=BPPARAM)
+    geneRanking <- order(R[, j], decreasing=TRUE)
+    es_sample <- lapply(geneSets, .fastRndWalk, geneRanking, j, Ra)
+    
+    unlist(es_sample)
+  }, BPPARAM=BPPARAM)
+  
   es <- do.call("cbind", es)
-
-  if (length(geneSets) == 1)
-    es <- matrix(es, nrow=1)
-
+  
+  
   if (normalization) {
     ## normalize enrichment scores by using the entire data set, as indicated
     ## by Barbie et al., 2009, online methods, pg. 2
     es <- apply(es, 2, function(x, es) x / (range(es)[2] - range(es)[1]), es)
   }
-
+  
   if (length(geneSets) == 1)
     es <- matrix(es, nrow=1)
-
+  
   rownames(es) <- names(geneSets)
   colnames(es) <- colnames(X)
-
+  
+  if(is(X, "dgCMatrix")){
+    es <- as(es, "dgCMatrix")
+  }
+  
   es
 }
 

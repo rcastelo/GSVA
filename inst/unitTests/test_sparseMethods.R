@@ -11,4 +11,5 @@ test_sparseMethods <- function(){
   checkEqualsNumeric(gsva(m, gene.sets), gsva(M, gene.sets))
   checkEqualsNumeric(gsva(m, gene.sets, method="plage"), gsva(M, gene.sets, method="plage"))
   checkEqualsNumeric(gsva(m, gene.sets, method="zscore"), gsva(M, gene.sets, method="zscore"))
+  checkEqualsNumeric(gsva(m, gene.sets, method="ssgsea"), gsva(M, gene.sets, method="ssgsea"))
 }
