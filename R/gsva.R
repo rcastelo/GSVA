@@ -5,6 +5,143 @@
 
 setGeneric("gsva", function(expr, gset.idx.list, ...) standardGeneric("gsva"))
 
+setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
+          function(expr, gset.idx.list, annotation,
+  method=c("gsva", "ssgsea", "zscore", "plage"),
+  kcdf=c("Gaussian", "Poisson", "none"),
+  abs.ranking=FALSE,
+  min.sz=1,
+  max.sz=Inf,
+  parallel.sz=1L, 
+  mx.diff=TRUE,
+  tau=switch(method, gsva=1, ssgsea=0.25, NA),
+  ssgsea.norm=TRUE,
+  verbose=TRUE,
+  BPPARAM=SerialParam(progressbar=verbose))
+{
+  method <- match.arg(method)
+  kcdf <- match.arg(kcdf)
+  
+  if (length(assays(expr)) == 0L)
+    stop("The input SummarizedExperiment object has no assay data.")
+  
+  se <- expr
+  
+  if (missing(annotation))
+    annotation <- names(assays(se))[1]
+  else {
+    if (!is.character(annotation))
+      stop("The 'annotation' argument must contain a character string.")
+    annotation <- annotation[1]
+    
+    if (!annotation %in% names(assays(se)))
+      stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
+  }
+  expr <- assays(se)[[annotation]]
+  
+  ## filter genes according to verious criteria,
+  ## e.g., constant expression
+  if(is(expr, "dgCMatrix")){
+    expr <- .filterFeaturesSparse(expr, method)
+  } else {
+    expr <- .filterFeatures(expr, method)
+  }
+  
+  
+  if (nrow(expr) < 2)
+    stop("Less than two genes in the input ExpressionSet object\n")
+  
+  ## map to the actual features for which expression data is available
+  mapped.gset.idx.list <- lapply(gset.idx.list,
+                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
+                                 rownames(expr))
+  
+  if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
+    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+  
+  ## remove gene sets from the analysis for which no features are available
+  ## and meet the minimum and maximum gene-set size specified by the user
+  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+                                         min.sz=max(1, min.sz),
+                                         max.sz=max.sz)
+  
+  if (!missing(kcdf)) {
+    if (kcdf == "Gaussian") {
+      rnaseq <- FALSE
+      kernel <- TRUE
+    } else if (kcdf == "Poisson") {
+      rnaseq <- TRUE
+      kernel <- TRUE
+    } else
+      kernel <- FALSE
+  }
+  
+  eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
+  
+  rval <- SingleCellExperiment(assays=SimpleList(es=eSco),
+                               colData=colData(se),
+                               metadata=metadata(se))
+  metadata(rval)$annotation <- NULL
+  
+  rval
+          })
+          
+setMethod("gsva", signature(expr="dgCMatrix", gset.idx.list="list"),
+          function(expr, gset.idx.list, annotation,
+  method=c("gsva", "ssgsea", "zscore", "plage"),
+  kcdf=c("Gaussian", "Poisson", "none"),
+  abs.ranking=FALSE,
+  min.sz=1,
+  max.sz=Inf,
+  parallel.sz=1L,
+  mx.diff=TRUE,
+  tau=switch(method, gsva=1, ssgsea=0.25, NA),
+  ssgsea.norm=TRUE,
+  verbose=TRUE,
+  BPPARAM=SerialParam(progressbar=verbose))
+{
+  method <- match.arg(method)
+  kcdf <- match.arg(kcdf)
+  
+  ## filter genes according to verious criteria,
+  ## e.g., constant expression
+  expr <- .filterFeaturesSparse(expr, method)
+  
+  if (nrow(expr) < 2)
+    stop("Less than two genes in the input assay object\n")
+  
+  ## map to the actual features for which expression data is available
+  mapped.gset.idx.list <- lapply(gset.idx.list,
+                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
+                                 rownames(expr))
+  
+  if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
+    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+  
+  ## remove gene sets from the analysis for which no features are available
+  ## and meet the minimum and maximum gene-set size specified by the user
+  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+                                         min.sz=max(1, min.sz),
+                                         max.sz=max.sz)
+  
+  if (!missing(kcdf)) {
+    if (kcdf == "Gaussian") {
+      rnaseq <- FALSE
+      kernel <- TRUE
+    } else if (kcdf == "Poisson") {
+      rnaseq <- TRUE
+      kernel <- TRUE
+    } else
+      kernel <- FALSE
+  }
+  
+  rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
+  
+  rval
+})
+
 setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetCollection"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
@@ -70,7 +207,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(mapped.gset.idx.list,
                                  function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                                 rownames(se))
+                                 rownames(expr))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
     stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
@@ -146,7 +283,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(gset.idx.list,
                                  function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                                 rownames(se))
+                                 rownames(expr))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
     stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
@@ -208,7 +345,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(gset.idx.list,
                                  function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                                 featureNames(eset))
+                                 rownames(expr))
 
   if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
     stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
@@ -290,7 +427,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   ## map to the actual features for which expression data is available
   tmp <- lapply(mapped.gset.idx.list,
                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                featureNames(eset))
+                rownames(expr))
   names(tmp) <- names(mapped.gset.idx.list)
 
   ## remove gene sets from the analysis for which no features are available
@@ -718,37 +855,43 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
                    normalization=TRUE, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose)) {
 
-  p <- nrow(X)
   n <- ncol(X)
-
-  R <- apply(X, 2, function(x, p) as.integer(rank(x)), p)
+  
+  if(is(X, "dgCMatrix")){
+    R <- t(sparseMatrixStats::colRanks(X, ties.method = "average"))
+    mode(R) <- "integer"
+  } else {
+    R <- apply(X, 2, function(x, p) as.integer(rank(x)))
+  }
+  
   Ra <- abs(R)^alpha
-
-  es <- matrix(NA, nrow=length(geneSets), ncol=ncol(X))
-
+  
   es <- bplapply(as.list(1:n), function(j) {
-                     geneRanking <- order(R[, j], decreasing=TRUE)
-                     es_sample <- lapply(geneSets, .fastRndWalk, geneRanking, j, Ra)
-
-                     unlist(es_sample)
-                   }, BPPARAM=BPPARAM)
+    geneRanking <- order(R[, j], decreasing=TRUE)
+    es_sample <- lapply(geneSets, .fastRndWalk, geneRanking, j, Ra)
+    
+    unlist(es_sample)
+  }, BPPARAM=BPPARAM)
+  
   es <- do.call("cbind", es)
-
-  if (length(geneSets) == 1)
-    es <- matrix(es, nrow=1)
-
+  
+  
   if (normalization) {
     ## normalize enrichment scores by using the entire data set, as indicated
     ## by Barbie et al., 2009, online methods, pg. 2
     es <- apply(es, 2, function(x, es) x / (range(es)[2] - range(es)[1]), es)
   }
-
+  
   if (length(geneSets) == 1)
     es <- matrix(es, nrow=1)
-
+  
   rownames(es) <- names(geneSets)
   colnames(es) <- colnames(X)
-
+  
+  if(is(X, "dgCMatrix")){
+    es <- as(es, "dgCMatrix")
+  }
+  
   es
 }
 
@@ -757,22 +900,32 @@ combinez <- function(gSetIdx, j, Z) sum(Z[gSetIdx, j]) / sqrt(length(gSetIdx))
 zscore <- function(X, geneSets, parallel.sz, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose)) {
 
-  p <- nrow(X)
   n <- ncol(X)
 
-  Z <- t(scale(t(X)))
-
-  es <- matrix(NA, nrow=length(geneSets), ncol=ncol(X))
+  if(is(X, "dgCMatrix")){
+    message("Please bear in mind that this method first scales the values of the gene
+    expression data. In order to take advantage of the sparse Matrix type, the scaling
+    will only be applied to the non-zero values of the data. This is a provisional 
+    solution in order to give support to the dgCMatrix format.")
+    
+    Z <- t(X)
+    Z <- .dgCapply(Z, scale, 2)
+    Z <- t(Z)
+    
+  } else {
+    Z <- t(scale(t(X)))
+  }
 
   es <- bplapply(as.list(1:n), function(j, Z, geneSets) {
-                   es_sample <- lapply(geneSets, combinez, j, Z)
+    es_sample <- lapply(geneSets, combinez, j, Z)
+    unlist(es_sample)
+  }, Z, geneSets, BPPARAM=BPPARAM)
 
-                   unlist(es_sample)
-                 }, Z, geneSets, BPPARAM=BPPARAM)
-    es <- do.call("cbind", es)
-
-  if (length(geneSets) == 1)
-    es <- matrix(es, nrow=1)
+  es <- do.call("cbind", es)
+  
+  if(is(X, "dgCMatrix")){
+    es <- as(es, "dgCMatrix")
+  }
 
   rownames(es) <- names(geneSets)
   colnames(es) <- colnames(X)
@@ -786,29 +939,49 @@ zscore <- function(X, geneSets, parallel.sz, verbose=TRUE,
 }
 
 rightsingularsvdvectorgset <- function(gSetIdx, Z) {
+  if(is(Z, "dgCMatrix")){
+    s <- BiocSingular::runExactSVD(Z[gSetIdx, ])
+  } else {
     s <- svd(Z[gSetIdx, ])
+  }
   s$v[, 1]
 }
 
 plage <- function(X, geneSets, parallel.sz, verbose=TRUE,
                   BPPARAM=SerialParam(progressbar=verbose)) {
-
-  p <- nrow(X)
-  n <- ncol(X)
-
-  Z <- t(scale(t(X)))
-
-  es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
-                 BPPARAM=BPPARAM)
-
-  es <- do.call(rbind, es)
-
-  if (length(geneSets) == 1)
-    es <- matrix(es, nrow=1)
-
-  rownames(es) <- names(geneSets)
-  colnames(es) <- colnames(X)
-
+  if(is(X, "dgCMatrix")){
+    message("Please bear in mind that this method first scales the values of the gene
+    expression data. In order to take advantage of the sparse Matrix type, the scaling
+    will only be applied to the non-zero values of the data. This is a provisional 
+    solution in order to give support to the dgCMatrix format.")
+    
+    Z <- Matrix::t(X)
+    Z <- .dgCapply(Z, scale, 2)
+    Z <- Matrix::t(Z)
+    
+    es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
+                   BPPARAM=BPPARAM)
+    
+    es <- do.call(rbind, es)
+    
+    es <- as(es, "dgCMatrix")
+    
+  } else {
+    
+    Z <- t(scale(t(X)))
+    
+    es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
+                   BPPARAM=BPPARAM)
+    
+    es <- do.call(rbind, es)
+    
+    if (length(geneSets) == 1)
+      es <- matrix(es, nrow=1)
+    
+    rownames(es) <- names(geneSets)
+    colnames(es) <- colnames(X)
+  }
+  
   es
 }
 
