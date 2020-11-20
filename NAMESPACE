@@ -8,6 +8,8 @@ importClassesFrom(SummarizedExperiment, SummarizedExperiment)
 importClassesFrom(GSEABase, GeneSetCollection)
 importClassesFrom(SingleCellExperiment, SingleCellExperiment)
 importClassesFrom(Matrix, dgCMatrix)
+importClassesFrom(DelayedArray, DelayedArray)
+importClassesFrom(HDF5Array, HDF5Array)
 
 importMethodsFrom(Biobase, featureNames,
                            phenoData,
@@ -48,8 +50,12 @@ importFrom(BiocParallel, SerialParam,
                          multicoreWorkers,
                          bpnworkers)
 importFrom(SingleCellExperiment, SingleCellExperiment)
-importFrom(BiocSingular, runExactSVD)
 importFrom(sparseMatrixStats, colRanks)
+importFrom(DelayedArray, rowAutoGrid,
+			  write_block,
+			  close)
+importFrom(HDF5Array, HDF5RealizationSink)
+importFrom(DelayedMatrixStats, rowSds)
 
 exportMethods(gsva,
               filterGeneSets,

@@ -1,6 +1,8 @@
 .filterFeatures <- function(expr, method) {
 
   ## filter out genes with constant expression values
+  ## DelayedMatrixStats::rowSds() works for both base and 
+  ## DelayedArray matrices
   sdGenes <- DelayedMatrixStats::rowSds(expr)
   if (any(sdGenes == 0) || any(is.na(sdGenes))) {
     warning(sum(sdGenes == 0 | is.na(sdGenes)),
