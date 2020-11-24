@@ -68,7 +68,7 @@ svdDelayed <- function(gSetIdx, Z) {
   block <- matrix(block, 1, length(block))
   sink <- DelayedArray::write_block(sink, sink_grid[[1L]], block)
   
-  # step 4: closing the sink and realizating it
+  # step 4: closing the sink and realizing it
   # in a hdf5 array object
   DelayedArray::close(sink)
   res <- as(sink, "DelayedArray")
@@ -79,7 +79,7 @@ svdDelayed <- function(gSetIdx, Z) {
 
 plageDelayed <- function(X, geneSets, parallel.sz, verbose=TRUE,
                   BPPARAM=SerialParam(progressbar=verbose)) {
-  
+
   Z <- t(DelayedArray::scale(t(X)))
   
   es <- bplapply(geneSets, svdDelayed, Z,
