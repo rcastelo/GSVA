@@ -46,7 +46,6 @@
     return(plageDelayed(expr, gset.idx.list, parallel.sz, verbose, BPPARAM=BPPARAM))
   }
   
-
 }
 
 rightsingularsvdvectorgset <- function(gSetIdx, Z) {
