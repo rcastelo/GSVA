@@ -5,6 +5,61 @@
 
 setGeneric("gsva", function(expr, gset.idx.list, ...) standardGeneric("gsva"))
 
+setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),
+          function(expr, gset.idx.list, annotation,
+  method=c("gsva", "ssgsea", "zscore", "plage"),
+  kcdf=c("Gaussian", "Poisson", "none"),
+  abs.ranking=FALSE,
+  min.sz=1,
+  max.sz=Inf,
+  parallel.sz=1L,
+  mx.diff=TRUE,
+  tau=switch(method, gsva=1, ssgsea=0.25, NA),
+  ssgsea.norm=TRUE,
+  verbose=TRUE,
+  BPPARAM=SerialParam(progressbar=verbose))
+{
+  method <- match.arg(method)
+  kcdf <- match.arg(kcdf)
+  
+  ## filter genes according to verious criteria,
+  ## e.g., constant expression
+  expr <- .filterFeatures(expr, method)
+  
+  if (nrow(expr) < 2)
+    stop("Less than two genes in the input assay object\n")
+  
+  ## map to the actual features for which expression data is available
+  mapped.gset.idx.list <- lapply(gset.idx.list,
+                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
+                                 rownames(expr))
+  
+  if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
+    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+  
+  ## remove gene sets from the analysis for which no features are available
+  ## and meet the minimum and maximum gene-set size specified by the user
+  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+                                         min.sz=max(1, min.sz),
+                                         max.sz=max.sz)
+  
+  if (!missing(kcdf)) {
+    if (kcdf == "Gaussian") {
+      rnaseq <- FALSE
+      kernel <- TRUE
+    } else if (kcdf == "Poisson") {
+      rnaseq <- TRUE
+      kernel <- TRUE
+    } else
+      kernel <- FALSE
+  }
+  
+  rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
+  
+  rval
+})
+
 setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
@@ -589,6 +644,11 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   ssgsea.norm=TRUE,
   verbose=TRUE,
   BPPARAM=SerialParam(progressbar=verbose)) {
+  
+  if(is(expr, "DelayedArray")){
+    return(.gsvaDelayedArray(expr, gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+                             parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM))
+  }
 
 	if (length(gset.idx.list) == 0)
 		stop("The gene set list is empty! Filter may be too stringent.")

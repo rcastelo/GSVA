@@ -1,5 +1,6 @@
 \name{gsva}
 \alias{gsva}
+\alias{gsva,HDF5Array,list-method}
 \alias{gsva,SingleCellExperiment,list-method}
 \alias{gsva,dgCMatrix,list-method}
 \alias{gsva,SummarizedExperiment,list-method}
@@ -19,6 +20,18 @@ Estimates GSVA enrichment scores.
 }
 \usage{
 \S4method{gsva}{SingleCellExperiment,list}(expr, gset.idx.list, annotation,
+    method=c("gsva", "ssgsea", "zscore", "plage"),
+    kcdf=c("Gaussian", "Poisson", "none"),
+    abs.ranking=FALSE,
+    min.sz=1,
+    max.sz=Inf,
+    parallel.sz=1L,
+    mx.diff=TRUE,
+    tau=switch(method, gsva=1, ssgsea=0.25, NA),
+    ssgsea.norm=TRUE,
+    verbose=TRUE,
+    BPPARAM=SerialParam(progressbar=verbose))
+\S4method{gsva}{HDF5Array,list}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
     abs.ranking=FALSE,
@@ -120,7 +133,8 @@ Estimates GSVA enrichment scores.
               \code{SummarizedExperiment}, \code{SingleCellExperiment}
               \code{ExpressionSet} object, or as a matrix of expression
               values where rows correspond to genes and columns correspond to samples.
-              This matrix can be also in a sparse format, as a \code{dgCMatrix}.}
+              This matrix can be also in a sparse format, as a \code{dgCMatrix}, or
+              as an on-disk backend representation, such as \code{HDF5Array} .}
   \item{gset.idx.list}{Gene sets provided either as a \code{list} object or as a
                        \code{GeneSetCollection} object.}
   \item{annotation}{In the case of calling \code{gsva()} on a
