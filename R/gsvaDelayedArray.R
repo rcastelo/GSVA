@@ -35,6 +35,15 @@
     cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
                 class(BPPARAM), parallel.sz))
 
+  if (method == "zscore") {
+    if (rnaseq)
+      stop("rnaseq=TRUE does not work with method='zscore'.")
+    
+    if(verbose)
+      cat("Estimating combined z-scores for", length(gset.idx.list), "gene sets.\n")
+    
+    return(zscoreDelayed(expr, gset.idx.list, parallel.sz, verbose, BPPARAM=BPPARAM))
+  }
   
   if (method == "plage") {
     if (rnaseq)
@@ -91,3 +100,26 @@ plageDelayed <- function(X, geneSets, parallel.sz, verbose=TRUE,
   es
 }
 
+combinez2 <- function(gSetIdx, Z){
+  DelayedMatrixStats::colSums2(Z[gSetIdx,]) / sqrt(length(gSetIdx))
+}
+
+zscoreDelayed <- function(X, geneSets, parallel.sz, verbose=TRUE,
+                   BPPARAM=SerialParam(progressbar=verbose)) {
+  
+  Z <- t(DelayedArray::scale(t(X)))
+  
+  sink <- HDF5Array::HDF5RealizationSink(dim=c(length(names(geneSets)), ncol(X)),
+                                         dimnames = list(names(geneSets), colnames(X)))
+  
+  sink_grid <- DelayedArray::rowAutoGrid(sink, nrow = 1)
+  
+  for(bid in seq_along(sink_grid)){
+    block <- combinez2(geneSets[[bid]], Z)
+    block <- matrix(block, 1, length(block))
+    sink <- DelayedArray::write_block(sink, sink_grid[[bid]], block)
+  }
+  DelayedArray::close(sink)
+  es <- as(sink, "DelayedArray")
+  es
+}
