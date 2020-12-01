@@ -94,6 +94,8 @@ plageDelayed <- function(X, geneSets, parallel.sz, verbose=TRUE,
                  BPPARAM=BPPARAM)
   
   es <- do.call(rbind, es)
+  rownames(es) <- names(geneSets)
+  colnames(es) <- colnames(X)
   
   es <- as(es, "HDF5Array")
   
