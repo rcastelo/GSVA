@@ -13,6 +13,11 @@ test_delayedMethods <- function(){
   x2 <- gsva(h5, gene.sets, method="plage")
   
   checkEqualsNumeric(as.vector(t(x1)), as.vector(t(x2)))
+  
+  x1 <- gsva(m, gene.sets, method="zscore")
+  x2 <- gsva(h5, gene.sets, method="zscore")
+  
+  checkEqualsNumeric(as.vector(t(x1)), as.vector(t(x2)))
 }
 
 
