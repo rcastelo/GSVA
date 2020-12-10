@@ -35,6 +35,15 @@
     cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
                 class(BPPARAM), parallel.sz))
 
+  if (method == "zscore") {
+    if (rnaseq)
+      stop("rnaseq=TRUE does not work with method='zscore'.")
+    
+    if(verbose)
+      cat("Estimating combined z-scores for", length(gset.idx.list), "gene sets.\n")
+    
+    return(zscoreDelayed(expr, gset.idx.list, parallel.sz, verbose, BPPARAM=BPPARAM))
+  }
   
   if (method == "plage") {
     if (rnaseq)
@@ -48,27 +57,19 @@
   
 }
 
-rightsingularsvdvectorgset <- function(gSetIdx, Z) {
-  s <- svd(Z[gSetIdx, ])
-  s$v[, 1]
-}
-
-svdDelayed <- function(gSetIdx, Z) {
+h5BackendRealization <- function(gSetIdx, FUN, Z) {
   
-  # step 1: creating a HDF5 sink object
+  FUN <- match.fun(FUN)
+  
+  # step 1: create realization sink
   sink <- HDF5Array::HDF5RealizationSink(dim = c(1L, ncol(Z)))
-  
-  #step 2: creating the sink's grid
+  # step 2: create grid over sink
   sink_grid <- DelayedArray::rowAutoGrid(sink, nrow = 1)
-  
-  # step 3: creating the block and writing it in the sink
-  # object using the sink's grid
-  block <- rightsingularsvdvectorgset(gSetIdx, Z)
+  # step 3: create block using FUN and write it on sink
+  block <- FUN(gSetIdx, Z)
   block <- matrix(block, 1, length(block))
   sink <- DelayedArray::write_block(sink, sink_grid[[1L]], block)
-  
-  # step 4: closing the sink and realizing it
-  # in a hdf5 array object
+  # step 4: close the sink as an hdf5Array
   DelayedArray::close(sink)
   res <- as(sink, "DelayedArray")
   
@@ -76,18 +77,45 @@ svdDelayed <- function(gSetIdx, Z) {
   
 }
 
+rightsingularsvdvectorgset <- function(gSetIdx, Z) {
+  s <- svd(Z[gSetIdx, ])
+  s$v[, 1]
+}
+
 plageDelayed <- function(X, geneSets, parallel.sz, verbose=TRUE,
                   BPPARAM=SerialParam(progressbar=verbose)) {
 
   Z <- t(DelayedArray::scale(t(X)))
   
-  es <- bplapply(geneSets, svdDelayed, Z,
-                 BPPARAM=BPPARAM)
+  es <- bplapply(geneSets, h5BackendRealization, rightsingularsvdvectorgset,
+                 Z, BPPARAM=BPPARAM)
   
   es <- do.call(rbind, es)
+  rownames(es) <- names(geneSets)
+  colnames(es) <- colnames(X)
   
   es <- as(es, "HDF5Array")
   
   es
 }
 
+combinezDelayed <- function(gSetIdx, Z){
+  DelayedMatrixStats::colSums2(Z[gSetIdx,]) / sqrt(length(gSetIdx))
+}
+
+zscoreDelayed <- function(X, geneSets, parallel.sz, verbose=TRUE,
+                          BPPARAM=SerialParam(progressbar=verbose)){
+  
+  Z <- t(DelayedArray::scale(t(X)))
+  
+  es <- bplapply(geneSets, h5BackendRealization, combinezDelayed,
+                 Z, BPPARAM = BPPARAM)
+  
+  es <- do.call(rbind, es)
+  rownames(es) <- names(geneSets)
+  colnames(es) <- colnames(X)
+  
+  es <- as(es, "HDF5Array")
+  
+  es
+}
