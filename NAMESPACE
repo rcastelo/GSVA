@@ -52,6 +52,10 @@ importFrom(BiocParallel, SerialParam,
 importFrom(SingleCellExperiment, SingleCellExperiment)
 importFrom(sparseMatrixStats, colRanks)
 importFrom(DelayedArray, rowAutoGrid,
+			  colAutoGrid,
+			  currentBlockId,
+			  read_block, 
+			  viewportReduce,
 			  write_block,
 			  close)
 importFrom(HDF5Array, HDF5RealizationSink)
