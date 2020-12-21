@@ -70,9 +70,9 @@ h5BackendRealization <- function(gSetIdx, FUN, Z) {
   FUN <- match.fun(FUN)
   
   # step 1: create realization sink
-  sink <- HDF5Array::HDF5RealizationSink(dim = c(1L, ncol(Z)))
+  sink <- HDF5RealizationSink(dim = c(1L, ncol(Z)))
   # step 2: create grid over sink
-  sink_grid <- DelayedArray::rowAutoGrid(sink, nrow = 1)
+  sink_grid <- rowAutoGrid(sink, nrow = 1)
   # step 3: create block using FUN and write it on sink
   block <- FUN(gSetIdx, Z)
   block <- matrix(block, 1, length(block))
@@ -131,26 +131,22 @@ zscoreDelayed <- function(X, geneSets, parallel.sz, verbose=TRUE,
 #### rank function for hdf5 files using sink and grid methods
 rankHDF5 <- function(X){
   sink <- HDF5RealizationSink(dim(X))
-  sink_grid <- colAutoGrid(sink, ncol = 1)
-  X_grid <- colAutoGrid(X, ncol=1)
+  grid <- defaultAutoGrid(sink, block.shape="first-dim-grows-first")
   
-  
-  FUN <- function(sink_grid, sink){
-    bid <- currentBlockId()
-    X_viewport <- X_grid[[bid]]
-    block <- read_block(X, X_viewport)
-    block <- as.integer(rank(block))
-    block <- matrix(block, length(block), 1)
-    write_block(sink, sink_grid, block)
+  colRanks_byBlock <- function(grid, sink){
+    block <- read_block(X, grid)
+    block <- t(colRanks(block, ties.method = "average"))
+    mode(block) <- "integer"
+    write_block(sink, grid, block)
   }
   
-  sink <- viewportReduce(FUN, sink_grid, sink)
+  sink <- viewportReduce(colRanks_byBlock, grid, sink)
   close(sink)
   res <- as(sink, "DelayedArray")
   res
 }
 
-## slightly modified .fastRndWalk() for porpuse of only 
+## slightly modified .fastRndWalk() for porpoise of only 
 ## receiving a vector and not a matrix column for sums
 .fastRndWalk2 <- function(gSetIdx, geneRanking, ra_block) {
   n <- length(geneRanking)
@@ -164,58 +160,45 @@ rankHDF5 <- function(X){
   walkStat
 }
 
-delayedGeneRanking <- function(r_block, ra_block, geneSets, BPPARAM){
-  geneRanking <- order(r_block, decreasing=TRUE)
-  res <- bplapply(geneSets, .fastRndWalk2, geneRanking, ra_block, BPPARAM = BPPARAM)
-  return(unlist(res))
-}
 
 ssgseaDelayed <- function(X, geneSets, alpha=0.25, parallel.sz,
                    normalization=TRUE, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose)) {
-
+  
   n <- ncol(X)
   
   R <- rankHDF5(X)
   
   Ra <- abs(R)^alpha
   
-  # step1: creating a grid for both DelayedArray objects
-  # that will be iterated
-  R_grid <- colAutoGrid(R, ncol=1)
-  Ra_grid <- colAutoGrid(Ra, ncol=1)
+  Ra <- as(Ra, "HDF5Array")
   
-  # step2: create a sink and a grid for it
-  sink <- HDF5RealizationSink(dim = c(1L, ncol(R)))
-  sink_grid <- colAutoGrid(sink, ncol=1)
+  es <- bplapply(as.list(1:n), function(j) {
+    geneRanking <- order(R[, j], decreasing=TRUE)
+    colRa <- Ra[,j]
+    sink <- HDF5RealizationSink(c(length(names(geneSets)), 1L))
+    sink_grid <- colAutoGrid(sink, ncol=1)
+    es_sample <- lapply(geneSets, .fastRndWalk2, geneRanking, colRa)
+    sink <- DelayedArray::write_block(sink, sink_grid[[1L]], do.call("rbind", es_sample))
+    DelayedArray::close(sink)
+    res <- as(sink, "DelayedArray")
+    res
+  }, BPPARAM=BPPARAM)
   
-  # step3: function that will read blocks of R and
-  # Ra grids, apply transformation and write into
-  # sink object
-  FUN <- function(sink_grid, sink, geneSets){
-    bid <- currentBlockId()
-    r_block <- read_block(R, R_grid[[bid]])
-    ra_block <- read_block(Ra, Ra_grid[[bid]])
-    res_block <- delayedGeneRanking(r_block, ra_block, geneSets, BPPARAM)
-    res_block <- matrix(res_block, 1, length(res_block))
-    write_block(sink, sink_grid, res_block)
-  }
-  
-  sink <- viewportReduce(FUN, sink_grid, sink, geneSets)
-  
-  # step4: close sink as a DelayedArray object
-  close(sink)
-  es <- as(sink, "DelayedArray")
+  es <- do.call(cbind, es)
+  es
   
   if (normalization) {
     ## normalize enrichment scores by using the entire data set, as indicated
     ## by Barbie et al., 2009, online methods, pg. 2
     sink <- HDF5RealizationSink(dim(es))
-    sink_grid <- colAutoGrid(sink, ncol=1)
-    es_grid <- colAutoGrid(es, ncol=1)
+    sink_grid <- defaultAutoGrid(sink, block.shape="first-dim-grows-first")
+    es_grid <- defaultAutoGrid(es, block.shape="first-dim-grows-first")
+    fin <- range(es)[2]
+    ini <- range(es)[1]
     for(bid in seq_along(sink_grid)){
       block <- read_block(es, es_grid[[bid]])
-      block <- block / (range(es)[2] - range(es)[1])
+      block <- apply(block, 2, function(x) x / ( fin - ini))
       write_block(sink, sink_grid[[bid]], block)
     }
     close(sink)

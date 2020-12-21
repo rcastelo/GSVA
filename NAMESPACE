@@ -53,6 +53,7 @@ importFrom(SingleCellExperiment, SingleCellExperiment)
 importFrom(sparseMatrixStats, colRanks)
 importFrom(DelayedArray, rowAutoGrid,
 			  colAutoGrid,
+			  defaultAutoGrid,
 			  currentBlockId,
 			  read_block, 
 			  viewportReduce,
