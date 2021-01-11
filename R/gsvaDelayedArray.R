@@ -171,8 +171,6 @@ ssgseaDelayed <- function(X, geneSets, alpha=0.25, parallel.sz,
   
   Ra <- abs(R)^alpha
   
-  Ra <- as(Ra, "HDF5Array")
-  
   es <- bplapply(as.list(1:n), function(j) {
     geneRanking <- order(R[, j], decreasing=TRUE)
     colRa <- Ra[,j]
