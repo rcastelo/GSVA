@@ -65,7 +65,7 @@
   
 }
 
-h5BackendRealization <- function(gSetIdx, FUN, Z) {
+h5BackendRealization <- function(gSetIdx, FUN, Z, bpp) {
   
   FUN <- match.fun(FUN)
   
@@ -74,7 +74,7 @@ h5BackendRealization <- function(gSetIdx, FUN, Z) {
   # step 2: create grid over sink
   sink_grid <- rowAutoGrid(sink, nrow = 1)
   # step 3: create block using FUN and write it on sink
-  block <- FUN(gSetIdx, Z)
+  block <- FUN(gSetIdx, Z, bpp)
   block <- matrix(block, 1, length(block))
   sink <- DelayedArray::write_block(sink, sink_grid[[1L]], block)
   # step 4: close the sink as an hdf5Array
@@ -85,8 +85,8 @@ h5BackendRealization <- function(gSetIdx, FUN, Z) {
   
 }
 
-rightsingularsvdvectorgset <- function(gSetIdx, Z) {
-  s <- svd(Z[gSetIdx, ])
+rightsingularsvdvectorgset <- function(gSetIdx, Z, bpp) {
+  s <-runRandomSVD(Z[gSetIdx,], k=1, nu=0, BPPARAM = bpp)
   s$v[, 1]
 }
 
@@ -96,7 +96,7 @@ plageDelayed <- function(X, geneSets, parallel.sz, verbose=TRUE,
   Z <- t(DelayedArray::scale(t(X)))
   
   es <- bplapply(geneSets, h5BackendRealization, rightsingularsvdvectorgset,
-                 Z, BPPARAM=BPPARAM)
+                 Z, bpp=BPPARAM, BPPARAM=BPPARAM)
   
   es <- do.call(rbind, es)
   rownames(es) <- names(geneSets)

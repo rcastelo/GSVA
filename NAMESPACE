@@ -61,6 +61,7 @@ importFrom(DelayedArray, rowAutoGrid,
 			  close)
 importFrom(HDF5Array, HDF5RealizationSink)
 importFrom(DelayedMatrixStats, rowSds)
+importFrom(BiocSingular, runRandomSVD)
 
 exportMethods(gsva,
               filterGeneSets,
