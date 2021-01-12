@@ -34,6 +34,14 @@
   if (class(BPPARAM) != "SerialParam" && verbose)
     cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
                 class(BPPARAM), parallel.sz))
+  
+  if (method == "ssgsea") {
+    if(verbose)
+      cat("Estimating ssGSEA scores for", length(gset.idx.list),"gene sets.\n")
+    
+    return(ssgseaDelayed(expr, gset.idx.list, alpha=tau, parallel.sz=parallel.sz,
+                  normalization=ssgsea.norm, verbose=verbose, BPPARAM=BPPARAM))
+  }
 
   if (method == "zscore") {
     if (rnaseq)
@@ -57,16 +65,16 @@
   
 }
 
-h5BackendRealization <- function(gSetIdx, FUN, Z) {
+h5BackendRealization <- function(gSetIdx, FUN, Z, bpp) {
   
   FUN <- match.fun(FUN)
   
   # step 1: create realization sink
-  sink <- HDF5Array::HDF5RealizationSink(dim = c(1L, ncol(Z)))
+  sink <- HDF5RealizationSink(dim = c(1L, ncol(Z)))
   # step 2: create grid over sink
-  sink_grid <- DelayedArray::rowAutoGrid(sink, nrow = 1)
+  sink_grid <- rowAutoGrid(sink, nrow = 1)
   # step 3: create block using FUN and write it on sink
-  block <- FUN(gSetIdx, Z)
+  block <- FUN(gSetIdx, Z, bpp)
   block <- matrix(block, 1, length(block))
   sink <- DelayedArray::write_block(sink, sink_grid[[1L]], block)
   # step 4: close the sink as an hdf5Array
@@ -77,8 +85,8 @@ h5BackendRealization <- function(gSetIdx, FUN, Z) {
   
 }
 
-rightsingularsvdvectorgset <- function(gSetIdx, Z) {
-  s <- svd(Z[gSetIdx, ])
+rightsingularsvdvectorgset <- function(gSetIdx, Z, bpp) {
+  s <-runRandomSVD(Z[gSetIdx,], k=1, nu=0, BPPARAM = bpp)
   s$v[, 1]
 }
 
@@ -88,7 +96,7 @@ plageDelayed <- function(X, geneSets, parallel.sz, verbose=TRUE,
   Z <- t(DelayedArray::scale(t(X)))
   
   es <- bplapply(geneSets, h5BackendRealization, rightsingularsvdvectorgset,
-                 Z, BPPARAM=BPPARAM)
+                 Z, bpp=BPPARAM, BPPARAM=BPPARAM)
   
   es <- do.call(rbind, es)
   rownames(es) <- names(geneSets)
@@ -119,3 +127,86 @@ zscoreDelayed <- function(X, geneSets, parallel.sz, verbose=TRUE,
   
   es
 }
+
+#### rank function for hdf5 files using sink and grid methods
+rankHDF5 <- function(X){
+  sink <- HDF5RealizationSink(dim(X))
+  grid <- defaultAutoGrid(sink, block.shape="first-dim-grows-first")
+  
+  colRanks_byBlock <- function(grid, sink){
+    block <- read_block(X, grid)
+    block <- t(colRanks(block, ties.method = "average"))
+    mode(block) <- "integer"
+    write_block(sink, grid, block)
+  }
+  
+  sink <- viewportReduce(colRanks_byBlock, grid, sink)
+  close(sink)
+  res <- as(sink, "DelayedArray")
+  res
+}
+
+## slightly modified .fastRndWalk() for porpoise of only 
+## receiving a vector and not a matrix column for sums
+.fastRndWalk2 <- function(gSetIdx, geneRanking, ra_block) {
+  n <- length(geneRanking)
+  k <- length(gSetIdx)
+  idxs <- sort.int(fastmatch::fmatch(gSetIdx, geneRanking))
+  stepCDFinGeneSet2 <-
+    sum(ra_block[geneRanking[idxs]] * (n - idxs + 1)) /
+    sum((ra_block[geneRanking[idxs]]))    
+  stepCDFoutGeneSet2 <- (n * (n + 1) / 2 - sum(n - idxs + 1)) / (n - k)
+  walkStat <- stepCDFinGeneSet2 - stepCDFoutGeneSet2
+  walkStat
+}
+
+
+ssgseaDelayed <- function(X, geneSets, alpha=0.25, parallel.sz,
+                   normalization=TRUE, verbose=TRUE,
+                   BPPARAM=SerialParam(progressbar=verbose)) {
+  
+  n <- ncol(X)
+  
+  R <- rankHDF5(X)
+  
+  Ra <- abs(R)^alpha
+  
+  es <- bplapply(as.list(1:n), function(j) {
+    geneRanking <- order(R[, j], decreasing=TRUE)
+    colRa <- Ra[,j]
+    sink <- HDF5RealizationSink(c(length(names(geneSets)), 1L))
+    sink_grid <- colAutoGrid(sink, ncol=1)
+    es_sample <- lapply(geneSets, .fastRndWalk2, geneRanking, colRa)
+    sink <- DelayedArray::write_block(sink, sink_grid[[1L]], do.call("rbind", es_sample))
+    DelayedArray::close(sink)
+    res <- as(sink, "DelayedArray")
+    res
+  }, BPPARAM=BPPARAM)
+  
+  es <- do.call(cbind, es)
+  es
+  
+  if (normalization) {
+    ## normalize enrichment scores by using the entire data set, as indicated
+    ## by Barbie et al., 2009, online methods, pg. 2
+    sink <- HDF5RealizationSink(dim(es))
+    sink_grid <- defaultAutoGrid(sink, block.shape="first-dim-grows-first")
+    es_grid <- defaultAutoGrid(es, block.shape="first-dim-grows-first")
+    fin <- range(es)[2]
+    ini <- range(es)[1]
+    for(bid in seq_along(sink_grid)){
+      block <- read_block(es, es_grid[[bid]])
+      block <- apply(block, 2, function(x) x / ( fin - ini))
+      write_block(sink, sink_grid[[bid]], block)
+    }
+    close(sink)
+    es <- as(sink, "DelayedArray")
+  }
+  
+  rownames(es) <- names(geneSets)
+  colnames(es) <- colnames(X)
+  
+  es <- as(es, "HDF5Array")
+  es
+}
+

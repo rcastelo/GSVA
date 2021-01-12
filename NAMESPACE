@@ -52,10 +52,16 @@ importFrom(BiocParallel, SerialParam,
 importFrom(SingleCellExperiment, SingleCellExperiment)
 importFrom(sparseMatrixStats, colRanks)
 importFrom(DelayedArray, rowAutoGrid,
+			  colAutoGrid,
+			  defaultAutoGrid,
+			  currentBlockId,
+			  read_block, 
+			  viewportReduce,
 			  write_block,
 			  close)
 importFrom(HDF5Array, HDF5RealizationSink)
 importFrom(DelayedMatrixStats, rowSds)
+importFrom(BiocSingular, runRandomSVD)
 
 exportMethods(gsva,
               filterGeneSets,
