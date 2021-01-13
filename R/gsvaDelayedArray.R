@@ -85,7 +85,7 @@ h5BackendRealization <- function(gSetIdx, FUN, Z, bpp) {
   
 }
 
-rightsingularsvdvectorgset <- function(gSetIdx, Z, bpp) {
+rightsvdDelayed <- function(gSetIdx, Z, bpp) {
   s <-runRandomSVD(Z[gSetIdx,], k=1, nu=0, BPPARAM = bpp)
   s$v[, 1]
 }
@@ -95,7 +95,7 @@ plageDelayed <- function(X, geneSets, parallel.sz, verbose=TRUE,
 
   Z <- t(DelayedArray::scale(t(X)))
   
-  es <- bplapply(geneSets, h5BackendRealization, rightsingularsvdvectorgset,
+  es <- bplapply(geneSets, h5BackendRealization, rightsvdDelayed,
                  Z, bpp=BPPARAM, BPPARAM=BPPARAM)
   
   es <- do.call(rbind, es)
