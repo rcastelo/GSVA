@@ -29,6 +29,9 @@ setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),
   if (nrow(expr) < 2)
     stop("Less than two genes in the input assay object\n")
   
+  if(is.null(rownames(expr)))
+    stop("The input assay object doesn't have rownames\n")
+  
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(gset.idx.list,
                                  function(x, y) na.omit(fastmatch::fmatch(x, y)),
@@ -106,6 +109,9 @@ setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
   if (nrow(expr) < 2)
     stop("Less than two genes in the input ExpressionSet object\n")
   
+  if(is.null(rownames(expr)))
+    stop("The input assay object doesn't have rownames\n")
+  
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(gset.idx.list,
                                  function(x, y) na.omit(fastmatch::fmatch(x, y)),
@@ -165,6 +171,9 @@ setMethod("gsva", signature(expr="dgCMatrix", gset.idx.list="list"),
   
   if (nrow(expr) < 2)
     stop("Less than two genes in the input assay object\n")
+  
+  if(is.null(rownames(expr)))
+    stop("The input assay object doesn't have rownames\n")
   
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(gset.idx.list,
@@ -236,6 +245,9 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
 
   if (nrow(expr) < 2)
     stop("Less than two genes in the input ExpressionSet object\n")
+  
+  if(is.null(rownames(expr)))
+    stop("The input assay object doesn't have rownames\n")
 
   annotpkg <- metadata(se)$annotation
   if (!is.null(annotpkg) && length(annotpkg) > 0 && is.character(annotpkg) && annotpkg != "") {
@@ -334,6 +346,9 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
 
   if (nrow(expr) < 2)
     stop("Less than two genes in the input ExpressionSet object\n")
+  
+  if(is.null(rownames(expr)))
+    stop("The input assay object doesn't have rownames\n")
 
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(gset.idx.list,
@@ -396,6 +411,9 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
 
   if (nrow(expr) < 2)
     stop("Less than two genes in the input ExpressionSet object\n")
+  
+  if(is.null(rownames(expr)))
+    stop("The input assay object doesn't have rownames\n")
 
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- lapply(gset.idx.list,
@@ -456,6 +474,9 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
 
   if (nrow(expr) < 2)
     stop("Less than two genes in the input ExpressionSet object\n")
+  
+  if(is.null(rownames(expr)))
+    stop("The input assay object doesn't have rownames\n")
 
   annotpkg <- Biobase::annotation(eset)
   if (length(annotpkg) > 0 && annotpkg != "") {
@@ -534,6 +555,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
 
   if (nrow(expr) < 2)
     stop("Less than two genes in the input expression data matrix\n")
+  
+  if(is.null(rownames(expr)))
+    stop("The input assay object doesn't have rownames\n")
 
   ## map gene identifiers of the gene sets to the features in the matrix
   mapped.gset.idx.list <- gset.idx.list
