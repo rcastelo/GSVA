@@ -26,19 +26,8 @@ setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),
   ## e.g., constant expression
   expr <- .filterFeatures(expr, method)
   
-  if (nrow(expr) < 2)
-    stop("Less than two genes in the input assay object\n")
-  
-  if(is.null(rownames(expr)))
-    stop("The input assay object doesn't have rownames\n")
-  
   ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- lapply(gset.idx.list,
-                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                                 rownames(expr))
-  
-  if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
-    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
   
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
@@ -105,20 +94,8 @@ setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
     expr <- .filterFeatures(expr, method)
   }
   
-  
-  if (nrow(expr) < 2)
-    stop("Less than two genes in the input ExpressionSet object\n")
-  
-  if(is.null(rownames(expr)))
-    stop("The input assay object doesn't have rownames\n")
-  
   ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- lapply(gset.idx.list,
-                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                                 rownames(expr))
-  
-  if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
-    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
   
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
@@ -169,19 +146,8 @@ setMethod("gsva", signature(expr="dgCMatrix", gset.idx.list="list"),
   ## e.g., constant expression
   expr <- .filterFeaturesSparse(expr, method)
   
-  if (nrow(expr) < 2)
-    stop("Less than two genes in the input assay object\n")
-  
-  if(is.null(rownames(expr)))
-    stop("The input assay object doesn't have rownames\n")
-  
   ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- lapply(gset.idx.list,
-                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                                 rownames(expr))
-  
-  if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
-    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
   
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
@@ -243,12 +209,6 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
   ## e.g., constant expression
   expr <- .filterFeatures(expr, method)
 
-  if (nrow(expr) < 2)
-    stop("Less than two genes in the input ExpressionSet object\n")
-  
-  if(is.null(rownames(expr)))
-    stop("The input assay object doesn't have rownames\n")
-
   annotpkg <- metadata(se)$annotation
   if (!is.null(annotpkg) && length(annotpkg) > 0 && is.character(annotpkg) && annotpkg != "") {
     if (!annotpkg %in% installed.packages())
@@ -272,12 +232,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
   }
 
   ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- lapply(mapped.gset.idx.list,
-                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                                 rownames(expr))
-
-  if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
-    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
 
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
@@ -344,20 +299,9 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
   ## e.g., constant expression
   expr <- .filterFeatures(expr, method)
 
-  if (nrow(expr) < 2)
-    stop("Less than two genes in the input ExpressionSet object\n")
-  
-  if(is.null(rownames(expr)))
-    stop("The input assay object doesn't have rownames\n")
-
   ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- lapply(gset.idx.list,
-                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                                 rownames(expr))
-
-  if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
-    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
-
+  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+  
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
@@ -409,20 +353,9 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
   ## e.g., constant expression
   expr <- .filterFeatures(expr, method)
 
-  if (nrow(expr) < 2)
-    stop("Less than two genes in the input ExpressionSet object\n")
-  
-  if(is.null(rownames(expr)))
-    stop("The input assay object doesn't have rownames\n")
-
   ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- lapply(gset.idx.list,
-                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                                 rownames(expr))
-
-  if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
-    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
-
+  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+  
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
@@ -472,12 +405,6 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   ## e.g., constant expression
   expr <- .filterFeatures(expr, method)
 
-  if (nrow(expr) < 2)
-    stop("Less than two genes in the input ExpressionSet object\n")
-  
-  if(is.null(rownames(expr)))
-    stop("The input assay object doesn't have rownames\n")
-
   annotpkg <- Biobase::annotation(eset)
   if (length(annotpkg) > 0 && annotpkg != "") {
     if (!annotpkg %in% installed.packages())
@@ -501,14 +428,11 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   }
 
   ## map to the actual features for which expression data is available
-  tmp <- lapply(mapped.gset.idx.list,
-                function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                rownames(expr))
-  names(tmp) <- names(mapped.gset.idx.list)
-
+  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+  
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
-  mapped.gset.idx.list <- filterGeneSets(tmp,
+  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
@@ -553,12 +477,6 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
   ## e.g., constant expression
   expr <- .filterFeatures(expr, method)
 
-  if (nrow(expr) < 2)
-    stop("Less than two genes in the input expression data matrix\n")
-  
-  if(is.null(rownames(expr)))
-    stop("The input assay object doesn't have rownames\n")
-
   ## map gene identifiers of the gene sets to the features in the matrix
   mapped.gset.idx.list <- gset.idx.list
   if (!missing(annotation)) {
@@ -570,17 +488,11 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
   }
   
   ## map to the actual features for which expression data is available
-  tmp <- lapply(geneIds(mapped.gset.idx.list),
-                                 function(x, y) na.omit(fastmatch::fmatch(x, y)),
-                                 rownames(expr))
-  names(tmp) <- names(mapped.gset.idx.list)
-
-  if (length(unlist(tmp, use.names=FALSE)) == 0)
-    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
-
+  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+  
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
-  mapped.gset.idx.list <- filterGeneSets(tmp,
+  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
                                          min.sz=max(1, min.sz),
                                          max.sz=max.sz)
 
@@ -623,16 +535,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   ## e.g., constant expression
   expr <- .filterFeatures(expr, method)
 
-  if (nrow(expr) < 2)
-    stop("Less than two genes in the input expression data matrix\n")
-
-  mapped.gset.idx.list <- lapply(gset.idx.list,
-                                 function(x ,y) na.omit(fastmatch::fmatch(x, y)),
-                                 rownames(expr))
-
-  if (length(unlist(mapped.gset.idx.list, use.names=FALSE)) == 0)
-    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
-
+  ## map to the actual features for which expression data is available
+  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+  
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
@@ -1091,10 +996,10 @@ setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="character
           function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
   totalGenes <- length(uniqGenes)
 
-  ## map to the features requested
-  gSets <- lapply(gSets, function(x, y) as.vector(na.omit(fastmatch::fmatch(x, y))), uniqGenes)
+  ## map to the actual features for which expression data is available
+  gSets <- .mapGeneSetsToFeatures(gSets, uniqGenes)
 
-  lenGsets <- sapply(gSets, length)
+  lenGsets <- lengths(gSets)
   totalGsets <- length(gSets)
 
   gSetsMembershipMatrix <- matrix(0, nrow=totalGenes, ncol=totalGsets,
@@ -1111,9 +1016,9 @@ setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="Expressio
   totalGenes <- length(uniqGenes)
 
   ## map to the actual features for which expression data is available
-  gSets <- lapply(gSets, function(x, y) as.vector(na.omit(fastmatch::fmatch(x, y))), uniqGenes)
+  gSets <- .mapGeneSetsToFeatures(gSets, uniqGenes)
 
-  lenGsets <- sapply(gSets, length)
+  lenGsets <- lengths(gSets)
   totalGsets <- length(gSets)
 
   gSetsMembershipMatrix <- matrix(0, nrow=totalGenes, ncol=totalGsets,

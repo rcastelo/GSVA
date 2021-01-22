@@ -13,7 +13,39 @@
     }
   } 
 
+  if (nrow(expr) < 2)
+    stop("Less than two genes in the input assay object\n")
+  
+  if(is.null(rownames(expr)))
+    stop("The input assay object doesn't have rownames\n")
+  
   expr
+}
+
+## maps gene sets content in 'gsets' to 'features', where 'gsets'
+## is a 'list' object with character string vectors as elements,
+## and 'features' is a character string vector object. it assumes
+## features in both input objects follow the same nomenclature,
+.mapGeneSetsToFeatures <- function(gsets, features) {
+
+  ## fastmatch::fmatch() modifies the 'table' argument (i.e., the
+  ## second argument) in place by adding the attribute '.match.hash'
+  ## https://github.com/rcastelo/GSVA/issues/39
+  ## to avoid that undesired feature we duplicate 'features'
+  ## by adding an "impossible value" at the end and let
+  ## fastmatch::match() work with the duplicated object
+  features2 <- c(features, "&!%impossiblevalue%!&")
+
+  ## map to the actual features for which expression data is available
+  mapdgenesets <- lapply(gsets,
+                         function(x, y)
+                           as.vector(na.omit(fastmatch::fmatch(x, y))),
+                         features2)
+  
+  if (length(unlist(mapdgenesets, use.names=FALSE)) == 0)
+    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+
+  mapdgenesets
 }
 
 ## transforms a dgCMatrix into a list of its
@@ -57,6 +89,12 @@
       expr <- expr[sdGenes > 0 & !is.na(sdGenes), ]
     }
   }
+  
+  if (nrow(expr) < 2)
+    stop("Less than two genes in the input assay object\n")
+  
+  if(is.null(rownames(expr)))
+    stop("The input assay object doesn't have rownames\n")
   
   expr
 }
