@@ -1,7 +1,6 @@
 useDynLib(GSVA)
 
 import(methods)
-import(BiocGenerics)
 
 importClassesFrom(Biobase, ExpressionSet)
 importClassesFrom(SummarizedExperiment, SummarizedExperiment)
@@ -33,7 +32,8 @@ importMethodsFrom(BiocParallel, bpiterate,
 
 importFrom(graphics, plot)
 importFrom(stats, ecdf,
-                  na.omit)
+                  na.omit,
+                  sd)
 importFrom(utils, installed.packages,
                   setTxtProgressBar,
                   txtProgressBar,
@@ -58,8 +58,10 @@ importFrom(DelayedArray, rowAutoGrid,
 			  read_block, 
 			  viewportReduce,
 			  write_block,
-			  close)
-importFrom(HDF5Array, HDF5RealizationSink)
+			  close,
+			  t)
+importFrom(HDF5Array, HDF5RealizationSink,
+                      writeHDF5Array)
 importFrom(DelayedMatrixStats, rowSds)
 importFrom(BiocSingular, runRandomSVD)
 

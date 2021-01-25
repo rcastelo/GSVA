@@ -116,15 +116,13 @@ zscoreDelayed <- function(X, geneSets, parallel.sz, verbose=TRUE,
   
   Z <- t(DelayedArray::scale(t(X)))
   
-  es <- bplapply(geneSets, h5BackendRealization, combinezDelayed,
-                 Z, BPPARAM = BPPARAM)
-  
-  es <- do.call(rbind, es)
-  rownames(es) <- names(geneSets)
-  colnames(es) <- colnames(X)
-  
+  es <- bplapply(geneSets, function(gSetIdx, Z){
+    x <- combinezDelayed(gSetIdx, Z)
+    x <- matrix(x, 1, length(x))
+    x <- writeHDF5Array(x)
+  }, Z, BPPARAM = BPPARAM)
+  es <- do.call(DelayedArray::rbind, es)
   es <- as(es, "HDF5Array")
-  
   es
 }
 
@@ -183,7 +181,7 @@ ssgseaDelayed <- function(X, geneSets, alpha=0.25, parallel.sz,
     res
   }, BPPARAM=BPPARAM)
   
-  es <- do.call(cbind, es)
+  es <- do.call(DelayedArray::cbind, es)
   es
   
   if (normalization) {
