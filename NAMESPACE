@@ -18,6 +18,7 @@ importMethodsFrom(Biobase, featureNames,
 
 importMethodsFrom(S4Vectors, metadata,
                              "metadata<-")
+importMethodsFrom(IRanges, match)
 
 importMethodsFrom(SummarizedExperiment, assays,
                                         colData)
@@ -40,6 +41,7 @@ importFrom(utils, installed.packages,
                   read.csv,
                   write.csv)
 importFrom(S4Vectors, SimpleList)
+importFrom(IRanges, CharacterList)
 importFrom(GSEABase, AnnoOrEntrezIdentifier,
                      mapIdentifiers,
                      getGmt)

@@ -28,20 +28,12 @@
 ## features in both input objects follow the same nomenclature,
 .mapGeneSetsToFeatures <- function(gsets, features) {
 
-  ## fastmatch::fmatch() modifies the 'table' argument (i.e., the
-  ## second argument) in place by adding the attribute '.match.hash'
-  ## https://github.com/rcastelo/GSVA/issues/39
-  ## to avoid that undesired feature we duplicate 'features'
-  ## by adding an "impossible value" at the end and let
-  ## fastmatch::match() work with the duplicated object
-  features2 <- c(features, "&!%impossiblevalue%!&")
+  ## Aaron Lun's suggestion at
+  ## https://github.com/rcastelo/GSVA/issues/39#issuecomment-765549620
+  gsets2 <- CharacterList(gsets)
+  mt <- match(gsets2, features)
+  mapdgenesets <- as.list(mt[!is.na(mt)])
 
-  ## map to the actual features for which expression data is available
-  mapdgenesets <- lapply(gsets,
-                         function(x, y)
-                           as.vector(na.omit(fastmatch::fmatch(x, y))),
-                         features2)
-  
   if (length(unlist(mapdgenesets, use.names=FALSE)) == 0)
     stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
 

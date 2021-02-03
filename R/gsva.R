@@ -825,7 +825,7 @@ ks_test_Rcode <- function(gene.density, gset_idxs, tau=1, make.plot=FALSE){
 .fastRndWalk <- function(gSetIdx, geneRanking, j, Ra) {
     n <- length(geneRanking)
     k <- length(gSetIdx)
-    idxs <- sort.int(fastmatch::fmatch(gSetIdx, geneRanking))
+    idxs <- sort.int(match(gSetIdx, geneRanking))
     
     stepCDFinGeneSet2 <- 
         sum(Ra[geneRanking[idxs], j] * (n - idxs + 1)) /
