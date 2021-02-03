@@ -232,7 +232,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
   }
 
   ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+  mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
 
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
@@ -428,7 +428,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   }
 
   ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+  mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
   
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
@@ -488,7 +488,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
   }
   
   ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+  mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
   
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user
