@@ -978,14 +978,13 @@ setGeneric("filterGeneSets", function(gSets, ...) standardGeneric("filterGeneSet
 
 setMethod("filterGeneSets", signature(gSets="list"),
           function(gSets, min.sz=1, max.sz=Inf) {
-	gSetsLen <- sapply(gSets,length)
+	gSetsLen <- lengths(gSets)
 	return (gSets[gSetsLen >= min.sz & gSetsLen <= max.sz])	
 })
 
 setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
           function(gSets, min.sz=1, max.sz=Inf) {
-	gSetsLen <- sapply(geneIds(gSets),length)
-	return (gSets[gSetsLen >= min.sz & gSetsLen <= max.sz])	
+  filterGeneSets(geneIds(gSets), min.sz., max.sz)
 })
 
 

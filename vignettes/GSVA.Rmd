@@ -1,0 +1,340 @@
+---
+title: "GSVA: gene set variation analysis for bulk expression data"
+author:
+- name: Robert Castelo
+  affiliation:
+  - &idupf Dept. of Experimental and Health Sciences, Universitat Pompeu Fabra, Barcelona, Spain
+  email: robert.castelo@upf.edu
+- name: Pablo Sebastian Rodriguez
+  affiliation: *idupf
+  email: pablosebastian.rodriguez@upf.edu
+- name: Justin Guinney 
+  affiliation: 
+  - Sage Bionetworks
+  email: justin.guinney@sagebase.org
+abstract: >
+  The GSVA package provides the implementation of four single-sample gene set
+  enrichment methods, concretely _zscore_, _plage_, _ssGSEA_ and its own called
+  _GSVA_. These methods transform an input gene-by-sample expression data matrix
+  into a gene-set-by-sample expression data matrix. Thereby enabling the
+  estimation of pathway activity for each sample and facilitating pathway-centric
+  analyses of gene expression data. In this vignette we illustrate how to use
+  the GSVA package with bulk microarray and RNA-seq expression data.
+date: "`r BiocStyle::doc_date()`"
+package: "`r pkg_ver('GSVA')`"
+vignette: >
+  %\VignetteIndexEntry{GSVA for bulk expression data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteKeywords{GeneExpression, Microarray, RNAseq, GeneSetEnrichment, Pathway}
+output:
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+bibliography: GSVA.bib
+---
+
+**License**: `r packageDescription("GSVA")[["License"]]`
+
+```{r setup, include=FALSE}
+options(width=80)
+knitr::opts_chunk$set(collapse=TRUE,
+                      message=FALSE)
+```
+
+# Quick start
+
+`r Biocpkg("GSVA")` is an R package distributed as part of the
+[Bioconductor](https://bioconductor.org) project. To install the package, start
+R and enter:
+
+```{r library_install, message=FALSE, cache=FALSE, eval=FALSE}
+install.packages("BiocManager")
+BiocManager::install("GSVA")
+```
+
+Once `r Biocpkg("GSVA")` is installed, it can be loaded with the following command.
+
+```{r load_library, message=FALSE, warning=FALSE, cache=FALSE}
+library(GSVA)
+```
+
+Given a gene expression data matrix with rows corresponding to genes and columns
+to samples, such as this one simulated from random Gaussian data:
+
+```{r}
+p <- 10000 ## number of genes
+n <- 30    ## number of samples
+## simulate expression values from a standard Gaussian distribution
+X <- matrix(rnorm(p*n), nrow=p,
+            dimnames=list(paste0("g", 1:p), paste0("s", 1:n)))
+X[1:5, 1:5]
+```
+
+Given a collection of gene sets stored, for instance, in a `list` object such as
+this one with gene sampled uniformly at random without replacement into the gene sets:
+
+```{r}
+## sample gene set sizes
+gs <- as.list(sample(10:100, size=100, replace=TRUE))
+## sample gene sets
+gs <- lapply(gs, function(n, p)
+                   paste0("g", sample(1:p, size=n, replace=FALSE)), p)
+names(gs) <- paste0("gs", 1:length(gs))
+```
+
+We can calculate GSVA enrichment scores as follows:
+
+```{r}
+gsva.es <- gsva(X, gs, verbose=FALSE)
+dim(gsva.es)
+gsva.es[1:5, 1:5]
+```
+
+So, the first argument to the `gsva()` function is the gene expression data matrix
+and the second the collection of gene sets. The `gsva()` function can take the
+expression data and gene sets using different specialized containers that facilitate
+the access and manipulation of molecular and phenotype data, as well as their associated
+metadata. Another advanced features include the use of on-disk and parallel backends to
+enable using GSVA on large molecular data sets and speed up computing time. You will
+find information on all these features in this vignette.
+
+# Introduction
+
+Gene set variation analysis (GSVA) provides an estimate of pathway activity
+by transforming an input gene-by-sample expression data matrix
+into a gene-set-by-sample one. This resulting expression data matrix can be
+then used with classical analytical methods such as differential expression,
+classification, survival analysis, clustering or correlation analysis in a
+pathway-centric manner. One can also perform sample-wise comparisons between
+pathways and other molecular data types such as microRNA expression or binding
+data, copy-number variation (CNV) data or single nucleotide polymorphisms (SNPs).
+
+The GSVA package provides an implementation of this approach for the following
+methods:
+
+* _plage_ [@tomfohr_pathway_2005]. Pathway level analysis of gene expression
+  (PLAGE) standardizes expression profiles over the samples and then, for each
+  gene set, it performs a singular value decomposition (SVD) over its genes.
+  The coefficients of the first right-singular vector are returned as the
+  estimates of pathway activity over the samples. Note that, because of how
+  SVD is calculated, the sign of its singular vectors is arbitrary.
+
+* _zscore_ [@lee_inferring_2008]. The z-score method standardizes expression
+  profiles over the samples and then, for each gene set, combines the
+  standardized values as follows. Given a gene set $\gamma=\{1,\dots,k\}$
+  with standardized values $z_1,\dots,z_k$ for each gene in a specific sample,
+  the combined z-score $Z_\gamma$ for the gene set $\gamma$ is defined as:
+  $$
+  Z_\gamma = \frac{\sum_{i=1}^k z_i}{\sqrt{k}}\,.
+  $$
+
+* _ssgsea_ [@barbie_systematic_2009]. Single sample GSEA (ssGSEA) is a
+  non-parametric method that calculates a gene set enrichment score per sample
+  as the normalized difference in empirical cumulative distribution functions
+  (CDFs) of gene expression ranks inside and outside the gene set. By default,
+  the implementation in the GSVA package follows the last step described in
+  [@barbie_systematic_2009, online methods, pg. 2] by which pathway scores are
+  normalized, dividing them by the range of calculated values. This normalization
+  step may be switched off using the argument `ssgsea.norm` in the call to the
+  `gsva()` function; see below.
+
+* _gsva_ [@haenzelmann_castelo_guinney_2013]. This is the default method of
+  the package and similarly to ssGSEA, is a non-parametric method that
+  uses the empirical CDFs of gene expression ranks inside and outside the gene
+  set, but it starts by calculating an expression-level statistic that brings
+  gene expression profiles with a different dynamic range to a common scale.
+
+The interested user may find full technical details about how these methods
+work in their corresponding article cited above. If you use any of them in a
+publication, please cite it with the given bibliographic reference.
+
+# Overview of the GSVA functionality
+
+The workhorse of the GSVA package is the function `gsva()`, which requires
+the following two input arguments:
+
+1. A normalized gene expression dataset, which can be provided in one of the
+   following containers:
+   * A `matrix` of expression values with genes corresponding to rows and samples
+     corresponding to columns.
+   * An `ExpressionSet` object, see package `r Biocpkg("Biobase")`.
+   * A `SummarizedExperiment` object, see package
+     `r Biocpkg("SummarizedExperiment")`.
+2. A collection of gene sets, which can be provided in one of the following
+   containers:
+   * A `list` object where each element corresponds to a gene set defined by a
+     vector of gene identifiers, and the element names correspond to the names of
+     the gene sets.
+   * A `GeneSetCollection` object, see package `r Biocpkg("GSEABase")`.
+
+One advantage of providing the input data using specialized containers such as
+`ExpressionSet`, `SummarizedExperiment` and `GeneSetCollection` is that the
+`gsva()` function will automatically map the gene identifiers between the
+expression data and the gene sets (internally calling the function
+`mapIdentifiers()` from the package `r Biocpkg("GSEABase")`), when they come
+from different standard nomenclatures, i.e., _Ensembl_ versus _Entrez_, provided
+the input objects contain the appropriate metadata; see next section.
+
+If either the input gene expression data is provided as a `matrix` object or
+the gene sets are provided in a `list` object, or both, it is then the
+responsibility of the user to ensure that both objects contain gene identifiers
+following the same standard nomenclature.
+
+Before the actual calculations take place, the `gsva()` function will apply
+the following filters:
+
+1. Discard genes in the input expression data matrix with constant expression.
+
+2. Discard genes in the input gene sets that do not map to a gene in the input
+   gene expression data matrix.
+
+3. Discard gene sets that, after applying the previous filter, do not meet a
+   minimum and maximum size, which by default is one for the minimum size and
+   has no limit in the maximum size.
+
+If as a result of this filter either no genes or gene sets are left, the
+`gsva()` function will prompt an error. A common cause for an error at this
+stage is that gene identifiers between the expression data matrix and the gene
+sets do not belong to the same standard nomenclature and could not be mapped.
+
+By default, the `gsva()` function employs the method described by
+@haenzelmann_castelo_guinney_2013 but this can be changed using the argument
+`method`, which can take values `gsva` (default), `zscore`, `plage` or
+`ssgsea`, corresponding to the methods briefly described in the introduction.
+
+When `method="gsva"` (default), the user can additionally tune the following
+parameters:
+
+* `kcdf`: The first step of the GSVA algorithm brings gene expression
+  profiles to a common scale by calculating an expression statistic through
+  a non-parametric estimation of the CDF across samples. Such a non-parametric
+  estimation employs a _kernel function_ and the `kcdf` parameter allows the
+  user to specify three possible values for that function: (1) `"Gaussian"`,
+  the default value, which is suitable for continuous expression data, such as
+  microarray fluorescent units in logarithmic scale and RNA-seq log-CPMs,
+  log-RPKMs or log-TPMs units of expression; (2) `"Poisson"`, which is
+  suitable for integer counts, such as those derived from RNA-seq alignments; (3)
+  `"none"`, which will enforce a direct estimation of the CDF without a kernel
+  function.
+
+* `mx.diff`: The last step of the GSVA algorithm calculates the gene set
+  enrichment score from two Kolmogorov-Smirnov random walk statistics. This
+  parameter is a logical flag that allows the user to specify two possible ways
+  to do such calculation: (1) `TRUE`, the default value, where the enrichment
+  score is calculated as the magnitude difference between the largest positive
+  and negative random walk deviations; (2) `FALSE`, where the enrichment score
+  is calculated as the maximum distance of the random walk from zero.
+
+* `abs.ranking`: Logical flag used only when `mx.diff=TRUE`. By default,
+  `abs.ranking=FALSE` and it implies that a modified Kuiper statistic is used
+  to calculate enrichment scores, taking the magnitude difference between the
+  largest positive and negative random walk deviations. When `abs.ranking=TRUE`
+  the original Kuiper statistic is used, by whih the largest positive and
+  negative random walk devations add added together. In this case, gene sets
+  with genes enriched on either extreme (high or low) will be regarded as
+  highly activated.
+
+* `tau`: Exponent defining the weight of the tail in the random walk. By
+  default `tau=1`. When `method="ssgsea"`, this parameter is also used and its
+  default value becomes then `tau=0.25`.
+
+In general, the default values for the previous parameters are suitable for
+most analysis settings, which usually consist of normalized continuous
+expression values.
+
+# Gene sets definitions and mapping to gene identifiers
+
+# Example applications
+
+## Molecular signature identification
+
+In [@verhaak_integrated_2010] four subtypes of glioblastoma multiforme (GBM)
+-proneural, classical, neural and mesenchymal- were identified by the
+characterization of distinct gene-level expression patterns. Using four
+gene set signatures specific to brain cell types (astrocytes, oligodendrocytes,
+neurons and cultured astroglial cells), derived from murine models by
+@cahoy_transcriptome_2008, we replicate the analysis of @verhaak_integrated_2010
+by using GSVA to transform the gene expression measurements into enrichment
+scores for these four gene sets, without taking the sample subtype grouping
+into account. We start by having a quick glance to the data, which forms part of
+the `r Biocpkg("GSVAdata") package:
+
+```{r}
+library(GSVAdata)
+
+data(gbm_VerhaakEtAl)
+gbm_eset
+head(featureNames(gbm_eset))
+table(gbm_eset$subtype)
+data(brainTxDbSets)
+lengths(brainTxDbSets)
+lapply(brainTxDbSets, head)
+```
+
+GSVA enrichment scores for the gene sets contained in `brainTxDbSets`
+are calculated, in this case using `mx.diff=FALSE`,  as follows:
+
+```{r}
+gbm_es <- gsva(gbm_eset, brainTxDbSets, mx.diff=FALSE, verbose=FALSE)
+```
+
+Figure \@ref(fig:gbmSignature) shows the GSVA enrichment scores obtained for the
+up-regulated gene sets across the samples of the four GBM subtypes. As expected,
+the _neural_ class is associated with the neural gene set and the astrocytic
+gene sets. The _mesenchymal_ subtype is characterized by the expression of
+mesenchymal and microglial markers, thus we expect it to correlate with the
+astroglial gene set. The _proneural_ subtype shows high expression of
+oligodendrocytic development genes, thus it is not surprising that the
+oligodendrocytic gene set is highly enriched for ths group. Interestingly, the
+_classical_ group correlates highly with the astrocytic gene set. In
+summary, the resulting GSVA enrichment scores recapitulate accurately the
+molecular signatures from @verhaak_integrated_2010.
+
+```{r gbmSignature, height=500, width=700, fig.cap="Heatmap of GSVA scores for cell-type brain signatures from murine models (y-axis) across GBM samples grouped by GBM subtype."}
+library(RColorBrewer)
+subtypeOrder <- c("Proneural", "Neural", "Classical", "Mesenchymal")
+sampleOrderBySubtype <- sort(match(gbm_es$subtype, subtypeOrder),
+                             index.return=TRUE)$ix
+subtypeXtable <- table(gbm_es$subtype)
+subtypeColorLegend <- c(Proneural="red", Neural="green",
+                        Classical="blue", Mesenchymal="orange")
+geneSetOrder <- c("astroglia_up", "astrocytic_up", "neuronal_up",
+                  "oligodendrocytic_up")
+geneSetLabels <- gsub("_", " ", geneSetOrder)
+hmcol <- colorRampPalette(brewer.pal(10, "RdBu"))(256)
+hmcol <- hmcol[length(hmcol):1]
+
+heatmap(exprs(gbm_es)[geneSetOrder, sampleOrderBySubtype], Rowv=NA,
+        Colv=NA, scale="row", margins=c(3,5), col=hmcol,
+        ColSideColors=rep(subtypeColorLegend[subtypeOrder],
+                          times=subtypeXtable[subtypeOrder]),
+        labCol="", gbm_es$subtype[sampleOrderBySubtype],
+        labRow=paste(toupper(substring(geneSetLabels, 1,1)),
+                     substring(geneSetLabels, 2), sep=""),
+        cexRow=2, main=" \n ")
+par(xpd=TRUE)
+text(0.23,1.21, "Proneural", col="red", cex=1.2)
+text(0.36,1.21, "Neural", col="green", cex=1.2)
+text(0.47,1.21, "Classical", col="blue", cex=1.2)
+text(0.62,1.21, "Mesenchymal", col="orange", cex=1.2)
+mtext("Gene sets", side=4, line=0, cex=1.5)
+mtext("Samples          ", side=1, line=4, cex=1.5)
+```
+
+
+# Parallel calculations
+
+# Frequently asked questions
+
+# Session information {.unnumbered}
+
+Here is the output of `sessionInfo()` on the system on which this document was
+compiled running pandoc `r rmarkdown::pandoc_version()`:
+
+```{r session_info, cache=FALSE}
+sessionInfo()
+```
+
+# References
