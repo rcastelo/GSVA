@@ -1,5 +1,5 @@
 .filterFeatures <- function(expr, method) {
-
+  
   ## filter out genes with constant expression values
   ## DelayedMatrixStats::rowSds() works for both base and 
   ## DelayedArray matrices
