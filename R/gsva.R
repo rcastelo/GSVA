@@ -418,7 +418,6 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
     ## 'annotation' argument
     mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
                                            AnnoOrEntrezIdentifier(annotpkg))
-    mapped.gset.idx.list <- geneIds(mapped.gset.idx.list) 
   } else {
     mapped.gset.idx.list <- gset.idx.list
     if (verbose) {
@@ -426,6 +425,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
         "Attempting to directly match identifiers in 'expr' to gene sets.", sep="\n")
     }
   }
+  mapped.gset.idx.list <- geneIds(mapped.gset.idx.list) 
 
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
@@ -486,6 +486,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
     mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
                                            AnnoOrEntrezIdentifier(annotation))
   }
+  mapped.gset.idx.list <- geneIds(mapped.gset.idx.list)
   
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
@@ -984,7 +985,7 @@ setMethod("filterGeneSets", signature(gSets="list"),
 
 setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
           function(gSets, min.sz=1, max.sz=Inf) {
-  filterGeneSets(geneIds(gSets), min.sz., max.sz)
+  filterGeneSets(geneIds(gSets), min.sz, max.sz)
 })
 
 
