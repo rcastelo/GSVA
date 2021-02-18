@@ -401,14 +401,14 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
 
   eset <- expr
   expr <- exprs(eset)
-  ## filter genes according to verious criteria,
+  ## filter genes according to various criteria,
   ## e.g., constant expression
   expr <- .filterFeatures(expr, method)
 
   annotpkg <- Biobase::annotation(eset)
   if (length(annotpkg) > 0 && annotpkg != "") {
     if (!annotpkg %in% installed.packages())
-      stop(sprintf("Please install the nnotation package %s", annotpkg))
+      stop(sprintf("Please install the Annotation package %s", annotpkg))
 
     if (verbose)
       cat("Mapping identifiers between gene sets and feature names\n")
@@ -488,7 +488,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
   }
   
   ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
+  mapped.gset.idx.list <- .mapGeneSetsToFeatures(geneIds(mapped.gset.idx.list), rownames(expr))
   
   ## remove gene sets from the analysis for which no features are available
   ## and meet the minimum and maximum gene-set size specified by the user

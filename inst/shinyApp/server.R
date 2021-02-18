@@ -1,63 +1,3 @@
-library(GSVA)
-library(shiny)
-library(shinythemes)
-library(GSEABase)
-library(GSVAdata)
-library(limma)
-library(ggplot2)
-library(data.table)
-library(plotly)
-
-argumentsDataInput <- function(id) {
-  # Create a namespace function using the provided id
-  ns <- NS(id)
-  
-  #UI Definition
-  column(
-    3,
-    conditionalPanel(
-      condition = "input.arg == 'yes'",
-      h3("Select arguments:"),
-      wellPanel(fluidRow(
-        column(
-          12,
-          selectInput("method", "Choose method:",
-                      c("gsva","ssgsea","zscore","plage")),
-          selectInput("kcdf", "Choose kcdf:",
-                      c("Gaussian","Poisson","none")),
-          radioButtons("absRanking", "abs.ranking:",
-                       c("False" = FALSE,
-                         "True" = TRUE)),
-          numericInput("minSz","min.sz:",value = 1),
-          numericInput("maxSz","max.sz (Write 0 for infinite):",value = 0),
-          ## numericInput("parallelSz","parallel.sz:",value = 0),
-          ## selectInput("parallelType", "parallel.type:",
-          ##             c("SOCK","MPI","NWS")),
-          radioButtons("mxDiff", "mx.diff:",
-                       c("True" = TRUE,
-                         "False" = FALSE)),
-          conditionalPanel(
-            condition = "input.method == 'gsva'",
-            numericInput("tau1","tau:",value = 1)
-          ),
-          conditionalPanel(
-            condition = "input.method == 'ssgsea'",
-            numericInput("tau2","tau:",value = 0.25)
-          ),
-          conditionalPanel(
-            condition = "input.method == 'zscore' || input.method == 'plage'"
-          ),
-          radioButtons("ssgseaNorm", "ssgsea.norm:",
-                       c("True" = TRUE,
-                         "False" = FALSE)),
-          radioButtons("verbose", "verbose:",
-                       c("True" = TRUE,
-                         "False" = FALSE))
-        )))
-    )
-  )
-}
-
 gsva_validation <- function(input, output, session) {
   success <- FALSE #Variable to control if the GSVA variables are assigned correctly
   if(input$matrixSourceType == "fileMatrix")
@@ -81,9 +21,11 @@ gsva_validation <- function(input, output, session) {
         {
           #User selects matrix file and geneSet file
           inFile <- input$matrixFile
-          newY <- as.matrix(read.csv(inFile$datapath, header = TRUE, sep = ",")) #Reading file as matrix
-          rownames(newY) <- newY[,1] #Taking the first column as rownames
-          newY <- newY[,-1] #Deleting the first column
+          # newY <- as.matrix(read.csv(inFile$datapath, header = TRUE, sep = ",")) #Reading file as matrix
+          # newY <- apply(newY, 2, as.numeric)
+          # rownames(newY) <- newY[,1] #Taking the first column as rownames
+          # newY <- newY[,-1] #Deleting the first column
+          newY <-  data.matrix(read.csv(file=inFile$datapath, row.names = 1L))
           inGenesetFile <- input$genesetFile
           genes <- getGmt(inGenesetFile$datapath)
           if(input$maxSz == 0) {
@@ -98,9 +40,10 @@ gsva_validation <- function(input, output, session) {
       {
         #User selects matrix file and geneset var
         inFile <- input$matrixFile
-        newY <- as.matrix(read.csv(inFile$datapath, header = TRUE, sep = ",")) #Reading file as matrix
-        rownames(newY) <- newY[,1] #Taking the first column as rownames
-        newY <- newY[,-1] #Deleting the first column
+        # newY <- as.matrix(read.csv(inFile$datapath, header = TRUE, sep = ",")) #Reading file as matrix
+        # rownames(newY) <- newY[,1] #Taking the first column as rownames
+        # newY <- newY[,-1] #Deleting the first column
+        newY <-  data.matrix(read.csv(file=inFile$datapath, row.names = 1L))
         assign("genes",get(input$genesetVar))
         if(input$maxSz == 0) {
           varMaxsz <- Inf
@@ -177,7 +120,7 @@ gsva_generation <- function(input, output, session, newY, genes,varMaxsz) {
     generated_gsva <<- gsva(newY, genes, method=input$method, kcdf=input$kcdf,
                             abs.ranking=as.logical(input$absRanking),
                             min.sz=input$minSz, max.sz=varMaxsz,
-                            parallel.sz=1L, ## by now, disable parallelism
+                            parallel.sz=4L, ## by now, disable parallelism
                             mx.diff=as.logical(input$mxDiff),
                             tau=selectedTau,
                             ssgsea.norm=as.logical(input$ssgseaNorm),
