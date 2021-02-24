@@ -819,9 +819,7 @@ ks_test_Rcode <- function(gene.density, gset_idxs, tau=1, make.plot=FALSE){
   sum(walkStat) 
 }
 
-## optimized version of the function .rndWalk by Alexey Sergushichev
-## https://github.com/rcastelo/GSVA/pull/15
-## based on his paper https://doi.org/10.1101/060012
+
 .fastRndWalk <- function(gSetIdx, geneRanking, j, Ra) {
     n <- length(geneRanking)
     k <- length(gSetIdx)
@@ -850,7 +848,7 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
     R <- t(sparseMatrixStats::colRanks(X, ties.method = "average"))
     mode(R) <- "integer"
   } else {
-    R <- apply(X, 2, function(x, p) as.integer(rank(x)))
+    R <- apply(X, 2, function(x) as.integer(rank(x)))
   }
   
   Ra <- abs(R)^alpha
@@ -984,7 +982,7 @@ setMethod("filterGeneSets", signature(gSets="list"),
 
 setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
           function(gSets, min.sz=1, max.sz=Inf) {
-  filterGeneSets(geneIds(gSets), min.sz., max.sz)
+  filterGeneSets(geneIds(gSets), min.sz, max.sz)
 })
 
 

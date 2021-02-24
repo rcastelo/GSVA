@@ -28,9 +28,12 @@ test_ssgsea <- function() {
   gset.idx.list <- lapply(geneSets,
                           function(x, y) na.omit(match(x, y)),
                           rownames(y))
-  fast.gset.idx.list <- lapply(geneSets,
-                               function(x, y) na.omit(fastmatch::fmatch(x, y)),
+  
+  charSets <- IRanges::CharacterList(geneSets)
+  fast.gset.idx.list <- lapply(charSets,
+                               function(x, y) na.omit(match(x, y)),
                                rownames(y))
+  
   checkIdentical(gset.idx.list, fast.gset.idx.list)
 
   R <- apply(y, 2, function(x ,p) as.integer(rank(x)), p)
