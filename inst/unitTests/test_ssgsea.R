@@ -29,7 +29,7 @@ test_ssgsea <- function() {
                           function(x, y) na.omit(match(x, y)),
                           rownames(y))
   fast.gset.idx.list <- lapply(geneSets,
-                               function(x, y) na.omit(fastmatch::fmatch(x, y)),
+                               function(x, y) na.omit(match(x, y)),
                                rownames(y))
   checkIdentical(gset.idx.list, fast.gset.idx.list)
 

@@ -222,7 +222,6 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
     ## 'annotation' argument
     mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
                                            AnnoOrEntrezIdentifier(annotpkg))
-    mapped.gset.idx.list <- geneIds(mapped.gset.idx.list) 
   } else {
     mapped.gset.idx.list <- gset.idx.list
     if (verbose) {
@@ -230,6 +229,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
           "Attempting to directly match identifiers in 'expr' to gene sets.", sep="\n")
     }
   }
+  mapped.gset.idx.list <- geneIds(mapped.gset.idx.list) 
 
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))

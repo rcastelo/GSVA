@@ -1,5 +1,5 @@
 ---
-title: "GSVA: gene set variation analysis for bulk expression data"
+title: "GSVA: gene set variation analysis for molecular profiling data"
 author:
 - name: Robert Castelo
   affiliation:
@@ -18,7 +18,9 @@ abstract: >
   _GSVA_. These methods transform an input gene-by-sample expression data matrix
   into a gene-set-by-sample expression data matrix. Thereby enabling the
   estimation of pathway activity for each sample and facilitating pathway-centric
-  analyses of gene expression data. In this vignette we illustrate how to use
+  analyses of gene expression data. While this methodology was initially developed
+  for gene expression data, it is readily aplicable to other types of molecular
+  profiling data. In this vignette we illustrate how to use
   the GSVA package with bulk microarray and RNA-seq expression data.
 date: "`r BiocStyle::doc_date()`"
 package: "`r pkg_ver('GSVA')`"
@@ -73,7 +75,7 @@ X[1:5, 1:5]
 ```
 
 Given a collection of gene sets stored, for instance, in a `list` object such as
-this one with gene sampled uniformly at random without replacement into the gene sets:
+this one with genes sampled uniformly at random without replacement into the gene sets:
 
 ```{r}
 ## sample gene set sizes
@@ -93,7 +95,7 @@ gsva.es[1:5, 1:5]
 ```
 
 So, the first argument to the `gsva()` function is the gene expression data matrix
-and the second the collection of gene sets. The `gsva()` function can take the
+and the second the collection of gene sets. The `gsva()` function can take the input
 expression data and gene sets using different specialized containers that facilitate
 the access and manipulation of molecular and phenotype data, as well as their associated
 metadata. Another advanced features include the use of on-disk and parallel backends to
@@ -144,10 +146,10 @@ methods:
   the package and similarly to ssGSEA, is a non-parametric method that
   uses the empirical CDFs of gene expression ranks inside and outside the gene
   set, but it starts by calculating an expression-level statistic that brings
-  gene expression profiles with a different dynamic range to a common scale.
+  gene expression profiles with different dynamic ranges to a common scale.
 
 The interested user may find full technical details about how these methods
-work in their corresponding article cited above. If you use any of them in a
+work in their corresponding articles cited above. If you use any of them in a
 publication, please cite it with the given bibliographic reference.
 
 # Overview of the GSVA functionality
@@ -159,15 +161,15 @@ the following two input arguments:
    following containers:
    * A `matrix` of expression values with genes corresponding to rows and samples
      corresponding to columns.
-   * An `ExpressionSet` object, see package `r Biocpkg("Biobase")`.
+   * An `ExpressionSet` object; see package `r Biocpkg("Biobase")`.
    * A `SummarizedExperiment` object, see package
      `r Biocpkg("SummarizedExperiment")`.
-2. A collection of gene sets, which can be provided in one of the following
+2. A collection of gene sets; which can be provided in one of the following
    containers:
    * A `list` object where each element corresponds to a gene set defined by a
      vector of gene identifiers, and the element names correspond to the names of
      the gene sets.
-   * A `GeneSetCollection` object, see package `r Biocpkg("GSEABase")`.
+   * A `GeneSetCollection` object; see package `r Biocpkg("GSEABase")`.
 
 One advantage of providing the input data using specialized containers such as
 `ExpressionSet`, `SummarizedExperiment` and `GeneSetCollection` is that the
@@ -190,14 +192,17 @@ the following filters:
 2. Discard genes in the input gene sets that do not map to a gene in the input
    gene expression data matrix.
 
-3. Discard gene sets that, after applying the previous filter, do not meet a
+3. Discard gene sets that, after applying the previous filters, do not meet a
    minimum and maximum size, which by default is one for the minimum size and
-   has no limit in the maximum size.
+   has no limit for the maximum size.
 
-If as a result of this filter either no genes or gene sets are left, the
+If, as a result of this filter, either no genes or gene sets are left, the
 `gsva()` function will prompt an error. A common cause for an error at this
 stage is that gene identifiers between the expression data matrix and the gene
-sets do not belong to the same standard nomenclature and could not be mapped.
+sets do not belong to the same standard nomenclature and could not be mapped,
+because either the input data were not provided using some of the specialized
+containers described above or the necessary metadata in those containers to
+successfully map gene identifiers is missing.
 
 By default, the `gsva()` function employs the method described by
 @haenzelmann_castelo_guinney_2013 but this can be changed using the argument
@@ -231,18 +236,19 @@ parameters:
   `abs.ranking=FALSE` and it implies that a modified Kuiper statistic is used
   to calculate enrichment scores, taking the magnitude difference between the
   largest positive and negative random walk deviations. When `abs.ranking=TRUE`
-  the original Kuiper statistic is used, by whih the largest positive and
-  negative random walk devations add added together. In this case, gene sets
+  the original Kuiper statistic is used, by which the largest positive and
+  negative random walk deviations are added together. In this case, gene sets
   with genes enriched on either extreme (high or low) will be regarded as
   highly activated.
 
 * `tau`: Exponent defining the weight of the tail in the random walk. By
   default `tau=1`. When `method="ssgsea"`, this parameter is also used and its
-  default value becomes then `tau=0.25`.
+  default value becomes then `tau=0.25` to match the methodology described in
+  [@barbie_systematic_2009].
 
 In general, the default values for the previous parameters are suitable for
-most analysis settings, which usually consist of normalized continuous
-expression values.
+most analysis settings, which usually consist of some kind of normalized
+continuous expression values.
 
 # Gene sets definitions and mapping to gene identifiers
 
@@ -259,7 +265,7 @@ neurons and cultured astroglial cells), derived from murine models by
 by using GSVA to transform the gene expression measurements into enrichment
 scores for these four gene sets, without taking the sample subtype grouping
 into account. We start by having a quick glance to the data, which forms part of
-the `r Biocpkg("GSVAdata") package:
+the `r Biocpkg("GSVAdata")` package:
 
 ```{r}
 library(GSVAdata)

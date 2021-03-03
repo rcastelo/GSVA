@@ -149,7 +149,7 @@ rankHDF5 <- function(X){
 .fastRndWalk2 <- function(gSetIdx, geneRanking, ra_block) {
   n <- length(geneRanking)
   k <- length(gSetIdx)
-  idxs <- sort.int(fastmatch::fmatch(gSetIdx, geneRanking))
+  idxs <- sort.int(match(gSetIdx, geneRanking))
   stepCDFinGeneSet2 <-
     sum(ra_block[geneRanking[idxs]] * (n - idxs + 1)) /
     sum((ra_block[geneRanking[idxs]]))    
