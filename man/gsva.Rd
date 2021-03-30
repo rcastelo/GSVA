@@ -196,13 +196,14 @@ Estimates GSVA enrichment scores.
 
 \details{
 GSVA assesses the relative enrichment of gene sets across samples using
-a non-parametric approach.  Conceptually, GSVA transforms a p-gene by n-sample
+a non-parametric approach. Conceptually, GSVA transforms a p-gene by n-sample
 gene expression matrix into a g-geneset by n-sample pathway enrichment matrix.
 This facilitates many forms of statistical analysis in the 'space' of pathways
 rather than genes, providing a higher level of interpretability.
 
 By default, \code{gsva()} will try to match the identifiers in \code{expr} to
-the identifiers in \code{gset.idx.list} just as they are, unless the \code{annotation} argument is set.
+the identifiers in \code{gset.idx.list} just as they are, unless the
+\code{annotation} argument is set.
 
 The \code{gsva()} function first maps the identifiers in the gene sets in
 \code{gset.idx.list} to the identifiers in the input expression data \code{expr}.
@@ -228,6 +229,9 @@ the relationships between the type of identifiers in \code{expr} and \code{gset.
 The collection of gene sets resulting from the previous identifier matching,
 can be further filtered to require a minimun and/or maximum size by using the
 arguments \code{min.sz} and \code{max.sz}.
+
+If you use GSVA in your research, please cite also the corresponding method as
+described in the \code{method} parameter.
 }
 \value{
 A gene-set by sample matrix (of \code{matrix} or \code{dgCMatrix} type, 
