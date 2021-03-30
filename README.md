@@ -31,11 +31,11 @@ install.packages("BiocManager")
 BiocManager::install("GSVA", version = "devel")
 ```
 
-Alternatively, you can install it from GitHub using the [devtools](https://github.com/hadley/devtools "devtools") package.
+Alternatively, you can install it from GitHub using the [remotes](https://github.com/r-lib/remotes "remotes") package.
 
 ```r
-install.packages("devtools")
-library(devtools)
+install.packages("remotes")
+library(remotes)
 install_github("rcastelo/GSVA")
 ```
 
@@ -46,3 +46,12 @@ please use the [Bioconductor support site](https://support.bioconductor.org "Bio
 For feature requests or bug reports and issues regarding this __development__ version of **GSVA**
 please use the GitHub issues link at the top-right of this page
 ([https://github.com/rcastelo/GSVA/issues](https://github.com/rcastelo/GSVA/issues)).
+
+## Contributing
+
+Contributions to the software codebase of GSVA are welcome as long as contributors abide to the
+terms of the [Bioconductor Contributor Code of Conduct](https://bioconductor.org/about/code-of-conduct).
+If you want to contribute to the development of GSVA please open an
+[issue](https://github.com/rcastelo/GSVA/issues) to start discussing your suggestion or, in case of a
+bugfix or a straightforward feature, directly a
+[pull request](https://github.com/rcastelo/GSVA/pulls).
