@@ -23,8 +23,7 @@ The `GSVA` package allows one to perform a change in coordinate systems of molec
 
 This is the __development__ version of the R/Bioconductor package GSVA. This version is unstable and should be used only to test new features. If you are looking for the __release__ version of this package please go to its package release landing page at [https://bioconductor.org/packages/GSVA](https://bioconductor.org/packages/GSVA) and follow the instructions there to install it.
 
-If you were really looking for this development version, then to install it you
-need first to install the development version of Bioconductor following the instructions at [http://bioconductor.org/developers/how-to/useDevel](http://bioconductor.org/developers/how-to/useDevel) and then type the following line from the R shell:
+If you were really looking for this development version, then to install it you need first to install the [development version of Bioconductor](https://bioconductor.org/developers/how-to/useDevel) and then type the following line from the R shell:
 
 ```r
 BiocManager::install("GSVA", version = "devel")
