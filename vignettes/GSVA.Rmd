@@ -1,5 +1,5 @@
 ---
-title: "GSVA: gene set variation analysis for molecular profiling data"
+title: "GSVA: gene set variation analysis"
 author:
 - name: Robert Castelo
   affiliation:
@@ -13,19 +13,19 @@ author:
   - Sage Bionetworks
   email: justin.guinney@sagebase.org
 abstract: >
-  The GSVA package provides the implementation of four single-sample gene set
-  enrichment methods, concretely _zscore_, _plage_, _ssGSEA_ and its own called
-  _GSVA_. These methods transform an input gene-by-sample expression data matrix
-  into a gene-set-by-sample expression data matrix. Thereby enabling the
-  estimation of pathway activity for each sample and facilitating pathway-centric
-  analyses of gene expression data. While this methodology was initially developed
-  for gene expression data, it is readily aplicable to other types of molecular
-  profiling data. In this vignette we illustrate how to use
+  Gene set variation analysis (GSVA) is a particular type of gene set enrichment
+  method that works on single samples and enables pathway-centric analyses of
+  molecular data by performing a conceptually simple but powerful change in the
+  functional unit of analysis, from genes to gene sets. The GSVA package provides
+  the implementation of four single-sample gene set enrichment methods, concretely
+  _zscore_, _plage_, _ssGSEA_ and its own called _GSVA_. While this methodology
+  was initially developed for gene expression data, it can be applied to other
+  types of molecular profiling data. In this vignette we illustrate how to use
   the GSVA package with bulk microarray and RNA-seq expression data.
 date: "`r BiocStyle::doc_date()`"
 package: "`r pkg_ver('GSVA')`"
 vignette: >
-  %\VignetteIndexEntry{GSVA for bulk expression data}
+  %\VignetteIndexEntry{Gene set variation analysis}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
   %\VignetteKeywords{GeneExpression, Microarray, RNAseq, GeneSetEnrichment, Pathway}
@@ -250,7 +250,44 @@ In general, the default values for the previous parameters are suitable for
 most analysis settings, which usually consist of some kind of normalized
 continuous expression values.
 
-# Gene sets definitions and mapping to gene identifiers
+# Gene set definitions and gene identifier mapping
+
+Gene sets constitute a simple, yet useful, way to define pathways, essentially
+because we use pathway membership definitions only, neglecting the information
+on molecular interactions. Gene set definitions are a crucial input to any gene
+set enrichment analysis because if our gene sets do not capture the biological
+processes we are studying, we will likely not find any relevant insights in our
+data.
+
+There are multiple sources of gene sets, the most popular ones being
+[The Gene Ontology (GO) project](http://geneontology.org) and
+[The Molecular Signatures Database (MSigDB)](https://www.gsea-msigdb.org/gsea/msigdb).
+Sometimes gene set databases will not include the ones we need. In such a case
+we should either curate our own gene sets or use techniques to infer them from
+data.
+
+The most basic data container for gene sets in R is the `list` class of objects,
+as illustrated before in the quick start section, where we defined a toy collection
+of three gene sets stored in a list object called `gs`:
+
+```{r}
+gs
+```
+
+Using a Bioconductor organism-level package such as
+`r Biocpkg("org.Hs.eg.db")` we can easily build a list object containing a
+collection of gene sets defined as GO terms with annotated Entrez gene
+identifiers, as follows:
+
+```{r}
+library(org.Hs.eg.db)
+
+goannot <- select(org.Hs.eg.db, keys=keys(org.Hs.eg.db), columns="GO")
+head(goannot)
+genesbygo <- split(annot$ENTREZID, annot$GO)
+length(genesbygo)
+head(genesbygo)
+```
 
 # Example applications
 
@@ -328,11 +365,6 @@ text(0.62,1.21, "Mesenchymal", col="orange", cex=1.2)
 mtext("Gene sets", side=4, line=0, cex=1.5)
 mtext("Samples          ", side=1, line=4, cex=1.5)
 ```
-
-
-# Parallel calculations
-
-# Frequently asked questions
 
 # Session information {.unnumbered}
 
