@@ -42,7 +42,8 @@ bibliography: GSVA.bib
 ```{r setup, include=FALSE}
 options(width=80)
 knitr::opts_chunk$set(collapse=TRUE,
-                      message=FALSE)
+                      message=FALSE,
+                      comment="")
 ```
 
 # Quick start
@@ -271,7 +272,9 @@ as illustrated before in the quick start section, where we defined a toy collect
 of three gene sets stored in a list object called `gs`:
 
 ```{r}
-gs
+class(gs)
+length(gs)
+head(lapply(gs, head))
 ```
 
 Using a Bioconductor organism-level package such as
