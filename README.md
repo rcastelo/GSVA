@@ -3,9 +3,12 @@
 [![Bioconductor Time](https://bioconductor.org/shields/years-in-bioc/GSVA.svg)](https://bioconductor.org/packages/release/bioc/html/GSVA.html "How long has been GSVA in a release of Bioconductor")
 [![Bioconductor Downloads](https://bioconductor.org/shields/downloads/release/GSVA.svg)](https://bioconductor.org/packages/stats/bioc/GSVA/ "Ranking by number of downloads. A lower number means the package is downloaded more frequently. Determined within a package type (software, experiment, annotation, workflow) and uses the number of distinct IPs for the last 12 months.")
 [![Support posts](https://bioconductor.org/shields/posts/GSVA.svg)](https://support.bioconductor.org/t/GSVA/ "Support site activity on GSVA, last 6 months: answered posts/total posts.")
+[![R-CMD-check-bioc](https://github.com/rcastelo/GSVA/workflows/R-CMD-check-bioc/badge.svg)](https://github.com/rcastelo/GSVA/actions?query=workflow%3AR-CMD-check-bioc)
+[![codecov.io](https://codecov.io/github/rcastelo/GSVA/coverage.svg?branch=master)](https://codecov.io/github/rcastelo/GSVA?branch=master)
 <img align="right" src="https://raw.githubusercontent.com/Bioconductor/BiocStickers/master/GSVA/GSVA.png" height="200"/>
 
-**Current build status**
+
+**Current Bioconductor build status**
 - `release` [![Bioconductor Availability](https://bioconductor.org/shields/availability/release/GSVA.svg)](https://bioconductor.org/packages/release/bioc/html/GSVA.html#archives "Whether GSVA release is available on all platforms") 
 [![Bioconductor Dependencies](https://bioconductor.org/shields/dependencies/release/GSVA.svg)](https://bioconductor.org/packages/release/bioc/html/GSVA.html#since "Number of recursive dependencies needed to install package")
 [![Bioconductor Commits](https://bioconductor.org/shields/lastcommit/release/bioc/GSVA.svg)](https://bioconductor.org/checkResults/release/bioc-LATEST/GSVA "Time since last commit, possible values: today, < 1 week, < 1 month, < 3 months, since release, before release")

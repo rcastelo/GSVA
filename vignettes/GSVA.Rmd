@@ -284,7 +284,7 @@ library(org.Hs.eg.db)
 
 goannot <- select(org.Hs.eg.db, keys=keys(org.Hs.eg.db), columns="GO")
 head(goannot)
-genesbygo <- split(annot$ENTREZID, annot$GO)
+genesbygo <- split(goannot$ENTREZID, goannot$GO)
 length(genesbygo)
 head(genesbygo)
 ```
