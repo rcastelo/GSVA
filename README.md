@@ -1,14 +1,14 @@
 # GSVA: gene set variation analysis for microarray and RNA-seq data
 
 [![Bioconductor Time](https://bioconductor.org/shields/years-in-bioc/GSVA.svg)](https://bioconductor.org/packages/release/bioc/html/GSVA.html "How long has been GSVA in a release of Bioconductor")
-[![Bioconductor Downloads](https://bioconductor.org/shields/downloads/GSVA.svg)](https://bioconductor.org/packages/stats/bioc/GSVA/ "Ranking by number of downloads. A lower number means the package is downloaded more frequently. Determined within a package type (software, experiment, annotation, workflow) and uses the number of distinct IPs for the last 12 months")
-[![Support posts](https://bioconductor.org/shields/posts/GSVA.svg)](https://support.bioconductor.org/t/GSVA/ "Support site activity on GSVA, last 6 months: tagged questions/avg. answers per question/avg. comments per question/accepted answers, or 0 if no tagged posts.")
+[![Bioconductor Downloads](https://bioconductor.org/shields/downloads/release/GSVA.svg)](https://bioconductor.org/packages/stats/bioc/GSVA/ "Ranking by number of downloads. A lower number means the package is downloaded more frequently. Determined within a package type (software, experiment, annotation, workflow) and uses the number of distinct IPs for the last 12 months.")
+[![Support posts](https://bioconductor.org/shields/posts/GSVA.svg)](https://support.bioconductor.org/t/GSVA/ "Support site activity on GSVA, last 6 months: answered posts/total posts.")
 <img align="right" src="https://raw.githubusercontent.com/Bioconductor/BiocStickers/master/GSVA/GSVA.png" height="200"/>
 
 **Current build status**
 - `release` [![Bioconductor Availability](https://bioconductor.org/shields/availability/release/GSVA.svg)](https://bioconductor.org/packages/release/bioc/html/GSVA.html#archives "Whether GSVA release is available on all platforms") 
 [![Bioconductor Dependencies](https://bioconductor.org/shields/dependencies/release/GSVA.svg)](https://bioconductor.org/packages/release/bioc/html/GSVA.html#since "Number of recursive dependencies needed to install package")
-[![Bioconductor Commits](https://bioconductor.org/shields/lastcommit/release/bioc/GSVA.svg)](https://bioconductor.org/checkResults/devel/bioc-LATEST/GSVA "Time since last commit, possible values: today, < 1 week, < 1 month, < 3 months, since release, before release")
+[![Bioconductor Commits](https://bioconductor.org/shields/lastcommit/release/bioc/GSVA.svg)](https://bioconductor.org/checkResults/release/bioc-LATEST/GSVA "Time since last commit, possible values: today, < 1 week, < 1 month, < 3 months, since release, before release")
 [![Bioconductor Release Build](https://bioconductor.org/shields/build/release/bioc/GSVA.svg)](https://bioconductor.org/checkResults/release/bioc-LATEST/GSVA/ "Bioconductor release build")
 - `development` [![Bioconductor Availability](https://bioconductor.org/shields/availability/devel/GSVA.svg)](https://bioconductor.org/packages/devel/bioc/html/GSVA.html#archives "Whether GSVA devel is available on all platforms") 
 [![Bioconductor Dependencies](https://bioconductor.org/shields/dependencies/devel/GSVA.svg)](https://bioconductor.org/packages/devel/bioc/html/GSVA.html#since "Number of recursive dependencies needed to install package")
