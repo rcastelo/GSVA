@@ -9,7 +9,6 @@ plot2_Server <- function(id, eventData1, rv){
     function(input, output, session){
       
       output$plot2 <- renderPlotly({
-        # req(eventData1())
         rv$sample.c <- colnames(rv$gs)[eventData1()]
         data <- rv$dat.t[Sample==rv$sample.c]
         p <- ggplot(data = data, aes(x=value, color=Sample)) +
