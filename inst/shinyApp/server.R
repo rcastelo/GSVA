@@ -111,14 +111,12 @@ function(input, output, session) {
     ind <- ind$pointNumber+1
   })
   plot3_Server("plot3", eventData2, rv, rv$matrix, rv$genesets)
-
-  # SAVE & CLOSE BTN
-  observeEvent(input$closeSave, {
-    stopApp(rv$gs) #Stops the app and returns the rv$gs object to the R session
-  })
   
   # DWN BTN
   downloadServer("download", rv$gs)
+  
+  # CLOSE BTN
+  closeBtnServer("close", reactive(rv$gs))
 
   
   # TEXT1

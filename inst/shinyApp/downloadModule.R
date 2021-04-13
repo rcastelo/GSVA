@@ -1,9 +1,6 @@
 downloadUI <- function(id) {
   ns <- NS(id)
-  tagList(
-    downloadButton(ns('downloadData'), 'Download'),
-    actionButton(ns('closeSave'),'Save & Close')
-  )
+  hidden(downloadButton(ns('downloadData'), 'Download'))
 }
 
 downloadServer <- function(id, gs){
@@ -11,6 +8,11 @@ downloadServer <- function(id, gs){
     id,
     function(input, output, session){
       #Controls the Download button
+      
+      observe({
+        
+      })
+      
       output$downloadData <- downloadHandler(
         filename = function() {
           paste("gsva_es-", Sys.Date(), ".csv", sep="")

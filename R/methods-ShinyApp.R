@@ -1,10 +1,11 @@
 igsva <- function() {
 
   shinydeps <- c("shiny", "shinythemes", "ggplot2",
-                 "data.table", "plotly")
+                 "data.table", "plotly", "future",
+                 "shinyjs", "shinybusy")
   maskshinydeps <- shinydeps %in% installed.packages()
   if (any(!maskshinydeps))
-    stop(sprintf("Please install the following packages to use the GenomiScores WebApp:\n\n  %s\n",
+    stop(sprintf("Please install the following packages to use the GSVA WebApp:\n\n  %s\n",
                  paste(shinydeps[!maskshinydeps], collapse=", ")))
   
   namespaceImportFrom(self=getNamespace("base"),
@@ -25,6 +26,15 @@ igsva <- function() {
   namespaceImportFrom(self=getNamespace("base"),
                       ns=getNamespace("plotly"),
                       vars=c("ggplotly", "event_data", "style"))
+  
+  namespaceImportFrom(self=getNamespace("base"),
+                      ns=getNamespace("future"))
+  
+  namespaceImportFrom(self=getNamespace("base"),
+                      ns=getNamespace("shinyjs"))
+  
+  namespaceImportFrom(self=getNamespace("base"),
+                      ns=getNamespace("shinybusy"))
 
   appDir <- system.file("shinyApp", package="GSVA")
   if (appDir == "")
