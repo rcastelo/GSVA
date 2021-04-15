@@ -10,7 +10,11 @@ downloadServer <- function(id, gs){
       #Controls the Download button
       
       observe({
-        
+        if(is.null(gs())){
+          hide("downloadData")
+        } else {
+          show("downloadData")
+        }
       })
       
       output$downloadData <- downloadHandler(
@@ -18,15 +22,15 @@ downloadServer <- function(id, gs){
           paste("gsva_es-", Sys.Date(), ".csv", sep="")
         },
         content = function(file) {
-            if("ExpressionSet" %in% class(gs)) 
+            if("ExpressionSet" %in% class(gs())) 
             {
-              expressionSetObs <- exprs(gs)
+              expressionSetObs <- exprs(gs())
               dataFrameObs <- as.data.frame(expressionSetObs)
               write.csv(dataFrameObs, file)
             }
             else
             {
-              dataFrameObs <- as.data.frame(gs)
+              dataFrameObs <- as.data.frame(gs())
               write.csv(dataFrameObs, file)
             } 
         }

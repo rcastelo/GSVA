@@ -89,7 +89,7 @@ function(input, output, session) {
   })
   
   # PRINTING CONSOLE.TEXT
-  modalGSVAServer("modal.text", console.text, gsva.cancel)
+  modalGSVAServer("modal.text", console.text, gsva.cancel, rout)
   
   # PLOT1 RENDER
   plot1_Server("plot1", rv)
@@ -113,7 +113,7 @@ function(input, output, session) {
   plot3_Server("plot3", eventData2, rv, rv$matrix, rv$genesets)
   
   # DWN BTN
-  downloadServer("download", rv$gs)
+  downloadServer("download", reactive(rv$gs))
   
   # CLOSE BTN
   closeBtnServer("close", reactive(rv$gs))

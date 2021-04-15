@@ -11,11 +11,11 @@ modalGSVAUI <- function(id){
   )
 }
 
-modalGSVAServer <- function(id, console.text, gsva.cancel){
+modalGSVAServer <- function(id, console.text, gsva.cancel, rout){
   moduleServer(
     id,
     function(input, output, session){
-      
+
       output$text <- renderText({
         req(console.text())
         max <- length(console.text())
@@ -29,7 +29,11 @@ modalGSVAServer <- function(id, console.text, gsva.cancel){
       observeEvent(input$cancel, {
         removeModal()
         gsva.cancel(TRUE)
-        plan(multisession, gc=TRUE)
+        write("", file=rout)
+        # changing plan() is the only and recommended way to safely 'interrupt' a future process:
+        # https://github.com/HenrikBengtsson/future/issues/93
+        plan(sequential)
+        plan(multisession)
       })
     }
   )
