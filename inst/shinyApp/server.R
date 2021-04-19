@@ -34,18 +34,18 @@ function(input, output, session) {
   #### GSVA RESULTS ####
   
   rv <- reactiveValues(gs=NULL, dat.t=NULL, n=NULL, dd.col=NULL, p=NULL, 
-                       errors.gsva = NULL, matrix=NULL, genesets=NULL)
+                       errors.gsva = NULL)
   gsva.cancel <- reactiveVal(FALSE)
   
   observeEvent( input$button, {
+    runjs("Shiny.setInputValue('plotly_click-click1', null);")
+    runjs("Shiny.setInputValue('plotly_click-click2', null);")
     rv$gs <- NULL
     rv$dat.t <- NULL
     rv$p <- NULL
     rv$p2 <- NULL
     rv$p3 <- NULL
     rv$errors.gsva = NULL
-    rv$matrix <- isolate(matrix())
-    rv$genesets <- isolate(genesets())
     gsva.cancel(FALSE)
     modalGSVAUI("modal.text")
     # future() cannot take reactive values, so we must isolate() them
@@ -96,7 +96,6 @@ function(input, output, session) {
   # PLOT1 RENDER
   plot1_Server("plot1", rv)
 
-
   # PLOT2 RENDER
   eventData1 <- reactive({
     req(rv$dat.t)
@@ -112,7 +111,8 @@ function(input, output, session) {
     ind <- event_data("plotly_click", source = "click2")
     ind <- ind$pointNumber+1
   })
-  plot3_Server("plot3", eventData2, rv, rv$matrix, rv$genesets)
+  # plot3_Server("plot3", eventData2, rv, rv$matrix, rv$genesets)
+  plot3_Server("plot3", eventData2, rv, matrix, genesets)
   
   # DWN BTN
   downloadServer("download", reactive(rv$gs))
