@@ -41,6 +41,8 @@ function(input, output, session) {
     rv$gs <- NULL
     rv$dat.t <- NULL
     rv$p <- NULL
+    rv$p2 <- NULL
+    rv$p3 <- NULL
     rv$errors.gsva = NULL
     rv$matrix <- isolate(matrix())
     rv$genesets <- isolate(genesets())
