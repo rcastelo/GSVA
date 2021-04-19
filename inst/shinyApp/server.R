@@ -111,7 +111,6 @@ function(input, output, session) {
     ind <- event_data("plotly_click", source = "click2")
     ind <- ind$pointNumber+1
   })
-  # plot3_Server("plot3", eventData2, rv, rv$matrix, rv$genesets)
   plot3_Server("plot3", eventData2, rv, matrix, genesets)
   
   # DWN BTN
