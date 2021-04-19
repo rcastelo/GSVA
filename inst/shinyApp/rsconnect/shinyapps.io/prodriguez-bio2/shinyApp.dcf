@@ -1,0 +1,13 @@
+name: shinyApp
+title: shinyApp
+username:
+account: prodriguez-bio2
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 3971711
+bundleId: 4476074
+url: https://prodriguez-bio2.shinyapps.io/shinyapp/
+when: 1618503477.40691
+lastSyncTime: 1618503477.40694
+asMultiple: FALSE
+asStatic: FALSE
