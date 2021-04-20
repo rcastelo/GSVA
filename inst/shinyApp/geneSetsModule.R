@@ -21,7 +21,7 @@ geneSetsServer <- function(id){
   moduleServer( id, function(input, output, session){
     geneSets <- reactive({
       if(input$genesetSourceType == "fileGeneset"){
-        if(is.null(input$genesetFile)) return(NULL)
+        if(is.null(input$genesetFile)) return(NULL) #this is in order to disable "run" btn
         genesets <- getGmt(input$genesetFile$datapath)
       } else {
         if(is.null(input$genesetVar)) return(NULL)

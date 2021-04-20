@@ -30,26 +30,46 @@ function(input, output, session) {
   
   # ARGUMENTS
   argInp <- argumentsDataServer("argumentsInput")
+  
 
   #### GSVA RESULTS ####
   
+  ## REACTIVE VALUES
   rv <- reactiveValues(gs=NULL, dat.t=NULL, n=NULL, dd.col=NULL, p=NULL, 
-                       errors.gsva = NULL)
+                       p2=NULL, p3=NULL, errors.gsva = NULL, sample.c = NULL)
   gsva.cancel <- reactiveVal(FALSE)
   
+  ## GSVA RESULT
   observeEvent( input$button, {
+    
+    ## This js is in order to reset the event_data from the plotlys,
+    ## so every time the .user hits the 'run' button, plotlys get back to null
     runjs("Shiny.setInputValue('plotly_click-click1', null);")
     runjs("Shiny.setInputValue('plotly_click-click2', null);")
+    
+    ## here we reset all the reactiveValues to NULL
     rv$gs <- NULL
     rv$dat.t <- NULL
     rv$p <- NULL
     rv$p2 <- NULL
     rv$p3 <- NULL
-    rv$errors.gsva = NULL
+    rv$sample.c <- NULL
+    rv$errors.gsva <- NULL
+    
+    ## this is a flag for the future. Futures cannot be canceled or
+    ## terminated in a strict way, so when they get interrupted they
+    ## throw an error that is not related to gsva(). When future is 
+    ## interrupted, the flag goes TRUE in order to make the errors
+    ## message print NULL
     gsva.cancel(FALSE)
+    
     modalGSVAUI("modal.text")
-    # future() cannot take reactive values, so we must isolate() them
+    
+    ## future() cannot take reactive values, so we must isolate() them
     future({
+      ## sink() will redirect all console cats and prints to a
+      ## text file that the main session will be reading in order
+      ## to print the progress bar from bplaply()
       sink(rout)
       result <- gsva(isolate(matrix()),
                      isolate(genesets()), 
@@ -64,20 +84,35 @@ function(input, output, session) {
                      ssgsea.norm=isolate(argInp$ssgseaNorm()),
                      verbose=TRUE)
       sink()
+      ## when gsva() ends, we reset the console text file to empty
       write("", file=rout)
       return(result)
     }, seed = TRUE) %...>%
       (function(result){
+        ## the future's result will be the gsva() result, and we save it
+        ## and transform it in reactiveValues(). In order to make the future
+        ## not block the app at an inner-session level, we save the results in
+        ## reactiveValues() and then at the end of the observeEvent() we return NULL
+        ## in order to make the plots.
+        ## https://github.com/rstudio/promises/issues/23#issuecomment-386687705
         rv$gs <- result
         rv$dat.t <- melt(as.data.table(rv$gs, keep.rownames = "gene.sets"),
                          variable.name = "Sample", id.vars="gene.sets")
         rv$n <- length(levels(rv$dat.t$Sample))
         rv$dd.col <- hcl(h = seq(15, 375, length=rv$n), l = 65, c = 100)[1:rv$n]
         names(rv$dd.col)  <- levels(rv$dat.t$Sample)
+        
+        ## finally, we leave the console.text file empty again and
+        ## remove the modal
         write("", file=rout)
         removeModal()
       }) %...!%
       (function(error){
+        ## there can be two ways to get an error here: 
+        ## 1. gsva() fails, which is an ok error and should be returnet to user
+        ## 2. User interrupts the future, which shouldn't be printed, that's
+        ## why I use a flag to identify if error comes from pressing "Cancel" btn
+        ## on the modal
         removeModal()
         write("", file=rout)
         if(gsva.cancel()){
