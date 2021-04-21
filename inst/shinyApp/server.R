@@ -5,22 +5,8 @@ function(input, output, session) {
   file.create(rout)
   console.text <- reactiveFileReader(200, session, rout, readLines, warn=F)
   
-  # ERRORS MESSAGES
-  output$errorsGsva <- renderText({
-    req(argInp$varMinsz(), argInp$varMaxsz(), argInp$selectedTau())
-    rv$errors.gsva
-  })
-
-  # ENABLING 'RUN' BTN
-  observe({
-    if(!is.null(matrix()) && !is.null(genesets())){
-      enable("button")
-    } else {
-      disable("button")
-    }
-  })
   
-  ### INPUTS ###
+  ##################### INPUTS #####################
   
   # DATA MATRIX
   matrix <- matrixServer("matrix1")
@@ -31,8 +17,9 @@ function(input, output, session) {
   # ARGUMENTS
   argInp <- argumentsDataServer("argumentsInput")
   
+  
 
-  #### GSVA RESULTS ####
+  ##################### GSVA RESULTS ################
   
   ## REACTIVE VALUES
   rv <- reactiveValues(gs=NULL, dat.t=NULL, n=NULL, dd.col=NULL, p=NULL, 
@@ -128,6 +115,10 @@ function(input, output, session) {
   # PRINTING CONSOLE.TEXT
   modalGSVAServer("modal.text", console.text, gsva.cancel, rout)
   
+  
+  
+  ##################### OUTPUTS ##################
+  
   # PLOT1 RENDER
   plot1_Server("plot1", rv)
 
@@ -139,7 +130,6 @@ function(input, output, session) {
   })
   plot2_Server("plot2", eventData1, rv)
   
-  
   # PLOT3 RENDER
   eventData2 <- reactive({
     req(rv$p2)
@@ -148,7 +138,39 @@ function(input, output, session) {
   })
   plot3_Server("plot3", eventData2, rv, matrix, genesets)
   
-  # DWN BTN
+  # ERRORS MESSAGES
+  output$errorsGsva <- renderText({
+    req(argInp$varMinsz(), argInp$varMaxsz(), argInp$selectedTau())
+    rv$errors.gsva
+  })
+  
+  # SESSION INFO
+  output$sessionInfo <- renderPrint({
+    sessionInfo()
+  })
+  
+  
+  ##################### UI SETUPS #####################
+  
+  ## ENABLING 'RUN' BTN
+  observe({
+    if(!is.null(matrix()) && !is.null(genesets())){
+      enable("button")
+    } else {
+      disable("button")
+    }
+  })
+  
+  ## HIDE 'GeneSets' PANEL WHILE THERE IS NO GSVA OBJECT
+  observe({
+    if(is.null(rv$gs)) {
+      hideTab(inputId="Panels", target="GeneSets")
+    } else {
+      showTab(inputId="Panels", target="GeneSets")
+    }
+  })
+  
+  # DNLD BTN
   downloadServer("download", reactive(rv$gs))
   
   # CLOSE BTN
@@ -183,10 +205,6 @@ function(input, output, session) {
     any given Gene Set in this Sample,  click on any point in this plot and a
     second plot will appear bellow it", "<br/>", sep="<br/>"))
   })
-  
-  # SESSION INFO
-  output$sessionInfo <- renderPrint({
-    sessionInfo()
-  })
+
 
 }
