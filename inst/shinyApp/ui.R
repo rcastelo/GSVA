@@ -33,7 +33,11 @@ fluidPage(
       ))
     ),
     mainPanel(width=6,
+<<<<<<< HEAD
               tabsetPanel(type="tabs",
+=======
+              tabsetPanel(id = "Panels", type="tabs",
+>>>>>>> 8dfc5494f0608cb5bbe03ef57fbf5f8532fe0b7d
                           tabPanel("Samples",
                                    textOutput("errorsGsva"),
                                    htmlOutput("text1"),
@@ -41,7 +45,11 @@ fluidPage(
                                    tableOutput("result"),
                                    downloadUI("download"),
                                    closeBtnUI("close")),
+<<<<<<< HEAD
                           tabPanel("Gene Sets",
+=======
+                          tabPanel("GeneSets",
+>>>>>>> 8dfc5494f0608cb5bbe03ef57fbf5f8532fe0b7d
                                    uiOutput("text2"),
                                    htmlOutput("text3"),
                                    plot2_UI("plot2"),
