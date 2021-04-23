@@ -7,7 +7,7 @@ geneSetsUI <- function(id){
     conditionalPanel(
       condition = "input.genesetSourceType == 'fileGeneset'", ns = ns,
       fileInput(ns("genesetFile"), "Choose GeneSet file:",
-                accept = ".gmt")
+                accept = c(".gmt", "text/csv", ".csv"))
     ),
     conditionalPanel(
       condition = "input.genesetSourceType == 'varGeneset'", ns = ns, 
@@ -22,7 +22,12 @@ geneSetsServer <- function(id){
     geneSets <- reactive({
       if(input$genesetSourceType == "fileGeneset"){
         if(is.null(input$genesetFile)) return(NULL) #this is in order to disable "run" btn
-        genesets <- getGmt(input$genesetFile$datapath)
+        ext <- tools::file_ext(input$genesetFile$name)
+        genesets <- 
+          switch(ext,
+                 csv = as.list(read.csv(input$genesetFile$datapath)),
+                 gmt = getGmt(input$genesetFile$datapath)
+        )
       } else {
         if(is.null(input$genesetVar)) return(NULL)
         genesets <- get(input$genesetVar)
