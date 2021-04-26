@@ -29,7 +29,15 @@ fluidPage(
           radioButtons("arg", "Change default settings:",
                        c("No" = "no",
                          "Yes" = "yes")),
-          actionButton("button", "Run"))
+          actionButton("button", "Run"),
+          fluidRow(
+            column(12,
+                   HTML("<br>"),
+                   downloadUI("download"),
+                   closeBtnUI("close")
+                   )
+            )
+          )
       ))
     ),
     mainPanel(width=6,
@@ -38,15 +46,14 @@ fluidPage(
                                    textOutput("errorsGsva"),
                                    htmlOutput("text1"),
                                    plot1_UI("plot1"),
-                                   tableOutput("result"),
-                                   downloadUI("download"),
-                                   closeBtnUI("close")),
+                                   tableOutput("result")
+                                   ),
                           tabPanel("GeneSets",
                                    uiOutput("text2"),
                                    htmlOutput("text3"),
                                    plot2_UI("plot2"),
                                    plot3_UI("plot3")
-                                   ),
+                          ),
                           tabPanel("Session Info",
                                    verbatimTextOutput("sessionInfo"))
               )

@@ -122,10 +122,9 @@ function(input, output, session) {
 
   # PLOT2 RENDER
   eventData1 <- reactive({
-    req(rv$dat.t)
+    if(is.null(rv$p))return(NULL)
     ind <- event_data("plotly_click", source = "click1")
     ind <- ind$curveNumber+1
-
   })
   plot2_Server("plot2", eventData1, rv)
 
@@ -134,7 +133,6 @@ function(input, output, session) {
     req(rv$p2)
     ind <- event_data("plotly_click", source = "click2")
     ind <- ind$pointNumber+1
-
   })
   plot3_Server("plot3", eventData2, rv, matrix, genesets)
 
@@ -161,12 +159,12 @@ function(input, output, session) {
     }
   })
   
-  ## HIDE 'GeneSets' PANEL WHILE THERE IS NO GSVA OBJECT
+  ## HIDE 'GeneSets' PANEL WHILE THERE IS NO CLICK EVENT ON THE FIRST PLOT
   observe({
-    if(is.null(rv$gs)) {
-      hideTab(inputId="Panels", target="GeneSets")
+    if( length(eventData1()) == 0){
+      hideTab(inputId = "Panels", target = "GeneSets")
     } else {
-      showTab(inputId="Panels", target="GeneSets")
+      showTab(inputId = "Panels", target = "GeneSets", select = TRUE)
     }
   })
   
