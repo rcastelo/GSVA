@@ -1,5 +1,4 @@
-.shiny-output-error-validation {
-	font-size: 16px;
-	font-weight: bold;
-	color: green;
-      }
+#errorsGsva{color: red;
+font-size: 20px;
+font-weight: bold;
+}
