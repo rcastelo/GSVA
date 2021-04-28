@@ -12,7 +12,7 @@ argumentsDataUI <- function(id) {
         column(
           12,
           selectInput(ns("method"), "Choose method:",
-                      c("gsva","ssgsea","zscore","plage")),
+                      choices = methodChoices),
           selectInput(ns("kcdf"), "Choose kcdf:",
                       c("Gaussian","Poisson","none")),
           radioButtons(ns("absRanking"), "abs.ranking:",
