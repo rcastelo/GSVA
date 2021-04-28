@@ -129,6 +129,12 @@ function(input, output, session) {
   plot2_Server("plot2", eventData1, rv)
 
   # PLOT3 RENDER
+  
+  ## Whenever the user clicks on the first plot, the third one resets
+  observeEvent(eventData1(), {
+    runjs("Shiny.setInputValue('plotly_click-click2', null);")
+  })
+  
   eventData2 <- reactive({
     req(rv$p2)
     ind <- event_data("plotly_click", source = "click2")
