@@ -920,11 +920,6 @@ zscore <- function(X, geneSets, parallel.sz, verbose=TRUE,
   rownames(es) <- names(geneSets)
   colnames(es) <- colnames(X)
 
-  if (verbose && length(geneSets) > n) {
-    setTxtProgressBar(get("progressBar", envir=globalenv()), 1)
-    close(get("progressBar", envir=globalenv()))
-  }
-
   es
 }
 

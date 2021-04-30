@@ -12,27 +12,21 @@ argumentsDataUI <- function(id) {
         column(
           12,
           selectInput(ns("method"), "Choose method:",
-                      c("gsva","ssgsea","zscore","plage")),
+                      choices = methodChoices),
           selectInput(ns("kcdf"), "Choose kcdf:",
                       c("Gaussian","Poisson","none")),
           radioButtons(ns("absRanking"), "abs.ranking:",
                        c("False" = FALSE,
                          "True" = TRUE)),
-          numericInput(ns("minSz"),"min.sz:",value = 1),
-          numericInput(ns("maxSz"),"max.sz (Write 0 for infinite):",value = 0),
+          numericInput(ns("minSz"),"min.sz:", value = 1),
+          numericInput(ns("maxSz"),"max.sz (Write 0 for infinite):", value = 0),
           radioButtons(ns("mxDiff"), "mx.diff:",
                        c("True" = TRUE,
                          "False" = FALSE)),
-          conditionalPanel(
-            condition = "input.method == 'gsva'", ns = ns, 
-            numericInput(ns("tau1"),"tau:",value = 1)
-          ),
-          conditionalPanel(
-            condition = "input.method == 'ssgsea'", ns = ns, 
-            numericInput(ns("tau2"),"tau:",value = 0.25),
-            radioButtons(ns("ssgseaNorm"), "ssgsea.norm:",
-                         c("True" = TRUE,
-                           "False" = FALSE)))
+          numericInput(ns("tau"),"tau:", value = 1),
+          radioButtons(ns("ssgseaNorm"), "ssgsea.norm:",
+                       c("True" = TRUE,
+                         "False" = FALSE))
         )))
     )
   )
@@ -40,6 +34,27 @@ argumentsDataUI <- function(id) {
 
 argumentsDataServer <- function(id){
   moduleServer(id, function(input, output, session){
+    
+    observeEvent(input$method, {
+      toggleElement("kcdf", condition = input$method %in% c("gsva", "ssgsea"))
+      toggleElement("absRanking", condition = input$method %in% c("gsva", "ssgsea"))
+      toggleElement("ssgseaNorm", condition = input$method %in% "ssgsea")
+      toggleElement("mxDiff", condition = input$method %in% "gsva")
+      toggleElement("tau", condition = input$method %in% c("gsva", "ssgsea"))
+      
+      if(input$method == "gsva"){
+        updateNumericInput(inputId = "tau", value = 1)
+      } else {
+        updateNumericInput(inputId = "tau", value = 0.25)
+      }
+      
+      if(input$method %in% c("zscore", "plage")){
+        updateSelectInput(inputId = "kcdf", selected = "Gaussian")
+      }
+      
+    })
+    
+    #"absRanking", "ssgseaNorm", "mxDiff", "tau"
     varMinsz <-  reactive({
       validate(need(!is.na(input$minSz), "Value 'min.sz' cannot be empty and must be an integer value"))
       input$minSz })
@@ -47,16 +62,11 @@ argumentsDataServer <- function(id){
       validate(need(!is.na(input$maxSz), "Value 'max.sz' cannot be empty and must be an integer value"))
       ifelse(input$maxSz==0, Inf, input$maxSz) })
     selectedTau <-  reactive({
-      if(input$method == "gsva"){
-        validate(need(!is.na(input$tau1), "Value 'tau' cannot be empty and must be an integer value"))
-        input$tau1
+      if(input$method %in% c("gsva", "ssgsea")){
+        validate(need(!is.na(input$tau), "Value 'tau' cannot be empty and must be an integer value"))
+        input$tau
       } else {
-        if(input$method == "ssgsea"){
-          validate(need(!is.na(input$tau2), "Value 'tau' cannot be empty and must be an integer value"))
-          input$tau2
-        } else {
-          NULL
-        }
+        NULL
       }
     })
     method <-  reactive({ input$method })
