@@ -2,3 +2,12 @@
 font-size: 20px;
 font-weight: bold;
 }
+
+#title_gsva {
+  background-color: black;
+}
+
+#app_title {
+  color: white;
+  font-weight: bold;
+}

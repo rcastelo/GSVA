@@ -21,3 +21,8 @@ source("matrixModule.R")
 source("geneSetsModule.R")
 source("argumentsDataModule.R")
 source("closeModule.R")
+
+methodChoices <- c( "GSVA" = "gsva",
+                    "ssGSEA" = "ssgsea",
+                    "zscore" = "zscore",
+                    "PLAGE" = "plage")
