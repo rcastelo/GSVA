@@ -66,27 +66,3 @@
   m@x <- unlist(x, use.names=FALSE)
   m
 }
-
-## filter out genes which non-zero values have
-## constant expression values
-.filterFeaturesSparse <- function(expr, method) {
-  
-  sdGenes <- sapply(.sparseToList(expr, 1), sd)
-  
-  if (any(sdGenes == 0) || any(is.na(sdGenes))) {
-    warning(sum(sdGenes == 0 | is.na(sdGenes)),
-            " genes with constant expression values throuhgout the samples.")
-    if (method != "ssgsea") {
-      warning("Since argument method!=\"ssgsea\", genes with constant expression values are discarded.")
-      expr <- expr[sdGenes > 0 & !is.na(sdGenes), ]
-    }
-  }
-  
-  if (nrow(expr) < 2)
-    stop("Less than two genes in the input assay object\n")
-  
-  if(is.null(rownames(expr)))
-    stop("The input assay object doesn't have rownames\n")
-  
-  expr
-}

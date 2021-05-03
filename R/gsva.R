@@ -86,13 +86,10 @@ setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
   }
   expr <- assays(se)[[annotation]]
   
-  ## filter genes according to verious criteria,
+  ## filter genes according to various criteria,
   ## e.g., constant expression
-  if(is(expr, "dgCMatrix")){
-    expr <- .filterFeaturesSparse(expr, method)
-  } else {
-    expr <- .filterFeatures(expr, method)
-  }
+  
+  expr <- .filterFeatures(expr, method)
   
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
@@ -144,7 +141,7 @@ setMethod("gsva", signature(expr="dgCMatrix", gset.idx.list="list"),
   
   ## filter genes according to verious criteria,
   ## e.g., constant expression
-  expr <- .filterFeaturesSparse(expr, method)
+  expr <- .filterFeatures(expr, method)
   
   ## map to the actual features for which expression data is available
   mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
