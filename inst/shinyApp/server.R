@@ -22,7 +22,8 @@ function(input, output, session) {
   
   ## REACTIVE VALUES
   rv <- reactiveValues(gs=NULL, dat.t=NULL, n=NULL, dd.col=NULL, p=NULL, 
-                       p2=NULL, p3=NULL, errors.gsva = NULL, sample.c = NULL)
+                       p2=NULL, p3=NULL, errors.gsva = NULL, sample.c = NULL,
+                       method=NULL)
   gsva.cancel <- reactiveVal(FALSE)
   
   ## GSVA RESULT
@@ -41,6 +42,7 @@ function(input, output, session) {
     rv$p3 <- NULL
     rv$sample.c <- NULL
     rv$errors.gsva <- NULL
+    rv$method <- argInp$method()
     
     ## this is a flag for the future. Futures cannot be canceled or
     ## terminated in a strict way, so when they get interrupted they
@@ -129,6 +131,12 @@ function(input, output, session) {
   plot2_Server("plot2", eventData1, rv)
 
   # PLOT3 RENDER
+  
+  ## Whenever the user clicks on the first plot, the third one resets
+  observeEvent(eventData1(), {
+    runjs("Shiny.setInputValue('plotly_click-click2', null);")
+  })
+  
   eventData2 <- reactive({
     req(rv$p2)
     ind <- event_data("plotly_click", source = "click2")

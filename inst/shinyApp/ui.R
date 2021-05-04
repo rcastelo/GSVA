@@ -1,16 +1,17 @@
 fluidPage( 
   theme = shinytheme("spacelab"),
   shinyjs::useShinyjs(),
-  add_busy_spinner(spin = "double-bounce", position = "bottom-right", height = "100px", width = "100px"),
+  add_busy_spinner(spin = "double-bounce", position = "bottom-right",
+                   height = "100px", width = "100px"),
   tags$head(
     tags$link(rel = "stylesheet", type = "text/css", href = "style.css")
   ),
-  titlePanel(
-    fluidRow(
+  titlePanel( 
+    fluidRow(id = "title_gsva",
       column(6,
-             h2("GSVA Shiny App", align="left")),
+             h2(id="app_title", "GSVA SHINY APP", align="left")),
       column(6,
-             tags$img(src="GSVA.png", align="right", height=75, width=75))
+             h2(tags$img(src="GSVA.png", align="right", height=75, width=75)))
     ), windowTitle="GSVA"),
   
   fluidRow(
