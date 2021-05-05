@@ -11,3 +11,12 @@ font-weight: bold;
   color: white;
   font-weight: bold;
 }
+/**
+.main-header {
+  max-height: 75px;
+}
+
+.main-header .logo {
+  max-height: 75px;
+}
+**/

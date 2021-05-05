@@ -1,64 +1,59 @@
-fluidPage( 
-  theme = shinytheme("spacelab"),
-  shinyjs::useShinyjs(),
-  add_busy_spinner(spin = "double-bounce", position = "bottom-right",
-                   height = "100px", width = "100px"),
-  tags$head(
-    tags$link(rel = "stylesheet", type = "text/css", href = "style.css")
+dashboardPage(
+  title = "GSVA Shiny Application",
+  dashboardHeader(
+    tags$li(class = "dropdown",
+            tags$style(".main-header {max-height: 75px}"),
+            tags$style(".main-header .logo {height: 75px}"),
+            tags$div("GSVA Shiny Application", style = "font-size: 30px; 
+                     color: white; font-weight: bold;")
+    ),
+    title = tags$img(src="GSVA.png", height=75, width=75)
   ),
-  titlePanel( 
-    fluidRow(id = "title_gsva",
-      column(6,
-             h2(id="app_title", "GSVA SHINY APP", align="left")),
-      column(6,
-             h2(tags$img(src="GSVA.png", align="right", height=75, width=75)))
-    ), windowTitle="GSVA"),
-  
-  fluidRow(
-    column(
-      width=3,
-      h3("Data input"),
-      #Select data source
-      wellPanel(fluidRow(
-        column(
-          12,
-          matrixUI("matrix1"),
-          fluidRow(column(12,
-                          HTML("<br>"))),
-          geneSetsUI("genes1"),
-          HTML("<br>"),
-          radioButtons("arg", "Change default settings:",
-                       c("No" = "no",
-                         "Yes" = "yes")),
-          actionButton("button", "Run"),
-          fluidRow(
-            column(12,
-                   HTML("<br>"),
-                   downloadUI("download"),
-                   closeBtnUI("close")
-                   )
-            )
-          )
-      ))
+  dashboardSidebar(
+    tags$style(".left-side, .main-sidebar {padding-top: 75px}"),
+    tags$head(
+      tags$link(rel = "stylesheet", type = "text/css", href = "style.css")
     ),
-    mainPanel(width=6,
-              tabsetPanel(id = "Panels", type="tabs",
-                          tabPanel("Samples",
-                                   textOutput("errorsGsva"),
-                                   htmlOutput("text1"),
-                                   plot1_UI("plot1"),
-                                   tableOutput("result")
-                                   ),
-                          tabPanel("GeneSets",
-                                   uiOutput("text2"),
-                                   htmlOutput("text3"),
-                                   plot2_UI("plot2"),
-                                   plot3_UI("plot3")
-                          ),
-                          tabPanel("Session Info",
-                                   verbatimTextOutput("sessionInfo"))
-              )
+    h3("Data input"),
+    #Select data source
+    matrixUI("matrix1"),
+    br(),
+    geneSetsUI("genes1"),
+    br(),
+    radioButtons("arg", "Change default settings:",
+                 c("No" = "no",
+                   "Yes" = "yes")),
+    actionButton("button", "Run"),
+    br(),
+    downloadUI("download"),
+    closeBtnUI("close")
+  ),
+  dashboardBody(
+    shinyjs::useShinyjs(),
+    add_busy_spinner(spin = "double-bounce", position = "bottom-right",
+                     height = "100px", width = "100px"),
+    box(
+      width = 9,
+      tabsetPanel(id = "Panels", type="tabs",
+                  tabPanel("Samples",
+                           textOutput("errorsGsva"),
+                           htmlOutput("text1"),
+                           plot1_UI("plot1"),
+                           tableOutput("result")
+                  ),
+                  tabPanel("GeneSets",
+                           uiOutput("text2"),
+                           htmlOutput("text3"),
+                           plot2_UI("plot2"),
+                           plot3_UI("plot3")
+                  ),
+                  tabPanel("Session Info",
+                           verbatimTextOutput("sessionInfo"))
+      )
     ),
-    argumentsDataUI("argumentsInput")
+    box(
+      width = 3,
+      argumentsDataUI("argumentsInput")
+    )
   )
 )
