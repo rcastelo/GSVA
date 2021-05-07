@@ -1,6 +1,6 @@
 downloadUI <- function(id) {
   ns <- NS(id)
-  hidden(downloadButton(ns('downloadData'), 'Download'))
+  hidden(downloadButton(ns('downloadData'), 'Download', class = "dwn-btn"))
 }
 
 downloadServer <- function(id, gs){

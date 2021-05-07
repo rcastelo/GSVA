@@ -1,6 +1,6 @@
 closeBtnUI <- function(id){
   ns <- NS(id)
-  hidden(actionButton(ns("closeSave"), "Save & Close"))
+  hidden(actionButton(ns("closeSave"), "Save & Close", class = "cls-btn"))
 }
 
 closeBtnServer <- function(id, gs){

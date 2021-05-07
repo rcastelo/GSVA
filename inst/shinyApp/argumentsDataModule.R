@@ -5,7 +5,13 @@ argumentsDataUI <- function(id) {
   #UI Definition
   conditionalPanel(
     condition = "input.arg == 'yes'",
-    h3("Parameters"),
+    fluidRow(
+      column(
+        width = 12,
+        align = "center",
+        h3("Parameters", style="font-weight: bold")
+      )
+    ),
     wellPanel(
       
       selectInput(ns("method"), "Choose method:",
