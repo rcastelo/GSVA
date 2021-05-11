@@ -40,7 +40,7 @@ argumentsDataServer <- function(id){
     
     observeEvent(input$method, {
       toggleElement("kcdf", condition = input$method %in% c("gsva", "ssgsea"))
-      toggleElement("absRanking", condition = input$method %in% c("gsva", "ssgsea"))
+      toggleElement("absRanking", condition = input$method %in% "gsva")
       toggleElement("ssgseaNorm", condition = input$method %in% "ssgsea")
       toggleElement("mxDiff", condition = input$method %in% "gsva")
       toggleElement("tau", condition = input$method %in% c("gsva", "ssgsea"))
