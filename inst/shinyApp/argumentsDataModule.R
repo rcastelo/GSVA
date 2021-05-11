@@ -3,33 +3,36 @@ argumentsDataUI <- function(id) {
   ns <- NS(id)
   
   #UI Definition
-  column(
-    width=3,
-    conditionalPanel(
-      condition = "input.arg == 'yes'",
-      h3("Parameters"),
-      wellPanel(fluidRow(
-        column(
-          12,
-          selectInput(ns("method"), "Choose method:",
-                      choices = methodChoices),
-          selectInput(ns("kcdf"), "Choose kcdf:",
-                      c("Gaussian","Poisson","none")),
-          radioButtons(ns("absRanking"), "abs.ranking:",
-                       c("False" = FALSE,
-                         "True" = TRUE)),
-          numericInput(ns("minSz"),"min.sz:", value = 1),
-          numericInput(ns("maxSz"),"max.sz (Write 0 for infinite):", value = 0),
-          radioButtons(ns("mxDiff"), "mx.diff:",
-                       c("True" = TRUE,
-                         "False" = FALSE)),
-          numericInput(ns("tau"),"tau:", value = 1),
-          radioButtons(ns("ssgseaNorm"), "ssgsea.norm:",
-                       c("True" = TRUE,
-                         "False" = FALSE))
-        )))
+  conditionalPanel(
+    condition = "input.arg == 'yes'",
+    fluidRow(
+      column(
+        width = 12,
+        align = "center",
+        h3("Parameters", style="font-weight: bold")
+      )
+    ),
+    wellPanel(
+      
+      selectInput(ns("method"), "Choose method:",
+                  choices = methodChoices),
+      selectInput(ns("kcdf"), "Choose kcdf:",
+                  c("Gaussian","Poisson","none")),
+      radioButtons(ns("absRanking"), "abs.ranking:",
+                   c("False" = FALSE,
+                     "True" = TRUE)),
+      numericInput(ns("minSz"),"min.sz:", value = 1),
+      numericInput(ns("maxSz"),"max.sz (Write 0 for infinite):", value = 0),
+      radioButtons(ns("mxDiff"), "mx.diff:",
+                   c("True" = TRUE,
+                     "False" = FALSE)),
+      numericInput(ns("tau"),"tau:", value = 1),
+      radioButtons(ns("ssgseaNorm"), "ssgsea.norm:",
+                   c("True" = TRUE,
+                     "False" = FALSE))
     )
   )
+  
 }
 
 argumentsDataServer <- function(id){
@@ -37,7 +40,7 @@ argumentsDataServer <- function(id){
     
     observeEvent(input$method, {
       toggleElement("kcdf", condition = input$method %in% c("gsva", "ssgsea"))
-      toggleElement("absRanking", condition = input$method %in% c("gsva", "ssgsea"))
+      toggleElement("absRanking", condition = input$method %in% "gsva")
       toggleElement("ssgseaNorm", condition = input$method %in% "ssgsea")
       toggleElement("mxDiff", condition = input$method %in% "gsva")
       toggleElement("tau", condition = input$method %in% c("gsva", "ssgsea"))

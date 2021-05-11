@@ -10,4 +10,29 @@ font-weight: bold;
 #app_title {
   color: white;
   font-weight: bold;
+  font-size: 30px;
 }
+
+.left-side, .main-sidebar {
+  padding-top: 75px;
+}
+
+.main-header {
+  max-height: 75px;
+  }
+
+.main-header .logo {
+  height: 75px;
+  
+}
+
+
+/**
+.main-header {
+  max-height: 75px;
+}
+
+.main-header .logo {
+  max-height: 75px;
+}
+**/
