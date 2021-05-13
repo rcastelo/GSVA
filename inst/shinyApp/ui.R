@@ -29,9 +29,12 @@ dashboardPage(
                    "Yes" = "yes")),
     br(),
     fluidRow(
-      actionButton("button", "Run"),
-      downloadUI("download"),
-      closeBtnUI("close"),
+      column(
+        width = 12, align = "left",
+        actionButton("button", "Run"),
+        downloadUI("download"),
+        closeBtnUI("close")
+      )
     )
   ),
   
