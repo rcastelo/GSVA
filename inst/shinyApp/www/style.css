@@ -11,6 +11,8 @@ font-weight: bold;
   color: white;
   font-weight: bold;
   font-size: 30px;
+  padding: 5px 5px 5px 5px;
+  margin: 5px 5px 5px 5px;
 }
 
 .left-side, .main-sidebar {
