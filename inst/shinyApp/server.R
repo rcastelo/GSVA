@@ -181,14 +181,17 @@ function(input, output, session) {
   
   # CLOSE BTN
   closeBtnServer("close", reactive(rv$gs))
-
+  
   
   # TEXT1
   output$text1 <- renderUI({
     req(rv$gs)
-    HTML(paste("<br/>", "\t To see the Empirical Cumulative Distribution Function 
-    of a Sample, click on its line in this plot and go
-      to the 'Gene.Set' Panel", "<br/>", sep="<br/>"))
+    tagList(
+      br(),
+      div("To see the Empirical Cumulative Distribution Function 
+      of a Sample, click on its line in this plot and go to the 
+      'Gene.Set' Panel", style="text-align: center;")
+    )
   })
   
   # TABLE
