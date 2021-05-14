@@ -63,8 +63,9 @@ Once `r Biocpkg("GSVA")` is installed, it can be loaded with the following comma
 library(GSVA)
 ```
 
-Given a gene expression data matrix with rows corresponding to genes and columns
-to samples, such as this one simulated from random Gaussian data:
+Given a gene expression data matrix, which we shall call `X`, with rows
+corresponding to genes and columns to samples, such as this one simulated from
+random Gaussian data:
 
 ```{r}
 p <- 10000 ## number of genes
@@ -75,8 +76,9 @@ X <- matrix(rnorm(p*n), nrow=p,
 X[1:5, 1:5]
 ```
 
-Given a collection of gene sets stored, for instance, in a `list` object such as
-this one with genes sampled uniformly at random without replacement into the gene sets:
+Given a collection of gene sets stored, for instance, in a `list` object, which
+we shall call `gs`, with genes sampled uniformly at random without replacement
+into 100 different gene sets:
 
 ```{r}
 ## sample gene set sizes
@@ -95,24 +97,26 @@ dim(gsva.es)
 gsva.es[1:5, 1:5]
 ```
 
-So, the first argument to the `gsva()` function is the gene expression data matrix
-and the second the collection of gene sets. The `gsva()` function can take the input
-expression data and gene sets using different specialized containers that facilitate
-the access and manipulation of molecular and phenotype data, as well as their associated
-metadata. Another advanced features include the use of on-disk and parallel backends to
-enable using GSVA on large molecular data sets and speed up computing time. You will
-find information on all these features in this vignette.
+The first argument to the `gsva()` function is the gene expression data matrix
+and the second the collection of gene sets. The `gsva()` function can take the
+input expression data and gene sets using different specialized containers that
+facilitate the access and manipulation of molecular and phenotype data, as well
+as their associated metadata. Another advanced features include the use of
+on-disk and parallel backends to enable, respectively, using GSVA on large
+molecular data sets and speed up computing time. You will find information on
+these features in this vignette.
 
 # Introduction
 
 Gene set variation analysis (GSVA) provides an estimate of pathway activity
-by transforming an input gene-by-sample expression data matrix
-into a gene-set-by-sample one. This resulting expression data matrix can be
-then used with classical analytical methods such as differential expression,
-classification, survival analysis, clustering or correlation analysis in a
-pathway-centric manner. One can also perform sample-wise comparisons between
-pathways and other molecular data types such as microRNA expression or binding
-data, copy-number variation (CNV) data or single nucleotide polymorphisms (SNPs).
+by transforming an input gene-by-sample expression data matrix into a
+corresponding gene-set-by-sample expression data matrix. This resulting
+expression data matrix can be then used with classical analytical methods such
+as differential expression, classification, survival analysis, clustering or
+correlation analysis in a pathway-centric manner. One can also perform
+sample-wise comparisons between pathways and other molecular data types such
+as microRNA expression or binding data, copy-number variation (CNV) data or
+single nucleotide polymorphisms (SNPs).
 
 The GSVA package provides an implementation of this approach for the following
 methods:
@@ -151,7 +155,7 @@ methods:
 
 The interested user may find full technical details about how these methods
 work in their corresponding articles cited above. If you use any of them in a
-publication, please cite it with the given bibliographic reference.
+publication, please cite them with the given bibliographic reference.
 
 # Overview of the GSVA functionality
 
@@ -197,13 +201,14 @@ the following filters:
    minimum and maximum size, which by default is one for the minimum size and
    has no limit for the maximum size.
 
-If, as a result of this filter, either no genes or gene sets are left, the
-`gsva()` function will prompt an error. A common cause for an error at this
-stage is that gene identifiers between the expression data matrix and the gene
-sets do not belong to the same standard nomenclature and could not be mapped,
-because either the input data were not provided using some of the specialized
-containers described above or the necessary metadata in those containers to
-successfully map gene identifiers is missing.
+If, as a result of applying these three filters, either no genes or gene sets
+are left, the `gsva()` function will prompt an error. A common cause for such
+an error at this stage is that gene identifiers between the expression data
+matrix and the gene sets do not belong to the same standard nomenclature and
+could not be mapped. This may happen because either the input data were not
+provided using some of the specialized containers described above or the
+necessary metadata in those containers that allows the software to successfully
+map gene identifiers, is missing.
 
 By default, the `gsva()` function employs the method described by
 @haenzelmann_castelo_guinney_2013 but this can be changed using the argument
@@ -253,12 +258,12 @@ continuous expression values.
 
 # Gene set definitions and gene identifier mapping
 
-Gene sets constitute a simple, yet useful, way to define pathways, essentially
-because we use pathway membership definitions only, neglecting the information
-on molecular interactions. Gene set definitions are a crucial input to any gene
-set enrichment analysis because if our gene sets do not capture the biological
+Gene sets constitute a simple, yet useful, way to define pathways because we
+use pathway membership definitions only, neglecting the information on molecular
+interactions. Gene set definitions are a crucial input to any gene set
+enrichment analysis because if our gene sets do not capture the biological
 processes we are studying, we will likely not find any relevant insights in our
-data.
+data from an analysis based on these gene sets.
 
 There are multiple sources of gene sets, the most popular ones being
 [The Gene Ontology (GO) project](http://geneontology.org) and
