@@ -9,7 +9,7 @@ argumentsDataUI <- function(id) {
       column(
         width = 12,
         align = "center",
-        h3("Parameters", style="font-weight: bold")
+        h4("Parameters", style="font-weight: bold")
       )
     ),
     wellPanel(

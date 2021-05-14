@@ -1,7 +1,7 @@
 geneSetsUI <- function(id){
   ns <- NS(id)
-  tagList(
-    radioButtons(ns("genesetSourceType"), "Select gene sets:",
+  div( id = ns("genesets-input"),
+    radioButtons(ns("genesetSourceType"), "Select Gene Sets:",
                  c("From file" = "fileGeneset",
                    "From workspace" = "varGeneset")),
     conditionalPanel(

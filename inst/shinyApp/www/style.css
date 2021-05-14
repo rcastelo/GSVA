@@ -15,6 +15,14 @@ font-weight: bold;
   margin: 5px 5px 5px 5px;
 }
 
+#matrix1-matrix-input, #genes1-genesets-input {
+  background-color: #708090;
+}
+
+#arg {
+  background-color: #BC8F8F;
+}
+
 .left-side, .main-sidebar {
   padding-top: 75px;
 }
@@ -26,6 +34,15 @@ font-weight: bold;
 .main-header .logo {
   height: 75px;
   
+}
+
+.run-btn {
+  color: #fff; 
+  background-color: #6495ED;
+  font-weight: bold;
+  border-color: #fff;
+  padding: 5px 5px 5px 5px;
+  margin: 5px 5px 5px 5px;
 }
 
 
