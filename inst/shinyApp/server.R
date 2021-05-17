@@ -210,9 +210,12 @@ function(input, output, session) {
   
   # TEXT3
   output$text3 <- renderUI({
-    HTML(paste("<br/>", "\t To see the Kernel Density Estimation of genes of 
-    any given Gene Set in this Sample,  click on any point in this plot and a
-    second plot will appear bellow it", "<br/>", sep="<br/>"))
+    tagList(
+      br(),
+      div("To see the Kernel Density Estimation of genes of any given
+      Gene Set in this Sample,  click on any point in this plot and a
+      second plot will appear bellow it", style = "text-align: center;")
+    )
   })
-
+  
 }
