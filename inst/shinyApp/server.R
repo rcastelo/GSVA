@@ -200,7 +200,7 @@ function(input, output, session) {
     resultInformation <- data.frame("Nr of gene sets" = nrow(rv$gs),
                                     "Nr of samples" = ncol(rv$gs))
     resultInformation
-  })
+  }, bordered = TRUE)
   
   # TEXT2
   output$text2 <- renderUI({

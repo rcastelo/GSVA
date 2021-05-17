@@ -1,8 +1,9 @@
 geneSetsUI <- function(id){
   ns <- NS(id)
   div( id = ns("genesets-input"),
-    radioButtons(ns("genesetSourceType"), "Select Gene Sets:",
-                 c("From file" = "fileGeneset",
+    radioButtons(ns("genesetSourceType"), 
+                 label = h5("GENE SETS", style="font-weight: bold"),
+                 choices = c("From file" = "fileGeneset",
                    "From workspace" = "varGeneset")),
     conditionalPanel(
       condition = "input.genesetSourceType == 'fileGeneset'", ns = ns,

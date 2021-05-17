@@ -1,8 +1,9 @@
 matrixUI <- function(id){
   ns <- NS(id)
   div(id = ns("matrix-input"),
-    radioButtons(ns("matrixSourceType"), "Select Expression Data Matrix:",
-                 c("From file" = "fileMatrix",
+    radioButtons(ns("matrixSourceType"),
+                 label = h5("EXPRESSION DATA MATRIX", style="font-weight: bold"),
+                 choices = c("From file" = "fileMatrix",
                    "From workspace" = "varMatrix")),
     conditionalPanel(
       condition = "input.matrixSourceType == 'fileMatrix'", ns = ns,
