@@ -12,26 +12,21 @@ dashboardPage(
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "style.css")
     ),
-    fluidRow(
-      column(
-        width = 12,
-        align = "center",
-        h3("Data Input", style="font-weight: bold")
-      )
-    ),
-    # h3("Data input"),
+    div(h3("DATA INPUT", style="font-weight: bold"), align = "center"),
+    br(),
     matrixUI("matrix1"),
     br(),
     geneSetsUI("genes1"),
     br(),
-    radioButtons("arg", "Change default settings?",
+    radioButtons(inputId = "arg",
+                 label = h5("CHANGE DEFAULT SETTINGS?", style="font-weight: bold"),
                  c("No" = "no",
                    "Yes" = "yes")),
     br(),
     fluidRow(
       column(
         width = 12, align = "left",
-        actionButton("button", "Run", class = "run-btn", icon = icon("play-circle"),
+        actionButton("button", "RUN", class = "run-btn", icon = icon("play-circle"),
                      width = "10vw"),
         downloadUI("download"),
         closeBtnUI("close")

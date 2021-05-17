@@ -1,14 +1,7 @@
 downloadUI <- function(id) {
   ns <- NS(id)
   hidden(
-    downloadButton(ns('downloadData'), 'Download',
-                   style = "color: #fff;
-                   background-color: #27ae60;
-                   font-weight: bold;
-                   border-color: #fff;
-                   padding: 5px 14px 5px 14px;
-                   margin: 6px 5px 6px 15px;
-                   width: 10vw;")) 
+    downloadButton(ns('downloadData'), 'DOWNLOAD')) 
 }
 
 downloadServer <- function(id, gs){
