@@ -24,20 +24,24 @@ dashboardPage(
     br(),
     geneSetsUI("genes1"),
     br(),
-    radioButtons("arg", "Change default settings:",
+    radioButtons("arg", "Change default settings?",
                  c("No" = "no",
                    "Yes" = "yes")),
     br(),
     fluidRow(
-      actionButton("button", "Run"),
-      downloadUI("download"),
-      closeBtnUI("close"),
+      column(
+        width = 12, align = "left",
+        actionButton("button", "Run", class = "run-btn", icon = icon("play-circle"),
+                     width = "10vw"),
+        downloadUI("download"),
+        closeBtnUI("close")
+      )
     )
   ),
   
   dashboardBody(
     shinyjs::useShinyjs(),
-    add_busy_spinner(spin = "double-bounce", position = "bottom-right",
+    add_busy_spinner(spin = "cube-grid", position = "bottom-right",
                      height = "100px", width = "100px"),
     fluidRow(
       box(
@@ -47,7 +51,14 @@ dashboardPage(
                              textOutput("errorsGsva"),
                              htmlOutput("text1"),
                              plot1_UI("plot1"),
-                             tableOutput("result")
+                             br(),
+                             fluidRow(
+                               column(
+                                 width = 12,
+                                 align = "center",
+                                 tableOutput("result")
+                               )
+                             )
                     ),
                     tabPanel("GeneSets",
                              uiOutput("text2"),
