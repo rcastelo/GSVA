@@ -700,7 +700,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
   ## more than 100 genes on more than 100 samples
   if (parallel.sz > 1 && length(sample.idxs > 100) && nrow(expr) > 100) {
     if (verbose)
-      cat(sprintf("Estimating ECDFs in parallel\n", parallel.sz))
+      cat(sprintf("Estimating ECDFs in parallel on %d cores\n", as.integer(parallel.sz)))
     iter <- function(Y, n_chunks=BiocParallel::multicoreWorkers()) {
       idx <- splitIndices(nrow(Y), min(nrow(Y), n_chunks))
       i <- 0L
