@@ -1,6 +1,5 @@
 ### LOADING LIBRARIES
 library(shiny)
-library(shinythemes)
 library(plotly)
 library(GSVA)
 library(GSEABase)
