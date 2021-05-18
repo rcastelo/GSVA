@@ -62,7 +62,8 @@
     
     return(plageDelayed(expr, gset.idx.list, parallel.sz, verbose, BPPARAM=BPPARAM))
   }
-  
+
+  stop("Not yet implemented for 'method=\"gsva\"'")
 }
 
 h5BackendRealization <- function(gSetIdx, FUN, Z, bpp) {

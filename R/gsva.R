@@ -22,6 +22,8 @@ setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
   
+  warning("Using 'HDF5Array' objects as input is still in an experimental stage.")
+
   ## filter genes according to verious criteria,
   ## e.g., constant expression
   expr <- .filterFeatures(expr, method)
@@ -69,6 +71,8 @@ setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
   
+  warning("Using 'SingleCellExperiment' objects as input is still in an experimental stage.")
+
   if (length(assays(expr)) == 0L)
     stop("The input SummarizedExperiment object has no assay data.")
   
@@ -139,6 +143,8 @@ setMethod("gsva", signature(expr="dgCMatrix", gset.idx.list="list"),
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
   
+  warning("Using 'dgCMatrix' objects as input is still in an experimental stage.")
+
   ## filter genes according to verious criteria,
   ## e.g., constant expression
   expr <- .filterFeatures(expr, method)
@@ -208,8 +214,8 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
 
   annotpkg <- metadata(se)$annotation
   if (!is.null(annotpkg) && length(annotpkg) > 0 && is.character(annotpkg) && annotpkg != "") {
-    if (!annotpkg %in% installed.packages())
-      stop(sprintf("Please install the nnotation package %s", annotpkg))
+    if (all(!c(annotpkg, paste0(annotpkg, ".db")) %in% installed.packages()))
+      stop(sprintf("Please install the annotation package %s. If %s does not seem to exist as a package, please try to append the suffix .db to its name.", annotpkg, annotpkg))
 
     if (verbose)
       cat("Mapping identifiers between gene sets and feature names\n")
@@ -404,8 +410,8 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
 
   annotpkg <- Biobase::annotation(eset)
   if (length(annotpkg) > 0 && annotpkg != "") {
-    if (!annotpkg %in% installed.packages())
-      stop(sprintf("Please install the nnotation package %s", annotpkg))
+    if (all(!c(annotpkg, paste0(annotpkg, ".db")) %in% installed.packages()))
+      stop(sprintf("Please install the annotation package %s. If %s does not seem to exist as a package, please try to append the suffix .db to its name.", annotpkg, annotpkg))
 
     if (verbose)
       cat("Mapping identifiers between gene sets and feature names\n")
@@ -573,6 +579,8 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   BPPARAM=SerialParam(progressbar=verbose)) {
   
   if(is(expr, "DelayedArray")){
+    warning("Using 'DelayedArray' objects as input is still in an experimental stage.")
+
     return(.gsvaDelayedArray(expr, gset.idx.list, method, kcdf, rnaseq, abs.ranking,
                              parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM))
   }

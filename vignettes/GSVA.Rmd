@@ -256,7 +256,7 @@ In general, the default values for the previous parameters are suitable for
 most analysis settings, which usually consist of some kind of normalized
 continuous expression values.
 
-# Gene set definitions and gene identifier mapping
+# Gene set definitions
 
 Gene sets constitute a simple, yet useful, way to define pathways because we
 use pathway membership definitions only, neglecting the information on molecular
@@ -297,6 +297,173 @@ length(genesbygo)
 head(genesbygo)
 ```
 
+A more sophisticated container for gene sets is the `GeneSetCollection`
+object class defined in the `r Biocpkg("GSEABase")` package, which also
+provides the function `getGmt()` to import
+[gene matrix transposed (GMT)](http://software.broadinstitute.org/cancer/software/gsea/wiki/index.php/Data_formats#GMT:_Gene_Matrix_Transposed_file_format_.28.2A.gmt.29) files such as those
+provided by [MSigDB](https://www.gsea-msigdb.org/gsea/msigdb) into a
+`GeneSetCollection` object. The experiment data package
+`r Biocpkg("GSVAdata")` provides one such object with the old (3.0) version
+of the C2 collection of curated genesets from [MSigDB](https://www.gsea-msigdb.org/gsea/msigdb),
+which can be loaded as follows.
+
+```{r}
+library(GSEABase)
+library(GSVAdata)
+
+data(c2BroadSets)
+class(c2BroadSets)
+c2BroadSets
+```
+
+The documentation of `r Biocpkg("GSEABase")` contains a description of the
+`GeneSetCollection` class and its associated methods.
+
+# Quantification of pathway activity in bulk microarray and RNA-seq data
+
+Here we illustrate how GSVA provides an analogous quantification of pathway
+activity in both microarray and RNA-seq data by using two such datasets that
+have been derived from the same biological samples. More concretely, we will
+use gene expression data of lymphoblastoid cell lines (LCL) from HapMap
+individuals that have been profiled using both technologies
+[@huang_genome-wide_2007, @pickrell_understanding_2010]. These data form part
+of the experimental package `r Biocpkg("GSVAdata")` and the corresponding help
+pages contain details on how the data were processed. We start loading these
+data and verifying that they indeed contain expression data for the same genes
+and samples, as follows:
+
+```{r}
+library(Biobase)
+
+data(commonPickrellHuang)
+
+stopifnot(identical(featureNames(huangArrayRMAnoBatchCommon_eset),
+                    featureNames(pickrellCountsArgonneCQNcommon_eset)))
+stopifnot(identical(sampleNames(huangArrayRMAnoBatchCommon_eset),
+                    sampleNames(pickrellCountsArgonneCQNcommon_eset)))
+```
+Next, for the current analysis we use the subset of canonical pathways from the C2
+collection of MSigDB Gene Sets. These correspond to the following pathways from
+KEGG, REACTOME and BIOCARTA:
+
+```{r}
+canonicalC2BroadSets <- c2BroadSets[c(grep("^KEGG", names(c2BroadSets)),
+                                      grep("^REACTOME", names(c2BroadSets)),
+                                      grep("^BIOCARTA", names(c2BroadSets)))]
+canonicalC2BroadSets
+```
+Additionally, we extend this collection of gene sets with two formed by genes
+with sex-specific expression, which also form part of the `r Biocpkg("GSVAdata")`
+experiment data package. Here we use the constructor function `GeneSet` from the
+`r Biocpkg("GSEABase")` package to build the objects that we add to the
+`GeneSetCollection` object `canonicalC2BroadSets`.
+
+```{r}
+data(genderGenesEntrez)
+
+MSY <- GeneSet(msYgenesEntrez, geneIdType=EntrezIdentifier(),
+                              collectionType=BroadCollection(category="c2"), setName="MSY")
+MSY
+XiE <- GeneSet(XiEgenesEntrez, geneIdType=EntrezIdentifier(),
+                              collectionType=BroadCollection(category="c2"), setName="XiE")
+XiE
+
+canonicalC2BroadSets <- GeneSetCollection(c(canonicalC2BroadSets, MSY, XiE))
+canonicalC2BroadSets
+```
+We calculate now GSVA enrichment scores for these gene sets using first the
+microarray data and then the RNA-seq integer count data. Note that the only
+requirement to do the latter is to set the argument `kcdf="Poisson"`, which is
+`"Gaussian"` by default. Note, however, that if our RNA-seq derived expression
+levels would be continuous, such as log-CPMs, log-RPKMs or log-TPMs, the default
+value of the `kcdf` argument should remain unchanged.
+
+```{r, results="hide"}
+esmicro <- gsva(huangArrayRMAnoBatchCommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500)
+esrnaseq <- gsva(pickrellCountsArgonneCQNcommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500,
+                 kcdf="Poisson")
+```
+We are going to assess how gene expression profiles correlate between microarray
+and RNA-seq data and compare those correlations with the ones derived at pathway
+level. To compare gene expression values of both technologies, we will transform
+first the RNA-seq integer counts into log-CPM units of expression using the
+`cpm()` function from the `r Biocpkg("edgeR")` package.
+
+```{r}
+library(edgeR)
+
+lcpms <- cpm(exprs(pickrellCountsArgonneCQNcommon_eset), log=TRUE)
+```
+We calculate Spearman correlations between gene expression profiles of the
+previous log-CPM values and the microarray RMA values.
+
+```{r}
+genecorrs <- sapply(1:nrow(lcpms),
+                    function(i, expmicro, exprnaseq) cor(expmicro[i, ], exprnaseq[i, ],
+                                                         method="spearman"),
+                    exprs(huangArrayRMAnoBatchCommon_eset), lcpms)
+names(genecorrs) <- rownames(lcpms)
+```
+Now calculate Spearman correlations between GSVA enrichment scores derived
+from the microarray and the RNA-seq data.
+
+```{r}
+pwycorrs <- sapply(1:nrow(esmicro),
+                   function(i, esmicro, esrnaseq) cor(esmicro[i, ], esrnaseq[i, ],
+                                                      method="spearman"),
+                   exprs(esmicro), exprs(esrnaseq))
+names(pwycorrs) <- rownames(esmicro)
+```
+Figure \@ref(fig:compcorrs) below shows the two distributions of these
+correlations and we can see that GSVA enrichment scores provide an agreement
+between microarray and RNA-seq data comparable to the one observed between
+gene-level units of expression.
+
+```{r compcorrs, height=500, width=1000, fig.cap="Comparison of correlation values of gene and pathway expression profiles derived from microarray and RNA-seq data."}
+par(mfrow=c(1, 2), mar=c(4, 5, 3, 2))
+hist(genecorrs, xlab="Spearman correlation", main="Gene level\n(RNA-seq log-CPMs vs microarray RMA)",
+     xlim=c(-1, 1), col="grey", las=1)
+hist(pwycorrs, xlab="Spearman correlation", main="Pathway level\n(GSVA enrichment scores)",
+     xlim=c(-1, 1), col="grey", las=1)
+```
+
+Finally, in Figure \@ref(fig:compsexgenesets) we compare the actual GSVA
+enrichment scores for two gene sets formed by genes with sex-specific expression.
+Concretely, one gene set (XIE) formed by genes that escape chromosome
+X-inactivation in females [@carrel_x-inactivation_2005] and another gene set
+(MSY) formed by genes located on the male-specific region of chromosome Y
+[@skaletsky_male-specific_2003].
+
+```{r compsexgenesets, height=500, width=1000, fig.cap="Comparison of GSVA enrichment scores obtained from microarray and RNA-seq data for two gene sets formed by genes with sex-specific expression."}
+par(mfrow=c(1, 2))
+rmsy <- cor(exprs(esrnaseq)["MSY", ], exprs(esmicro)["MSY", ])
+plot(exprs(esrnaseq)["MSY", ], exprs(esmicro)["MSY", ], xlab="GSVA scores RNA-seq",
+     ylab="GSVA scores microarray", main=sprintf("MSY R=%.2f", rmsy), las=1, type="n")
+abline(lm(exprs(esmicro)["MSY", ] ~ exprs(esrnaseq)["MSY", ]), lwd=2, lty=2, col="grey")
+points(exprs(esrnaseq["MSY", pickrellCountsArgonneCQNcommon_eset$Gender == "Female"]),
+       exprs(esmicro)["MSY", huangArrayRMAnoBatchCommon_eset$Gender == "Female"],
+       col="red", pch=21, bg="red", cex=1)
+points(exprs(esrnaseq)["MSY", pickrellCountsArgonneCQNcommon_eset$Gender == "Male"],
+       exprs(esmicro)["MSY", huangArrayRMAnoBatchCommon_eset$Gender == "Male"],
+       col="blue", pch=21, bg="blue", cex=1)
+legend("topleft", c("female", "male"), pch=21, col=c("red", "blue"), pt.bg=c("red", "blue"), inset=0.01)
+rxie <- cor(exprs(esrnaseq)["XiE", ], exprs(esmicro)["XiE", ])
+plot(exprs(esrnaseq)["XiE", ], exprs(esmicro)["XiE", ], xlab="GSVA scores RNA-seq",
+     ylab="GSVA scores microarray", main=sprintf("XiE R=%.2f", rxie), las=1, type="n")
+abline(lm(exprs(esmicro)["XiE", ] ~ exprs(esrnaseq)["XiE", ]), lwd=2, lty=2, col="grey")
+points(exprs(esrnaseq["XiE", pickrellCountsArgonneCQNcommon_eset$Gender == "Female"]),
+       exprs(esmicro)["XiE", huangArrayRMAnoBatchCommon_eset$Gender == "Female"],
+       col="red", pch=21, bg="red", cex=1)
+points(exprs(esrnaseq)["XiE", pickrellCountsArgonneCQNcommon_eset$Gender == "Male"],
+       exprs(esmicro)["XiE", huangArrayRMAnoBatchCommon_eset$Gender == "Male"],
+       col="blue", pch=21, bg="blue", cex=1)
+legend("topleft", c("female", "male"), pch=21, col=c("red", "blue"), pt.bg=c("red", "blue"), inset=0.01)
+```
+We can see how microarray and RNA-seq single-sample GSVA enrichment scores
+correlate very well in these gene sets, with $\rho=0.80$ for the male-specific
+gene set and $\rho=0.79$ for the female-specific gene set. Male and female
+samples show higher GSVA enrichment scores in their corresponding gene set.
+
 # Example applications
 
 ## Molecular signature identification
@@ -313,8 +480,6 @@ into account. We start by having a quick glance to the data, which forms part of
 the `r Biocpkg("GSVAdata")` package:
 
 ```{r}
-library(GSVAdata)
-
 data(gbm_VerhaakEtAl)
 gbm_eset
 head(featureNames(gbm_eset))
@@ -327,8 +492,8 @@ lapply(brainTxDbSets, head)
 GSVA enrichment scores for the gene sets contained in `brainTxDbSets`
 are calculated, in this case using `mx.diff=FALSE`,  as follows:
 
-```{r}
-gbm_es <- gsva(gbm_eset, brainTxDbSets, mx.diff=FALSE, verbose=FALSE)
+```{r, results="hide"}
+gbm_es <- gsva(gbm_eset, brainTxDbSets, mx.diff=FALSE)
 ```
 
 Figure \@ref(fig:gbmSignature) shows the GSVA enrichment scores obtained for the
@@ -373,6 +538,117 @@ text(0.62,1.21, "Mesenchymal", col="orange", cex=1.2)
 mtext("Gene sets", side=4, line=0, cex=1.5)
 mtext("Samples          ", side=1, line=4, cex=1.5)
 ```
+
+## Differential expression at pathway level
+
+We illustrate here how to conduct a differential expression analysis at
+pathway level. We will use an example gene expression microarray data from
+@armstrong_mll_2002, which consists of 37 different individuals with human
+acute leukemia, where 20 of them have conventional childhood acute
+lymphoblastic leukemia (ALL) and the other 17 are affected with the MLL
+(mixed-lineage leukemia gene) translocation. This leukemia data set is stored as
+an `ExpressionSet` object called `leukemia` in the `r Biocpkg("GSVAdata")`
+package and and details on how the data was pre-processed can be found in the
+corresponding help page. Jointly with the RMA expression values, we
+provide some metadata including the main phenotype corresponding to the leukemia
+sample subtype.
+
+```{r}
+data(leukemia)
+leukemia_eset
+```
+
+Next, we calculate GSVA enrichment scores setting the minimum and maximum
+gene set size to 10 and 500 genes, respectively.
+
+```{r, results="hide"}
+leukemia_es <- gsva(leukemia_eset, c2BroadSets, min.sz=10, max.sz=500)
+```
+The object returned by the function `gsva()` is always of the same class
+as the input object with the expression data. Therefore, in this case,
+we obtain an `ExpressionSet` object with features corresponding to gene
+sets.
+
+```{r}
+class(leukemia_es)
+leukemia_es
+head(featureNames(leukemia_es))
+```
+We will perform now a differential expression analysis using `r Biocpkg("limma")`
+[@Smyth_2004] between the two different leukemia subtypes.
+
+```{r}
+library(limma)
+
+mod <- model.matrix(~ factor(leukemia_es$subtype))
+colnames(mod) <- c("ALL", "MLLvsALL")
+fit <- lmFit(leukemia_es, mod)
+fit <- eBayes(fit)
+res <- decideTests(fit, p.value=0.01)
+summary(res)
+```
+
+There are `r sum(res[, 2] != 0)` MSigDB C2 differentially expressed pathways with
+FDR < 1%. Figure @\ref(fig:leukemiavolcano) below shows a volcano plot of the
+expression changes.
+
+```{r leukemiavolcano, height=700, width=500, fig.cap="Volcano plot for the differential expression analysis at pathway level between two leukemia subtypes."}
+tt <- topTable(fit, coef=2, n=Inf)
+DEpwys <- rownames(tt)[tt$adj.P.Val <= 0.01]
+plot(tt$logFC, -log10(tt$P.Value), pch=".", cex=4, col=grey(0.75),
+     main="", xlab="GSVA enrichment score difference", ylab=expression(-log[10]~~Raw~P-value))
+abline(h=-log10(max(tt$P.Value[tt$adj.P.Val <= 0.01])), col=grey(0.5), lwd=1, lty=2)
+points(tt$logFC[match(DEpwys, rownames(tt))],
+       -log10(tt$P.Value[match(DEpwys, rownames(tt))]), pch=".", cex=5, col="darkred")
+text(max(tt$logFC)*0.85, -log10(max(tt$P.Value[tt$adj.P.Val <= 0.01])), "1% FDR", pos=3)
+```
+
+Figure @\ref(fig:leukemiaheatmap} below shows a heatmap of GSVA enrichment scores for
+the `r sum(res[, 2] != 0)` differentially expressed pathways.
+
+```{r leukemiaheatmap, height=500, width=1200, fig.cap="Heatmap of GSVA enrichment scores for the differentially expressed pathways between two leukemia subtypes."}
+DEpwys_es <- exprs(leukemia_es[DEpwys, ])
+colorLegend <- c("darkred", "darkblue")
+names(colorLegend) <- c("ALL", "MLL")
+sample.color.map <- colorLegend[pData(leukemia_es)[, "subtype"]]
+names(sample.color.map) <- colnames(DEpwys_es)
+sampleClustering <- hclust(as.dist(1-cor(DEpwys_es, method="spearman")),
+                           method="complete")
+geneSetClustering <- hclust(as.dist(1-cor(t(DEpwys_es), method="pearson")),
+                            method="complete")
+heatmap(DEpwys_es, ColSideColors=sample.color.map, xlab="samples",
+        ylab="Pathways", margins=c(2, 20),
+        labRow=substr(gsub("_", " ", gsub("^KEGG_|^REACTOME_|^BIOCARTA_", "",
+                                          rownames(DEpwys_es))), 1, 35),
+        labCol="", scale="row", Colv=as.dendrogram(sampleClustering),
+        Rowv=as.dendrogram(geneSetClustering))
+legend("topleft", names(colorLegend), fill=colorLegend, inset=0.01, bg="white")
+```
+
+# Interactive web app
+
+The `gsva()` function can be also used through an interactive web app developed
+with `r CRANpkg("shiny")`. To start it just type on the R console:
+
+```{r, eval=FALSE}
+res <- igsva()
+```
+
+It will open your browser with the web app shown here below. The button
+`SAVE & CLOSE` will close the app and return the resulting object on the
+R console. Hence, the need to call igsva() on the right-hand side of an
+assignment if you want to store the result in your workspace. Alternatively,
+you can use the `DOWNLOAD` button to download the result in a CSV file.
+
+![](webapp1.png)
+
+In the starting window of the web app, after running GSVA, a non-parametric
+kernel density estimation of sample profiles of GSVA scores will be shown.
+By clicking on one of the lines, the cumulative distribution of GSVA scores
+for the corresponding samples will be shown in the `GeneSets` tab, as
+illustrated in the image below.
+
+![](webapp2.png)
 
 # Session information {.unnumbered}
 

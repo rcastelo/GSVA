@@ -7,7 +7,7 @@ matrixUI <- function(id){
                    "From workspace" = "varMatrix")),
     conditionalPanel(
       condition = "input.matrixSourceType == 'fileMatrix'", ns = ns,
-      fileInput(ns("matrixFile"), "Choose matrix file:",
+      fileInput(ns("matrixFile"), "Choose expression data matrix file:",
                 accept = c(
                   "text/csv",
                   "text/comma-separated-values,text/plain",
@@ -15,7 +15,7 @@ matrixUI <- function(id){
     ),
     conditionalPanel(
       condition = "input.matrixSourceType == 'varMatrix'", ns= ns,
-      selectInput(ns("matrixVar"), "Choose matrix var:",
+      selectInput(ns("matrixVar"), "Choose expression data matrix object:",
                   ls(envir=.GlobalEnv))
     )
   )

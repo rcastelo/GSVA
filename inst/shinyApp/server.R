@@ -188,17 +188,20 @@ function(input, output, session) {
     req(rv$gs)
     tagList(
       br(),
-      div("To see the Empirical Cumulative Distribution Function 
-      of a Sample, click on its line in this plot and go to the 
-      'Gene.Set' Panel", style="text-align: center;")
+      div("Non-parametric kernel density estimation of sample
+          profiles of GSVA enrichment scores. Clicking on the
+          line of a sample will display the empirical cumulative
+          distribution of GSVA scores for that sample on the
+          'GeneSets' tab", style="text-align: center;")
     )
   })
   
   # TABLE
   output$result <- renderTable({
     req(rv$gs)
-    resultInformation <- data.frame("Nr of gene sets" = nrow(rv$gs),
-                                    "Nr of samples" = ncol(rv$gs))
+    resultInformation <- data.frame("Nr. of gene sets" = nrow(rv$gs),
+                                    "Nr. of samples" = ncol(rv$gs),
+                                    check.names=FALSE)
     resultInformation
   }, bordered = TRUE)
   
@@ -212,9 +215,11 @@ function(input, output, session) {
   output$text3 <- renderUI({
     tagList(
       br(),
-      div("To see the Kernel Density Estimation of genes of any given
-      Gene Set in this Sample,  click on any point in this plot and a
-      second plot will appear bellow it", style = "text-align: center;")
+      div("Empirical cumulative distribution of GSVA scores, where each
+          point is a gene set. Clicking on a gene set will display below
+          the individual gene expression values of its constituent genes
+          and the non-parametric kernel density estimation of their
+          distribution", style = "text-align: center;")
     )
   })
   

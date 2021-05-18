@@ -1,3 +1,18 @@
+CHANGES IN VERSION 1.40
+-----------------------
+
+USER VISIBLE CHANGES
+
+   o The vignette has been rewritten in R Markdown to produce an HTML vignette page and make it shorter and faster to produce.
+
+   o Development of a shiny app available through the function 'igsva()'.
+
+BUG FIXES
+
+   o Replaced fastmatch::fmatch() by IRanges::match,CharacterList-method after disscussion at https://github.com/rcastelo/GSVA/issues/39 to avoid the row names of an input expression matrix being altered by fastmatch::fmatch() adding an attribute.
+
+   o Fixed wrong call to .mapGeneSetsToFeatures() when gene sets are given in a GeneSetCollection object.
+
 CHANGES IN VERSION 1.36
 -----------------------
 

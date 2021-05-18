@@ -21,7 +21,7 @@ plot2_Server <- function(id, eventData1, rv){
         data <- rv$dat.t[Sample==rv$sample.c]
         p <- ggplot(data = data, aes(x=value, color=Sample)) +
           stat_ecdf(geom="point") + theme(legend.position = "none") +
-          labs(x=paste0(method, " Scores in selected sample"), y="Empirical Cumulative Density") +
+          labs(x=paste0(method, " scores in selected sample"), y="Empirical cumulative distribution") +
           scale_color_manual("Legend", values = rv$dd.col)
         rv$p2 <- ggplotly(p, source="click2") %>% style(text=data$gene.sets)
         rv$p2

@@ -24,7 +24,7 @@ plot3_Server <- function(id, eventData2, rv, matrix, genesets){
         rv$p3 <- ggplot(data = df, aes(x=x, color = Sample, label = Gene)) +
           stat_density(geom="line", position = "identity") +
           geom_rug() + theme(legend.position = "none") +
-          labs(x="Gene Expressions in selected sample", y="Density") +
+          labs(x="Gene expression values in selected gene set and sample", y="Density") +
           xlim(as.numeric(range(matrix()))) +
           scale_color_manual("legend", values= rv$dd.col)
         ggplotly(rv$p3, tooltip = c("Gene", "x")) %>% style(hoverinfo="none", traces = 1) %>%

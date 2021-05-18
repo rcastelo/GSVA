@@ -7,12 +7,12 @@ geneSetsUI <- function(id){
                    "From workspace" = "varGeneset")),
     conditionalPanel(
       condition = "input.genesetSourceType == 'fileGeneset'", ns = ns,
-      fileInput(ns("genesetFile"), "Choose GeneSet file:",
+      fileInput(ns("genesetFile"), "Choose gene sets file:",
                 accept = c(".gmt", "text/csv", ".csv"))
     ),
     conditionalPanel(
       condition = "input.genesetSourceType == 'varGeneset'", ns = ns, 
-      selectInput(ns("genesetVar"), "Choose GeneSet var:",
+      selectInput(ns("genesetVar"), "Choose gene sets object:",
                   ls(envir=.GlobalEnv))
     )
   )
