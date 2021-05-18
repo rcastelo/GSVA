@@ -1,12 +1,8 @@
 closeBtnUI <- function(id){
   ns <- NS(id)
-  hidden(actionButton(ns("closeSave"), "Save & Close", style = "color: #fff;
-  font-weight: bold;
-  background-color: red;
-  border-color: #fff;
-  width:130;
-  padding: 5px 5px 5px 5px;
-  margin: 5px 5px 5px 5px; "))
+  hidden(actionButton(ns("closeSave"), "SAVE & CLOSE", 
+                      icon = icon("window-close"),
+                      width = "10vw"))
 }
 
 closeBtnServer <- function(id, gs){

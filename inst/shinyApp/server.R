@@ -181,14 +181,17 @@ function(input, output, session) {
   
   # CLOSE BTN
   closeBtnServer("close", reactive(rv$gs))
-
+  
   
   # TEXT1
   output$text1 <- renderUI({
     req(rv$gs)
-    HTML(paste("<br/>", "\t To see the Empirical Cumulative Distribution Function 
-    of a Sample, click on its line in this plot and go
-      to the 'Gene.Set' Panel", "<br/>", sep="<br/>"))
+    tagList(
+      br(),
+      div("To see the Empirical Cumulative Distribution Function 
+      of a Sample, click on its line in this plot and go to the 
+      'Gene.Set' Panel", style="text-align: center;")
+    )
   })
   
   # TABLE
@@ -197,7 +200,7 @@ function(input, output, session) {
     resultInformation <- data.frame("Nr of gene sets" = nrow(rv$gs),
                                     "Nr of samples" = ncol(rv$gs))
     resultInformation
-  })
+  }, bordered = TRUE)
   
   # TEXT2
   output$text2 <- renderUI({
@@ -207,9 +210,12 @@ function(input, output, session) {
   
   # TEXT3
   output$text3 <- renderUI({
-    HTML(paste("<br/>", "\t To see the Kernel Density Estimation of genes of 
-    any given Gene Set in this Sample,  click on any point in this plot and a
-    second plot will appear bellow it", "<br/>", sep="<br/>"))
+    tagList(
+      br(),
+      div("To see the Kernel Density Estimation of genes of any given
+      Gene Set in this Sample,  click on any point in this plot and a
+      second plot will appear bellow it", style = "text-align: center;")
+    )
   })
-
+  
 }
