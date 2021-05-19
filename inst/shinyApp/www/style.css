@@ -55,16 +55,20 @@
 }
 
 .left-side, .main-sidebar {
-  padding-top: 75px;
+  top: auto;
+  padding-top: 0px;
 }
 
 .main-header {
-  max-height: 75px;
+  min-height: 75px;
   }
 
 .main-header .logo {
   height: 75px;
-  
+}
+
+.content-wrapper {
+  padding-top: 20px;
 }
 
 .run-btn {
