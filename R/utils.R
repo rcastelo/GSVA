@@ -4,6 +4,10 @@
   ## DelayedMatrixStats::rowSds() works for both base and 
   ## DelayedArray matrices
   sdGenes <- DelayedMatrixStats::rowSds(expr)
+  ## the following fixes this bug, see issues
+  ## https://github.com/rcastelo/GSVA/issues/54
+  ## https://github.com/HenrikBengtsson/matrixStats/issues/204
+  sdGenes[sdGenes < 1e-10] <- 0
   if (any(sdGenes == 0) || any(is.na(sdGenes))) {
     warning(sum(sdGenes == 0 | is.na(sdGenes)),
             " genes with constant expression values throuhgout the samples.")
