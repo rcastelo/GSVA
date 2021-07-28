@@ -1,0 +1,24 @@
+cff-version: 1.1.0
+message: Please cite the following works when using this software.
+authors:
+  - family-names: Hänzelmann
+    given-names: Sonja
+  - family-names: Castelo
+    given-names: Robert
+  - family-names: Guinney
+    given-names: Justin
+doi: 10.1186/1471-2105-14-7
+identifiers:
+  - type: doi
+    value: 10.1186/1471-2105-14-7
+  - type: other
+    value: urn:issn:1471-2105
+  - type: other
+    value: pmcid:3618321
+  - type: other
+    value: pmid:23323831
+keywords:
+  - GSEA
+  - GSVA
+  - RNA sequencing
+title: 'GSVA: gene set variation analysis for microarray and RNA-seq data'
