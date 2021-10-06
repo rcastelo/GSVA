@@ -1,6 +1,6 @@
 test_delayed <- function(){
   
-  set.seed(1001)
+  # set.seed(1001)
   m <- matrix(runif(10000), 1000, 100)
   rownames(m) <- paste0("gene_", 1:1000)
   colnames(m) <- paste0("cell_", 1:100)
