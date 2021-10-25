@@ -1,3 +1,10 @@
+CHANGES IN VERSION 1.50
+-----------------------
+
+BUG FIXES
+
+   o Bugfix for https://github.com/rcastelo/GSVA/issues/54 to force filtering genes with constant expression behaving the same regardless of the delayed or non-delayed nature of the data container.
+
 CHANGES IN VERSION 1.40
 -----------------------
 
