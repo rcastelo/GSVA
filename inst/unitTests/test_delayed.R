@@ -13,7 +13,8 @@ test_delayed <- function(){
   x1 <- gsva(m, gene.sets, method="plage")
   x2 <- gsva(h5, gene.sets, method="plage")
   
-  checkEqualsNumeric(as.vector(t(x1)), as.vector(t(x2)))
+  ## SVD sign is arbitrary and implementation-dependent
+  checkEqualsNumeric(abs(as.vector(t(x1))), abs(as.vector(t(x2))))
   
   x1 <- gsva(m, gene.sets, method="zscore")
   x2 <- gsva(h5, gene.sets, method="zscore")
@@ -25,7 +26,3 @@ test_delayed <- function(){
   
   checkEqualsNumeric(as.vector(t(x1)), as.vector(t(x2)))
 }
-
-
-
-
