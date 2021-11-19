@@ -139,7 +139,7 @@ rankHDF5 <- function(X){
     write_block(sink, grid, block)
   }
   
-  sink <- viewportReduce(colRanks_byBlock, grid, sink)
+  sink <- gridReduce(colRanks_byBlock, grid, sink)
   close(sink)
   res <- as(sink, "DelayedArray")
   res

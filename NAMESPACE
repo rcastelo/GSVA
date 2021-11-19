@@ -58,7 +58,7 @@ importFrom(DelayedArray, rowAutoGrid,
 			  defaultAutoGrid,
 			  currentBlockId,
 			  read_block, 
-			  viewportReduce,
+			  gridReduce,
 			  write_block,
 			  close,
 			  t)
