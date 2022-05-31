@@ -875,8 +875,7 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
     print("Normalizing...")
     ## normalize enrichment scores by using the entire data set, as indicated
     ## by Barbie et al., 2009, online methods, pg. 2
-    # es <- apply(es, 2, function(x, es) x / (range(es)[2] - range(es)[1]), es)
-    es <- es[,1:n] / (range(es)[2] - range(es)[1])
+    es <- es[, 1:n, drop=FALSE] / (range(es)[2] - range(es)[1])
   }
   
   if (length(geneSets) == 1)
