@@ -206,7 +206,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
     if (!annotation %in% names(assays(se)))
       stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
   }
-  expr <- assays(se)[[annotation]]
+  expr <- as.matrix(assays(se)[[annotation]])
 
   ## filter genes according to verious criteria,
   ## e.g., constant expression
@@ -296,7 +296,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
     if (!annotation %in% names(assays(se)))
       stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
   }
-  expr <- assays(se)[[annotation]]
+  expr <- as.matrix(assays(se)[[annotation]])
 
   ## filter genes according to verious criteria,
   ## e.g., constant expression
