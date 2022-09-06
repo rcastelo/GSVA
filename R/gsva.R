@@ -885,7 +885,7 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
   colnames(es) <- colnames(X)
   
   if(is(X, "dgCMatrix")){
-    es <- as(es, "dgCMatrix")
+    es <- as(as(as(es, "dMatrix"), "generalMatrix"), "CsparseMatrix")
   }
   
   es
@@ -920,7 +920,7 @@ zscore <- function(X, geneSets, parallel.sz, verbose=TRUE,
   es <- do.call("cbind", es)
   
   if(is(X, "dgCMatrix")){
-    es <- as(es, "dgCMatrix")
+    es <- as(as(as(es, "dMatrix"), "generalMatrix"), "CsparseMatrix")
   }
 
   rownames(es) <- names(geneSets)
@@ -955,7 +955,7 @@ plage <- function(X, geneSets, parallel.sz, verbose=TRUE,
     
     es <- do.call(rbind, es)
     
-    es <- as(es, "dgCMatrix")
+    es <- as(as(as(es, "dMatrix"), "generalMatrix"), "CsparseMatrix")
     
   } else {
     
