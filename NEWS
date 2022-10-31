@@ -1,4 +1,14 @@
-CHANGES IN VERSION 1.50
+
+CHANGES IN VERSION 1.46
+-----------------------
+
+BUG FIXES
+
+   o Bugfix for https://github.com/rcastelo/GSVA/issues/61 to enable using the ssgsea method with one single column (sample) in the input data container.
+
+   o Bugfix when input is a SummarizedExperiment and assays contain a data.frame instead of a matrix.
+
+CHANGES IN VERSION 1.44
 -----------------------
 
 BUG FIXES
