@@ -23,15 +23,15 @@
   
   ## because we keep the argument 'parallel.sz' for backwards compatibility
   ## we need to harmonize it with the contents of BPPARAM
-  if (parallel.sz > 1L && class(BPPARAM) == "SerialParam") {
+  if (parallel.sz > 1L && inherits(BPPARAM, "SerialParam")) {
     BPPARAM=MulticoreParam(progressbar=verbose, workers=parallel.sz, tasks=100)
-  } else if (parallel.sz == 1L && class(BPPARAM) != "SerialParam") {
+  } else if (parallel.sz == 1L && !inherits(BPPARAM, "SerialParam")) {
     parallel.sz <- bpnworkers(BPPARAM)
-  } else if (parallel.sz > 1L && class(BPPARAM) != "SerialParam") {
+  } else if (parallel.sz > 1L && !inherits(BPPARAM, "SerialParam")) {
     bpworkers(BPPARAM) <- parallel.sz
   }
   
-  if (class(BPPARAM) != "SerialParam" && verbose)
+  if (!inherits(BPPARAM, "SerialParam") && verbose)
     cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
                 class(BPPARAM), parallel.sz))
   
