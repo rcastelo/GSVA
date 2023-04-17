@@ -29,4 +29,5 @@ cMethods[] = {
 void
 R_init_GSVA(DllInfo *info) {
   R_registerRoutines(info, cMethods, NULL, NULL, NULL);
+  R_useDynamicSymbols(info, FALSE);
 }
