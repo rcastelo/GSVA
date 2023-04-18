@@ -11,7 +11,7 @@ citEntry(entry="Article",
   year = "2013",
   url = "https://doi.org/10.1186/1471-2105-14-7",
   doi = "10.1186/1471-2105-14-7",
-  textVersion = paste("Hänzelmann, S., Castelo, R. and Guinney, A.",
+  textVersion = paste("HÃ¤nzelmann, S., Castelo, R. and Guinney, A.",
                       "GSVA: gene set variation analysis for microarray and RNA-seq data.",
                       "BMC Bioinformatics, 14:7, 2013.")
 )
