@@ -36,15 +36,6 @@ setClass("emptyParam",
 ## #' \code{\link{plageParam-class}}
 ## #' \code{\link{ssGseaParam-class}}
 ## #' \code{\link{gsvaParam-class}}
-## #' 
-## #' @examples
-## #' bamfiles <- list.files(system.file("extdata", package="atena"),
-## #'                        pattern="*.bam", full.names=TRUE)
-## #' TE_annot <- readRDS(file = system.file("extdata", "Top28TEs.rds",
-## #'                     package="atena"))
-## #' ttpar <- TEtranscriptsParam(bamfiles, teFeatures=TE_annot, singleEnd=TRUE,
-## #'                             ignoreStrand=TRUE, aggregateby = c("repName"))
-## #' path(ttpar)
 #'
 #' @name zscoreParam-class
 #' @rdname zscoreParam-class
@@ -53,6 +44,27 @@ setClass("zscoreParam",
          slots = character(),
          contains = "emptyParam")
 
+
+
+# PLAGE Parameter Class -------------------------------------------------
+
+#' PLAGE parameter class
+#'
+#' Method-specific parameters for the PLAGE method.  Since this method does not
+#' need any parameters, the class does not have any slots and exists merely for
+#' method dispatch.
+#'
+## #' @seealso
+## #' \code{\link{zscoreParam-class}}
+## #' \code{\link{ssGseaParam-class}}
+## #' \code{\link{gsvaParam-class}}
+#'
+#' @name plageParam-class
+#' @rdname plageParam-class
+#' @exportClass plageParam
+setClass("plageParam",
+         slots = character(),
+         contains = "emptyParam")
 
 
 # Constructor Functions ---------------------------------------------------
@@ -73,5 +85,24 @@ setClass("zscoreParam",
 #' @export
 zscoreParam <- function() {
   new("zscoreParam")
+}
+
+
+# PLAGE Parameter Constructor -------------------------------------------
+
+#' Build a \code{plage} parameter object
+#'
+#' Build an object of the class \code{plageParam}
+#'
+#' @return A \linkS4class{plageParam} object.
+#'
+#' @examples
+#' pp <- plageParam()
+#'
+#' @importFrom methods new
+#' @rdname plageParam
+#' @export
+plageParam <- function() {
+  new("plageParam")
 }
 
