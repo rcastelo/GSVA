@@ -1,6 +1,7 @@
 
-# Class Definitions -------------------------------------------------------
-
+#
+# 2023-04-25  axel: S4 class definitions
+#
 
 # Virtual Superclass ------------------------------------------------------
 
@@ -13,7 +14,7 @@
 ## #' @seealso
 ## #' \code{\link{zscoreParam-class}}
 ## #' \code{\link{plageParam-class}}
-## #' \code{\link{ssGseaParam-class}}
+## #' \code{\link{ssgseaParam-class}}
 ## #' \code{\link{gsvaParam-class}}
 #'
 #' @name emptyParam-class
@@ -34,7 +35,7 @@ setClass("emptyParam",
 #'
 ## #' @seealso
 ## #' \code{\link{plageParam-class}}
-## #' \code{\link{ssGseaParam-class}}
+## #' \code{\link{ssgseaParam-class}}
 ## #' \code{\link{gsvaParam-class}}
 #'
 #' @name zscoreParam-class
@@ -56,7 +57,7 @@ setClass("zscoreParam",
 #'
 ## #' @seealso
 ## #' \code{\link{zscoreParam-class}}
-## #' \code{\link{ssGseaParam-class}}
+## #' \code{\link{ssgseaParam-class}}
 ## #' \code{\link{gsvaParam-class}}
 #'
 #' @name plageParam-class
@@ -67,42 +68,21 @@ setClass("plageParam",
          contains = "emptyParam")
 
 
-# Constructor Functions ---------------------------------------------------
+# ssGSEA Parameter Class -------------------------------------------------
 
-# z-Score Parameter Constructor -------------------------------------------
-
-#' Build a \code{zscore} parameter object
+#' ssGSEA parameter class
 #'
-#' Build an object of the class \code{zscoreParam}
+#' Method-specific parameters for the ssGSEA method.  
 #'
-#' @return A \linkS4class{zscoreParam} object.
+## #' @seealso
+## #' \code{\link{zscoreParam-class}}
+## #' \code{\link{plageParam-class}}
+## #' \code{\link{gsvaParam-class}}
 #'
-#' @examples
-#' zp <- zscoreParam()
-#'
-#' @importFrom methods new
-#' @rdname zscoreParam
-#' @export
-zscoreParam <- function() {
-  new("zscoreParam")
-}
-
-
-# PLAGE Parameter Constructor -------------------------------------------
-
-#' Build a \code{plage} parameter object
-#'
-#' Build an object of the class \code{plageParam}
-#'
-#' @return A \linkS4class{plageParam} object.
-#'
-#' @examples
-#' pp <- plageParam()
-#'
-#' @importFrom methods new
-#' @rdname plageParam
-#' @export
-plageParam <- function() {
-  new("plageParam")
-}
+#' @name ssgseaParam-class
+#' @rdname ssgseaParam-class
+#' @exportClass ssgseaParam
+setClass("ssgseaParam",
+         slots = c(alpha = "numeric", normalize = "logical"),
+         contains = "emptyParam")
 
