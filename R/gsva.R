@@ -54,6 +54,12 @@ setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),
   rval
 })
 
+setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="GeneSetCollection"),
+          function(expr, gset.idx.list, ...)
+{
+  gsva(expr, geneIds(gset.idx.list), ...)
+})
+
 setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),

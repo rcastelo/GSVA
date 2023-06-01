@@ -2,6 +2,7 @@
 \alias{gsva}
 \alias{gsva,HDF5Array,list-method}
 \alias{gsva,SingleCellExperiment,list-method}
+\alias{gsva,SingleCellExperiment,GeneSetCollection-method}
 \alias{gsva,dgCMatrix,list-method}
 \alias{gsva,SummarizedExperiment,list-method}
 \alias{gsva,SummarizedExperiment,GeneSetCollection-method}
