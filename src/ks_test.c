@@ -3,11 +3,11 @@
 #include <stdlib.h>
 #include <math.h>
 #include <R.h>
+#include <Rdefines.h>
 
-
-void
-ks_matrix_R(double* X, double* R, int* sidxs, int* n_genes, int* geneset_idxs,
-            int* n_geneset, double* tau,  int* n_samples, int* mx_diff, int* abs_rnk);
+SEXP
+ks_matrix_R(SEXP XR, SEXP sidxsR, SEXP n_genesR, SEXP geneset_idxsR,
+            SEXP n_genesetR, SEXP tauR, SEXP n_samplesR, SEXP mx_diffR, SEXP abs_rnkR);
 
 double
 ks_sample(double* x, int* x_sort_indxs, int n_genes, int* geneset_mask,
@@ -76,8 +76,30 @@ void ks_matrix(double* X, double* R, int* sidxs, int n_genes, int* geneset_idxs,
 	}
 }
 
-void ks_matrix_R(double* X, double* R, int* sidxs, int* n_genes,
-                 int* geneset_idxs, int* n_geneset, double* tau,
-                 int* n_samples, int* mx_diff, int* abs_rnk) {
-	ks_matrix(X,R, sidxs, *n_genes, geneset_idxs, *n_geneset, *tau, *n_samples, *mx_diff, *abs_rnk);
+SEXP
+ks_matrix_R(SEXP XR, SEXP sidxsR, SEXP n_genesR, SEXP geneset_idxsR,
+            SEXP n_genesetR, SEXP tauR, SEXP n_samplesR, SEXP mx_diffR,
+            SEXP abs_rnkR) {
+  double* X=REAL(XR);
+  int*    sidxs=INTEGER(sidxsR);
+  int     n_genes=INTEGER(n_genesR)[0];
+  int*    geneset_idxs=INTEGER(geneset_idxsR);
+  int     n_geneset=INTEGER(n_genesetR)[0];
+  double  tau=REAL(tauR)[0];
+  int     n_samples=INTEGER(n_samplesR)[0];
+  int     mx_diff=INTEGER(mx_diffR)[0];
+  int     abs_rnk=INTEGER(abs_rnkR)[0];  
+  SEXP    resR;
+  double* res;
+
+  PROTECT(resR = allocVector(REALSXP, n_samples));
+  res = REAL(resR);
+
+  ks_matrix(X, res, sidxs, n_genes, geneset_idxs, n_geneset, tau, n_samples,
+            mx_diff, abs_rnk);
+
+  UNPROTECT(1); /* resR */
+
+  return(resR);
 }
+

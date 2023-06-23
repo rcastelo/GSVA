@@ -5,16 +5,14 @@
 #include <math.h>
 */
 #include <R.h>
+#include <Rdefines.h>
 #include <Rinternals.h>
 #include <Rmath.h>
 #include <R_ext/Rdynload.h>
 
-/**
- * X <- possibly bootstrapped samples for density distribution
- * Y <- samples to test
- */
-void
-matrix_density_R(double* X, double* Y, double* R, int* n_density_samples, int* n_test_samples, int* n_genes, int* rnaseq);
+SEXP
+matrix_density_R(SEXP X, SEXP Y, SEXP n_density_samples, SEXP n_test_samples,
+                 SEXP n_genes, SEXP rnaseq);
 
 void initCdfs(void);
 double precomputedCdf(double x, double sigma);
@@ -84,9 +82,26 @@ void matrix_d(double* X, double* Y, double* R, int n_density_samples, int n_test
 	}
 }
 
-void matrix_density_R(double* density_data, double* test_data, double* R, int* n_density_samples,
-                      int* n_test_samples, int* n_genes, int* rnaseq){
-	matrix_d(density_data, test_data, R,*n_density_samples,*n_test_samples, *n_genes, *rnaseq);
+SEXP
+matrix_density_R(SEXP density_dataR, SEXP test_dataR, SEXP n_density_samplesR,
+                 SEXP n_test_samplesR, SEXP n_genesR, SEXP rnaseqR) {
+  double* density_data=REAL(density_dataR);
+  double* test_data=REAL(test_dataR);
+  int     n_density_samples=INTEGER(n_density_samplesR)[0];
+  int     n_test_samples=INTEGER(n_test_samplesR)[0];
+  int     n_genes=INTEGER(n_genesR)[0];
+  int     rnaseq=INTEGER(rnaseqR)[0];
+  SEXP    resR;
+  double* res;
+
+  PROTECT(resR = allocVector(REALSXP, n_test_samples * n_genes));
+  res = REAL(resR);
+
+	matrix_d(density_data, test_data, res, n_density_samples, n_test_samples, n_genes, rnaseq);
+
+  UNPROTECT(1); /* resR */
+
+  return(resR);
 }
 
 inline double precomputedCdf(double x, double sigma){
