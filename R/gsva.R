@@ -54,6 +54,12 @@ setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),
   rval
 })
 
+setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="GeneSetCollection"),
+          function(expr, gset.idx.list, ...)
+{
+  gsva(expr, geneIds(gset.idx.list), ...)
+})
+
 setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
@@ -668,14 +674,13 @@ compute.gene.density <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
 	
   gene.density <- NA
   if (kernel) {
-	  A = .C("matrix_density_R",
-			as.double(t(expr[ ,sample.idxs, drop=FALSE])),
-			as.double(t(expr)),
-			R = double(n.test.samples * n.genes),
-			n.density.samples,
-			n.test.samples,
-			n.genes,
-      as.integer(rnaseq))$R
+	  A = .Call("matrix_density_R",
+              as.double(t(expr[ ,sample.idxs, drop=FALSE])),
+              as.double(t(expr)),
+              n.density.samples,
+              n.test.samples,
+              n.genes,
+              as.integer(rnaseq))
 	
 	  gene.density <- t(matrix(A, n.test.samples, n.genes))
   } else {
@@ -759,17 +764,16 @@ ks_test_m <- function(gset_idxs, gene.density, sort.idxs, mx.diff=TRUE,
 	n.samples <- ncol(gene.density)
 	n.geneset <- length(gset_idxs)
 
-	geneset.sample.es = .C("ks_matrix_R",
-			as.double(gene.density),
-			R = double(n.samples),
-			as.integer(sort.idxs),
-			n.genes,
-			as.integer(gset_idxs),
-			n.geneset,
-			as.double(tau),
-			n.samples,
-			as.integer(mx.diff),
-      as.integer(abs.ranking))$R
+	geneset.sample.es <- .Call("ks_matrix_R",
+			                       as.double(gene.density),
+			                       as.integer(sort.idxs),
+			                       n.genes,
+			                       as.integer(gset_idxs),
+			                       n.geneset,
+			                       as.double(tau),
+			                       n.samples,
+			                       as.integer(mx.diff),
+                             as.integer(abs.ranking))
 
 	return(geneset.sample.es)
 }
