@@ -1,15 +1,11 @@
 
-#
-# 2023-04-25  axel: methods for class plageParam
-#
+# PLAGE Parameter Constructor ---------------------------------------------
 
-# Constructor -----------------------------------------------------------
-
-#' Build a \code{plage} parameter object
+#' Construct a PLAGE parameter object
 #'
-#' Build an object of the class \code{plageParam}
+#' Construct and return a new object of class \linkS4class{plageParam}.
 #'
-#' @return A \linkS4class{plageParam} object.
+#' @return A new \linkS4class{plageParam} object.
 #'
 #' @examples
 #' pp <- plageParam()

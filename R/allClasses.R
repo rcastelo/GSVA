@@ -1,21 +1,26 @@
 
-#
-# 2023-04-25  axel: S4 class definitions
-#
-
 # Virtual Superclass ------------------------------------------------------
 
-#' empty parameter class
+#' `emptyParam` class
 #'
-#' Virtual empty superclass for deriving non-virtual empty method-specific
-#' parameter classes for methods without method-specific parameters.  These
-#' classes exist merely for method dispatch.
+#' Virtual superclass of method-specific parameter classes.
 #'
-## #' @seealso
-## #' \code{\link{zscoreParam-class}}
-## #' \code{\link{plageParam-class}}
-## #' \code{\link{ssgseaParam-class}}
-## #' \code{\link{gsvaParam-class}}
+#' To ensure that the various methods implemented in `GSVA` are invoked with
+#' appropriate parameters, S4 classes are introduced as containers for
+#' method-specific parameters as well as for dispatching them to the
+#' appropriate method -- which requires them to be instantiated.
+#' 
+#' Some simple methods, however, do not take any method-specific parameters at
+#' all and hence their parameter classes have no slots and will be created as
+#' virtual classes unless they have a superclass (see [`methods::setClass`]).
+#' 
+#' This is the purpose of this class.
+#'
+#' @seealso
+#' [`zscoreParam-class`], 
+#' [`plageParam-class`], 
+#' [`ssgseaParam-class`], 
+#' [`gsvaParam-class`]
 #'
 #' @name emptyParam-class
 #' @rdname emptyParam-class
@@ -27,16 +32,18 @@ setClass("emptyParam",
 
 # z-Score Parameter Class -------------------------------------------------
 
-#' zscore parameter class
+#' `zscoreParam` class
 #'
-#' Method-specific parameters for the z-score method.  Since this method does not
-#' need any parameters, the class does not have any slots and exists merely for
-#' method dispatch.
+#' Method-specific parameters for the `zscore` method.
+#' 
+#' Since this method does not take any parameters, the parameter class does not
+#' have any slots and exists merely for method dispatch.  It is derived from the
+#' virtual superclass [`emptyParam-class`].
 #'
-## #' @seealso
-## #' \code{\link{plageParam-class}}
-## #' \code{\link{ssgseaParam-class}}
-## #' \code{\link{gsvaParam-class}}
+#' @seealso
+#' [`plageParam-class`],
+#' [`ssgseaParam-class`],
+#' [`gsvaParam-class`]
 #'
 #' @name zscoreParam-class
 #' @rdname zscoreParam-class
@@ -49,16 +56,18 @@ setClass("zscoreParam",
 
 # PLAGE Parameter Class -------------------------------------------------
 
-#' PLAGE parameter class
+#' `plageParam` class
 #'
-#' Method-specific parameters for the PLAGE method.  Since this method does not
-#' need any parameters, the class does not have any slots and exists merely for
-#' method dispatch.
+#' Method-specific parameters for the `plage` method.
+#' 
+#' Since this method does not take any parameters, the parameter class does not
+#' have any slots and exists merely for method dispatch.  It is derived from the
+#' virtual superclass [`emptyParam-class`].
 #'
-## #' @seealso
-## #' \code{\link{zscoreParam-class}}
-## #' \code{\link{ssgseaParam-class}}
-## #' \code{\link{gsvaParam-class}}
+#' @seealso
+#' [`zscoreParam-class`],
+#' [`ssgseaParam-class`],
+#' [`gsvaParam-class`]
 #'
 #' @name plageParam-class
 #' @rdname plageParam-class
@@ -70,14 +79,26 @@ setClass("plageParam",
 
 # ssGSEA Parameter Class -------------------------------------------------
 
-#' ssGSEA parameter class
+#' `ssgseaParam` class
 #'
-#' Method-specific parameters for the ssGSEA method.  
+#' Method-specific parameters for the `ssgsea` method.
+#' 
+#' This class has slots for storing the two parameters to the `ssgsea` method
+#' described below.  It is derived from the virtual superclass [`emptyParam-class`].
+#' 
+#' @slot alpha Numeric vector of length 1; the exponent defining the
+#'  weight of the tail in the random walk performed by the `ssGSEA` (Barbie et
+#'  al., 2009) method.
+#'` `
+#' @slot normalize Logical vector of length 1; if `TRUE`  runs the `ssGSEA` method
+#'  from Barbie et al. (2009) normalizing the scores by the absolute difference
+#'  between the minimum and the maximum, as described in their paper. Otherwise
+#'  this last normalization step is skipped.
 #'
-## #' @seealso
-## #' \code{\link{zscoreParam-class}}
-## #' \code{\link{plageParam-class}}
-## #' \code{\link{gsvaParam-class}}
+#' @seealso
+#' [`zscoreParam-class`],
+#' [`plageParam-class`],
+#' [`gsvaParam-class`]
 #'
 #' @name ssgseaParam-class
 #' @rdname ssgseaParam-class
@@ -85,4 +106,53 @@ setClass("plageParam",
 setClass("ssgseaParam",
          slots = c(alpha = "numeric", normalize = "logical"),
          contains = "emptyParam")
+
+
+# GSVA Parameter Class ----------------------------------------------------
+
+#' `gsvaParam` class
+#'
+#' Method-specific parameters for the `gsva` method.
+#' 
+#' This class has slots for storing the two parameters to the `gsva` method
+#' described below.  It is derived from the virtual superclass [`emptyParam-class`].
+#' 
+#' @slot kcdf Character vector of length 1 denoting the kernel to use during the
+#'  non-parametric estimation of the cumulative distribution function of
+#'  expression levels across samples. `kcdf="Gaussian"` is suitable when input
+#'  expression values are continuous, such as microarray fluorescent units in
+#'  logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input
+#'  expression values are integer counts, such as those derived from RNA-seq
+#'  experiments, then this argument should be set to `kcdf="Poisson"`.
+#' 
+#' @slot mx.diff Logical vector of length 1 which offers two approaches to
+#'  calculate the enrichment statistic (ES) from the KS random walk statistic.
+#'  \describe{
+#'    \item{\code{mx.diff=FALSE}}{ES is calculated as the maximum distance of the 
+#'    random walk from 0.}
+#'    \item{\code{mx.diff=TRUE}}{ES is calculated as the magnitude difference between
+#'    the largest positive and negative random walk deviations.}
+#'  }
+#'  
+#' @slot abs.ranking Logical vector of length 1 used only when `mx.diff=TRUE`.
+#'  When `abs.ranking=FALSE` a modified Kuiper statistic is used to calculate
+#'  enrichment scores, taking the magnitude difference between the largest
+#'  positive and negative random walk deviations. When `abs.ranking=TRUE` the
+#'  original Kuiper statistic that sums the largest positive and negative random
+#'  walk deviations, is used. In this latter case, gene sets with genes enriched
+#'  on either extreme (high or low) will be regarded as ’highly’ activated.
+#'
+#' @seealso
+#' [`zscoreParam-class`],
+#' [`plageParam-class`],
+#' [`ssgseaParam-class`]
+#'
+#' @name gsvaParam-class
+#' @rdname gsvaParam-class
+#' @exportClass gsvaParam
+setClass("gsvaParam",
+         slots = c(kcdf = "character", mx.diff = "logical", abs.ranking = "logical"),
+         contains = "emptyParam")
+
+
 

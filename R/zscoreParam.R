@@ -1,15 +1,11 @@
 
-#
-# 2023-04-25  axel: methods for class zscoreParam
-#
+# z-Score Parameter Constructor -------------------------------------------
 
-# Constructor -------------------------------------------------------------
-
-#' Build a \code{zscore} parameter object
+#' Construct a z-score parameter object
 #'
-#' Build an object of the class \code{zscoreParam}
+#' Construct and return a new object of class \linkS4class{zscoreParam}.
 #'
-#' @return A \linkS4class{zscoreParam} object.
+#' @return A new \linkS4class{zscoreParam} object.
 #'
 #' @examples
 #' zp <- zscoreParam()
