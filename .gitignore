@@ -4,3 +4,6 @@
 .Ruserdata
 .Renviron
 .Rproj.user
+src/*.o
+src/*.so
+man/*.Rd
