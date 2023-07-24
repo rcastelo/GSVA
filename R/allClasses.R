@@ -155,7 +155,8 @@ setClass("ssgseaParam",
 #' @rdname gsvaParam-class
 #' @exportClass gsvaParam
 setClass("gsvaParam",
-         slots = c(kcdf = "character", mx.diff = "logical", abs.ranking = "logical"),
+         slots = c(kcdf = "character", tau = "numeric", 
+                   mx.diff = "logical", abs.ranking = "logical"),
          contains = "emptyParam")
 
 
