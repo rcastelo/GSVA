@@ -84,4 +84,6 @@ export(plageParam)
 exportClasses(plageParam)
 export(ssgseaParam)
 exportClasses(ssgseaParam)
+export(gsvaParam)
+exportClasses(gsvaParam)
 
