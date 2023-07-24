@@ -89,7 +89,7 @@ setClass("plageParam",
 #' @slot alpha Numeric vector of length 1; the exponent defining the
 #'  weight of the tail in the random walk performed by the `ssGSEA` (Barbie et
 #'  al., 2009) method.
-#'` `
+#'
 #' @slot normalize Logical vector of length 1; if `TRUE`  runs the `ssGSEA` method
 #'  from Barbie et al. (2009) normalizing the scores by the absolute difference
 #'  between the minimum and the maximum, as described in their paper. Otherwise
@@ -124,6 +124,10 @@ setClass("ssgseaParam",
 #'  logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input
 #'  expression values are integer counts, such as those derived from RNA-seq
 #'  experiments, then this argument should be set to `kcdf="Poisson"`.
+#' 
+#' @slot tau Numeric vector of length 1; the exponent defining the
+#'  weight of the tail in the random walk performed by the `GSVA` (Hänzelmann et
+#'  al., 2013) method.
 #' 
 #' @slot mx.diff Logical vector of length 1 which offers two approaches to
 #'  calculate the enrichment statistic (ES) from the KS random walk statistic.

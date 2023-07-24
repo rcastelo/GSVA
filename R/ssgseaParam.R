@@ -40,15 +40,12 @@ ssgseaParam <- function(alpha = 0.25, normalize = TRUE) {
 #'
 #' @examples
 #' sp <- ssgseaParam()
-#' getAlpha(sp)
+#' get_alpha(sp)
 #' sp <- ssgseaParam(alpha = 0.42)
-#' getAlpha(sp)
+#' get_alpha(sp)
 #'
 #' @noRd
-#' 
-# #' @rdname ssgseaParam
-# #' @export
-getAlpha <- function(obj) {
+get_alpha <- function(obj) {
   stopifnot(inherits(obj, "ssgseaParam"))
   return(obj@alpha)
 }
@@ -65,15 +62,12 @@ getAlpha <- function(obj) {
 #'
 #' @examples
 #' sp <- ssgseaParam()
-#' doNormalize(sp)
+#' do_normalize(sp)
 #' sp <- ssgseaParam(doNormalize = FALSE)
-#' doNormalize(sp)
+#' do_normalize(sp)
 #'
 #' @noRd
-#' 
-# #' @rdname ssgseaParam
-# #' @export
-doNormalize <- function(obj) {
+do_normalize <- function(obj) {
   stopifnot(inherits(obj, "ssgseaParam"))
   return(obj@normalize)
 }
