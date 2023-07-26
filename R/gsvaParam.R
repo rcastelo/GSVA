@@ -5,32 +5,34 @@
 #'
 #' Construct and return a new object of class \linkS4class{gsvaParam}.
 #'
-#' @param kcdf Character vector of length 1 denoting the kernel to use during the
-#'  non-parametric estimation of the cumulative distribution function of
-#'  expression levels across samples. By default, `kcdf="Gaussian"` is suitable
-#'  when input expression values are continuous, such as microarray fluorescent
-#'  units in logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs.
-#'  When input expression values are integer counts, such as those derived from
-#'  RNA-seq experiments, then this argument should be set to `kcdf="Poisson"`.
+#' @param kcdf Character vector of length 1 denoting the kernel to use during
+#'   the non-parametric estimation of the cumulative distribution function of
+#'   expression levels across samples. By default, `kcdf="Gaussian"` which is
+#'   suitable when input expression values are continuous, such as microarray
+#'   fluorescent units in logarithmic scale, RNA-seq log-CPMs, log-RPKMs or
+#'   log-TPMs. When input expression values are integer counts, such as those
+#'   derived from RNA-seq experiments, then this argument should be set to
+#'   `kcdf="Poisson"`.
 #'
-#' @param tau Numeric vector of length 1; the exponent defining the
-#'  weight of the tail in the random walk performed by the `GSVA` (Hänzelmann et
-#'  al., 2013) method.  The default value is 1 as described in the paper.
-#'  
+#' @param tau Numeric vector of length 1; the exponent defining the weight of
+#'   the tail in the random walk performed by the `GSVA` (Hänzelmann et al.,
+#'   2013) method.  The default value is 1 as described in the paper.
+#'
 #' @param mx.diff Logical vector of length 1 which offers two approaches to
-#'  calculate the enrichment statistic (ES) from the KS random walk statistic.
+#'   calculate the enrichment statistic (ES) from the KS random walk statistic.
 #'  * `FALSE`: ES is calculated as the maximum distance of the random walk
-#'  from 0.
+#'   from 0.
 #'  * `TRUE` (the default): ES is calculated as the magnitude difference between
-#'  the largest positive and negative random walk deviations.
-#'  
+#'   the largest positive and negative random walk deviations.
+#'
 #' @param abs.ranking Logical vector of length 1 used only when `mx.diff=TRUE`.
-#'  When `abs.ranking=FALSE` (default) a modified Kuiper statistic is used to
-#'  calculate enrichment scores, taking the magnitude difference between the
-#'  largest positive and negative random walk deviations. When `abs.ranking=TRUE`
-#'  the original Kuiper statistic that sums the largest positive and negative
-#'  random walk deviations, is used. In this latter case, gene sets with genes
-#'  enriched on either extreme (high or low) will be regarded as ’highly’ activated.
+#'   When `abs.ranking=FALSE` (default) a modified Kuiper statistic is used to
+#'   calculate enrichment scores, taking the magnitude difference between the
+#'   largest positive and negative random walk deviations. When
+#'   `abs.ranking=TRUE` the original Kuiper statistic that sums the largest
+#'   positive and negative random walk deviations, is used. In this latter case,
+#'   gene sets with genes enriched on either extreme (high or low) will be
+#'   regarded as ’highly’ activated.
 #' 
 #' @return A new \linkS4class{gsvaParam} object.
 #'
@@ -42,6 +44,7 @@
 #' @export
 gsvaParam <- function(kcdf = c("Gaussian", "Poisson", "none"), 
                       tau = 1, mx.diff = TRUE, abs.ranking = FALSE) {
+  kcdf <- match.arg(kcdf)
   new("gsvaParam", kcdf = kcdf, tau = tau, mx.diff = mx.diff, abs.ranking = abs.ranking)
 }
 

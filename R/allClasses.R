@@ -113,38 +113,38 @@ setClass("ssgseaParam",
 #' `gsvaParam` class
 #'
 #' Method-specific parameters for the `gsva` method.
-#' 
+#'
 #' This class has slots for storing the two parameters to the `gsva` method
-#' described below.  It is derived from the virtual superclass [`emptyParam-class`].
-#' 
+#' described below.  It is derived from the virtual superclass
+#' [`emptyParam-class`].
+#'
 #' @slot kcdf Character vector of length 1 denoting the kernel to use during the
-#'  non-parametric estimation of the cumulative distribution function of
-#'  expression levels across samples. `kcdf="Gaussian"` is suitable when input
-#'  expression values are continuous, such as microarray fluorescent units in
-#'  logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input
-#'  expression values are integer counts, such as those derived from RNA-seq
-#'  experiments, then this argument should be set to `kcdf="Poisson"`.
-#' 
-#' @slot tau Numeric vector of length 1; the exponent defining the
-#'  weight of the tail in the random walk performed by the `GSVA` (Hänzelmann et
-#'  al., 2013) method.
-#' 
+#'   non-parametric estimation of the cumulative distribution function of
+#'   expression levels across samples. `kcdf="Gaussian"` is suitable when input
+#'   expression values are continuous, such as microarray fluorescent units in
+#'   logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input
+#'   expression values are integer counts, such as those derived from RNA-seq
+#'   experiments, then this argument should be set to `kcdf="Poisson"`.
+#'
+#' @slot tau Numeric vector of length 1; the exponent defining the weight of the
+#'   tail in the random walk performed by the `GSVA` (Hänzelmann et al., 2013)
+#'   method.
+#'
 #' @slot mx.diff Logical vector of length 1 which offers two approaches to
-#'  calculate the enrichment statistic (ES) from the KS random walk statistic.
-#'  \describe{
-#'    \item{\code{mx.diff=FALSE}}{ES is calculated as the maximum distance of the 
-#'    random walk from 0.}
-#'    \item{\code{mx.diff=TRUE}}{ES is calculated as the magnitude difference between
-#'    the largest positive and negative random walk deviations.}
-#'  }
-#'  
+#'   calculate the enrichment statistic (ES) from the KS random walk statistic.
+#'  * `FALSE`: ES is calculated as the maximum distance of the random walk
+#'   from 0.
+#'  * `TRUE`: ES is calculated as the magnitude difference between
+#'   the largest positive and negative random walk deviations.
+#'
 #' @slot abs.ranking Logical vector of length 1 used only when `mx.diff=TRUE`.
-#'  When `abs.ranking=FALSE` a modified Kuiper statistic is used to calculate
-#'  enrichment scores, taking the magnitude difference between the largest
-#'  positive and negative random walk deviations. When `abs.ranking=TRUE` the
-#'  original Kuiper statistic that sums the largest positive and negative random
-#'  walk deviations, is used. In this latter case, gene sets with genes enriched
-#'  on either extreme (high or low) will be regarded as ’highly’ activated.
+#'   When `abs.ranking=FALSE` a modified Kuiper statistic is used to calculate
+#'   enrichment scores, taking the magnitude difference between the largest
+#'   positive and negative random walk deviations. When `abs.ranking=TRUE` the
+#'   original Kuiper statistic that sums the largest positive and negative
+#'   random walk deviations, is used. In this latter case, gene sets with genes
+#'   enriched on either extreme (high or low) will be regarded as ’highly’
+#'   activated.
 #'
 #' @seealso
 #' [`zscoreParam-class`],
