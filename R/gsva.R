@@ -898,10 +898,7 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
 combinez <- function(gSetIdx, j, Z) sum(Z[gSetIdx, j]) / sqrt(length(gSetIdx))
 
 zscore <- function(X, geneSets, parallel.sz, verbose=TRUE,
-                   BPPARAM=SerialParam(progressbar=verbose)) {
-
-  n <- ncol(X)
-
+                   BPPARAM=SerialParam(progressbar = verbose)) {
   if(is(X, "dgCMatrix")){
     message("Please bear in mind that this method first scales the values of the gene
     expression data. In order to take advantage of the sparse Matrix type, the scaling
@@ -911,25 +908,14 @@ zscore <- function(X, geneSets, parallel.sz, verbose=TRUE,
     Z <- t(X)
     Z <- .dgCapply(Z, scale, 2)
     Z <- t(Z)
-    
   } else {
     Z <- t(scale(t(X)))
   }
-
-  es <- bplapply(as.list(1:n), function(j, Z, geneSets) {
-    es_sample <- lapply(geneSets, combinez, j, Z)
-    unlist(es_sample)
-  }, Z, geneSets, BPPARAM=BPPARAM)
-
-  es <- do.call("cbind", es)
+  es <- bplapply(geneSets, function(gSetIdx) {
+    colSums(Z[gSetIdx, ]) / sqrt(length(gSetIdx))
+  },BPPARAM=BPPARAM)
   
-  if(is(X, "dgCMatrix")){
-    es <- as(as(as(es, "dMatrix"), "generalMatrix"), "CsparseMatrix")
-  }
-
-  rownames(es) <- names(geneSets)
-  colnames(es) <- colnames(X)
-
+  es <- do.call("rbind",es)
   es
 }
 
