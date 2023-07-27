@@ -1,4 +1,4 @@
-useDynLib(GSVA)
+useDynLib(GSVA, .registration=TRUE)
 
 import(methods)
 

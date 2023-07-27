@@ -1,10 +1,8 @@
-citHeader("To cite package 'GSVA' in publications use:")
-
-citEntry(entry="Article",
+bibentry(bibtype="Article",
   title = "{GSVA}: gene set variation analysis for microarray and {RNA-Seq} data",
-  author = personList(as.person("Sonja H{\\\"a}nzelmann"),
-                      as.person("Robert Castelo"),
-                      as.person("Justin Guinney")),
+  author = c(person("Sonja", "H{\\\"a}nzelmann"),
+             person("Robert", "Castelo"),
+             person("Justin", "Guinney")),
   journal = "BMC Bioinformatics",
   volume = "14",
   pages = "7",
@@ -13,5 +11,6 @@ citEntry(entry="Article",
   doi = "10.1186/1471-2105-14-7",
   textVersion = paste("Hänzelmann, S., Castelo, R. and Guinney, A.",
                       "GSVA: gene set variation analysis for microarray and RNA-seq data.",
-                      "BMC Bioinformatics, 14:7, 2013.")
+                      "BMC Bioinformatics, 14:7, 2013."),
+  header = "To cite the package 'GSVA' in publications use:"
 )
