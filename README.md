@@ -4,7 +4,7 @@
 [![Bioconductor Downloads](https://bioconductor.org/shields/downloads/release/GSVA.svg)](https://bioconductor.org/packages/stats/bioc/GSVA/ "Ranking by number of downloads. A lower number means the package is downloaded more frequently. Determined within a package type (software, experiment, annotation, workflow) and uses the number of distinct IPs for the last 12 months.")
 [![Support posts](https://bioconductor.org/shields/posts/GSVA.svg)](https://support.bioconductor.org/t/GSVA/ "Support site activity on GSVA, last 6 months: answered posts/total posts.")
 [![R-CMD-check-bioc](https://github.com/rcastelo/GSVA/workflows/R-CMD-check-bioc/badge.svg)](https://github.com/rcastelo/GSVA/actions?query=workflow%3AR-CMD-check-bioc)
-[![codecov.io](https://app.codecov.io/github/rcastelo/GSVA/coverage.svg?branch=devel)](https://app.codecov.io/github/rcastelo/GSVA?branch=devel)
+[![codecov.io](https://codecov.io/github/rcastelo/GSVA/coverage.svg?branch=devel)](https://app.codecov.io/github/rcastelo/GSVA?branch=devel)
 <img align="right" src="https://raw.githubusercontent.com/Bioconductor/BiocStickers/master/GSVA/GSVA.png" height="200"/>
 
 
