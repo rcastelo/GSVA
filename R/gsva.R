@@ -3,7 +3,7 @@
 ## purpose: main function of the package which estimates activity
 ##          scores for each given gene-set
 
-setGeneric("gsva", function(expr, gset.idx.list, ...) standardGeneric("gsva"))
+setGeneric("gsva", function(expr, gset.idx.list, param, ...) standardGeneric("gsva"))
 
 setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),
           function(expr, gset.idx.list, annotation,
