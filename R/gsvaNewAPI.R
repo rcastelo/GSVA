@@ -4,9 +4,6 @@
 ###
 
 
-##
-## PLAGE with a matrix of data and a list of sets
-##
 ##' Estimates GSVA enrichment scores.
 ##'
 ##' GSVA assesses the relative enrichment of gene sets across samples using
@@ -85,6 +82,9 @@
 ##' 
 ##' @rdname gsvaNewAPI
 ##' @export 
+##
+## PLAGE with a matrix of data and a list of sets
+##
 setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "plageParam"),
           function(expr, gset.idx.list, param,
                    annotation, 
@@ -109,14 +109,122 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "plageP
 
               rval <- .gsva_newAPI(expr = expr,
                                    gset.idx.list = mapped.gset.idx.list,
-                                   method = "plage",
-                                   rnaseq = FALSE, 
+                                   param = param,
                                    parallel.sz = parallel.sz,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
 
               return(rval)
           })
+
+
+##
+## Z-Score with a matrix of data and a list of sets
+##
+setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "zscoreParam"),
+          function(expr, gset.idx.list, param,
+                   annotation, 
+                   min.sz=1,
+                   max.sz=Inf,
+                   parallel.sz=1L, 
+                   verbose=TRUE,
+                   BPPARAM=SerialParam(progressbar=verbose))
+          {
+              ## filter genes according to verious criteria,
+              ## e.g., constant expression
+              expr <- .filterFeatures_newAPI(expr)
+
+              ## map to the actual features for which expression data is available
+              mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+              
+              ## remove gene sets from the analysis for which no features are available
+              ## and meet the minimum and maximum gene-set size specified by the user
+              mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+                                                     min.sz=max(1, min.sz),
+                                                     max.sz=max.sz)
+
+              rval <- .gsva_newAPI(expr = expr,
+                                   gset.idx.list = mapped.gset.idx.list,
+                                   param = param,
+                                   parallel.sz = parallel.sz,
+                                   verbose = verbose,
+                                   BPPARAM = BPPARAM)
+
+              return(rval)
+          })
+
+
+##
+## ssGSEA with a matrix of data and a list of sets
+##
+setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "ssgseaParam"),
+          function(expr, gset.idx.list, param,
+                   annotation, 
+                   min.sz=1,
+                   max.sz=Inf,
+                   parallel.sz=1L, 
+                   verbose=TRUE,
+                   BPPARAM=SerialParam(progressbar=verbose))
+          {
+              ## filter genes according to verious criteria,
+              ## e.g., constant expression
+              expr <- .filterFeatures_newAPI(expr, dropConstantRows = FALSE)
+
+              ## map to the actual features for which expression data is available
+              mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+              
+              ## remove gene sets from the analysis for which no features are available
+              ## and meet the minimum and maximum gene-set size specified by the user
+              mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+                                                     min.sz=max(1, min.sz),
+                                                     max.sz=max.sz)
+
+              rval <- .gsva_newAPI(expr = expr,
+                                   gset.idx.list = mapped.gset.idx.list,
+                                   param = param,
+                                   parallel.sz = parallel.sz,
+                                   verbose = verbose,
+                                   BPPARAM = BPPARAM)
+
+              return(rval)
+          })
+
+
+##
+## GSVA with a matrix of data and a list of sets
+##
+setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "gsvaParam"),
+          function(expr, gset.idx.list, param,
+                   annotation, 
+                   min.sz=1,
+                   max.sz=Inf,
+                   parallel.sz=1L, 
+                   verbose=TRUE,
+                   BPPARAM=SerialParam(progressbar=verbose))
+          {
+              ## filter genes according to verious criteria,
+              ## e.g., constant expression
+              expr <- .filterFeatures_newAPI(expr)
+
+              ## map to the actual features for which expression data is available
+              mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+              
+              ## remove gene sets from the analysis for which no features are available
+              ## and meet the minimum and maximum gene-set size specified by the user
+              mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+                                                     min.sz=max(1, min.sz),
+                                                     max.sz=max.sz)
+
+              rval <- .gsva_newAPI(expr = expr,
+                                   gset.idx.list = mapped.gset.idx.list,
+                                   param = param,
+                                   parallel.sz = parallel.sz,
+                                   verbose = verbose,
+                                   BPPARAM = BPPARAM)
+
+              return(rval)
+          })
+
 
 
 ### ----- GSVA utility functions, slightly adapted for new API -----
@@ -150,11 +258,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "plageP
 }
 
 
-.gsva_newAPI <- function(expr, gset.idx.list, method,
-                         kcdf=c("Gaussian", "Poisson", "none"),
-                         rnaseq=FALSE,
+.gsva_newAPI <- function(expr, gset.idx.list, param,
+                         rnaseq = FALSE,
                          parallel.sz=1L,
-                         kernel=TRUE,
                          verbose=TRUE,
                          BPPARAM=SerialParam(progressbar=verbose)) {
     
@@ -189,15 +295,18 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "plageP
         cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
                     class(BPPARAM), parallel.sz))
 
-    if (method == "ssgsea") {
+    if (inherits(param, "ssgseaParam")) {
         if(verbose)
             cat("Estimating ssGSEA scores for", length(gset.idx.list),"gene sets.\n")
 
-        return(ssgsea(expr, gset.idx.list, alpha=tau, parallel.sz=parallel.sz,
-                      normalization=ssgsea.norm, verbose=verbose, BPPARAM=BPPARAM))
+        return(ssgsea(expr, gset.idx.list, alpha=get_alpha(param), parallel.sz=parallel.sz,
+                      normalization=do_normalize(param), verbose=verbose, BPPARAM=BPPARAM))
     }
 
-    if (method == "zscore") {
+    ## CHECK: AFAICS rnaseq is either FALSE because kcdf=="Gaussian" by default (and kcdf shouldn't be considered
+    ## for methods other than 'gsva')or it is missing and consequently FALSE by the default of this function; and
+    ## the only way rnaseq could be TRUE would be to set kcdf = "Poisson", regardless of the method?!?
+    if (inherits(param, "zscoreParam")) {
         if (rnaseq)
             stop("rnaseq=TRUE does not work with method='zscore'.")
 
@@ -207,7 +316,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "plageP
         return(zscore(expr, gset.idx.list, parallel.sz, verbose, BPPARAM=BPPARAM))
     }
 
-    if (method == "plage") {
+    if (inherits(param, "plageParam")) {
         if (rnaseq)
             stop("rnaseq=TRUE does not work with method='plage'.")
 
@@ -223,15 +332,25 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "plageP
     n.samples <- ncol(expr)
     n.genes <- nrow(expr)
     n.gset <- length(gset.idx.list)
+
+    ## CHECK: isn't this the only place this should be used?!?
+    if (get_kcdf(param) == "Gaussian") {
+        rnaseq <- FALSE
+        kernel <- TRUE
+    } else if (get_kcdf(param) == "Poisson") {
+        rnaseq <- TRUE
+        kernel <- TRUE
+    } else
+        kernel <- FALSE
     
     es.obs <- matrix(NaN, n.gset, n.samples, dimnames=list(names(gset.idx.list),colnames(expr)))
     colnames(es.obs) <- colnames(expr)
     rownames(es.obs) <- names(gset.idx.list)
     
     es.obs <- compute.geneset.es(expr, gset.idx.list, 1:n.samples,
-                                 rnaseq=rnaseq, abs.ranking=abs.ranking,
+                                 rnaseq=rnaseq, abs.ranking=get_abs.ranking(param),
                                  parallel.sz=parallel.sz,
-                                 mx.diff=mx.diff, tau=tau, kernel=kernel,
+                                 mx.diff=get_mx.diff(param), tau=get_tau(param), kernel=kernel,
                                  verbose=verbose, BPPARAM=BPPARAM)
     
     colnames(es.obs) <- colnames(expr)
@@ -254,14 +373,14 @@ generateTestInputData <- function(p = 10, nGS = 3,
     tid[["geneSets"]] <- geneSets
 
     ## sample data from a normal distribution with mean 0 and st.dev. 1
-    y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+    y <- matrix(stats::rnorm(n*p), nrow=p, ncol=n,
                 dimnames=list(paste0("g", 1:p) , paste0("s", 1:n)))
     ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
     y[geneSets[["GeneSet1"]], seq.int(nGrp1+1, n)] <- y[geneSets[["GeneSet1"]], seq.int(nGrp1+1, n)] + 2
     tid[["mxFloat"]] <- y
 
     ## same structure with count data
-    d <- matrix(rpois(n*p, 42), nrow=p, ncol=n,
+    d <- matrix(stats::rpois(n*p, 42), nrow=p, ncol=n,
                 dimnames=list(paste0("g", 1:p) , paste0("s", 1:n)))
     d[geneSets[["GeneSet1"]], seq.int(nGrp1+1, n)] <- d[geneSets[["GeneSet1"]], seq.int(nGrp1+1, n)] + 23
     tid[["mxCount"]] <- d
