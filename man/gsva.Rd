@@ -1,15 +1,15 @@
 \name{gsva}
 \alias{gsva}
-\alias{gsva,HDF5Array,list-method}
-\alias{gsva,SingleCellExperiment,list-method}
-\alias{gsva,SingleCellExperiment,GeneSetCollection-method}
-\alias{gsva,dgCMatrix,list-method}
-\alias{gsva,SummarizedExperiment,list-method}
-\alias{gsva,SummarizedExperiment,GeneSetCollection-method}
-\alias{gsva,ExpressionSet,list-method}
-\alias{gsva,ExpressionSet,GeneSetCollection-method}
-\alias{gsva,matrix,GeneSetCollection-method}
-\alias{gsva,matrix,list-method}
+\alias{gsva,HDF5Array,list,missing-method}
+\alias{gsva,SingleCellExperiment,list,missing-method}
+\alias{gsva,SingleCellExperiment,GeneSetCollection,missing-method}
+\alias{gsva,dgCMatrix,list,missing-method}
+\alias{gsva,SummarizedExperiment,list,missing-method}
+\alias{gsva,SummarizedExperiment,GeneSetCollection,missing-method}
+\alias{gsva,ExpressionSet,list,missing-method}
+\alias{gsva,ExpressionSet,GeneSetCollection,missing-method}
+\alias{gsva,matrix,GeneSetCollection,missing-method}
+\alias{gsva,matrix,list,missing-method}
 
 \encoding{latin1}
 
@@ -20,7 +20,7 @@ Gene Set Variation Analysis
 Estimates GSVA enrichment scores.
 }
 \usage{
-\S4method{gsva}{SingleCellExperiment,list}(expr, gset.idx.list, annotation,
+\S4method{gsva}{SingleCellExperiment,list,missing}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
     abs.ranking=FALSE,
@@ -32,7 +32,7 @@ Estimates GSVA enrichment scores.
     ssgsea.norm=TRUE,
     verbose=TRUE,
     BPPARAM=SerialParam(progressbar=verbose))
-\S4method{gsva}{HDF5Array,list}(expr, gset.idx.list, annotation,
+\S4method{gsva}{HDF5Array,list,missing}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
     abs.ranking=FALSE,
@@ -44,7 +44,7 @@ Estimates GSVA enrichment scores.
     ssgsea.norm=TRUE,
     verbose=TRUE,
     BPPARAM=SerialParam(progressbar=verbose))
-\S4method{gsva}{dgCMatrix,list}(expr, gset.idx.list, annotation,
+\S4method{gsva}{dgCMatrix,list,missing}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
     abs.ranking=FALSE,
@@ -56,7 +56,7 @@ Estimates GSVA enrichment scores.
     ssgsea.norm=TRUE,
     verbose=TRUE,
     BPPARAM=SerialParam(progressbar=verbose))
-\S4method{gsva}{SummarizedExperiment,GeneSetCollection}(expr, gset.idx.list, annotation,
+\S4method{gsva}{SummarizedExperiment,GeneSetCollection,missing}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
     abs.ranking=FALSE,
@@ -68,7 +68,7 @@ Estimates GSVA enrichment scores.
     ssgsea.norm=TRUE,
     verbose=TRUE,
     BPPARAM=SerialParam(progressbar=verbose))
-\S4method{gsva}{SummarizedExperiment,list}(expr, gset.idx.list, annotation,
+\S4method{gsva}{SummarizedExperiment,list,missing}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
     abs.ranking=FALSE,
@@ -80,7 +80,7 @@ Estimates GSVA enrichment scores.
     ssgsea.norm=TRUE,
     verbose=TRUE,
     BPPARAM=SerialParam(progressbar=verbose))
-\S4method{gsva}{ExpressionSet,list}(expr, gset.idx.list, annotation,
+\S4method{gsva}{ExpressionSet,list,missing}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
     abs.ranking=FALSE,
@@ -92,7 +92,7 @@ Estimates GSVA enrichment scores.
     ssgsea.norm=TRUE,
     verbose=TRUE,
     BPPARAM=SerialParam(progressbar=verbose))
-\S4method{gsva}{ExpressionSet,GeneSetCollection}(expr, gset.idx.list, annotation,
+\S4method{gsva}{ExpressionSet,GeneSetCollection,missing}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
     abs.ranking=FALSE,
@@ -104,7 +104,7 @@ Estimates GSVA enrichment scores.
     ssgsea.norm=TRUE,
     verbose=TRUE,
     BPPARAM=SerialParam(progressbar=verbose))
-\S4method{gsva}{matrix,GeneSetCollection}(expr, gset.idx.list, annotation,
+\S4method{gsva}{matrix,GeneSetCollection,missing}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
     abs.ranking=FALSE,
@@ -116,7 +116,7 @@ Estimates GSVA enrichment scores.
     ssgsea.norm=TRUE,
     verbose=TRUE,
     BPPARAM=SerialParam(progressbar=verbose))
-\S4method{gsva}{matrix,list}(expr, gset.idx.list, annotation,
+\S4method{gsva}{matrix,list,missing}(expr, gset.idx.list, annotation,
     method=c("gsva", "ssgsea", "zscore", "plage"),
     kcdf=c("Gaussian", "Poisson", "none"),
     abs.ranking=FALSE,
