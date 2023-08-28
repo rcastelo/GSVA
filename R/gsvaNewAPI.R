@@ -85,7 +85,7 @@
 ##
 ## PLAGE with a matrix of data and a list of sets
 ##
-setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "plageParam"),
+setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "PlageParam"),
           function(expr, gset.idx.list, param,
                    annotation, 
                    min.sz=1,
@@ -121,7 +121,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "plageP
 ##
 ## Z-Score with a matrix of data and a list of sets
 ##
-setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "zscoreParam"),
+setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "ZScoreParam"),
           function(expr, gset.idx.list, param,
                    annotation, 
                    min.sz=1,
@@ -157,7 +157,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "zscore
 ##
 ## ssGSEA with a matrix of data and a list of sets
 ##
-setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "ssgseaParam"),
+setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "SsGseaParam"),
           function(expr, gset.idx.list, param,
                    annotation, 
                    min.sz=1,
@@ -193,7 +193,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "ssgsea
 ##
 ## GSVA with a matrix of data and a list of sets
 ##
-setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "gsvaParam"),
+setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "GsvaParam"),
           function(expr, gset.idx.list, param,
                    annotation, 
                    min.sz=1,
@@ -295,7 +295,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "gsvaPa
         cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
                     class(BPPARAM), parallel.sz))
 
-    if (inherits(param, "ssgseaParam")) {
+    if (inherits(param, "SsGseaParam")) {
         if(verbose)
             cat("Estimating ssGSEA scores for", length(gset.idx.list),"gene sets.\n")
 
@@ -306,7 +306,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "gsvaPa
     ## CHECK: AFAICS rnaseq is either FALSE because kcdf=="Gaussian" by default (and kcdf shouldn't be considered
     ## for methods other than 'gsva')or it is missing and consequently FALSE by the default of this function; and
     ## the only way rnaseq could be TRUE would be to set kcdf = "Poisson", regardless of the method?!?
-    if (inherits(param, "zscoreParam")) {
+    if (inherits(param, "ZScoreParam")) {
         if (rnaseq)
             stop("rnaseq=TRUE does not work with method='zscore'.")
 
@@ -316,7 +316,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "gsvaPa
         return(zscore(expr, gset.idx.list, parallel.sz, verbose, BPPARAM=BPPARAM))
     }
 
-    if (inherits(param, "plageParam")) {
+    if (inherits(param, "PlageParam")) {
         if (rnaseq)
             stop("rnaseq=TRUE does not work with method='plage'.")
 
@@ -377,13 +377,13 @@ generateTestInputData <- function(p = 10, nGS = 3,
                 dimnames=list(paste0("g", 1:p) , paste0("s", 1:n)))
     ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
     y[geneSets[["GeneSet1"]], seq.int(nGrp1+1, n)] <- y[geneSets[["GeneSet1"]], seq.int(nGrp1+1, n)] + 2
-    tid[["mxFloat"]] <- y
+    tid[["continuousData"]] <- y
 
     ## same structure with count data
     d <- matrix(stats::rpois(n*p, 42), nrow=p, ncol=n,
                 dimnames=list(paste0("g", 1:p) , paste0("s", 1:n)))
     d[geneSets[["GeneSet1"]], seq.int(nGrp1+1, n)] <- d[geneSets[["GeneSet1"]], seq.int(nGrp1+1, n)] + 23
-    tid[["mxCount"]] <- d
+    tid[["countData"]] <- d
 
     return(tid)
 }

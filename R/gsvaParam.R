@@ -3,7 +3,7 @@
 
 #' Construct a GSVA parameter object
 #'
-#' Construct and return a new object of class \linkS4class{gsvaParam}.
+#' Construct and return a new object of class \linkS4class{GsvaParam}.
 #'
 #' @param kcdf Character vector of length 1 denoting the kernel to use during
 #'   the non-parametric estimation of the cumulative distribution function of
@@ -34,7 +34,7 @@
 #'   gene sets with genes enriched on either extreme (high or low) will be
 #'   regarded as ’highly’ activated.
 #' 
-#' @return A new \linkS4class{gsvaParam} object.
+#' @return A new \linkS4class{GsvaParam} object.
 #'
 #' @examples
 #' gp <- gsvaParam()
@@ -45,20 +45,20 @@
 gsvaParam <- function(kcdf = c("Gaussian", "Poisson", "none"), 
                       tau = 1, mx.diff = TRUE, abs.ranking = FALSE) {
   kcdf <- match.arg(kcdf)
-  new("gsvaParam", kcdf = kcdf, tau = tau, mx.diff = mx.diff, abs.ranking = abs.ranking)
+  new("GsvaParam", kcdf = kcdf, tau = tau, mx.diff = mx.diff, abs.ranking = abs.ranking)
 }
 
 
 # Getters -----------------------------------------------------------------
 
-#' Return the `kcdf` parameter from a `gsvaParam` object
+#' Return the `kcdf` parameter from a `GsvaParam` object
 #'
-#' Returns the `kcdf` parameter from a \linkS4class{gsvaParam} object.
+#' Returns the `kcdf` parameter from a \linkS4class{GsvaParam} object.
 #'
-#' @param obj A \linkS4class{gsvaParam} object.
+#' @param obj A \linkS4class{GsvaParam} object.
 #' 
 #' @return The requested `kcdf` parameter from `obj` or an error if `obj` does
-#' not inherit from \linkS4class{gsvaParam}.
+#' not inherit from \linkS4class{GsvaParam}.
 #'
 #' @examples
 #' gp <- gsvaParam()
@@ -68,19 +68,19 @@ gsvaParam <- function(kcdf = c("Gaussian", "Poisson", "none"),
 #'
 #' @noRd
 get_kcdf <- function(obj) {
-  stopifnot(inherits(obj, "gsvaParam"))
+  stopifnot(inherits(obj, "GsvaParam"))
   return(obj@kcdf)
 }
 
 
-#' Return the `tau` parameter from a `gsvaParam` object
+#' Return the `tau` parameter from a `GsvaParam` object
 #'
-#' Returns the `tau` parameter from a \linkS4class{gsvaParam} object.
+#' Returns the `tau` parameter from a \linkS4class{GsvaParam} object.
 #'
-#' @param obj A \linkS4class{gsvaParam} object.
+#' @param obj A \linkS4class{GsvaParam} object.
 #' 
 #' @return The requested `tau` parameter from `obj` or an error if `obj` does
-#' not inherit from \linkS4class{gsvaParam}.
+#' not inherit from \linkS4class{GsvaParam}.
 #'
 #' @examples
 #' gp <- gsvaParam()
@@ -90,19 +90,19 @@ get_kcdf <- function(obj) {
 #'
 #' @noRd
 get_tau <- function(obj) {
-  stopifnot(inherits(obj, "gsvaParam"))
+  stopifnot(inherits(obj, "GsvaParam"))
   return(obj@tau)
 }
 
 
-#' Return the `mx.diff` parameter from a `gsvaParam` object
+#' Return the `mx.diff` parameter from a `GsvaParam` object
 #'
-#' Returns the `mx.diff` parameter from a \linkS4class{gsvaParam} object.
+#' Returns the `mx.diff` parameter from a \linkS4class{GsvaParam} object.
 #'
-#' @param obj A \linkS4class{gsvaParam} object.
+#' @param obj A \linkS4class{GsvaParam} object.
 #' 
 #' @return The requested `mx.diff` parameter from `obj` or an error if `obj` does
-#' not inherit from \linkS4class{gsvaParam}.
+#' not inherit from \linkS4class{GsvaParam}.
 #'
 #' @examples
 #' gp <- gsvaParam()
@@ -112,19 +112,19 @@ get_tau <- function(obj) {
 #'
 #' @noRd
 get_mx.diff <- function(obj) {
-  stopifnot(inherits(obj, "gsvaParam"))
+  stopifnot(inherits(obj, "GsvaParam"))
   return(obj@mx.diff)
 }
 
 
-#' Return the `abs.ranking` parameter from a `gsvaParam` object
+#' Return the `abs.ranking` parameter from a `GsvaParam` object
 #'
-#' Returns the `abs.ranking` parameter from a \linkS4class{gsvaParam} object.
+#' Returns the `abs.ranking` parameter from a \linkS4class{GsvaParam} object.
 #'
-#' @param obj A \linkS4class{gsvaParam} object.
+#' @param obj A \linkS4class{GsvaParam} object.
 #' 
 #' @return The requested `abs.ranking` parameter from `obj` or an error if `obj`
-#'   does not inherit from \linkS4class{gsvaParam}.
+#'   does not inherit from \linkS4class{GsvaParam}.
 #'
 #' @examples
 #' gp <- gsvaParam()
@@ -134,7 +134,7 @@ get_mx.diff <- function(obj) {
 #'
 #' @noRd
 get_abs.ranking <- function(obj) {
-  stopifnot(inherits(obj, "gsvaParam"))
+  stopifnot(inherits(obj, "GsvaParam"))
   return(obj@abs.ranking)
 }
 

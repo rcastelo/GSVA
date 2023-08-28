@@ -3,9 +3,9 @@
 test_plageParam <- function() {
     plgPrm <- plageParam()
 
-    checkTrue(inherits(plgPrm, "plageParam"))
-    checkTrue(inherits(plgPrm, "emptyParam"))
-    checkTrue(!inherits(plgPrm, "gsvaParam"))
+    checkTrue(inherits(plgPrm, "PlageParam"))
+    checkTrue(inherits(plgPrm, "EmptyParam"))
+    checkTrue(!inherits(plgPrm, "GsvaParam"))
 
     checkException(plageParam(42), msg = "unexpected argument to plageParam()")
 }
@@ -13,9 +13,9 @@ test_plageParam <- function() {
 test_zscoreParam <- function() {
     zscPrm <- zscoreParam()
 
-    checkTrue(inherits(zscPrm, "zscoreParam"))
-    checkTrue(inherits(zscPrm, "emptyParam"))
-    checkTrue(!inherits(zscPrm, "gsvaParam"))
+    checkTrue(inherits(zscPrm, "ZScoreParam"))
+    checkTrue(inherits(zscPrm, "EmptyParam"))
+    checkTrue(!inherits(zscPrm, "GsvaParam"))
 
     checkException(zscoreParam(42), msg = "unexpected argument to zscoreParam()")
 }
@@ -23,18 +23,18 @@ test_zscoreParam <- function() {
 test_ssgseaParam <- function() {
     ssgPrm <- ssgseaParam()
 
-    checkTrue(inherits(ssgPrm, "ssgseaParam"))
-    checkTrue(inherits(ssgPrm, "emptyParam"))
-    checkTrue(!inherits(ssgPrm, "gsvaParam"))
+    checkTrue(inherits(ssgPrm, "SsGseaParam"))
+    checkTrue(inherits(ssgPrm, "EmptyParam"))
+    checkTrue(!inherits(ssgPrm, "GsvaParam"))
 
     checkEqualsNumeric(ssgPrm@alpha, 0.25)
     checkTrue(ssgPrm@normalize)
 
     ssgPrm <- ssgseaParam(0.5, FALSE)
 
-    checkTrue(inherits(ssgPrm, "ssgseaParam"))
-    checkTrue(inherits(ssgPrm, "emptyParam"))
-    checkTrue(!inherits(ssgPrm, "gsvaParam"))
+    checkTrue(inherits(ssgPrm, "SsGseaParam"))
+    checkTrue(inherits(ssgPrm, "EmptyParam"))
+    checkTrue(!inherits(ssgPrm, "GsvaParam"))
 
     checkEqualsNumeric(ssgPrm@alpha, 0.5)
     checkTrue(!ssgPrm@normalize)
@@ -46,9 +46,9 @@ test_ssgseaParam <- function() {
 test_gsvaParam = function() {
     gsvaPrm <- gsvaParam()
 
-    checkTrue(inherits(gsvaPrm, "gsvaParam"))
-    checkTrue(inherits(gsvaPrm, "emptyParam"))
-    checkTrue(!inherits(gsvaPrm, "ssgseaParam"))
+    checkTrue(inherits(gsvaPrm, "GsvaParam"))
+    checkTrue(inherits(gsvaPrm, "EmptyParam"))
+    checkTrue(!inherits(gsvaPrm, "SsGseaParam"))
 
     checkEquals(gsvaPrm@kcdf, "Gaussian")
     checkEqualsNumeric(gsvaPrm@tau, 1)
@@ -58,9 +58,9 @@ test_gsvaParam = function() {
     gsvaPrm <- gsvaParam(kcdf = "Poisson", tau = 0.5,
                          mx.diff = FALSE, abs.ranking = TRUE)
 
-    checkTrue(inherits(gsvaPrm, "gsvaParam"))
-    checkTrue(inherits(gsvaPrm, "emptyParam"))
-    checkTrue(!inherits(gsvaPrm, "ssgseaParam"))
+    checkTrue(inherits(gsvaPrm, "GsvaParam"))
+    checkTrue(inherits(gsvaPrm, "EmptyParam"))
+    checkTrue(!inherits(gsvaPrm, "SsGseaParam"))
 
     checkEquals(gsvaPrm@kcdf, "Poisson")
     checkEqualsNumeric(gsvaPrm@tau, 0.5)
@@ -69,9 +69,9 @@ test_gsvaParam = function() {
 
     gsvaPrm <- gsvaParam(kcdf = "none")
 
-    checkTrue(inherits(gsvaPrm, "gsvaParam"))
-    checkTrue(inherits(gsvaPrm, "emptyParam"))
-    checkTrue(!inherits(gsvaPrm, "ssgseaParam"))
+    checkTrue(inherits(gsvaPrm, "GsvaParam"))
+    checkTrue(inherits(gsvaPrm, "EmptyParam"))
+    checkTrue(!inherits(gsvaPrm, "SsGseaParam"))
 
     checkEquals(gsvaPrm@kcdf, "none")
 

@@ -3,9 +3,9 @@
 
 #' Construct a PLAGE parameter object
 #'
-#' Construct and return a new object of class \linkS4class{plageParam}.
+#' Construct and return a new object of class \linkS4class{PlageParam}.
 #'
-#' @return A new \linkS4class{plageParam} object.
+#' @return A new \linkS4class{PlageParam} object.
 #'
 #' @examples
 #' pp <- plageParam()
@@ -14,6 +14,6 @@
 #' @rdname plageParam
 #' @export
 plageParam <- function() {
-  new("plageParam")
+  new("PlageParam")
 }
 
