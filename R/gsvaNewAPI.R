@@ -4,70 +4,72 @@
 ###
 
 
-##' Estimates GSVA enrichment scores.
-##'
-##' GSVA assesses the relative enrichment of gene sets across samples using
-##' a non-parametric approach. Conceptually, GSVA transforms a p-gene by n-sample
-##' gene expression matrix into a g-geneset by n-sample pathway enrichment matrix.
-##' This facilitates many forms of statistical analysis in the 'space' of pathways
-##' rather than genes, providing a higher level of interpretability.
-##' 
-##' By default, `gsva()` will try to match the identifiers in `expr` to
-##' the identifiers in `gset.idx.list` just as they are, unless the
-##' `annotation` argument is set.
-##' 
-##' The `gsva()` function first maps the identifiers in the gene sets in
-##' `gset.idx.list` to the identifiers in the input expression data `expr`.
-##' When the input gene sets in `gset.idx.list` is provided as a `list`
-##' object, `gsva()` will try to match the identifiers in `expr` directly
-##' to the identifiers in `gset.idx.list` just as they are. Because unmatching
-##' identifiers will be discarded in both, `expr` and `gset.idx.list`,
-##' `gsva()` may prompt an error if no identifiers can be matched as in the case
-##' of different types of identifiers (e.g., gene symbols vs Entrez identitifers).
-##' 
-##' However, then the input gene sets in `gset.idx.list` is provided as a
-##' `GeneSetCollection` object, `gsva()` will try to automatically convert
-##' those identifiers to the type of identifier in the input expression data `expr`.
-##' Such an automatic conversion, however, will only occur in three scenarios: 1. when
-##' `expr` is an `ExpressionSet` object with an appropriately set
-##' `annotation` slot; 2. when `expr` is a `SummarizedExperiment` or a
-##' `SingleCellExperiment` object with an appropriately set `annotation` slot
-##' in the metadata of `expr`; 3. when `expr` is a `matrix` or a 
-##' `dgCMatrix` and the `annotation` argument of the `gsva()` function
-##' is set to the name of the annotation package that provides
-##' the relationships between the type of identifiers in `expr` and `gset.idx.list`.
-##' 
-##' The collection of gene sets resulting from the previous identifier matching,
-##' can be further filtered to require a minimun and/or maximum size by using the
-##' arguments `min.sz` and `max.sz`.
-##' 
-##' If you use GSVA in your research, please cite also the corresponding method as
-##' described in the `method` parameter.
-##' 
+### ##' Estimates GSVA enrichment scores.
+### ##'
+### ##' GSVA assesses the relative enrichment of gene sets across samples using
+### ##' a non-parametric approach. Conceptually, GSVA transforms a p-gene by n-sample
+### ##' gene expression matrix into a g-geneset by n-sample pathway enrichment matrix.
+### ##' This facilitates many forms of statistical analysis in the 'space' of pathways
+### ##' rather than genes, providing a higher level of interpretability.
+### ##' 
+### ##' By default, `gsva()` will try to match the identifiers in `expr` to
+### ##' the identifiers in `gset.idx.list` just as they are, unless the
+### ##' `annotation` argument is set.
+### ##' 
+### ##' The `gsva()` function first maps the identifiers in the gene sets in
+### ##' `gset.idx.list` to the identifiers in the input expression data `expr`.
+### ##' When the input gene sets in `gset.idx.list` is provided as a `list`
+### ##' object, `gsva()` will try to match the identifiers in `expr` directly
+### ##' to the identifiers in `gset.idx.list` just as they are. Because unmatching
+### ##' identifiers will be discarded in both, `expr` and `gset.idx.list`,
+### ##' `gsva()` may prompt an error if no identifiers can be matched as in the case
+### ##' of different types of identifiers (e.g., gene symbols vs Entrez identitifers).
+### ##' 
+### ##' However, then the input gene sets in `gset.idx.list` is provided as a
+### ##' `GeneSetCollection` object, `gsva()` will try to automatically convert
+### ##' those identifiers to the type of identifier in the input expression data `expr`.
+### ##' Such an automatic conversion, however, will only occur in three scenarios: 1. when
+### ##' `expr` is an `ExpressionSet` object with an appropriately set
+### ##' `annotation` slot; 2. when `expr` is a `SummarizedExperiment` or a
+### ##' `SingleCellExperiment` object with an appropriately set `annotation` slot
+### ##' in the metadata of `expr`; 3. when `expr` is a `matrix` or a 
+### ##' `dgCMatrix` and the `annotation` argument of the `gsva()` function
+### ##' is set to the name of the annotation package that provides
+### ##' the relationships between the type of identifiers in `expr` and `gset.idx.list`.
+### ##' 
+### ##' The collection of gene sets resulting from the previous identifier matching,
+### ##' can be further filtered to require a minimun and/or maximum size by using the
+### ##' arguments `min.sz` and `max.sz`.
+### ##' 
+### ##' If you use GSVA in your research, please cite also the corresponding method as
+### ##' described in the `method` parameter.
+
 ##' @title Gene Set Variation Analysis
+##' @description Run PLAGE on a matrix with gene sets in a list.
+##' @describeIn gsvaNewAPI Run PLAGE on a matrix with gene sets in a list.
 ##' @param expr Gene expression data which can be given either as a
-##'   `SummarizedExperiment`, `SingleCellExperiment`
-##'   `ExpressionSet` object, or as a matrix of expression
+##'   [`SummarizedExperiment`], [`SingleCellExperiment`]
+##'   [`ExpressionSet`] object, or as a matrix of expression
 ##'   values where rows correspond to genes and columns correspond to samples.
-##'   This matrix can be also in a sparse format, as a `dgCMatrix`, or
-##'   as an on-disk backend representation, such as `HDF5Array` .
+##'   This matrix can be also in a sparse format, as a [`dgCMatrix`], or
+##'   as an on-disk backend representation, such as [`HDF5Array`] .
 ##' @param gset.idx.list Gene sets provided either as a `list` object or as a
-##'   `GeneSetCollection` object.
+##'   [`GeneSetCollection`] object.
 ##' @param param A parameter object determining the analysis method to be performed
 ##'   as well as containing any method-specific parameters.
 ##' @param annotation In the case of calling `gsva()` on a
-##'   `SummarizedExperiment` or `SingleCellExperiment` object,
+##'   [`SummarizedExperiment`] or [`SingleCellExperiment`] object,
 ##'   the `annotation` argument can be used to select the assay
 ##'   containing the molecular data we want as input to the `gsva()`
 ##'   function, otherwise the first assay is selected.
 ##'   In the case of calling `gsva()` with expression data in
-##'   a `matrix` and gene sets as a `GeneSetCollection`
+##'   a `matrix` and gene sets as a [`GeneSetCollection`]
 ##'   object, the `annotation` argument can be used to supply
 ##'   the name of the Bioconductor package that contains
 ##'   annotations for the class of gene identifiers occurring in
 ##'   the row names of the expression data matrix.
 ##'   In the case of calling `gsva()` on a
-##'   `ExpressionSet` object, the `annotation` argument
+##'   [`ExpressionSet`] object, the `annotation` argument
 ##'   is ignored. See details information below.
 ##' @param min.sz Minimum size of the resulting gene sets.
 ##' @param max.sz Maximum size of the resulting gene sets.
@@ -75,16 +77,11 @@
 ##'   The argument BPPARAM allows one to set the parallel back-end and fine
 ##'   tune its configuration.
 ##' @param verbose Gives information about each calculation step. Default: `FALSE`.
-##' @param BPPARAM An object of class \linkS4class{BiocParallelParam} specifiying parameters
+##' @param BPPARAM An object of class [`BiocParallelParam`] specifiying parameters
 ##'   related to the parallel execution of some of the tasks and calculations within this function.
-##' @return A gene-set by sample matrix (of `matrix` or `dgCMatrix` type, 
+##' @return A gene-set by sample matrix (of `matrix` or [`dgCMatrix`] type, 
 ##'   depending on the input) of GSVA enrichment scores.
-##' 
-##' @rdname gsvaNewAPI
-##' @export 
-##
-## PLAGE with a matrix of data and a list of sets
-##
+##' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`]
 setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "PlageParam"),
           function(expr, gset.idx.list, param,
                    annotation, 
@@ -118,9 +115,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "PlageP
           })
 
 
-##
-## Z-Score with a matrix of data and a list of sets
-##
+##' @title Gene Set Variation Analysis
+##' @description Run z-score analysis on a matrix with gene sets in a list.
+##' @describeIn gsvaNewAPI Run z-score analysis on a matrix with gene sets in a list.
 setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "ZScoreParam"),
           function(expr, gset.idx.list, param,
                    annotation, 
@@ -154,9 +151,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "ZScore
           })
 
 
-##
-## ssGSEA with a matrix of data and a list of sets
-##
+##' @title Gene Set Variation Analysis
+##' @description Run ssGSEA on a matrix with gene sets in a list.
+##' @describeIn gsvaNewAPI Run ssGSEA on a matrix with gene sets in a list.
 setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "SsGseaParam"),
           function(expr, gset.idx.list, param,
                    annotation, 
@@ -190,9 +187,9 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "SsGsea
           })
 
 
-##
-## GSVA with a matrix of data and a list of sets
-##
+##' @title Gene Set Variation Analysis
+##' @description Run GSVA on a matrix with gene sets in a list.
+##' @describeIn gsvaNewAPI Run GSVA on a matrix with gene sets in a list.
 setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "GsvaParam"),
           function(expr, gset.idx.list, param,
                    annotation, 
