@@ -51,7 +51,7 @@
 ##'   [`SummarizedExperiment`], [`SingleCellExperiment`]
 ##'   [`ExpressionSet`] object, or as a matrix of expression
 ##'   values where rows correspond to genes and columns correspond to samples.
-##'   This matrix can be also in a sparse format, as a [`dgCMatrix`], or
+##'   This matrix can be also in a sparse format, as a [`dgCMatrix-class`], or
 ##'   as an on-disk backend representation, such as [`HDF5Array`] .
 ##' @param gset.idx.list Gene sets provided either as a `list` object or as a
 ##'   [`GeneSetCollection`] object.
@@ -79,7 +79,7 @@
 ##' @param verbose Gives information about each calculation step. Default: `FALSE`.
 ##' @param BPPARAM An object of class [`BiocParallelParam`] specifiying parameters
 ##'   related to the parallel execution of some of the tasks and calculations within this function.
-##' @return A gene-set by sample matrix (of `matrix` or [`dgCMatrix`] type, 
+##' @return A gene-set by sample matrix (of `matrix` or [`dgCMatrix-class`] type, 
 ##'   depending on the input) of GSVA enrichment scores.
 ##' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`]
 setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "PlageParam"),
@@ -264,8 +264,8 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "GsvaPa
     if(is(expr, "DelayedArray")){
         warning("Using 'DelayedArray' objects as input is still in an experimental stage.")
 
-        return(.gsvaDelayedArray(expr, gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM))
+#         return(.gsvaDelayedArray(expr, gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+#                                  parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM))
     }
 
     if (length(gset.idx.list) == 0)
