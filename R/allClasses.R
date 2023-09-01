@@ -1,7 +1,7 @@
 
 # Virtual Superclass ------------------------------------------------------
 
-#' `emptyParam` class
+#' `EmptyParam` class
 #'
 #' Virtual superclass of method-specific parameter classes.
 #'
@@ -17,74 +17,74 @@
 #' This is the purpose of this class.
 #'
 #' @seealso
-#' [`zscoreParam-class`], 
-#' [`plageParam-class`], 
-#' [`ssgseaParam-class`], 
-#' [`gsvaParam-class`]
+#' [`ZScoreParam-class`], 
+#' [`PlageParam-class`], 
+#' [`SsGseaParam-class`], 
+#' [`GsvaParam-class`]
 #'
-#' @name emptyParam-class
-#' @rdname emptyParam-class
-#' @exportClass emptyParam
-setClass("emptyParam",
+#' @name EmptyParam-class
+#' @rdname EmptyParam-class
+#' @exportClass EmptyParam
+setClass("EmptyParam",
          slots = character(),
          contains = "VIRTUAL")
 
 
 # z-Score Parameter Class -------------------------------------------------
 
-#' `zscoreParam` class
+#' `ZScoreParam` class
 #'
 #' Method-specific parameters for the `zscore` method.
 #' 
 #' Since this method does not take any parameters, the parameter class does not
 #' have any slots and exists merely for method dispatch.  It is derived from the
-#' virtual superclass [`emptyParam-class`].
+#' virtual superclass [`EmptyParam-class`].
 #'
 #' @seealso
-#' [`plageParam-class`],
-#' [`ssgseaParam-class`],
-#' [`gsvaParam-class`]
+#' [`PlageParam-class`],
+#' [`SsGseaParam-class`],
+#' [`GsvaParam-class`]
 #'
-#' @name zscoreParam-class
-#' @rdname zscoreParam-class
-#' @exportClass zscoreParam
-setClass("zscoreParam",
+#' @name ZScoreParam-class
+#' @rdname ZScoreParam-class
+#' @exportClass ZScoreParam
+setClass("ZScoreParam",
          slots = character(),
-         contains = "emptyParam")
+         contains = "EmptyParam")
 
 
 
 # PLAGE Parameter Class -------------------------------------------------
 
-#' `plageParam` class
+#' `PlageParam` class
 #'
 #' Method-specific parameters for the `plage` method.
 #' 
 #' Since this method does not take any parameters, the parameter class does not
 #' have any slots and exists merely for method dispatch.  It is derived from the
-#' virtual superclass [`emptyParam-class`].
+#' virtual superclass [`EmptyParam-class`].
 #'
 #' @seealso
-#' [`zscoreParam-class`],
-#' [`ssgseaParam-class`],
-#' [`gsvaParam-class`]
+#' [`ZScoreParam-class`],
+#' [`SsGseaParam-class`],
+#' [`GsvaParam-class`]
 #'
-#' @name plageParam-class
-#' @rdname plageParam-class
-#' @exportClass plageParam
-setClass("plageParam",
+#' @name PlageParam-class
+#' @rdname PlageParam-class
+#' @exportClass PlageParam
+setClass("PlageParam",
          slots = character(),
-         contains = "emptyParam")
+         contains = "EmptyParam")
 
 
 # ssGSEA Parameter Class -------------------------------------------------
 
-#' `ssgseaParam` class
+#' `SsGseaParam` class
 #'
 #' Method-specific parameters for the `ssgsea` method.
 #' 
 #' This class has slots for storing the two parameters to the `ssgsea` method
-#' described below.  It is derived from the virtual superclass [`emptyParam-class`].
+#' described below.  It is derived from the virtual superclass [`EmptyParam-class`].
 #' 
 #' @slot alpha Numeric vector of length 1; the exponent defining the
 #'  weight of the tail in the random walk performed by the `ssGSEA` (Barbie et
@@ -96,27 +96,27 @@ setClass("plageParam",
 #'  this last normalization step is skipped.
 #'
 #' @seealso
-#' [`zscoreParam-class`],
-#' [`plageParam-class`],
-#' [`gsvaParam-class`]
+#' [`ZScoreParam-class`],
+#' [`PlageParam-class`],
+#' [`GsvaParam-class`]
 #'
-#' @name ssgseaParam-class
-#' @rdname ssgseaParam-class
-#' @exportClass ssgseaParam
-setClass("ssgseaParam",
+#' @name SsGseaParam-class
+#' @rdname SsGseaParam-class
+#' @exportClass SsGseaParam
+setClass("SsGseaParam",
          slots = c(alpha = "numeric", normalize = "logical"),
-         contains = "emptyParam")
+         contains = "EmptyParam")
 
 
 # GSVA Parameter Class ----------------------------------------------------
 
-#' `gsvaParam` class
+#' `GsvaParam` class
 #'
 #' Method-specific parameters for the `gsva` method.
 #'
 #' This class has slots for storing the two parameters to the `gsva` method
 #' described below.  It is derived from the virtual superclass
-#' [`emptyParam-class`].
+#' [`EmptyParam-class`].
 #'
 #' @slot kcdf Character vector of length 1 denoting the kernel to use during the
 #'   non-parametric estimation of the cumulative distribution function of
@@ -147,17 +147,17 @@ setClass("ssgseaParam",
 #'   activated.
 #'
 #' @seealso
-#' [`zscoreParam-class`],
-#' [`plageParam-class`],
-#' [`ssgseaParam-class`]
+#' [`ZScoreParam-class`],
+#' [`PlageParam-class`],
+#' [`SsGseaParam-class`]
 #'
-#' @name gsvaParam-class
-#' @rdname gsvaParam-class
-#' @exportClass gsvaParam
-setClass("gsvaParam",
+#' @name GsvaParam-class
+#' @rdname GsvaParam-class
+#' @exportClass GsvaParam
+setClass("GsvaParam",
          slots = c(kcdf = "character", tau = "numeric", 
                    mx.diff = "logical", abs.ranking = "logical"),
-         contains = "emptyParam")
+         contains = "EmptyParam")
 
 
 

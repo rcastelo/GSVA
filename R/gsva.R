@@ -3,9 +3,9 @@
 ## purpose: main function of the package which estimates activity
 ##          scores for each given gene-set
 
-setGeneric("gsva", function(expr, gset.idx.list, ...) standardGeneric("gsva"))
+setGeneric("gsva", function(expr, gset.idx.list, param, ...) standardGeneric("gsva"))
 
-setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),
+setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list", param="missing"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
@@ -54,13 +54,13 @@ setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),
   rval
 })
 
-setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="GeneSetCollection"),
+setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="GeneSetCollection", param="missing"),
           function(expr, gset.idx.list, ...)
 {
   gsva(expr, geneIds(gset.idx.list), ...)
 })
 
-setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
+setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list", param="missing"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
@@ -132,7 +132,7 @@ setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
   rval
           })
           
-setMethod("gsva", signature(expr="dgCMatrix", gset.idx.list="list"),
+setMethod("gsva", signature(expr="dgCMatrix", gset.idx.list="list", param="missing"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
@@ -181,7 +181,7 @@ setMethod("gsva", signature(expr="dgCMatrix", gset.idx.list="list"),
   rval
 })
 
-setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetCollection"),
+setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetCollection", param="missing"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
@@ -271,7 +271,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
   rval
 })
 
-setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
+setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list", param="missing"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
@@ -339,7 +339,7 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
   rval
 })
 
-setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
+setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list", param="missing"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
@@ -391,7 +391,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
   rval
 })
 
-setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollection"),
+setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollection", param="missing"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
@@ -465,7 +465,7 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   rval
 })
 
-setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
+setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", param="missing"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
@@ -524,7 +524,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
   rval
 })
 
-setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
+setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param="missing"),
           function(expr, gset.idx.list, annotation,
   method=c("gsva", "ssgsea", "zscore", "plage"),
   kcdf=c("Gaussian", "Poisson", "none"),
@@ -898,10 +898,7 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
 combinez <- function(gSetIdx, j, Z) sum(Z[gSetIdx, j]) / sqrt(length(gSetIdx))
 
 zscore <- function(X, geneSets, parallel.sz, verbose=TRUE,
-                   BPPARAM=SerialParam(progressbar=verbose)) {
-
-  n <- ncol(X)
-
+                   BPPARAM=SerialParam(progressbar = verbose)) {
   if(is(X, "dgCMatrix")){
     message("Please bear in mind that this method first scales the values of the gene
     expression data. In order to take advantage of the sparse Matrix type, the scaling
@@ -911,25 +908,14 @@ zscore <- function(X, geneSets, parallel.sz, verbose=TRUE,
     Z <- t(X)
     Z <- .dgCapply(Z, scale, 2)
     Z <- t(Z)
-    
   } else {
     Z <- t(scale(t(X)))
   }
-
-  es <- bplapply(as.list(1:n), function(j, Z, geneSets) {
-    es_sample <- lapply(geneSets, combinez, j, Z)
-    unlist(es_sample)
-  }, Z, geneSets, BPPARAM=BPPARAM)
-
-  es <- do.call("cbind", es)
+  es <- bplapply(geneSets, function(gSetIdx) {
+    colSums(Z[gSetIdx, ]) / sqrt(length(gSetIdx))
+  },BPPARAM=BPPARAM)
   
-  if(is(X, "dgCMatrix")){
-    es <- as(as(as(es, "dMatrix"), "generalMatrix"), "CsparseMatrix")
-  }
-
-  rownames(es) <- names(geneSets)
-  colnames(es) <- colnames(X)
-
+  es <- do.call("rbind",es)
   es
 }
 

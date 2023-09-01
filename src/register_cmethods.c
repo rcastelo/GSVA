@@ -16,8 +16,8 @@ ks_matrix_R(SEXP XR, SEXP sidxsR, SEXP n_genesR, SEXP geneset_idxsR,
 /* registration of C-entry points */
 
 static R_CallMethodDef callMethods[] = {
-  {"ks_matrix_R2", (DL_FUNC) &ks_matrix_R, 9},
-  {"matrix_density_R2", (DL_FUNC) &matrix_density_R, 6},
+  {"ks_matrix_R", (DL_FUNC) &ks_matrix_R, 9},
+  {"matrix_density_R", (DL_FUNC) &matrix_density_R, 6},
   {NULL, NULL, 0}
 };
 
@@ -25,5 +25,6 @@ void
 R_init_GSVA(DllInfo *info) {
 
   R_registerRoutines(info, NULL, callMethods, NULL, NULL);
+  R_useDynamicSymbols(info, TRUE);
 
 }

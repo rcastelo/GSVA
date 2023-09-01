@@ -7,3 +7,5 @@
 src/*.o
 src/*.so
 man/*.Rd
+*~
+*.RData
