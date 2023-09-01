@@ -82,6 +82,30 @@ test_newAPI <- function() {
     checkTrue((min(g9) >= -1 && (max(g9) <= 1)))
     checkTrue(!any(is.na(g9)))
 
+    ## check: container class, dimnames, values; method 'gsva' by param object; Gaussian kernel; unnamed arguments
+    g10 <- gsva(xf, gs, gsvaParam())
+    checkIdentical(class(xf), class(g10))
+    checkEquals(names(gs), rownames(g10))
+    checkEquals(colnames(xf), colnames(g10))
+    checkTrue((min(g10) >= -1 && (max(g10) <= 1)))
+    checkTrue(!any(is.na(g10)))
+
+    ## check: container class, dimnames, values; method 'gsva' by param object; Poisson kernel; unnamed arguments
+    g11 <- gsva(xi, gs, gsvaParam(kcdf = "Poisson"))
+    checkIdentical(class(xf), class(g11))
+    checkEquals(names(gs), rownames(g11))
+    checkEquals(colnames(xf), colnames(g11))
+    checkTrue((min(g11) >= -1 && (max(g11) <= 1)))
+    checkTrue(!any(is.na(g11)))
+
+    ## check: container class, dimnames, values; method 'gsva' by param object; no kernel; unnamed arguments
+    g12 <- gsva(xf, gs, gsvaParam(kcdf = "none"))
+    checkIdentical(class(xf), class(g12))
+    checkEquals(names(gs), rownames(g12))
+    checkEquals(colnames(xf), colnames(g12))
+    checkTrue((min(g12) >= -1 && (max(g12) <= 1)))
+    checkTrue(!any(is.na(g12)))
+
     ## compare results using default method vs explicit method
     checkIdentical(g1, g4)
     checkIdentical(g2, g5)
@@ -89,6 +113,9 @@ test_newAPI <- function() {
     checkIdentical(g1, g7)
     checkIdentical(g2, g8)
     checkIdentical(g3, g9)
+    checkIdentical(g1, g10)
+    checkIdentical(g2, g11)
+    checkIdentical(g3, g12)
 
 
     ## check: container class, dimnames, values; method 'plage' by name
@@ -107,8 +134,17 @@ test_newAPI <- function() {
     checkTrue((min(p2) >= -1 && (max(p2) <= 1)))
     checkTrue(!any(is.na(p2)))
 
+    ## check: container class, dimnames, values; method 'plage' by param object; unnamed arguments
+    p3 <- gsva(xf, gs, plageParam())
+    checkIdentical(class(xf), class(p3))
+    checkEquals(names(gs), rownames(p3))
+    checkEquals(colnames(xf), colnames(p3))
+    checkTrue((min(p3) >= -1 && (max(p3) <= 1)))
+    checkTrue(!any(is.na(p3)))
+
     ## compare results using method name vs param object
     checkIdentical(p1, p2)
+    checkIdentical(p1, p3)
     
 
     ## check: container class, dimnames, values; method 'zscore' by name
@@ -127,8 +163,17 @@ test_newAPI <- function() {
     ## checkTrue((min(z2) >= -1 && (max(z2) <= 1)))
     checkTrue(!any(is.na(z2)))
 
+    ## check: container class, dimnames, values; method 'zscore' by param object; unnamed arguments
+    z3 <- gsva(xf, gs, zscoreParam())
+    checkIdentical(class(xf), class(z3))
+    checkEquals(names(gs), rownames(z3))
+    checkEquals(colnames(xf), colnames(z3))
+    ## checkTrue((min(z3) >= -1 && (max(z3) <= 1)))
+    checkTrue(!any(is.na(z3)))
+
     ## compare results of using method name vs param object
     checkIdentical(z1, z2)
+    checkIdentical(z1, z3)
     
 
     ## check: container class, dimnames, values; method ssgsea' by name; default parameters
@@ -163,7 +208,25 @@ test_newAPI <- function() {
     ## checkTrue((min(s4) >= -1 && (max(s4) <= 1)))
     checkTrue(!any(is.na(s4)))
 
+    ## check: container class, dimnames, values; method ssgsea' by param object; default parameters; unnamed arguments
+    s5 <- gsva(xf, gs, ssgseaParam())
+    checkIdentical(class(xf), class(s5))
+    checkEquals(names(gs), rownames(s5))
+    checkEquals(colnames(xf), colnames(s5))
+    checkTrue((min(s5) >= -1 && (max(s5) <= 1)))
+    checkTrue(!any(is.na(s5)))
+
+    ## check: container class, dimnames, values; method ssgsea' by param object; without normalization; unnames arguments
+    s6 <- gsva(xf, gs, ssgseaParam(normalize = FALSE))
+    checkIdentical(class(xf), class(s6))
+    checkEquals(names(gs), rownames(s6))
+    checkEquals(colnames(xf), colnames(s6))
+    ## checkTrue((min(s6) >= -1 && (max(s6) <= 1)))
+    checkTrue(!any(is.na(s6)))
+
     ## compare results of using method name vs param object
     checkIdentical(s1, s2)
     checkIdentical(s3, s4)
+    checkIdentical(s1, s5)
+    checkIdentical(s3, s6)
 }
