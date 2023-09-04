@@ -105,9 +105,9 @@ canonicalC2BroadSets
 
 
 ## ---- results="hide"--------------------------------------------------------------------
-esmicro <- gsva(huangArrayRMAnoBatchCommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500)
+esmicro <- gsva(huangArrayRMAnoBatchCommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500, verbose = FALSE)
 esrnaseq <- gsva(pickrellCountsArgonneCQNcommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500,
-                 kcdf="Poisson")
+                 kcdf="Poisson", verbose = FALSE)
 
 
 ## ---------------------------------------------------------------------------------------
@@ -177,7 +177,7 @@ lapply(brainTxDbSets, head)
 
 
 ## ---- results="hide"--------------------------------------------------------------------
-gbm_es <- gsva(gbm_eset, brainTxDbSets, mx.diff=FALSE)
+gbm_es <- gsva(gbm_eset, brainTxDbSets, mx.diff=FALSE, verbose = FALSE)
 
 
 ## ----gbmSignature, height=500, width=700, fig.cap="Heatmap of GSVA scores for cell-type brain signatures from murine models (y-axis) across GBM samples grouped by GBM subtype."----
@@ -217,7 +217,7 @@ leukemia_eset
 
 
 ## ---- results="hide"--------------------------------------------------------------------
-leukemia_es <- gsva(leukemia_eset, c2BroadSets, min.sz=10, max.sz=500)
+leukemia_es <- gsva(leukemia_eset, c2BroadSets, min.sz=10, max.sz=500, verbose = FALSE)
 
 
 ## ---------------------------------------------------------------------------------------
