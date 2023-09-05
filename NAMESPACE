@@ -34,6 +34,8 @@ importMethodsFrom(BiocParallel, bpiterate,
 importFrom(graphics, plot)
 importFrom(stats, ecdf,
                   na.omit,
+                  rnorm,
+                  rpois,
                   sd)
 importFrom(utils, installed.packages,
                   setTxtProgressBar,
