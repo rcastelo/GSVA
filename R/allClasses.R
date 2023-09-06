@@ -29,6 +29,13 @@ setClass("EmptyParam",
          slots = character(),
          contains = "VIRTUAL")
 
+setClassUnion("GsvaDataSet",
+              c("matrix", "ExpressionSet", "SummarizedExperiment",
+                "SingleCellExperiment", "dgCMatrix", "HDF5Array"))
+
+setClassUnion("GsvaGeneSet",
+              c("list", "GeneSetCollection"))
+
 
 # z-Score Parameter Class -------------------------------------------------
 
