@@ -1,0 +1,467 @@
+
+R version 4.3.1 (2023-06-16) -- "Beagle Scouts"
+Copyright (C) 2023 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> 
+> ###
+> ### 2023-09-03  axele
+> ### some useful information about package tests found in WRE 1.1.5, as well as
+> ### WRE 1.3.1, item 19, WRE 2.1.1, section \examples{...}
+> ###
+> 
+> ## ----setup, include=FALSE---------------------------------------------------------------
+> set.seed(2023-09-03)
+> options(warn = 1)
+> ## options(width=80)
+> ## knitr::opts_chunk$set(collapse=TRUE,
+> ##                       message=FALSE,
+> ##                       comment="")
+> 
+> 
+> ## ----library_install, message=FALSE, cache=FALSE, eval=FALSE----------------------------
+> ## install.packages("BiocManager")
+> ## BiocManager::install("GSVA")
+> 
+> 
+> ## ----load_library, message=FALSE, warning=FALSE, cache=FALSE----------------------------
+> suppressPackageStartupMessages(library(GSVA))
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> p <- 10000 ## number of genes
+> n <- 30    ## number of samples
+> ## simulate expression values from a standard Gaussian distribution
+> X <- matrix(rnorm(p*n), nrow=p,
++             dimnames=list(paste0("g", 1:p), paste0("s", 1:n)))
+> X[1:5, 1:5]
+            s1         s2         s3          s4          s5
+g1 -0.65480083 -0.1830515  0.2021209 -0.07063136 -0.27245342
+g2 -0.02877456  0.6976377 -0.1372065 -1.20749254 -0.70533356
+g3 -0.19413575 -0.4139692  1.0126158  1.56258491 -0.68224100
+g4 -0.90141523  0.8372188  0.6467115  1.25083002  1.35117670
+g5  1.31329723 -0.9827924 -0.4236211  0.84031256  0.01059914
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> ## sample gene set sizes
+> gs <- as.list(sample(10:100, size=100, replace=TRUE))
+> ## sample gene sets
+> gs <- lapply(gs, function(n, p)
++                    paste0("g", sample(1:p, size=n, replace=FALSE)), p)
+> names(gs) <- paste0("gs", 1:length(gs))
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> gsva.es <- gsva(X, gs, verbose=FALSE)
+> dim(gsva.es)
+[1] 100  30
+> gsva.es[1:5, 1:5]
+             s1          s2          s3          s4          s5
+gs1  0.06522982  0.29878929 -0.06071464  0.19408417  0.31517423
+gs2 -0.08505787 -0.20543839  0.26035797 -0.39158139  0.04002841
+gs3  0.15087615 -0.15901312 -0.42078342 -0.07769717 -0.10712207
+gs4  0.18670441 -0.34245527  0.27634515 -0.13106568  0.35827926
+gs5  0.12792002 -0.07831883 -0.02289371 -0.13990252 -0.24548261
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> class(gs)
+[1] "list"
+> length(gs)
+[1] 100
+> head(lapply(gs, head))
+$gs1
+[1] "g3937" "g260"  "g5784" "g2734" "g4720" "g8943"
+
+$gs2
+[1] "g936"  "g732"  "g4250" "g8767" "g1750" "g8000"
+
+$gs3
+[1] "g1417" "g7348" "g9766" "g254"  "g6851" "g687" 
+
+$gs4
+[1] "g9914" "g5112" "g285"  "g3234" "g6852" "g3369"
+
+$gs5
+[1] "g3057" "g8614" "g5087" "g5159" "g7156" "g1927"
+
+$gs6
+[1] "g4098" "g9615" "g3624" "g4355" "g45"   "g9082"
+
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> suppressPackageStartupMessages(library(org.Hs.eg.db))
+> 
+> goannot <- select(org.Hs.eg.db, keys=keys(org.Hs.eg.db), columns="GO")
+'select()' returned 1:many mapping between keys and columns
+> head(goannot)
+  ENTREZID         GO EVIDENCE ONTOLOGY
+1        1 GO:0003674       ND       MF
+2        1 GO:0005576      HDA       CC
+3        1 GO:0005576      IDA       CC
+4        1 GO:0005576      TAS       CC
+5        1 GO:0005615      HDA       CC
+6        1 GO:0005886      IBA       CC
+> genesbygo <- split(goannot$ENTREZID, goannot$GO)
+> length(genesbygo)
+[1] 18944
+> head(genesbygo)
+$`GO:0000002`
+ [1] "291"   "1890"  "4205"  "4358"  "4976"  "9361"  "10000" "55186" "55186"
+[10] "80119" "84275" "84275" "92667"
+
+$`GO:0000003`
+[1] "8510"   "286826"
+
+$`GO:0000009`
+[1] "55650" "79087"
+
+$`GO:0000010`
+[1] "23590" "57107"
+
+$`GO:0000012`
+ [1] "1161"      "2074"      "3981"      "7141"      "7515"      "23411"    
+ [7] "54840"     "54840"     "54840"     "55775"     "55775"     "55775"    
+[13] "200558"    "100133315"
+
+$`GO:0000014`
+ [1] "2021"  "2067"  "2072"  "4361"  "4361"  "5932"  "6419"  "6419"  "9941" 
+[10] "10111" "64421"
+
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> suppressPackageStartupMessages(library(GSEABase))
+> suppressPackageStartupMessages(library(GSVAdata))
+> 
+> data(c2BroadSets)
+> class(c2BroadSets)
+[1] "GeneSetCollection"
+attr(,"package")
+[1] "GSEABase"
+> c2BroadSets
+GeneSetCollection
+  names: NAKAMURA_CANCER_MICROENVIRONMENT_UP, NAKAMURA_CANCER_MICROENVIRONMENT_DN, ..., ST_PHOSPHOINOSITIDE_3_KINASE_PATHWAY (3272 total)
+  unique identifiers: 5167, 100288400, ..., 57191 (29340 total)
+  types in collection:
+    geneIdType: EntrezIdentifier (1 total)
+    collectionType: BroadCollection (1 total)
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> suppressPackageStartupMessages(library(Biobase))
+> 
+> data(commonPickrellHuang)
+> 
+> stopifnot(identical(featureNames(huangArrayRMAnoBatchCommon_eset),
++                     featureNames(pickrellCountsArgonneCQNcommon_eset)))
+> stopifnot(identical(sampleNames(huangArrayRMAnoBatchCommon_eset),
++                     sampleNames(pickrellCountsArgonneCQNcommon_eset)))
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> canonicalC2BroadSets <- c2BroadSets[c(grep("^KEGG", names(c2BroadSets)),
++                                       grep("^REACTOME", names(c2BroadSets)),
++                                       grep("^BIOCARTA", names(c2BroadSets)))]
+> canonicalC2BroadSets
+GeneSetCollection
+  names: KEGG_GLYCOLYSIS_GLUCONEOGENESIS, KEGG_CITRATE_CYCLE_TCA_CYCLE, ..., BIOCARTA_ACTINY_PATHWAY (833 total)
+  unique identifiers: 55902, 2645, ..., 8544 (6744 total)
+  types in collection:
+    geneIdType: EntrezIdentifier (1 total)
+    collectionType: BroadCollection (1 total)
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> data(genderGenesEntrez)
+> 
+> MSY <- GeneSet(msYgenesEntrez, geneIdType=EntrezIdentifier(),
++                               collectionType=BroadCollection(category="c2"), setName="MSY")
+> MSY
+setName: MSY 
+geneIds: 266, 84663, ..., 353513 (total: 34)
+geneIdType: EntrezId
+collectionType: Broad
+  bcCategory: c2 (Curated)
+  bcSubCategory: NA
+details: use 'details(object)'
+> XiE <- GeneSet(XiEgenesEntrez, geneIdType=EntrezIdentifier(),
++                               collectionType=BroadCollection(category="c2"), setName="XiE")
+> XiE
+setName: XiE 
+geneIds: 293, 8623, ..., 1121 (total: 66)
+geneIdType: EntrezId
+collectionType: Broad
+  bcCategory: c2 (Curated)
+  bcSubCategory: NA
+details: use 'details(object)'
+> 
+> canonicalC2BroadSets <- GeneSetCollection(c(canonicalC2BroadSets, MSY, XiE))
+> canonicalC2BroadSets
+GeneSetCollection
+  names: KEGG_GLYCOLYSIS_GLUCONEOGENESIS, KEGG_CITRATE_CYCLE_TCA_CYCLE, ..., XiE (835 total)
+  unique identifiers: 55902, 2645, ..., 1121 (6810 total)
+  types in collection:
+    geneIdType: EntrezIdentifier (1 total)
+    collectionType: BroadCollection (1 total)
+> 
+> 
+> ## ---- results="hide"--------------------------------------------------------------------
+> esmicro <- gsva(huangArrayRMAnoBatchCommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500, verbose = FALSE)
+> esrnaseq <- gsva(pickrellCountsArgonneCQNcommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500,
++                  kcdf="Poisson", verbose = FALSE)
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> suppressPackageStartupMessages(library(edgeR))
+> 
+> lcpms <- cpm(exprs(pickrellCountsArgonneCQNcommon_eset), log=TRUE)
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> genecorrs <- sapply(1:nrow(lcpms),
++                     function(i, expmicro, exprnaseq) cor(expmicro[i, ], exprnaseq[i, ],
++                                                          method="spearman"),
++                     exprs(huangArrayRMAnoBatchCommon_eset), lcpms)
+> names(genecorrs) <- rownames(lcpms)
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> pwycorrs <- sapply(1:nrow(esmicro),
++                    function(i, esmicro, esrnaseq) cor(esmicro[i, ], esrnaseq[i, ],
++                                                       method="spearman"),
++                    exprs(esmicro), exprs(esrnaseq))
+> names(pwycorrs) <- rownames(esmicro)
+> 
+> 
+> ## ----compcorrs, height=500, width=1000, fig.cap="Comparison of correlation values of gene and pathway expression profiles derived from microarray and RNA-seq data."----
+> ## par(mfrow=c(1, 2), mar=c(4, 5, 3, 2))
+> ## hist(genecorrs, xlab="Spearman correlation", main="Gene level\n(RNA-seq log-CPMs vs microarray RMA)",
+> ##      xlim=c(-1, 1), col="grey", las=1)
+> ## hist(pwycorrs, xlab="Spearman correlation", main="Pathway level\n(GSVA enrichment scores)",
+> ##      xlim=c(-1, 1), col="grey", las=1)
+> 
+> 
+> ## ----compsexgenesets, height=500, width=1000, fig.cap="Comparison of GSVA enrichment scores obtained from microarray and RNA-seq data for two gene sets formed by genes with sex-specific expression."----
+> rmsy <- cor(exprs(esrnaseq)["MSY", ], exprs(esmicro)["MSY", ])
+> ## par(mfrow=c(1, 2))
+> ## plot(exprs(esrnaseq)["MSY", ], exprs(esmicro)["MSY", ], xlab="GSVA scores RNA-seq",
+> ##      ylab="GSVA scores microarray", main=sprintf("MSY R=%.2f", rmsy), las=1, type="n")
+> ## abline(lm(exprs(esmicro)["MSY", ] ~ exprs(esrnaseq)["MSY", ]), lwd=2, lty=2, col="grey")
+> ## points(exprs(esrnaseq["MSY", pickrellCountsArgonneCQNcommon_eset$Gender == "Female"]),
+> ##        exprs(esmicro)["MSY", huangArrayRMAnoBatchCommon_eset$Gender == "Female"],
+> ##        col="red", pch=21, bg="red", cex=1)
+> ## points(exprs(esrnaseq)["MSY", pickrellCountsArgonneCQNcommon_eset$Gender == "Male"],
+> ##        exprs(esmicro)["MSY", huangArrayRMAnoBatchCommon_eset$Gender == "Male"],
+> ##        col="blue", pch=21, bg="blue", cex=1)
+> ## legend("topleft", c("female", "male"), pch=21, col=c("red", "blue"), pt.bg=c("red", "blue"), inset=0.01)
+> ## rxie <- cor(exprs(esrnaseq)["XiE", ], exprs(esmicro)["XiE", ])
+> ## plot(exprs(esrnaseq)["XiE", ], exprs(esmicro)["XiE", ], xlab="GSVA scores RNA-seq",
+> ##      ylab="GSVA scores microarray", main=sprintf("XiE R=%.2f", rxie), las=1, type="n")
+> ## abline(lm(exprs(esmicro)["XiE", ] ~ exprs(esrnaseq)["XiE", ]), lwd=2, lty=2, col="grey")
+> ## points(exprs(esrnaseq["XiE", pickrellCountsArgonneCQNcommon_eset$Gender == "Female"]),
+> ##        exprs(esmicro)["XiE", huangArrayRMAnoBatchCommon_eset$Gender == "Female"],
+> ##        col="red", pch=21, bg="red", cex=1)
+> ## points(exprs(esrnaseq)["XiE", pickrellCountsArgonneCQNcommon_eset$Gender == "Male"],
+> ##        exprs(esmicro)["XiE", huangArrayRMAnoBatchCommon_eset$Gender == "Male"],
+> ##        col="blue", pch=21, bg="blue", cex=1)
+> ## legend("topleft", c("female", "male"), pch=21, col=c("red", "blue"), pt.bg=c("red", "blue"), inset=0.01)
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> data(gbm_VerhaakEtAl)
+> gbm_eset
+ExpressionSet (storageMode: lockedEnvironment)
+assayData: 11861 features, 173 samples 
+  element names: exprs 
+protocolData: none
+phenoData
+  rowNames: TCGA.02.0003.01A.01 TCGA.02.0010.01A.01 ...
+    TCGA.12.0620.01A.01 (173 total)
+  varLabels: subtype
+  varMetadata: labelDescription channel
+featureData: none
+experimentData: use 'experimentData(object)'
+Annotation:  
+> head(featureNames(gbm_eset))
+[1] "AACS"    "FSTL1"   "ELMO2"   "CREB3L1" "RPS11"   "PNMA1"  
+> table(gbm_eset$subtype)
+
+  Classical Mesenchymal      Neural   Proneural 
+         38          56          26          53 
+> data(brainTxDbSets)
+> lengths(brainTxDbSets)
+      astrocytic_up        astroglia_up         neuronal_up oligodendrocytic_up 
+                 85                  88                  98                  70 
+> lapply(brainTxDbSets, head)
+$astrocytic_up
+[1] "GRHL1"   "GPAM"    "PAPSS2"  "MERTK"   "BTG1"    "SLC46A1"
+
+$astroglia_up
+[1] "BST2"     "SERPING1" "ACTA2"    "C9orf167" "C1orf31"  "ANXA4"   
+
+$neuronal_up
+[1] "STXBP1"  "JPH4"    "CACNG3"  "BRUNOL6" "CLSTN2"  "FAM123C"
+
+$oligodendrocytic_up
+[1] "DCT"    "ZNF536" "GNG8"   "ELOVL6" "NR2C1"  "RCBTB1"
+
+> 
+> 
+> ## ---- results="hide"--------------------------------------------------------------------
+> gbm_es <- gsva(gbm_eset, brainTxDbSets, mx.diff=FALSE, verbose = FALSE)
+> 
+> 
+> ## ----gbmSignature, height=500, width=700, fig.cap="Heatmap of GSVA scores for cell-type brain signatures from murine models (y-axis) across GBM samples grouped by GBM subtype."----
+> suppressPackageStartupMessages(library(RColorBrewer))
+> subtypeOrder <- c("Proneural", "Neural", "Classical", "Mesenchymal")
+> sampleOrderBySubtype <- sort(match(gbm_es$subtype, subtypeOrder),
++                              index.return=TRUE)$ix
+> subtypeXtable <- table(gbm_es$subtype)
+> subtypeColorLegend <- c(Proneural="red", Neural="green",
++                         Classical="blue", Mesenchymal="orange")
+> geneSetOrder <- c("astroglia_up", "astrocytic_up", "neuronal_up",
++                   "oligodendrocytic_up")
+> geneSetLabels <- gsub("_", " ", geneSetOrder)
+> hmcol <- colorRampPalette(brewer.pal(10, "RdBu"))(256)
+> hmcol <- hmcol[length(hmcol):1]
+> 
+> ## heatmap(exprs(gbm_es)[geneSetOrder, sampleOrderBySubtype], Rowv=NA,
+> ##         Colv=NA, scale="row", margins=c(3,5), col=hmcol,
+> ##         ColSideColors=rep(subtypeColorLegend[subtypeOrder],
+> ##                           times=subtypeXtable[subtypeOrder]),
+> ##         labCol="", gbm_es$subtype[sampleOrderBySubtype],
+> ##         labRow=paste(toupper(substring(geneSetLabels, 1,1)),
+> ##                      substring(geneSetLabels, 2), sep=""),
+> ##         cexRow=2, main=" \n ")
+> ## par(xpd=TRUE)
+> ## text(0.23,1.21, "Proneural", col="red", cex=1.2)
+> ## text(0.36,1.21, "Neural", col="green", cex=1.2)
+> ## text(0.47,1.21, "Classical", col="blue", cex=1.2)
+> ## text(0.62,1.21, "Mesenchymal", col="orange", cex=1.2)
+> ## mtext("Gene sets", side=4, line=0, cex=1.5)
+> ## mtext("Samples          ", side=1, line=4, cex=1.5)
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> data(leukemia)
+> leukemia_eset
+ExpressionSet (storageMode: lockedEnvironment)
+assayData: 12626 features, 37 samples 
+  element names: exprs 
+protocolData
+  sampleNames: CL2001011101AA.CEL CL2001011102AA.CEL ...
+    CL2001011152AA.CEL (37 total)
+  varLabels: ScanDate
+  varMetadata: labelDescription
+phenoData
+  sampleNames: CL2001011101AA.CEL CL2001011102AA.CEL ...
+    CL2001011152AA.CEL (37 total)
+  varLabels: subtype
+  varMetadata: labelDescription channel
+featureData: none
+experimentData: use 'experimentData(object)'
+Annotation: hgu95a 
+> 
+> 
+> ## ---- results="hide"--------------------------------------------------------------------
+> leukemia_es <- gsva(leukemia_eset, c2BroadSets, min.sz=10, max.sz=500, verbose = FALSE)
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> class(leukemia_es)
+[1] "ExpressionSet"
+attr(,"package")
+[1] "Biobase"
+> leukemia_es
+ExpressionSet (storageMode: lockedEnvironment)
+assayData: 2701 features, 37 samples 
+  element names: exprs 
+protocolData: none
+phenoData
+  sampleNames: CL2001011101AA.CEL CL2001011102AA.CEL ...
+    CL2001011152AA.CEL (37 total)
+  varLabels: subtype
+  varMetadata: labelDescription channel
+featureData: none
+experimentData: use 'experimentData(object)'
+Annotation:  
+> head(featureNames(leukemia_es))
+[1] "NAKAMURA_CANCER_MICROENVIRONMENT_UP" 
+[2] "NAKAMURA_CANCER_MICROENVIRONMENT_DN" 
+[3] "WEST_ADRENOCORTICAL_TUMOR_MARKERS_UP"
+[4] "WEST_ADRENOCORTICAL_TUMOR_MARKERS_DN"
+[5] "WINTER_HYPOXIA_UP"                   
+[6] "WINTER_HYPOXIA_DN"                   
+> 
+> 
+> ## ---------------------------------------------------------------------------------------
+> suppressPackageStartupMessages(library(limma))
+> 
+> mod <- model.matrix(~ factor(leukemia_es$subtype))
+> colnames(mod) <- c("ALL", "MLLvsALL")
+> fit <- lmFit(leukemia_es, mod)
+> fit <- eBayes(fit)
+> res <- decideTests(fit, p.value=0.01)
+> summary(res)
+        ALL MLLvsALL
+Down      2       40
+NotSig 2697     2605
+Up        2       56
+> 
+> 
+> ## ----leukemiavolcano, height=700, width=500, fig.cap="Volcano plot for the differential expression analysis at pathway level between two leukemia subtypes."----
+> tt <- topTable(fit, coef=2, n=Inf)
+> DEpwys <- rownames(tt)[tt$adj.P.Val <= 0.01]
+> ## plot(tt$logFC, -log10(tt$P.Value), pch=".", cex=4, col=grey(0.75),
+> ##      main="", xlab="GSVA enrichment score difference", ylab=expression(-log[10]~~Raw~P-value))
+> ## abline(h=-log10(max(tt$P.Value[tt$adj.P.Val <= 0.01])), col=grey(0.5), lwd=1, lty=2)
+> ## points(tt$logFC[match(DEpwys, rownames(tt))],
+> ##        -log10(tt$P.Value[match(DEpwys, rownames(tt))]), pch=".", cex=5, col="darkred")
+> ## text(max(tt$logFC)*0.85, -log10(max(tt$P.Value[tt$adj.P.Val <= 0.01])), "1% FDR", pos=3)
+> 
+> 
+> ## ----leukemiaheatmap, height=500, width=1200, fig.cap="Heatmap of GSVA enrichment scores for the differentially expressed pathways between two leukemia subtypes."----
+> DEpwys_es <- exprs(leukemia_es[DEpwys, ])
+> colorLegend <- c("darkred", "darkblue")
+> names(colorLegend) <- c("ALL", "MLL")
+> sample.color.map <- colorLegend[pData(leukemia_es)[, "subtype"]]
+> names(sample.color.map) <- colnames(DEpwys_es)
+> sampleClustering <- hclust(as.dist(1-cor(DEpwys_es, method="spearman")),
++                            method="complete")
+> geneSetClustering <- hclust(as.dist(1-cor(t(DEpwys_es), method="pearson")),
++                             method="complete")
+> ## heatmap(DEpwys_es, ColSideColors=sample.color.map, xlab="samples",
+> ##         ylab="Pathways", margins=c(2, 20),
+> ##         labRow=substr(gsub("_", " ", gsub("^KEGG_|^REACTOME_|^BIOCARTA_", "",
+> ##                                           rownames(DEpwys_es))), 1, 35),
+> ##         labCol="", scale="row", Colv=as.dendrogram(sampleClustering),
+> ##         Rowv=as.dendrogram(geneSetClustering))
+> ## legend("topleft", names(colorLegend), fill=colorLegend, inset=0.01, bg="white")
+> 
+> 
+> ## ---- eval=FALSE------------------------------------------------------------------------
+> ## res <- igsva()
+> 
+> 
+> ## ----session_info, cache=FALSE----------------------------------------------------------
+> ## sessionInfo()
+> 
+> 
+> proc.time()
+   user  system elapsed 
+ 53.509   0.396  53.882 

@@ -10,7 +10,7 @@
   sdGenes[sdGenes < 1e-10] <- 0
   if (any(sdGenes == 0) || any(is.na(sdGenes))) {
     warning(sum(sdGenes == 0 | is.na(sdGenes)),
-            " genes with constant expression values throuhgout the samples.")
+            " genes with constant expression values throughout the samples.")
     if (method != "ssgsea") {
       warning("Since argument method!=\"ssgsea\", genes with constant expression values are discarded.")
       expr <- expr[sdGenes > 0 & !is.na(sdGenes), ]
@@ -69,4 +69,10 @@
   x <- lapply(.sparseToList(m, MARGIN), f)
   m@x <- unlist(x, use.names=FALSE)
   m
+}
+
+
+guessIfCountData <- function(x, tolerance = sqrt(.Machine$double.eps)) {
+    return(typeof(x) == "integer" ||
+           (all(x >= 0) && all(x - round(x) < tolerance)))
 }
