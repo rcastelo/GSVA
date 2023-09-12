@@ -482,7 +482,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection", pa
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
 
-  ## filter genes according to verious criteria,
+  ## filter genes according to various criteria,
   ## e.g., constant expression
   expr <- .filterFeatures(expr, method)
 
@@ -541,7 +541,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param="missing"
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
 
-  ## filter genes according to verious criteria,
+  ## filter genes according to various criteria,
   ## e.g., constant expression
   expr <- .filterFeatures(expr, method)
 
