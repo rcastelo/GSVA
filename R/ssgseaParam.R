@@ -1,9 +1,9 @@
 
-# ssGSEA Parameter Constructor --------------------------------------------
+### ssGSEA Parameter Constructor --------------------------------------------
 
 #' Construct a ssGSEA parameter object
 #'
-#' Construct and return a new object of class \linkS4class{SsGseaParam}.
+#' Construct and return a new object of class \linkS4class{ssgseaParam}.
 #'
 #' @param alpha Numeric vector of length 1; the exponent defining the
 #'  weight of the tail in the random walk performed by the `ssGSEA` (Barbie et
@@ -14,7 +14,7 @@
 #'  between the minimum and the maximum, as described in their paper. Otherwise
 #'  this last normalization step is skipped.
 #' 
-#' @return A new \linkS4class{SsGseaParam} object.
+#' @return A new \linkS4class{ssgseaParam} object.
 #'
 #' @examples
 #' sp <- ssgseaParam()
@@ -22,21 +22,38 @@
 #' @importFrom methods new
 #' @rdname ssgseaParam
 #' @export
-ssgseaParam <- function(alpha = 0.25, normalize = TRUE) {
-  new("SsGseaParam", alpha = alpha, normalize = normalize)
+ssgseaParam <- function(dataSet, geneSets, alpha = 0.25, normalize = TRUE) {
+    new("ssgseaParam",
+        dataSet = dataSet, geneSets = geneSets, alpha = alpha, normalize = normalize)
 }
 
 
-# Getters -----------------------------------------------------------------
+### ssGSEA Parameter Validator ---------------------------------------------
 
-#' Return the `alpha` parameter from a `SsGseaParam` object
+setValidity("ssgseaParam", function(object) {
+    invalid <- character()
+    dd <- dim(object@dataSet)
+    if(dd[1] == 0) invalid <- c(invalid, "@dataSet has 0 rows")
+    if(dd[2] == 0) invalid <- c(invalid, "@dataSet has 0 columns")
+    if(length(object@geneSets) == 0) invalid <- c(invalid, "@geneSets has length 0")
+    if(length(object@alpha) != 1) invalid <- c(invalid, "@alpha should be of length 1")
+    if(is.na(object@alpha)) invalid <- c(invalid, "@alpha should not be NA")
+    if(length(object@normalize) != 1) invalid <- c(invalid, "@normalize should be of length 1")
+    if(is.na(object@normalize)) invalid <- c(invalid, "@normalize should not be NA")
+    return(if(length(invalid) == 0) TRUE else invalid)
+})
+
+
+### Getters -----------------------------------------------------------------
+
+#' Return the `alpha` parameter from a `ssgseaParam` object
 #'
-#' Returns the `alpha` parameter from a \linkS4class{SsGseaParam} object.
+#' Returns the `alpha` parameter from a \linkS4class{ssgseaParam} object.
 #'
-#' @param obj A \linkS4class{SsGseaParam} object.
+#' @param obj A \linkS4class{ssgseaParam} object.
 #' 
 #' @return The requested `alpha` parameter from `obj` or an error if `obj` does
-#' not inherit from \linkS4class{SsGseaParam}.
+#' not inherit from \linkS4class{ssgseaParam}.
 #'
 #' @examples
 #' sp <- ssgseaParam()
@@ -46,19 +63,19 @@ ssgseaParam <- function(alpha = 0.25, normalize = TRUE) {
 #'
 #' @noRd
 get_alpha <- function(obj) {
-  stopifnot(inherits(obj, "SsGseaParam"))
+  stopifnot(inherits(obj, "ssgseaParam"))
   return(obj@alpha)
 }
 
 
-#' Return the `normalize` flag from a `SsGseaParam` object
+#' Return the `normalize` flag from a `ssgseaParam` object
 #'
-#' Returns the `normalize` flag from a \linkS4class{SsGseaParam} object.
+#' Returns the `normalize` flag from a \linkS4class{ssgseaParam} object.
 #'
-#' @param obj A \linkS4class{SsGseaParam} object.
+#' @param obj A \linkS4class{ssgseaParam} object.
 #' 
 #' @return The requested `normalize` flag from `obj` or an error if `obj` does
-#' not inherit from \linkS4class{SsGseaParam}.
+#' not inherit from \linkS4class{ssgseaParam}.
 #'
 #' @examples
 #' sp <- ssgseaParam()
@@ -68,6 +85,6 @@ get_alpha <- function(obj) {
 #'
 #' @noRd
 do_normalize <- function(obj) {
-  stopifnot(inherits(obj, "SsGseaParam"))
+  stopifnot(inherits(obj, "ssgseaParam"))
   return(obj@normalize)
 }

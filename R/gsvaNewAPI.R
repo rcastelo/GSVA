@@ -1,48 +1,7 @@
 
 ###
-### 2023-08-21  axel: gsva() S4 methods for running all analysis methods
+### gsva() S4 methods for running all analysis methods
 ###
-
-
-### ##' Estimates GSVA enrichment scores.
-### ##'
-### ##' GSVA assesses the relative enrichment of gene sets across samples using
-### ##' a non-parametric approach. Conceptually, GSVA transforms a p-gene by n-sample
-### ##' gene expression matrix into a g-geneset by n-sample pathway enrichment matrix.
-### ##' This facilitates many forms of statistical analysis in the 'space' of pathways
-### ##' rather than genes, providing a higher level of interpretability.
-### ##' 
-### ##' By default, `gsva()` will try to match the identifiers in `expr` to
-### ##' the identifiers in `gset.idx.list` just as they are, unless the
-### ##' `annotation` argument is set.
-### ##' 
-### ##' The `gsva()` function first maps the identifiers in the gene sets in
-### ##' `gset.idx.list` to the identifiers in the input expression data `expr`.
-### ##' When the input gene sets in `gset.idx.list` is provided as a `list`
-### ##' object, `gsva()` will try to match the identifiers in `expr` directly
-### ##' to the identifiers in `gset.idx.list` just as they are. Because unmatching
-### ##' identifiers will be discarded in both, `expr` and `gset.idx.list`,
-### ##' `gsva()` may prompt an error if no identifiers can be matched as in the case
-### ##' of different types of identifiers (e.g., gene symbols vs Entrez identitifers).
-### ##' 
-### ##' However, then the input gene sets in `gset.idx.list` is provided as a
-### ##' `GeneSetCollection` object, `gsva()` will try to automatically convert
-### ##' those identifiers to the type of identifier in the input expression data `expr`.
-### ##' Such an automatic conversion, however, will only occur in three scenarios: 1. when
-### ##' `expr` is an `ExpressionSet` object with an appropriately set
-### ##' `annotation` slot; 2. when `expr` is a `SummarizedExperiment` or a
-### ##' `SingleCellExperiment` object with an appropriately set `annotation` slot
-### ##' in the metadata of `expr`; 3. when `expr` is a `matrix` or a 
-### ##' `dgCMatrix` and the `annotation` argument of the `gsva()` function
-### ##' is set to the name of the annotation package that provides
-### ##' the relationships between the type of identifiers in `expr` and `gset.idx.list`.
-### ##' 
-### ##' The collection of gene sets resulting from the previous identifier matching,
-### ##' can be further filtered to require a minimun and/or maximum size by using the
-### ##' arguments `min.sz` and `max.sz`.
-### ##' 
-### ##' If you use GSVA in your research, please cite also the corresponding method as
-### ##' described in the `method` parameter.
 
 ##' @title Gene Set Variation Analysis
 ##' @description Run PLAGE on a matrix with gene sets in a list.
@@ -82,7 +41,7 @@
 ##' @return A gene-set by sample matrix (of `matrix` or [`dgCMatrix-class`] type, 
 ##'   depending on the input) of GSVA enrichment scores.
 ##' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`]
-setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "PlageParam"),
+setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "plageParam"),
           function(expr, gset.idx.list, param,
                    annotation, 
                    min.sz=1,
@@ -91,10 +50,23 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "PlageP
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              ## filter genes according to verious criteria,
+              message("¡Hola PLAGE!")
+              dataSet <- get_dataSet(param)
+              dataMatrix <- unwrapData(dataSet, annotation)
+              
+              ## filter genes according to various criteria,
               ## e.g., constant expression
-              expr <- .filterFeatures_newAPI(expr)
+              expr <- .filterFeatures_newAPI(dataMatrix)
 
+              anno <- if(missing(annotation)) {
+                          Biobase::annotation(dataSet)
+                      } else {
+                          Biobase::annotation(dataSet, annotation)
+                      }
+              
+              gset.idx.list <- get_geneSets(param)
+              gset.idx.list <- mapGeneSetsToAnno(gset.idx.list, anno)
+              
               ## map to the actual features for which expression data is available
               mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
               
@@ -110,7 +82,8 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "PlageP
                                    parallel.sz = parallel.sz,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
-
+              rval <- wrapData(rval, dataSet)
+              
               return(rval)
           })
 
@@ -118,7 +91,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "PlageP
 ##' @title Gene Set Variation Analysis
 ##' @description Run z-score analysis on a matrix with gene sets in a list.
 ##' @describeIn gsvaNewAPI Run z-score analysis on a matrix with gene sets in a list.
-setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "ZScoreParam"),
+setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "zscoreParam"),
           function(expr, gset.idx.list, param,
                    annotation, 
                    min.sz=1,
@@ -127,10 +100,23 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "ZScore
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
+              message("¡Hola z-Score!")
+              dataSet <- get_dataSet(param)
+              dataMatrix <- unwrapData(dataSet, annotation)
+              
               ## filter genes according to verious criteria,
               ## e.g., constant expression
-              expr <- .filterFeatures_newAPI(expr)
+              expr <- .filterFeatures_newAPI(dataMatrix)
 
+              anno <- if(missing(annotation)) {
+                          Biobase::annotation(dataSet)
+                      } else {
+                          Biobase::annotation(dataSet, annotation)
+                      }
+              
+              gset.idx.list <- get_geneSets(param)
+              gset.idx.list <- mapGeneSetsToAnno(gset.idx.list, anno)
+              
               ## map to the actual features for which expression data is available
               mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
               
@@ -146,6 +132,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "ZScore
                                    parallel.sz = parallel.sz,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
+              rval <- wrapData(rval, dataSet)
 
               return(rval)
           })
@@ -154,7 +141,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "ZScore
 ##' @title Gene Set Variation Analysis
 ##' @description Run ssGSEA on a matrix with gene sets in a list.
 ##' @describeIn gsvaNewAPI Run ssGSEA on a matrix with gene sets in a list.
-setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "SsGseaParam"),
+setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "ssgseaParam"),
           function(expr, gset.idx.list, param,
                    annotation, 
                    min.sz=1,
@@ -163,10 +150,23 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "SsGsea
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
+              message("¡Hola ssGSEA!")
+              dataSet <- get_dataSet(param)
+              dataMatrix <- unwrapData(dataSet, annotation)
+              
               ## filter genes according to verious criteria,
               ## e.g., constant expression
-              expr <- .filterFeatures_newAPI(expr, dropConstantRows = FALSE)
+              expr <- .filterFeatures_newAPI(dataMatrix, dropConstantRows = FALSE)
 
+              anno <- if(missing(annotation)) {
+                          Biobase::annotation(dataSet)
+                      } else {
+                          Biobase::annotation(dataSet, annotation)
+                      }
+              
+              gset.idx.list <- get_geneSets(param)
+              gset.idx.list <- mapGeneSetsToAnno(gset.idx.list, anno)
+              
               ## map to the actual features for which expression data is available
               mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
               
@@ -182,7 +182,8 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "SsGsea
                                    parallel.sz = parallel.sz,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
-
+              rval <- wrapData(rval, dataSet)
+              
               return(rval)
           })
 
@@ -190,7 +191,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "SsGsea
 ##' @title Gene Set Variation Analysis
 ##' @description Run GSVA on a matrix with gene sets in a list.
 ##' @describeIn gsvaNewAPI Run GSVA on a matrix with gene sets in a list.
-setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "GsvaParam"),
+setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "gsvaParam"),
           function(expr, gset.idx.list, param,
                    annotation, 
                    min.sz=1,
@@ -199,10 +200,23 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "GsvaPa
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
+              message("¡Hola GSVA!")
+              dataSet <- get_dataSet(param)
+              dataMatrix <- unwrapData(dataSet, annotation)
+              
               ## filter genes according to verious criteria,
               ## e.g., constant expression
-              expr <- .filterFeatures_newAPI(expr)
+              expr <- .filterFeatures_newAPI(dataMatrix)
 
+              anno <- if(missing(annotation)) {
+                          Biobase::annotation(dataSet)
+                      } else {
+                          Biobase::annotation(dataSet, annotation)
+                      }
+              
+              gset.idx.list <- get_geneSets(param)
+              gset.idx.list <- mapGeneSetsToAnno(gset.idx.list, anno)
+              
               ## map to the actual features for which expression data is available
               mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
               
@@ -218,7 +232,8 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "GsvaPa
                                    parallel.sz = parallel.sz,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
-
+              rval <- wrapData(rval, dataSet)
+              
               return(rval)
           })
 
@@ -292,7 +307,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "GsvaPa
         cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
                     class(BPPARAM), parallel.sz))
 
-    if (inherits(param, "SsGseaParam")) {
+    if (inherits(param, "ssgseaParam")) {
         if(verbose)
             cat("Estimating ssGSEA scores for", length(gset.idx.list),"gene sets.\n")
 
@@ -303,7 +318,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "GsvaPa
     ## CHECK: AFAICS rnaseq is either FALSE because kcdf=="Gaussian" by default (and kcdf shouldn't be considered
     ## for methods other than 'gsva')or it is missing and consequently FALSE by the default of this function; and
     ## the only way rnaseq could be TRUE would be to set kcdf = "Poisson", regardless of the method?!?
-    if (inherits(param, "ZScoreParam")) {
+    if (inherits(param, "zscoreParam")) {
         if (rnaseq)
             stop("rnaseq=TRUE does not work with method='zscore'.")
 
@@ -313,7 +328,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "GsvaPa
         return(zscore(expr, gset.idx.list, parallel.sz, verbose, BPPARAM=BPPARAM))
     }
 
-    if (inherits(param, "PlageParam")) {
+    if (inherits(param, "plageParam")) {
         if (rnaseq)
             stop("rnaseq=TRUE does not work with method='plage'.")
 
@@ -356,6 +371,169 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list", param = "GsvaPa
     es.obs
 }
 
+
+### ----- generics and methods for data pre-/post-processing
+
+## unwrapData: extract a data matrix from a container object
+setGeneric("unwrapData",
+           function(container, ...) standardGeneric("unwrapData"))
+
+setMethod("unwrapData", signature("matrix"),
+          function(container, unused) {
+              return(container)
+          })
+
+setMethod("unwrapData", signature("dgCMatrix"),
+          function(container, unused) {
+              return(container)
+          })
+
+setMethod("unwrapData", signature("ExpressionSet"),
+          function(container, unused) {
+              return(exprs(container))
+          })
+
+setMethod("unwrapData", signature("SummarizedExperiment"),
+          function(container, assay) {
+              if (length(assays(container)) == 0L)
+                  stop("The input SummarizedExperiment object has no assay data.")
+
+              if (missing(assay)) {
+                  assay <- names(assays(container))[1]
+              } else {
+                  if (!is.character(assay))
+                      stop("The 'assay' argument must contain a character string.")
+
+                  assay <- assay[1]
+
+                  if (!assay %in% names(assays(container)))
+                      stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", assay))
+              }
+
+              return(as.matrix(assays(container)[[assay]]))
+          })
+
+setMethod("unwrapData", signature("SingleCellExperiment"),
+          function(container, assay) {
+              if (length(assays(container)) == 0L)
+                  stop("The input SingleCellExperiment object has no assay data.")
+
+              if (missing(assay)) {
+                  assay <- names(assays(container))[1]
+              } else {
+                  if (!is.character(assay))
+                      stop("The 'assay' argument must contain a character string.")
+
+                  assay <- assay[1]
+
+                  if (!assay %in% names(assays(container)))
+                      stop(sprintf("Assay %s not found in the input SingleCellExperiment object.", assay))
+              }
+
+              return(as.matrix(assays(container)[[assay]]))
+          })
+
+
+## wrapData: put the resulting data into the original data container type
+setGeneric("wrapData",
+           function(dataMatrix, container) standardGeneric("wrapData"))
+
+setMethod("wrapData", signature("matrix", "matrix"),
+          function(dataMatrix, container) {
+              return(dataMatrix)
+          })
+
+setMethod("wrapData", signature("matrix", "ExpressionSet"),
+          function(dataMatrix, container) {
+              rval <- new("ExpressionSet", exprs=dataMatrix,
+                          phenoData=phenoData(container),
+                          experimentData=experimentData(container),
+                          annotation="")
+
+              return(rval)
+          })
+
+setMethod("wrapData", signature("matrix", "SummarizedExperiment"),
+          function(dataMatrix, container) {
+              rval <- SummarizedExperiment(assays=SimpleList(es=dataMatrix),
+                                           colData=colData(container),
+                                           metadata=metadata(container))
+              metadata(rval)$annotation <- NULL
+
+              return(rval)
+          })
+
+setMethod("wrapData", signature("matrix", "SingleCellExperiment"),
+          function(dataMatrix, container) {
+              rval <- SingleCellExperiment(assays=SimpleList(es=dataMatrix),
+                                           colData=colData(container),
+                                           metadata=metadata(container))
+              metadata(rval)$annotation <- NULL
+              
+              return(rval)
+          })
+
+## annotation: from BiocGenerics, some more methods for us
+setMethod("annotation", signature("SingleCellExperiment"),
+          function(object) {
+              return(metadata(object)$annotation)
+          })
+
+setMethod("annotation", signature("SummarizedExperiment"),
+          function(object) {
+              return(metadata(object)$annotation)
+          })
+
+setMethod("annotation", signature("GsvaDataSet"),
+          function(object, default = NULL) {
+              return(default)
+          })
+
+## annotation package checks
+isAnnoPkgValid <- function(ap) {
+    return((!is.null(ap)) &&
+           (length(ap) == 1) &&
+           (is.character(ap)) &&
+           (nchar(ap)> 0))
+}
+
+isAnnoPkgInstalled <- function(ap) {
+    ap <- c(ap, paste0(ap, ".db"))
+    return(any(ap %in% rownames(installed.packages())))
+}
+
+## mapGeneSetsToAnno: translate feature IDs used in gene sets to specified annotation type (if any, and if possible)
+setGeneric("mapGeneSetsToAnno",
+           function(geneSets, ...) standardGeneric("mapGeneSetsToAnno"))
+
+setMethod("mapGeneSetsToAnno", signature("list"),
+          function(geneSets, anno) {
+              return(geneSets)
+          })
+
+setMethod("mapGeneSetsToAnno", signature("GeneSetCollection"),
+          function(geneSets, anno) {
+              if(isAnnoPkgValid(anno)) {
+                  if(!isAnnoPkgInstalled(anno))
+                      stop(sprintf("Please install the annotation package %s. If %s does not seem to exist as a package, please try to append the suffix .db to its name.", anno, anno))
+                  ## TODO: provide a check for verbosity
+                  cat("Mapping identifiers between gene sets and feature names\n")
+
+                  ## map gene identifiers of the gene sets to the features in the chip
+                  mappedGeneSets <- mapIdentifiers(geneSets,
+                                                   AnnoOrEntrezIdentifier(anno))
+                  rval <- geneIds(mappedGeneSets)
+
+              } else {
+                  ## TODO: provide a check for verbosity
+                  cat("No annotation package name available in the input data object.",
+                      "Attempting to directly match identifiers in data to gene sets.", sep="\n")
+
+                  rval <- geneIds(geneSets)
+              }
+
+              return(rval)
+          })
 
 
 ### ----- generate test input data -----

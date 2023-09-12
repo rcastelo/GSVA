@@ -17,53 +17,29 @@
 #' This is the purpose of this class.
 #'
 #' @seealso
-#' [`ZScoreParam-class`], 
-#' [`PlageParam-class`], 
-#' [`SsGseaParam-class`], 
-#' [`GsvaParam-class`]
+#' [`zscoreParam-class`], 
+#' [`plageParam-class`], 
+#' [`ssgseaParam-class`], 
+#' [`gsvaParam-class`]
 #'
 #' @name EmptyParam-class
 #' @rdname EmptyParam-class
 #' @exportClass EmptyParam
-setClass("EmptyParam",
-         slots = character(),
-         contains = "VIRTUAL")
+## setClass("EmptyParam",
+##          slots = character(),
+##          contains = "VIRTUAL")
 
 setClassUnion("GsvaDataSet",
               c("matrix", "ExpressionSet", "SummarizedExperiment",
                 "SingleCellExperiment", "dgCMatrix", "HDF5Array"))
 
-setClassUnion("GsvaGeneSet",
+setClassUnion("GsvaGeneSets",
               c("list", "GeneSetCollection"))
-
-
-# z-Score Parameter Class -------------------------------------------------
-
-#' `ZScoreParam` class
-#'
-#' Method-specific parameters for the `zscore` method.
-#' 
-#' Since this method does not take any parameters, the parameter class does not
-#' have any slots and exists merely for method dispatch.  It is derived from the
-#' virtual superclass [`EmptyParam-class`].
-#'
-#' @seealso
-#' [`PlageParam-class`],
-#' [`SsGseaParam-class`],
-#' [`GsvaParam-class`]
-#'
-#' @name ZScoreParam-class
-#' @rdname ZScoreParam-class
-#' @exportClass ZScoreParam
-setClass("ZScoreParam",
-         slots = character(),
-         contains = "EmptyParam")
-
 
 
 # PLAGE Parameter Class -------------------------------------------------
 
-#' `PlageParam` class
+#' `plageParam` class
 #'
 #' Method-specific parameters for the `plage` method.
 #' 
@@ -72,21 +48,49 @@ setClass("ZScoreParam",
 #' virtual superclass [`EmptyParam-class`].
 #'
 #' @seealso
-#' [`ZScoreParam-class`],
-#' [`SsGseaParam-class`],
-#' [`GsvaParam-class`]
+#' [`zscoreParam-class`],
+#' [`ssgseaParam-class`],
+#' [`gsvaParam-class`]
 #'
-#' @name PlageParam-class
-#' @rdname PlageParam-class
-#' @exportClass PlageParam
-setClass("PlageParam",
-         slots = character(),
-         contains = "EmptyParam")
+#' @name plageParam-class
+#' @rdname plageParam-class
+#' @exportClass plageParam
+setClass("plageParam",
+         slots = c(dataSet = "GsvaDataSet",
+                   geneSets = "GsvaGeneSets"),
+         prototype = list(dataSet = NULL,
+                          geneSets = NULL))
+
+
+# z-score Parameter Class -------------------------------------------------
+
+#' `zscoreParam` class
+#'
+#' Method-specific parameters for the `zscore` method.
+#' 
+#' Since this method does not take any parameters, the parameter class does not
+#' have any slots and exists merely for method dispatch.  It is derived from the
+#' virtual superclass [`EmptyParam-class`].
+#'
+#' @seealso
+#' [`plageParam-class`],
+#' [`ssgseaParam-class`],
+#' [`gsvaParam-class`]
+#'
+#' @name zscoreParam-class
+#' @rdname zscoreParam-class
+#' @exportClass zscoreParam
+setClass("zscoreParam",
+         slots = c(dataSet = "GsvaDataSet",
+                   geneSets = "GsvaGeneSets"),
+         prototype = list(dataSet = NULL,
+                          geneSets = NULL))
+
 
 
 # ssGSEA Parameter Class -------------------------------------------------
 
-#' `SsGseaParam` class
+#' `ssgseaParam` class
 #'
 #' Method-specific parameters for the `ssgsea` method.
 #' 
@@ -103,21 +107,27 @@ setClass("PlageParam",
 #'  this last normalization step is skipped.
 #'
 #' @seealso
-#' [`ZScoreParam-class`],
-#' [`PlageParam-class`],
-#' [`GsvaParam-class`]
+#' [`zscoreParam-class`],
+#' [`plageParam-class`],
+#' [`gsvaParam-class`]
 #'
-#' @name SsGseaParam-class
-#' @rdname SsGseaParam-class
-#' @exportClass SsGseaParam
-setClass("SsGseaParam",
-         slots = c(alpha = "numeric", normalize = "logical"),
-         contains = "EmptyParam")
+#' @name ssgseaParam-class
+#' @rdname ssgseaParam-class
+#' @exportClass ssgseaParam
+setClass("ssgseaParam",
+         slots = c(dataSet = "GsvaDataSet",
+                   geneSets = "GsvaGeneSets",
+                   alpha = "numeric",
+                   normalize = "logical"),
+         prototype = list(dataSet = NULL,
+                          geneSets = NULL,
+                          alpha = NA_real_,
+                          normalize = NA))
 
 
 # GSVA Parameter Class ----------------------------------------------------
 
-#' `GsvaParam` class
+#' `gsvaParam` class
 #'
 #' Method-specific parameters for the `gsva` method.
 #'
@@ -154,17 +164,29 @@ setClass("SsGseaParam",
 #'   activated.
 #'
 #' @seealso
-#' [`ZScoreParam-class`],
-#' [`PlageParam-class`],
-#' [`SsGseaParam-class`]
+#' [`zscoreParam-class`],
+#' [`plageParam-class`],
+#' [`ssgseaParam-class`]
 #'
-#' @name GsvaParam-class
-#' @rdname GsvaParam-class
-#' @exportClass GsvaParam
-setClass("GsvaParam",
-         slots = c(kcdf = "character", tau = "numeric", 
-                   mx.diff = "logical", abs.ranking = "logical"),
-         contains = "EmptyParam")
+#' @name gsvaParam-class
+#' @rdname gsvaParam-class
+#' @exportClass gsvaParam
+setClass("gsvaParam",
+         slots = c(dataSet = "GsvaDataSet",
+                   geneSets = "GsvaGeneSets",
+                   kcdf = "character",
+                   tau = "numeric", 
+                   mx.diff = "logical",
+                   abs.ranking = "logical"),
+         prototype = list(dataSet = NULL,
+                          geneSets = NULL,
+                          kcdf = NA_character_,
+                          tau = NA_real_,
+                          mx.diff = NA,
+                          abs.ranking = NA))
 
 
-
+setClassUnion(
+    "gsvaCallParam",
+    c("plageParam", "zscoreParam", "ssgseaParam", "gsvaParam")
+)
