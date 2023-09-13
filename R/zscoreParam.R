@@ -28,3 +28,28 @@ setValidity("zscoreParam", function(object) {
     if(length(object@geneSets) == 0) invalid <- c(invalid, "@geneSets has length 0")
     return(if(length(invalid) == 0) TRUE else invalid)
 })
+
+
+### Combined z-Scores Parameter Show -------------------------------------------------
+
+setMethod("show",
+          signature=signature(
+            object="zscoreParam"),
+          function(object) {
+              some <- function(x)
+                  paste0(paste(Biobase::selectSome(x, 4), collapse=", "),
+                        " (", length(x), " total)")
+              ds <- get_dataSet(object)
+              dsDim <- sprintf(" [%s, %d]", nrow(ds), ncol(ds))
+              gs <- get_geneSets(object)
+              gsDim <- sprintf(" [%d, %d]", nrow(gs), ncol(gs))
+              gs
+              cat("Combined z-Scores Parameter object\n",
+                  "  data set: ", class(ds)[1], dsDim, "\n",
+                  "    rows: ", some(rownames(ds)), "\n",
+                  "      (annotation: ", annotation(ds), ")", "\n",
+                  "    columns: ", some(colnames(ds)), "\n",
+                  "  gene sets: ", class(gs)[1], gsDim, "\n",
+                  "    names: ", some(names(gs)), "\n",
+                  sep="")
+          })
