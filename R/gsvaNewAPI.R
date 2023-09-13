@@ -41,8 +41,8 @@
 ##' @return A gene-set by sample matrix (of `matrix` or [`dgCMatrix-class`] type, 
 ##'   depending on the input) of GSVA enrichment scores.
 ##' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`]
-setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "plageParam"),
-          function(expr, gset.idx.list, param,
+setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
+          function(expr, gset.idx.list,
                    annotation, 
                    min.sz=1,
                    max.sz=Inf,
@@ -51,6 +51,8 @@ setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "pl
                    BPPARAM=SerialParam(progressbar=verbose))
           {
               message("¡Hola PLAGE!")
+              param <- expr
+              
               dataSet <- get_dataSet(param)
               dataMatrix <- unwrapData(dataSet, annotation)
               
@@ -91,8 +93,8 @@ setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "pl
 ##' @title Gene Set Variation Analysis
 ##' @description Run z-score analysis on a matrix with gene sets in a list.
 ##' @describeIn gsvaNewAPI Run z-score analysis on a matrix with gene sets in a list.
-setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "zscoreParam"),
-          function(expr, gset.idx.list, param,
+setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
+          function(expr, gset.idx.list,
                    annotation, 
                    min.sz=1,
                    max.sz=Inf,
@@ -101,6 +103,8 @@ setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "zs
                    BPPARAM=SerialParam(progressbar=verbose))
           {
               message("¡Hola z-Score!")
+              param <- expr
+              
               dataSet <- get_dataSet(param)
               dataMatrix <- unwrapData(dataSet, annotation)
               
@@ -141,7 +145,7 @@ setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "zs
 ##' @title Gene Set Variation Analysis
 ##' @description Run ssGSEA on a matrix with gene sets in a list.
 ##' @describeIn gsvaNewAPI Run ssGSEA on a matrix with gene sets in a list.
-setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "ssgseaParam"),
+setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
           function(expr, gset.idx.list, param,
                    annotation, 
                    min.sz=1,
@@ -151,6 +155,8 @@ setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "ss
                    BPPARAM=SerialParam(progressbar=verbose))
           {
               message("¡Hola ssGSEA!")
+              param <- expr
+              
               dataSet <- get_dataSet(param)
               dataMatrix <- unwrapData(dataSet, annotation)
               
@@ -191,8 +197,8 @@ setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "ss
 ##' @title Gene Set Variation Analysis
 ##' @description Run GSVA on a matrix with gene sets in a list.
 ##' @describeIn gsvaNewAPI Run GSVA on a matrix with gene sets in a list.
-setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "gsvaParam"),
-          function(expr, gset.idx.list, param,
+setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
+          function(expr, gset.idx.list,
                    annotation, 
                    min.sz=1,
                    max.sz=Inf,
@@ -201,6 +207,8 @@ setMethod("gsva", signature(expr="missing", gset.idx.list="missing", param = "gs
                    BPPARAM=SerialParam(progressbar=verbose))
           {
               message("¡Hola GSVA!")
+              param <- expr
+              
               dataSet <- get_dataSet(param)
               dataMatrix <- unwrapData(dataSet, annotation)
               
