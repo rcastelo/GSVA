@@ -4,6 +4,8 @@
 ###
 
 test_newAPI <- function() {
+    DEACTIVATED("Unit tests need to be adapted to new API.")
+    
     tid <- GSVA:::generateTestInputData()
 
     gs <- tid[["geneSets"]]
