@@ -1,53 +1,89 @@
 
-# Virtual Superclass ------------------------------------------------------
+## ----- Virtual Superclasses -----
 
-#' `EmptyParam` class
+#' `GsvaExprData` class
 #'
-#' Virtual superclass of method-specific parameter classes.
+#' Virtual superclass of expression data classes supported by `GSVA`.
 #'
-#' To ensure that the various methods implemented in `GSVA` are invoked with
-#' appropriate parameters, S4 classes are introduced as containers for
-#' method-specific parameters as well as for dispatching them to the
-#' appropriate method -- which requires them to be instantiated.
-#' 
-#' Some simple methods, however, do not take any method-specific parameters at
-#' all and hence their parameter classes have no slots and will be created as
-#' virtual classes unless they have a superclass (see [`methods::setClass`]).
-#' 
-#' This is the purpose of this class.
+#' `GSVA` supports expression data matrices in a growing number of containers
+#' and representations.  This class union allows to store any of these in a slot
+#' of another class as well as defining common methods for all of them.
 #'
 #' @seealso
+#' [`matrix`],
+#' [`dgCMatrix-class`],
+#' [`ExpressionSet-class`],
+#' [`SummarizedExperiment-class`],
+#' [`SingleCellExperiment-class`],
+#' [`HDF5Array`]
+#'
+#' @name GsvaExprData-class
+#' @rdname GsvaExprData-class
+#' @exportClass GsvaExprData
+setClassUnion("GsvaExprData",
+              c("matrix", "dgCMatrix", "ExpressionSet",
+                "SummarizedExperiment", "SingleCellExperiment", "HDF5Array"))
+
+#' `GsvaGeneSets` class
+#'
+#' Virtual superclass of gene set classes supported by `GSVA`.
+#'
+#' `GSVA` supports gene sets in either a list of character vectors or an object
+#' of class `GSEABase::GeneSetCollection`.  This class union allows to store any
+#' of these in a slot of another class as well as defining common methods for
+#' them.
+#'
+#' @seealso
+#' [`list`], 
+#' [`GeneSetCollection`]
+#'
+#' @name GsvaGeneSets-class
+#' @rdname GsvaGeneSets-class
+#' @exportClass GsvaGeneSets
+setClassUnion("GsvaGeneSets",
+              c("list", "GeneSetCollection"))
+
+#' `GsvaMethodParam` class
+#'
+#' Virtual superclass of method parameter classes supported by `GSVA`.
+#'
+#' `GSVA` implements four single-sample gene set analysis methods: PLAGE,
+#' combined z-scores, ssGSEA, and GSVA.  All of them take at least an expression
+#' data matrix and one or many gene sets as input.  This virtual class provides
+#' the necessary slots for this minimum parameter set and serves as all `GSVA`
+#' method parameter classes,
+#'
+#' @seealso
+#' [`GsvaExprData-class`],
+#' [`GsvaGeneSets-class`],
 #' [`zscoreParam-class`], 
 #' [`plageParam-class`], 
 #' [`ssgseaParam-class`], 
 #' [`gsvaParam-class`]
 #'
-#' @name EmptyParam-class
-#' @rdname EmptyParam-class
-#' @exportClass EmptyParam
-## setClass("EmptyParam",
-##          slots = character(),
-##          contains = "VIRTUAL")
-
-setClassUnion("GsvaDataSet",
-              c("matrix", "ExpressionSet", "SummarizedExperiment",
-                "SingleCellExperiment", "dgCMatrix", "HDF5Array"))
-
-setClassUnion("GsvaGeneSets",
-              c("list", "GeneSetCollection"))
+#' @name GsvaMethodParam-class
+#' @rdname GsvaMethodParam-class
+#' @exportClass GsvaMethodParam
+setClass("GsvaMethodParam",
+         slots=c(exprData="GsvaExprData",
+                 geneSets="GsvaGeneSets"),
+         contains="VIRTUAL")
 
 
-# PLAGE Parameter Class -------------------------------------------------
+## ----- PLAGE Parameter Class -----
 
 #' `plageParam` class
 #'
-#' Method-specific parameters for the `plage` method.
+#' Method-specific parameters for the `PLAGE` method.
 #' 
-#' Since this method does not take any parameters, the parameter class does not
-#' have any slots and exists merely for method dispatch.  It is derived from the
-#' virtual superclass [`EmptyParam-class`].
+#' Since this method does not take any method-specific parameters, the parameter
+#' class does not add any slots to the common slots inherited from
+#' [`GsvaMethodParam-class`].
 #'
 #' @seealso
+#' [`GsvaExprData-class`],
+#' [`GsvaGeneSets-class`],
+#' [`GsvaMethodParam-class`],
 #' [`zscoreParam-class`],
 #' [`ssgseaParam-class`],
 #' [`gsvaParam-class`]
@@ -56,23 +92,25 @@ setClassUnion("GsvaGeneSets",
 #' @rdname plageParam-class
 #' @exportClass plageParam
 setClass("plageParam",
-         slots = c(dataSet = "GsvaDataSet",
-                   geneSets = "GsvaGeneSets"),
-         prototype = list(dataSet = NULL,
-                          geneSets = NULL))
+         contains="GsvaMethodParam",
+         prototype=list(exprData=NULL,
+                        geneSets=NULL))
 
 
-# z-score Parameter Class -------------------------------------------------
+## ----- Combined z-Scores Parameter Class -----
 
 #' `zscoreParam` class
 #'
-#' Method-specific parameters for the `zscore` method.
+#' Method-specific parameters for the `combined z-scores` method.
 #' 
-#' Since this method does not take any parameters, the parameter class does not
-#' have any slots and exists merely for method dispatch.  It is derived from the
-#' virtual superclass [`EmptyParam-class`].
+#' Since this method does not take any method-specific parameters, the parameter
+#' class does not add any slots to the common slots inherited from
+#' [`GsvaMethodParam-class`].
 #'
 #' @seealso
+#' [`GsvaExprData-class`],
+#' [`GsvaGeneSets-class`],
+#' [`GsvaMethodParam-class`],
 #' [`plageParam-class`],
 #' [`ssgseaParam-class`],
 #' [`gsvaParam-class`]
@@ -81,112 +119,109 @@ setClass("plageParam",
 #' @rdname zscoreParam-class
 #' @exportClass zscoreParam
 setClass("zscoreParam",
-         slots = c(dataSet = "GsvaDataSet",
-                   geneSets = "GsvaGeneSets"),
-         prototype = list(dataSet = NULL,
-                          geneSets = NULL))
+         contains="GsvaMethodParam",
+         prototype=list(exprData=NULL,
+                        geneSets=NULL))
 
 
 
-# ssGSEA Parameter Class -------------------------------------------------
+## ----- ssGSEA Parameter Class -----
 
 #' `ssgseaParam` class
 #'
-#' Method-specific parameters for the `ssgsea` method.
-#' 
-#' This class has slots for storing the two parameters to the `ssgsea` method
-#' described below.  It is derived from the virtual superclass [`EmptyParam-class`].
-#' 
-#' @slot alpha Numeric vector of length 1; the exponent defining the
-#'  weight of the tail in the random walk performed by the `ssGSEA` (Barbie et
-#'  al., 2009) method.
+#' Method-specific parameters for the `ssGSEA` method.
 #'
-#' @slot normalize Logical vector of length 1; if `TRUE`  runs the `ssGSEA` method
-#'  from Barbie et al. (2009) normalizing the scores by the absolute difference
-#'  between the minimum and the maximum, as described in their paper. Otherwise
-#'  this last normalization step is skipped.
+#' In addition to the two common parameter slots inherited from
+#' `[GsvaMethodParam]`, this class has slots for the two method-specific
+#' parameters of the `ssGSEA` method described below.
+#' 
+#' @slot alpha Numeric vector of length 1.  The exponent defining the
+#' weight of the tail in the random walk performed by the `ssGSEA` (Barbie et
+#' al., 2009) method.
+#'
+#' @slot normalize Logical vector of length 1.  If `TRUE` runs the `ssGSEA`
+#' method from Barbie et al. (2009) normalizing the scores by the absolute
+#' difference between the minimum and the maximum, as described in their paper.
+#' Otherwise this last normalization step is skipped.
 #'
 #' @seealso
-#' [`zscoreParam-class`],
+#' [`GsvaExprData-class`],
+#' [`GsvaGeneSets-class`],
+#' [`GsvaMethodParam-class`],
 #' [`plageParam-class`],
+#' [`zscoreParam-class`],
 #' [`gsvaParam-class`]
 #'
 #' @name ssgseaParam-class
 #' @rdname ssgseaParam-class
 #' @exportClass ssgseaParam
 setClass("ssgseaParam",
-         slots = c(dataSet = "GsvaDataSet",
-                   geneSets = "GsvaGeneSets",
-                   alpha = "numeric",
-                   normalize = "logical"),
-         prototype = list(dataSet = NULL,
-                          geneSets = NULL,
-                          alpha = NA_real_,
-                          normalize = NA))
+         slots=c(alpha="numeric",
+                 normalize="logical"),
+         contains="GsvaMethodParam",
+         prototype=list(exprData=NULL,
+                        geneSets=NULL,
+                        alpha=NA_real_,
+                        normalize=NA))
 
 
-# GSVA Parameter Class ----------------------------------------------------
+## ----- GSVA Parameter Class -----
 
 #' `gsvaParam` class
 #'
-#' Method-specific parameters for the `gsva` method.
+#' Method-specific parameters for the `GSVA` method.
 #'
-#' This class has slots for storing the two parameters to the `gsva` method
-#' described below.  It is derived from the virtual superclass
-#' [`EmptyParam-class`].
+#' In addition to the two common parameter slots inherited from
+#' `[GsvaMethodParam]`, this class has slots for the two method-specific
+#' parameters of the `GSVA` method described below.
 #'
-#' @slot kcdf Character vector of length 1 denoting the kernel to use during the
-#'   non-parametric estimation of the cumulative distribution function of
-#'   expression levels across samples. `kcdf="Gaussian"` is suitable when input
-#'   expression values are continuous, such as microarray fluorescent units in
-#'   logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input
-#'   expression values are integer counts, such as those derived from RNA-seq
-#'   experiments, then this argument should be set to `kcdf="Poisson"`.
+#' @slot kcdf Character vector of length 1 denoting the kernel to use during
+#' the non-parametric estimation of the cumulative distribution function of
+#' expression levels across samples. `kcdf="Gaussian"` is suitable when input
+#' expression values are continuous, such as microarray fluorescent units in
+#' logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input
+#' expression values are integer counts, such as those derived from RNA-seq
+#' experiments, then this argument should be set to `kcdf="Poisson"`.
 #'
-#' @slot tau Numeric vector of length 1; the exponent defining the weight of the
-#'   tail in the random walk performed by the `GSVA` (Hänzelmann et al., 2013)
-#'   method.
+#' @slot tau Numeric vector of length 1.  The exponent defining the weight of
+#' the tail in the random walk performed by the `GSVA` (Hänzelmann et al., 2013)
+#' method.
 #'
-#' @slot mx.diff Logical vector of length 1 which offers two approaches to
-#'   calculate the enrichment statistic (ES) from the KS random walk statistic.
-#'  * `FALSE`: ES is calculated as the maximum distance of the random walk
-#'   from 0.
-#'  * `TRUE`: ES is calculated as the magnitude difference between
-#'   the largest positive and negative random walk deviations.
+#' @slot maxDiff Logical vector of length 1 which offers two approaches to
+#' calculate the enrichment statistic (ES) from the KS random walk statistic.
+#' * `FALSE`: ES is calculated as the maximum distance of the random walk from 0.
+#' * `TRUE`: ES is calculated as the magnitude difference between
+#' the largest positive and negative random walk deviations.
 #'
-#' @slot abs.ranking Logical vector of length 1 used only when `mx.diff=TRUE`.
-#'   When `abs.ranking=FALSE` a modified Kuiper statistic is used to calculate
-#'   enrichment scores, taking the magnitude difference between the largest
-#'   positive and negative random walk deviations. When `abs.ranking=TRUE` the
-#'   original Kuiper statistic that sums the largest positive and negative
-#'   random walk deviations, is used. In this latter case, gene sets with genes
-#'   enriched on either extreme (high or low) will be regarded as ’highly’
-#'   activated.
+#' @slot absRanking Logical vector of length 1 used only when `mx.diff=TRUE`.
+#' When `abs.ranking=FALSE` a modified Kuiper statistic is used to calculate
+#' enrichment scores, taking the magnitude difference between the largest
+#' positive and negative random walk deviations. When `abs.ranking=TRUE` the
+#' original Kuiper statistic that sums the largest positive and negative
+#' random walk deviations, is used. In this latter case, gene sets with genes
+#' enriched on either extreme (high or low) will be regarded as ’highly’
+#' activated.
 #'
 #' @seealso
-#' [`zscoreParam-class`],
+#' [`GsvaExprData-class`],
+#' [`GsvaGeneSets-class`],
+#' [`GsvaMethodParam-class`],
 #' [`plageParam-class`],
+#' [`zscoreParam-class`],
 #' [`ssgseaParam-class`]
 #'
 #' @name gsvaParam-class
 #' @rdname gsvaParam-class
 #' @exportClass gsvaParam
 setClass("gsvaParam",
-         slots = c(dataSet = "GsvaDataSet",
-                   geneSets = "GsvaGeneSets",
-                   kcdf = "character",
-                   tau = "numeric", 
-                   mx.diff = "logical",
-                   abs.ranking = "logical"),
-         prototype = list(dataSet = NULL,
-                          geneSets = NULL,
-                          kcdf = NA_character_,
-                          tau = NA_real_,
-                          mx.diff = NA,
-                          abs.ranking = NA))
-
-
-setClassUnion(
-    "gsvaCallParam",
-    c("plageParam", "zscoreParam", "ssgseaParam", "gsvaParam")
-)
+         slots=c(kcdf="character",
+                 tau="numeric", 
+                 maxDiff="logical",
+                 absRanking="logical"),
+         contains="GsvaMethodParam",
+         prototype=list(exprData=NULL,
+                        geneSets=NULL,
+                        kcdf=NA_character_,
+                        tau=NA_real_,
+                        maxDiff=NA,
+                        absRanking=NA))

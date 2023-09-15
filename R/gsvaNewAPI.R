@@ -1,46 +1,46 @@
 
-###
-### gsva() S4 methods for running all analysis methods
-###
+##
+## gsva() S4 methods for running all analysis methods
+##
 
-##' @title Gene Set Variation Analysis
-##' @description Run PLAGE on a matrix with gene sets in a list.
-##' @describeIn gsvaNewAPI Run PLAGE on a matrix with gene sets in a list.
-##' @param expr Gene expression data which can be given either as a
-##'   [`SummarizedExperiment`], [`SingleCellExperiment`]
-##'   [`ExpressionSet`] object, or as a matrix of expression
-##'   values where rows correspond to genes and columns correspond to samples.
-##'   This matrix can be also in a sparse format, as a [`dgCMatrix-class`], or
-##'   as an on-disk backend representation, such as [`HDF5Array`] .
-##' @param gset.idx.list Gene sets provided either as a `list` object or as a
-##'   [`GeneSetCollection`] object.
-##' @param param A parameter object determining the analysis method to be performed
-##'   as well as containing any method-specific parameters.
-##' @param annotation In the case of calling `gsva()` on a
-##'   [`SummarizedExperiment`] or [`SingleCellExperiment`] object,
-##'   the `annotation` argument can be used to select the assay
-##'   containing the molecular data we want as input to the `gsva()`
-##'   function, otherwise the first assay is selected.
-##'   In the case of calling `gsva()` with expression data in
-##'   a `matrix` and gene sets as a [`GeneSetCollection`]
-##'   object, the `annotation` argument can be used to supply
-##'   the name of the Bioconductor package that contains
-##'   annotations for the class of gene identifiers occurring in
-##'   the row names of the expression data matrix.
-##'   In the case of calling `gsva()` on a
-##'   [`ExpressionSet`] object, the `annotation` argument
-##'   is ignored. See details information below.
-##' @param min.sz Minimum size of the resulting gene sets.
-##' @param max.sz Maximum size of the resulting gene sets.
-##' @param parallel.sz Number of threads of execution to use when doing the calculations in parallel.
-##'   The argument BPPARAM allows one to set the parallel back-end and fine
-##'   tune its configuration.
-##' @param verbose Gives information about each calculation step. Default: `FALSE`.
-##' @param BPPARAM An object of class [`BiocParallelParam`] specifiying parameters
-##'   related to the parallel execution of some of the tasks and calculations within this function.
-##' @return A gene-set by sample matrix (of `matrix` or [`dgCMatrix-class`] type, 
-##'   depending on the input) of GSVA enrichment scores.
-##' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`]
+#' @title Gene Set Variation Analysis
+#' @description Run PLAGE on a matrix with gene sets in a list.
+#' @describeIn gsvaNewAPI Run PLAGE on a matrix with gene sets in a list.
+#' @param expr Gene expression data which can be given either as a
+#'   [`SummarizedExperiment`], [`SingleCellExperiment`]
+#'   [`ExpressionSet`] object, or as a matrix of expression
+#'   values where rows correspond to genes and columns correspond to samples.
+#'   This matrix can be also in a sparse format, as a [`dgCMatrix-class`], or
+#'   as an on-disk backend representation, such as [`HDF5Array`] .
+#' @param gset.idx.list Gene sets provided either as a `list` object or as a
+#'   [`GeneSetCollection`] object.
+#' @param param A parameter object determining the analysis method to be performed
+#'   as well as containing any method-specific parameters.
+#' @param annotation In the case of calling `gsva()` on a
+#'   [`SummarizedExperiment`] or [`SingleCellExperiment`] object,
+#'   the `annotation` argument can be used to select the assay
+#'   containing the molecular data we want as input to the `gsva()`
+#'   function, otherwise the first assay is selected.
+#'   In the case of calling `gsva()` with expression data in
+#'   a `matrix` and gene sets as a [`GeneSetCollection`]
+#'   object, the `annotation` argument can be used to supply
+#'   the name of the Bioconductor package that contains
+#'   annotations for the class of gene identifiers occurring in
+#'   the row names of the expression data matrix.
+#'   In the case of calling `gsva()` on a
+#'   [`ExpressionSet`] object, the `annotation` argument
+#'   is ignored. See details information below.
+#' @param min.sz Minimum size of the resulting gene sets.
+#' @param max.sz Maximum size of the resulting gene sets.
+#' @param parallel.sz Number of threads of execution to use when doing the calculations in parallel.
+#'   The argument BPPARAM allows one to set the parallel back-end and fine
+#'   tune its configuration.
+#' @param verbose Gives information about each calculation step. Default: `FALSE`.
+#' @param BPPARAM An object of class [`BiocParallelParam`] specifiying parameters
+#'   related to the parallel execution of some of the tasks and calculations within this function.
+#' @return A gene-set by sample matrix (of `matrix` or [`dgCMatrix-class`] type, 
+#'   depending on the input) of GSVA enrichment scores.
+#' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`]
 setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
           function(expr, gset.idx.list,
                    annotation, 
@@ -50,20 +50,19 @@ setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              message("¡Hola PLAGE!")
               param <- expr
               
-              dataSet <- get_dataSet(param)
-              dataMatrix <- unwrapData(dataSet, annotation)
+              exprData <- get_exprData(param)
+              dataMatrix <- unwrapData(exprData, annotation)
               
               ## filter genes according to various criteria,
               ## e.g., constant expression
               expr <- .filterFeatures_newAPI(dataMatrix)
 
               anno <- if(missing(annotation)) {
-                          Biobase::annotation(dataSet)
+                          Biobase::annotation(exprData)
                       } else {
-                          Biobase::annotation(dataSet, annotation)
+                          Biobase::annotation(exprData, annotation)
                       }
               
               gset.idx.list <- get_geneSets(param)
@@ -84,15 +83,15 @@ setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
                                    parallel.sz = parallel.sz,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
-              rval <- wrapData(rval, dataSet)
+              rval <- wrapData(rval, exprData)
               
               return(rval)
           })
 
 
-##' @title Gene Set Variation Analysis
-##' @description Run z-score analysis on a matrix with gene sets in a list.
-##' @describeIn gsvaNewAPI Run z-score analysis on a matrix with gene sets in a list.
+#' @title Gene Set Variation Analysis
+#' @description Run z-score analysis on a matrix with gene sets in a list.
+#' @describeIn gsvaNewAPI Run z-score analysis on a matrix with gene sets in a list.
 setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
           function(expr, gset.idx.list,
                    annotation, 
@@ -102,20 +101,19 @@ setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              message("¡Hola z-Score!")
               param <- expr
               
-              dataSet <- get_dataSet(param)
-              dataMatrix <- unwrapData(dataSet, annotation)
+              exprData <- get_exprData(param)
+              dataMatrix <- unwrapData(exprData, annotation)
               
               ## filter genes according to verious criteria,
               ## e.g., constant expression
               expr <- .filterFeatures_newAPI(dataMatrix)
 
               anno <- if(missing(annotation)) {
-                          Biobase::annotation(dataSet)
+                          Biobase::annotation(exprData)
                       } else {
-                          Biobase::annotation(dataSet, annotation)
+                          Biobase::annotation(exprData, annotation)
                       }
               
               gset.idx.list <- get_geneSets(param)
@@ -136,15 +134,15 @@ setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
                                    parallel.sz = parallel.sz,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
-              rval <- wrapData(rval, dataSet)
+              rval <- wrapData(rval, exprData)
 
               return(rval)
           })
 
 
-##' @title Gene Set Variation Analysis
-##' @description Run ssGSEA on a matrix with gene sets in a list.
-##' @describeIn gsvaNewAPI Run ssGSEA on a matrix with gene sets in a list.
+#' @title Gene Set Variation Analysis
+#' @description Run ssGSEA on a matrix with gene sets in a list.
+#' @describeIn gsvaNewAPI Run ssGSEA on a matrix with gene sets in a list.
 setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
           function(expr, gset.idx.list, param,
                    annotation, 
@@ -154,20 +152,19 @@ setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              message("¡Hola ssGSEA!")
               param <- expr
               
-              dataSet <- get_dataSet(param)
-              dataMatrix <- unwrapData(dataSet, annotation)
+              exprData <- get_exprData(param)
+              dataMatrix <- unwrapData(exprData, annotation)
               
               ## filter genes according to verious criteria,
               ## e.g., constant expression
               expr <- .filterFeatures_newAPI(dataMatrix, dropConstantRows = FALSE)
 
               anno <- if(missing(annotation)) {
-                          Biobase::annotation(dataSet)
+                          Biobase::annotation(exprData)
                       } else {
-                          Biobase::annotation(dataSet, annotation)
+                          Biobase::annotation(exprData, annotation)
                       }
               
               gset.idx.list <- get_geneSets(param)
@@ -188,15 +185,15 @@ setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
                                    parallel.sz = parallel.sz,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
-              rval <- wrapData(rval, dataSet)
+              rval <- wrapData(rval, exprData)
               
               return(rval)
           })
 
 
-##' @title Gene Set Variation Analysis
-##' @description Run GSVA on a matrix with gene sets in a list.
-##' @describeIn gsvaNewAPI Run GSVA on a matrix with gene sets in a list.
+#' @title Gene Set Variation Analysis
+#' @description Run GSVA on a matrix with gene sets in a list.
+#' @describeIn gsvaNewAPI Run GSVA on a matrix with gene sets in a list.
 setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
           function(expr, gset.idx.list,
                    annotation, 
@@ -206,20 +203,19 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              message("¡Hola GSVA!")
               param <- expr
               
-              dataSet <- get_dataSet(param)
-              dataMatrix <- unwrapData(dataSet, annotation)
+              exprData <- get_exprData(param)
+              dataMatrix <- unwrapData(exprData, annotation)
               
               ## filter genes according to verious criteria,
               ## e.g., constant expression
               expr <- .filterFeatures_newAPI(dataMatrix)
 
               anno <- if(missing(annotation)) {
-                          Biobase::annotation(dataSet)
+                          Biobase::annotation(exprData)
                       } else {
-                          Biobase::annotation(dataSet, annotation)
+                          Biobase::annotation(exprData, annotation)
                       }
               
               gset.idx.list <- get_geneSets(param)
@@ -240,7 +236,7 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
                                    parallel.sz = parallel.sz,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
-              rval <- wrapData(rval, dataSet)
+              rval <- wrapData(rval, exprData)
               
               return(rval)
           })
@@ -368,9 +364,9 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
     rownames(es.obs) <- names(gset.idx.list)
     
     es.obs <- compute.geneset.es(expr, gset.idx.list, 1:n.samples,
-                                 rnaseq=rnaseq, abs.ranking=get_abs.ranking(param),
+                                 rnaseq=rnaseq, abs.ranking=get_absRanking(param),
                                  parallel.sz=parallel.sz,
-                                 mx.diff=get_mx.diff(param), tau=get_tau(param), kernel=kernel,
+                                 mx.diff=get_maxDiff(param), tau=get_tau(param), kernel=kernel,
                                  verbose=verbose, BPPARAM=BPPARAM)
     
     colnames(es.obs) <- colnames(expr)
@@ -492,7 +488,7 @@ setMethod("annotation", signature("SummarizedExperiment"),
               return(metadata(object)$annotation)
           })
 
-setMethod("annotation", signature("GsvaDataSet"),
+setMethod("annotation", signature("GsvaExprData"),
           function(object, default = NULL) {
               return(default)
           })
