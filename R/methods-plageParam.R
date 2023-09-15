@@ -1,50 +1,55 @@
 
-# z-Score Parameter Constructor -------------------------------------------
+## ----- constructor -----
 
-#' Construct a z-score parameter object
+#' Construct a `PLAGE` parameter object
 #'
-#' Construct and return a new object of class \linkS4class{zscoreParam}.
+#' Construct and return a new object of class \linkS4class{plageParam}.
 #'
-#' @return A new \linkS4class{zscoreParam} object.
+#' @param exprData The expression data.  Must be one of the classes
+#' supported by [`GsvaExprData-class`].
 #'
-#' @examples
-#' zp <- zscoreParam()
+#' @param geneSets The gene sets.  Must be one of the classes supported by
+#' [`GsvaGeneSets-class`].
+#' 
+#' @return A new [`plageParam`] object.
 #'
-#' @importFrom methods new
-#' @rdname zscoreParam
+## #' @examples
+## #' pp <- plageParam()
+## #'
+## #' @importFrom methods new
+#' @rdname plageParam
 #' @export
-zscoreParam <- function(dataSet, geneSets) {
-  new("zscoreParam", dataSet = dataSet, geneSets = geneSets)
+plageParam <- function(exprData, geneSets) {
+  new("plageParam", exprData=exprData, geneSets=geneSets)
 }
 
 
-### z-Score Parameter Validator ---------------------------------------------
+## ----- validator -----
 
-setValidity("zscoreParam", function(object) {
+setValidity("plageParam", function(object) {
     invalid <- character()
-    dd <- dim(object@dataSet)
-    if(dd[1] == 0) invalid <- c(invalid, "@dataSet has 0 rows")
-    if(dd[2] == 0) invalid <- c(invalid, "@dataSet has 0 columns")
+    dd <- dim(object@exprData)
+    if(dd[1] == 0) invalid <- c(invalid, "@exprData has 0 rows")
+    if(dd[2] == 0) invalid <- c(invalid, "@exprData has 0 columns")
     if(length(object@geneSets) == 0) invalid <- c(invalid, "@geneSets has length 0")
     return(if(length(invalid) == 0) TRUE else invalid)
 })
 
 
-### Combined z-Scores Parameter Show -------------------------------------------------
+## ----- show -----
 
 setMethod("show",
-          signature=signature(
-            object="zscoreParam"),
+          signature=signature(object="plageParam"),
           function(object) {
               some <- function(x)
                   paste0(paste(Biobase::selectSome(x, 4), collapse=", "),
                         " (", length(x), " total)")
-              ds <- get_dataSet(object)
+              ds <- get_exprData(object)
               dsDim <- sprintf(" [%s, %d]", nrow(ds), ncol(ds))
               gs <- get_geneSets(object)
               gsDim <- sprintf(" [%d, %d]", nrow(gs), ncol(gs))
               gs
-              cat("Combined z-Scores Parameter object\n",
+              cat("PLAGE Parameter object\n",
                   "  data set: ", class(ds)[1], dsDim, "\n",
                   "    rows: ", some(rownames(ds)), "\n",
                   "      (annotation: ", annotation(ds), ")", "\n",

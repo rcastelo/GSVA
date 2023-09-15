@@ -1,13 +1,19 @@
 
-### ssGSEA Parameter Constructor --------------------------------------------
+## ----- constructor -----
 
-#' Construct a ssGSEA parameter object
+#' Construct a `ssGSEA` parameter object
 #'
 #' Construct and return a new object of class \linkS4class{ssgseaParam}.
 #'
-#' @param alpha Numeric vector of length 1; the exponent defining the
-#'  weight of the tail in the random walk performed by the `ssGSEA` (Barbie et
-#'  al., 2009) method.  The default value is 0.25 as described in the paper.
+#' @param exprData The expression data.  Must be one of the classes
+#' supported by [`GsvaExprData-class`].
+#'
+#' @param geneSets The gene sets.  Must be one of the classes supported by
+#' [`GsvaGeneSets-class`].
+#' 
+#' @param alpha Numeric vector of length 1.  The exponent defining the
+#' weight of the tail in the random walk performed by the `ssGSEA` (Barbie et
+#' al., 2009) method.  The default value is 0.25 as described in the paper.
 #' 
 #' @param normalize Logical vector of length 1; if `TRUE`  runs the `ssGSEA` method
 #'  from Barbie et al. (2009) normalizing the scores by the absolute difference
@@ -16,25 +22,25 @@
 #' 
 #' @return A new \linkS4class{ssgseaParam} object.
 #'
-#' @examples
-#' sp <- ssgseaParam()
-#'
-#' @importFrom methods new
+## #' @examples
+## #' sp <- ssgseaParam()
+## #'
+## #' @importFrom methods new
 #' @rdname ssgseaParam
 #' @export
-ssgseaParam <- function(dataSet, geneSets, alpha = 0.25, normalize = TRUE) {
+ssgseaParam <- function(exprData, geneSets, alpha=0.25, normalize=TRUE) {
     new("ssgseaParam",
-        dataSet = dataSet, geneSets = geneSets, alpha = alpha, normalize = normalize)
+        exprData=exprData, geneSets=geneSets, alpha=alpha, normalize=normalize)
 }
 
 
-### ssGSEA Parameter Validator ---------------------------------------------
+## ----- validator -----
 
 setValidity("ssgseaParam", function(object) {
     invalid <- character()
-    dd <- dim(object@dataSet)
-    if(dd[1] == 0) invalid <- c(invalid, "@dataSet has 0 rows")
-    if(dd[2] == 0) invalid <- c(invalid, "@dataSet has 0 columns")
+    dd <- dim(object@exprData)
+    if(dd[1] == 0) invalid <- c(invalid, "@exprData has 0 rows")
+    if(dd[2] == 0) invalid <- c(invalid, "@exprData has 0 columns")
     if(length(object@geneSets) == 0) invalid <- c(invalid, "@geneSets has length 0")
     if(length(object@alpha) != 1) invalid <- c(invalid, "@alpha should be of length 1")
     if(is.na(object@alpha)) invalid <- c(invalid, "@alpha should not be NA")
@@ -44,27 +50,27 @@ setValidity("ssgseaParam", function(object) {
 })
 
 
-### Getters -----------------------------------------------------------------
+## ----- getters -----
 
 #' Return the `alpha` parameter from a `ssgseaParam` object
 #'
 #' Returns the `alpha` parameter from a \linkS4class{ssgseaParam} object.
 #'
-#' @param obj A \linkS4class{ssgseaParam} object.
+#' @param object A \linkS4class{ssgseaParam} object.
 #' 
-#' @return The requested `alpha` parameter from `obj` or an error if `obj` does
-#' not inherit from \linkS4class{ssgseaParam}.
+#' @return The requested `alpha` parameter from `object` or an error if `object`
+#' does not inherit from \linkS4class{ssgseaParam}.
 #'
-#' @examples
-#' sp <- ssgseaParam()
-#' get_alpha(sp)
-#' sp <- ssgseaParam(alpha = 0.42)
-#' get_alpha(sp)
-#'
+## #' @examples
+## #' sp <- ssgseaParam()
+## #' get_alpha(sp)
+## #' sp <- ssgseaParam(alpha=0.42)
+## #' get_alpha(sp)
+## #'
 #' @noRd
-get_alpha <- function(obj) {
-  stopifnot(inherits(obj, "ssgseaParam"))
-  return(obj@alpha)
+get_alpha <- function(object) {
+  stopifnot(inherits(object, "ssgseaParam"))
+  return(object@alpha)
 }
 
 
@@ -72,34 +78,33 @@ get_alpha <- function(obj) {
 #'
 #' Returns the `normalize` flag from a \linkS4class{ssgseaParam} object.
 #'
-#' @param obj A \linkS4class{ssgseaParam} object.
+#' @param object A \linkS4class{ssgseaParam} object.
 #' 
-#' @return The requested `normalize` flag from `obj` or an error if `obj` does
+#' @return The requested `normalize` flag from `object` or an error if `object` does
 #' not inherit from \linkS4class{ssgseaParam}.
 #'
-#' @examples
-#' sp <- ssgseaParam()
-#' do_normalize(sp)
-#' sp <- ssgseaParam(doNormalize = FALSE)
-#' do_normalize(sp)
-#'
+## #' @examples
+## #' sp <- ssgseaParam()
+## #' do_normalize(sp)
+## #' sp <- ssgseaParam(doNormalize=FALSE)
+## #' do_normalize(sp)
+## #'
 #' @noRd
-do_normalize <- function(obj) {
-  stopifnot(inherits(obj, "ssgseaParam"))
-  return(obj@normalize)
+do_normalize <- function(object) {
+  stopifnot(inherits(object, "ssgseaParam"))
+  return(object@normalize)
 }
 
 
-### ssGSEA Parameter Show -------------------------------------------------
+## ----- show -----
 
 setMethod("show",
-          signature=signature(
-            object="ssgseaParam"),
+          signature=signature(object="ssgseaParam"),
           function(object) {
               some <- function(x)
                   paste0(paste(Biobase::selectSome(x, 4), collapse=", "),
                         " (", length(x), " total)")
-              ds <- get_dataSet(object)
+              ds <- get_exprData(object)
               dsDim <- sprintf(" [%s, %d]", nrow(ds), ncol(ds))
               gs <- get_geneSets(object)
               gsDim <- sprintf(" [%d, %d]", nrow(gs), ncol(gs))
