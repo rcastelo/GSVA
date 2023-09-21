@@ -21,18 +21,17 @@
 #' [DOI](https://doi.org/10.1186/1471-2105-6-225)
 #'
 #' @examples
-#' library("GSEABase")
-#' data(sample.ExpressionSet, package="Biobase")
-#' 
-#' ses <- sample.ExpressionSet[201:242,]
-#' gsc <- GeneSetCollection(ses, setType=GOCollection())
+#' library(GSVA)
+#' library(GSVAdata)
+#'
+#' data(leukemia)
+#' data(c2BroadSets)
+#'
+#' ## for simplicity, use only a subset of the sample data
+#' ses <- leukemia_eset[1:1000, ]
+#' gsc <- c2BroadSets[1:100]
 #' pp1 <- plageParam(ses, gsc)
 #' pp1
-#' 
-#' xes <- exprs(ses)
-#' lgs <- geneIds(gsc)
-#' pp2 <- plageParam(exprData=xes, geneSets=lgs)
-#' pp2
 #'
 #' @importFrom methods new
 #' @rdname plageParam-class

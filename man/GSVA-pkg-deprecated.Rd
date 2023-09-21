@@ -175,11 +175,12 @@ the near future. When possible, alternative functions with similar
 functionality are also mentioned. Help pages for deprecated functions are
 available at \code{\link{gsva-deprecated}}.
 }
-\section{\code{gsva}}{
+\section{Details}{
 
 Instead of gsva(expr=., gset.idx.list=., method=., ...), use a method-specific
-parameter object.
-See [\code{gsva}][\code{plageParam}][\code{zscoreParam}][\code{ssgseaParam}][\code{gsvaParam}]
+parameter object,
+see [\code{plageParam}][\code{zscoreParam}][\code{ssgseaParam}][\code{gsvaParam}],
+followed by a call to the new \code{gsva()} function, see \code{\link{gsva}}.
 }
 
 \keyword{internal}

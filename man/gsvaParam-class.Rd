@@ -104,18 +104,18 @@ activated.}
 }}
 
 \examples{
-library("GSEABase")
-data(sample.ExpressionSet, package="Biobase")
+library(GSVA)
+library(GSVAdata)
 
-ses <- sample.ExpressionSet[201:242,]
-gsc <- GeneSetCollection(ses, setType=GOCollection())
+data(leukemia)
+data(c2BroadSets)
+
+## for simplicity, use only a subset of the sample data
+ses <- leukemia_eset[1:1000, ]
+gsc <- c2BroadSets[1:100]
 gp1 <- gsvaParam(ses, gsc)
 gp1
 
-xes <- exprs(ses)
-lgs <- geneIds(gsc)
-gp2 <- gsvaParam(exprData=xes, geneSets=lgs, kcdf="Poisson", tau=0.42, maxDiff=FALSE)
-gp2
 
 }
 \references{

@@ -4,7 +4,8 @@
 ##          scores for each given gene-set
 
 #' @title Gene Set Variation Analysis
-#' @description Estimates GSVA enrichment scores.
+#' @description This is the old manual page of the deprecated version
+#' of the function `gsva()`.
 #'
 #' @name gsva-deprecated
 #' @usage gsva(expr, gset.idx.list, ...)
@@ -15,10 +16,11 @@
 NULL
 
 #' @rdname GSVA-pkg-deprecated
-#' @section `gsva`:
+#' @section Details:
 #' Instead of gsva(expr=., gset.idx.list=., method=., ...), use a method-specific
-#' parameter object.
-#' See [`gsva`][`plageParam`][`zscoreParam`][`ssgseaParam`][`gsvaParam`]
+#' parameter object,
+#' see [`plageParam`][`zscoreParam`][`ssgseaParam`][`gsvaParam`],
+#' followed by a call to the new `gsva()` function, see [`gsva`].
 #'
 #' @export
 setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),

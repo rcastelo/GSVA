@@ -11,22 +11,17 @@
 #'
 #' @seealso [`plageParam`][`zscoreParam`][`ssgseaParam`][`gsvaParam`]
 #' 
-#' @aliases
-#' get_exprData,GsvaMethodParam-method
-#' get_geneSets,GsvaMethodParam-method
-#' 
+#' @name GsvaMethodParam-class
 #' @rdname GsvaMethodParam-class
-
+NULL
 
 ## ----- getters -----
 
-#' @exportMethod get_exprData
 setMethod("get_exprData", signature("GsvaMethodParam"),
           function(object) {
               return(object@exprData)
           })
 
-#' @exportMethod get_geneSets
 setMethod("get_geneSets", signature("GsvaMethodParam"),
           function(object) {
               return(object@geneSets)

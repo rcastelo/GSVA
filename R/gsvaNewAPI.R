@@ -3,8 +3,23 @@
 #' 
 #' @description Run Gene Set Variation Analysis on a matrix with gene sets in a list.
 #' 
-#' @param expr A parameter object determining the analysis method to be performed
-#'   as well as containing any method-specific parameters.
+#' @param expr A parameter object of one of the following classes:
+#' * A [`gsvaParam`] object built using the constructor function [`gsvaParam`].
+#'   This object will trigger `gsva()` to use the GSVA algorithm by
+#'   Hänzelmann et al. (2013).
+#' * A [`plageParam`] object built using the constructor function [`plageParam`].
+#'   This object will trigger `gsva()` to use the PLAGE algorithm by
+#'   Tomfohr et al. (2005).
+#' * A [`zscoreParam`] object built using the constructor function [`zscoreParam`]
+#'   This object will trigger `gsva()` to use the combined z-score algorithm by
+#'   Lee et al. (2008).
+#' * A [`ssgseaParam`] object built using the constructor function [`ssgseaParam`]
+#'   This object will trigger `gsva()` to use the ssGSEA algorithm by
+#'   Barbie et al. (2009).
+#'
+#' @param gset.idx.list Dummy parameter, only present for backward compatibility,
+#' do not use it. It will be removed once the deprecated version of 'gsva()'
+#' is defunct.
 #' @param minSize Minimum size of the resulting gene sets.
 #' @param maxSize Maximum size of the resulting gene sets.
 #' @param verbose Gives information about each calculation step. Default: `FALSE`.
@@ -16,9 +31,82 @@
 #'   depending on the input) of GSVA enrichment scores.
 #' 
 #' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`]
-#' @aliases gsva,plageParam,missing-method
+#'
+#' @aliases gsva
+#' @name gsva
 #' @rdname gsva
 #' 
+#' @references Barbie, D.A. et al. Systematic RNA interference reveals that
+#' oncogenic KRAS-driven cancers require TBK1.
+#' *Nature*, 462(5):108-112, 2009.
+#' [DOI](https://doi.org/10.1038/nature08460)
+#'
+#' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
+#' variation analysis for microarray and RNA-Seq data.
+#' *BMC Bioinformatics*, 14:7, 2013.
+#' [DOI](https://doi.org/10.1186/1471-2105-14-7)
+#'
+#' @references Lee, E. et al. Inferring pathway activity toward precise
+#' disease classification.
+#' *PLoS Comp Biol*, 4(11):e1000217, 2008.
+#' [DOI](https://doi.org/10.1371/journal.pcbi.1000217)
+#'
+#' @references Tomfohr, J. et al. Pathway level analysis of gene expression
+#' using singular value decomposition.
+#' *BMC Bioinformatics*, 6:225, 2005.
+#' [DOI](https://doi.org/10.1186/1471-2105-6-225)
+#'
+#' @examples
+#' library(GSVA)
+#' library(limma)
+#' 
+#' p <- 10 ## number of genes
+#' n <- 30 ## number of samples
+#' nGrp1 <- 15 ## number of samples in group 1
+#' nGrp2 <- n - nGrp1 ## number of samples in group 2
+#' 
+#' ## consider three disjoint gene sets
+#' geneSets <- list(set1=paste("g", 1:3, sep=""),
+#'                  set2=paste("g", 4:6, sep=""),
+#'                  set3=paste("g", 7:10, sep=""))
+#'
+#' ## sample data from a normal distribution with mean 0 and st.dev. 1
+#' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+#'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+#'
+#' ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
+#' y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
+#' 
+#' ## build design matrix
+#' design <- cbind(sampleGroup1=1, sampleGroup2vs1=c(rep(0, nGrp1), rep(1, nGrp2)))
+#' 
+#' ## fit linear model
+#' fit <- lmFit(y, design)
+#' 
+#' ## estimate moderated t-statistics
+#' fit <- eBayes(fit)
+#' 
+#' ## genes in set1 are differentially expressed
+#' topTable(fit, coef="sampleGroup2vs1")
+#' 
+#' ## build GSVA parameter object
+#' gsvapar <- gsvaParam(y, geneSets, maxDiff=TRUE)
+#' 
+#' ## estimate GSVA enrichment scores for the three sets
+#' gsva_es <- gsva(gsvapar)
+#' 
+#' ## fit the same linear model now to the GSVA enrichment scores
+#' fit <- lmFit(gsva_es, design)
+#' 
+#' ## estimate moderated t-statistics
+#' fit <- eBayes(fit)
+#' 
+#' ## set1 is differentially expressed
+#' topTable(fit, coef="sampleGroup2vs1")
+NULL
+
+#' @aliases gsva,plageParam,missing-method
+#' @rdname gsva
 #' @exportMethod
 setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
           function(expr, gset.idx.list,
@@ -65,13 +153,8 @@ setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
           })
 
 
-#' @title Gene Set Variation Analysis
-#' 
-#' @description Run combined z-score analysis on a matrix with gene sets in a list.
-#' 
 #' @aliases gsva,zscoreParam,missing-method
 #' @rdname gsva
-#' 
 #' @exportMethod
 setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
           function(expr, gset.idx.list,
@@ -118,16 +201,11 @@ setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
           })
 
 
-#' @title Gene Set Variation Analysis
-#' 
-#' @description Run ssGSEA on a matrix with gene sets in a list.
-#' 
 #' @aliases gsva,ssgseaParam,missing-method
 #' @rdname gsva
-#' 
 #' @exportMethod
 setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
-          function(expr, gset.idx.list, param,
+          function(expr, gset.idx.list,
                    minSize=1,
                    maxSize=Inf,
                    verbose=TRUE,
@@ -171,13 +249,8 @@ setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
           })
 
 
-#' @title Gene Set Variation Analysis
-#' 
-#' @description Run GSVA on a matrix with gene sets in a list.
-#' 
 #' @aliases gsva,gsvaParam,missing-method
 #' @rdname gsva
-#' 
 #' @exportMethod
 setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
           function(expr, gset.idx.list,

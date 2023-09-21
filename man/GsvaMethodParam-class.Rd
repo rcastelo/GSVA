@@ -3,12 +3,7 @@
 \docType{class}
 \name{GsvaMethodParam-class}
 \alias{GsvaMethodParam-class}
-\alias{get_exprData,GsvaMethodParam-method}
-\alias{get_geneSets,GsvaMethodParam-method}
 \title{\code{GsvaMethodParam} class}
-\usage{
-\S4method{get_exprData}{GsvaMethodParam}(object)
-}
 \description{
 Virtual superclass of method parameter classes supported by \code{GSVA}.
 

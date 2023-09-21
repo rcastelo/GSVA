@@ -55,18 +55,17 @@ Otherwise this last normalization step is skipped.}
 }}
 
 \examples{
-library("GSEABase")
-data(sample.ExpressionSet, package="Biobase")
+library(GSVA)
+library(GSVAdata)
 
-ses <- sample.ExpressionSet[201:242,]
-gsc <- GeneSetCollection(ses, setType=GOCollection())
+data(leukemia)
+data(c2BroadSets)
+
+## for simplicity, use only a subset of the sample data
+ses <- leukemia_eset[1:1000, ]
+gsc <- c2BroadSets[1:100]
 sp1 <- ssgseaParam(ses, gsc)
 sp1
-
-xes <- exprs(ses)
-lgs <- geneIds(gsc)
-sp2 <- ssgseaParam(exprData=xes, geneSets=lgs, alpha=0.42, normalize=FALSE)
-sp2
 
 }
 \references{

@@ -7,7 +7,8 @@
 gsva(expr, gset.idx.list, ...)
 }
 \description{
-Estimates GSVA enrichment scores.
+This is the old manual page of the deprecated version
+of the function \code{gsva()}.
 }
 \seealso{
 \code{\link{GSVA-pkg-deprecated}}

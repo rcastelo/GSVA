@@ -22,18 +22,17 @@
 #' [DOI](https://doi.org/10.1371/journal.pcbi.1000217)
 #'
 #' @examples
-#' library("GSEABase")
-#' data(sample.ExpressionSet, package="Biobase")
-#' 
-#' ses <- sample.ExpressionSet[201:242,]
-#' gsc <- GeneSetCollection(ses, setType=GOCollection())
+#' library(GSVA)
+#' library(GSVAdata)
+#'
+#' data(leukemia)
+#' data(c2BroadSets)
+#'
+#' ## for simplicity, use only a subset of the sample data
+#' ses <- leukemia_eset[1:1000, ]
+#' gsc <- c2BroadSets[1:100]
 #' zp1 <- zscoreParam(ses, gsc)
 #' zp1
-#' 
-#' xes <- exprs(ses)
-#' lgs <- geneIds(gsc)
-#' zp2 <- zscoreParam(exprData=xes, geneSets=lgs)
-#' zp2
 #'
 #'
 #' @importFrom methods new
