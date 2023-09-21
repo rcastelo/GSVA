@@ -1,52 +1,29 @@
 
-##
-## gsva() S4 methods for running all analysis methods
-##
-
 #' @title Gene Set Variation Analysis
-#' @description Run PLAGE on a matrix with gene sets in a list.
-#' @describeIn gsvaNewAPI Run PLAGE on a matrix with gene sets in a list.
-#' @param expr Gene expression data which can be given either as a
-#'   [`SummarizedExperiment`], [`SingleCellExperiment`]
-#'   [`ExpressionSet`] object, or as a matrix of expression
-#'   values where rows correspond to genes and columns correspond to samples.
-#'   This matrix can be also in a sparse format, as a [`dgCMatrix-class`], or
-#'   as an on-disk backend representation, such as [`HDF5Array`] .
-#' @param gset.idx.list Gene sets provided either as a `list` object or as a
-#'   [`GeneSetCollection`] object.
-#' @param param A parameter object determining the analysis method to be performed
+#' 
+#' @description Run Gene Set Variation Analysis on a matrix with gene sets in a list.
+#' 
+#' @param expr A parameter object determining the analysis method to be performed
 #'   as well as containing any method-specific parameters.
-#' @param annotation In the case of calling `gsva()` on a
-#'   [`SummarizedExperiment`] or [`SingleCellExperiment`] object,
-#'   the `annotation` argument can be used to select the assay
-#'   containing the molecular data we want as input to the `gsva()`
-#'   function, otherwise the first assay is selected.
-#'   In the case of calling `gsva()` with expression data in
-#'   a `matrix` and gene sets as a [`GeneSetCollection`]
-#'   object, the `annotation` argument can be used to supply
-#'   the name of the Bioconductor package that contains
-#'   annotations for the class of gene identifiers occurring in
-#'   the row names of the expression data matrix.
-#'   In the case of calling `gsva()` on a
-#'   [`ExpressionSet`] object, the `annotation` argument
-#'   is ignored. See details information below.
-#' @param min.sz Minimum size of the resulting gene sets.
-#' @param max.sz Maximum size of the resulting gene sets.
-#' @param parallel.sz Number of threads of execution to use when doing the calculations in parallel.
-#'   The argument BPPARAM allows one to set the parallel back-end and fine
-#'   tune its configuration.
+#' @param minSize Minimum size of the resulting gene sets.
+#' @param maxSize Maximum size of the resulting gene sets.
 #' @param verbose Gives information about each calculation step. Default: `FALSE`.
 #' @param BPPARAM An object of class [`BiocParallelParam`] specifiying parameters
-#'   related to the parallel execution of some of the tasks and calculations within this function.
+#'   related to the parallel execution of some of the tasks and calculations
+#'   within this function.
+#' 
 #' @return A gene-set by sample matrix (of `matrix` or [`dgCMatrix-class`] type, 
 #'   depending on the input) of GSVA enrichment scores.
+#' 
 #' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`]
+#' @aliases gsva,plageParam,missing-method
+#' @rdname gsva
+#' 
+#' @exportMethod
 setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
           function(expr, gset.idx.list,
-                   annotation, 
-                   min.sz=1,
-                   max.sz=Inf,
-                   parallel.sz=1L, 
+                   minSize=1,
+                   maxSize=Inf,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
@@ -74,13 +51,12 @@ setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                                     min.sz=max(1, min.sz),
-                                                     max.sz=max.sz)
+                                                     minSize=max(1, minSize),
+                                                     maxSize=maxSize)
 
               rval <- .gsva_newAPI(expr = expr,
                                    gset.idx.list = mapped.gset.idx.list,
                                    param = param,
-                                   parallel.sz = parallel.sz,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
               rval <- wrapData(rval, exprData)
@@ -90,14 +66,17 @@ setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
 
 
 #' @title Gene Set Variation Analysis
-#' @description Run z-score analysis on a matrix with gene sets in a list.
-#' @describeIn gsvaNewAPI Run z-score analysis on a matrix with gene sets in a list.
+#' 
+#' @description Run combined z-score analysis on a matrix with gene sets in a list.
+#' 
+#' @aliases gsva,zscoreParam,missing-method
+#' @rdname gsva
+#' 
+#' @exportMethod
 setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
           function(expr, gset.idx.list,
-                   annotation, 
-                   min.sz=1,
-                   max.sz=Inf,
-                   parallel.sz=1L, 
+                   minSize=1,
+                   maxSize=Inf,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
@@ -125,13 +104,12 @@ setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                                     min.sz=max(1, min.sz),
-                                                     max.sz=max.sz)
+                                                     minSize=max(1, minSize),
+                                                     maxSize=maxSize)
 
               rval <- .gsva_newAPI(expr = expr,
                                    gset.idx.list = mapped.gset.idx.list,
                                    param = param,
-                                   parallel.sz = parallel.sz,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
               rval <- wrapData(rval, exprData)
@@ -141,14 +119,17 @@ setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
 
 
 #' @title Gene Set Variation Analysis
+#' 
 #' @description Run ssGSEA on a matrix with gene sets in a list.
-#' @describeIn gsvaNewAPI Run ssGSEA on a matrix with gene sets in a list.
+#' 
+#' @aliases gsva,ssgseaParam,missing-method
+#' @rdname gsva
+#' 
+#' @exportMethod
 setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
           function(expr, gset.idx.list, param,
-                   annotation, 
-                   min.sz=1,
-                   max.sz=Inf,
-                   parallel.sz=1L, 
+                   minSize=1,
+                   maxSize=Inf,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
@@ -176,13 +157,12 @@ setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                                     min.sz=max(1, min.sz),
-                                                     max.sz=max.sz)
+                                                     minSize=max(1, minSize),
+                                                     maxSize=maxSize)
 
               rval <- .gsva_newAPI(expr = expr,
                                    gset.idx.list = mapped.gset.idx.list,
                                    param = param,
-                                   parallel.sz = parallel.sz,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
               rval <- wrapData(rval, exprData)
@@ -192,14 +172,17 @@ setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
 
 
 #' @title Gene Set Variation Analysis
+#' 
 #' @description Run GSVA on a matrix with gene sets in a list.
-#' @describeIn gsvaNewAPI Run GSVA on a matrix with gene sets in a list.
+#' 
+#' @aliases gsva,gsvaParam,missing-method
+#' @rdname gsva
+#' 
+#' @exportMethod
 setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
           function(expr, gset.idx.list,
-                   annotation, 
-                   min.sz=1,
-                   max.sz=Inf,
-                   parallel.sz=1L, 
+                   minSize=1,
+                   maxSize=Inf,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
@@ -227,13 +210,12 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                                     min.sz=max(1, min.sz),
-                                                     max.sz=max.sz)
+                                                     minSize=max(1, minSize),
+                                                     maxSize=maxSize)
 
               rval <- .gsva_newAPI(expr = expr,
                                    gset.idx.list = mapped.gset.idx.list,
                                    param = param,
-                                   parallel.sz = parallel.sz,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
               rval <- wrapData(rval, exprData)
@@ -276,7 +258,6 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
 
 .gsva_newAPI <- function(expr, gset.idx.list, param,
                          rnaseq = FALSE,
-                         parallel.sz=1L,
                          verbose=TRUE,
                          BPPARAM=SerialParam(progressbar=verbose)) {
     
@@ -291,25 +272,13 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
         stop("The gene set list is empty! Filter may be too stringent.")
 
     if (any(lengths(gset.idx.list) == 1))
-        warning("Some gene sets have size one. Consider setting 'min.sz > 1'.")
+        warning("Some gene sets have size one. Consider setting 'minSize > 1'.")
 
-    parallel.sz <- as.integer(parallel.sz)
-    if (parallel.sz < 1L)
-        parallel.sz <- 1L
+    parallel.sz <- if (inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM)
     
-    ## because we keep the argument 'parallel.sz' for backwards compatibility
-    ## we need to harmonize it with the contents of BPPARAM
-    if (parallel.sz > 1L && inherits(BPPARAM, "SerialParam")) {
-        BPPARAM=MulticoreParam(progressbar=verbose, workers=parallel.sz, tasks=100)
-    } else if (parallel.sz == 1L && !inherits(BPPARAM, "SerialParam")) {
-        parallel.sz <- bpnworkers(BPPARAM)
-    } else if (parallel.sz > 1L && !inherits(BPPARAM, "SerialParam")) {
-        bpworkers(BPPARAM) <- parallel.sz
-    }
-
     if (!inherits(BPPARAM, "SerialParam") && verbose)
         cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
-                    class(BPPARAM), parallel.sz))
+                    class(BPPARAM), bpnworkers(BPPARAM)))
 
     if (inherits(param, "ssgseaParam")) {
         if(verbose)
@@ -376,12 +345,9 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
 }
 
 
-### ----- generics and methods for data pre-/post-processing
+### -----  methods for data pre-/post-processing -----
 
 ## unwrapData: extract a data matrix from a container object
-setGeneric("unwrapData",
-           function(container, ...) standardGeneric("unwrapData"))
-
 setMethod("unwrapData", signature("matrix"),
           function(container, unused) {
               return(container)
@@ -439,9 +405,6 @@ setMethod("unwrapData", signature("SingleCellExperiment"),
 
 
 ## wrapData: put the resulting data into the original data container type
-setGeneric("wrapData",
-           function(dataMatrix, container) standardGeneric("wrapData"))
-
 setMethod("wrapData", signature("matrix", "matrix"),
           function(dataMatrix, container) {
               return(dataMatrix)
@@ -507,9 +470,6 @@ isAnnoPkgInstalled <- function(ap) {
 }
 
 ## mapGeneSetsToAnno: translate feature IDs used in gene sets to specified annotation type (if any, and if possible)
-setGeneric("mapGeneSetsToAnno",
-           function(geneSets, ...) standardGeneric("mapGeneSetsToAnno"))
-
 setMethod("mapGeneSetsToAnno", signature("list"),
           function(geneSets, anno) {
               return(geneSets)

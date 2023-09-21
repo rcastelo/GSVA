@@ -1,9 +1,11 @@
 
-## ----- constructor -----
-
-#' Construct a `GSVA` parameter object
+#' @title The `gsvaParam` class
 #'
-#' Construct and return a new object of class \linkS4class{gsvaParam}.
+#' @description Objects of class `gsvaParam` contain the parameters for running
+#' the `GSVA` method.
+#'
+#' @details In addition to an expression data set and a collection of
+#' gene sets, `GSVA` takes four method-specific parameters as described below.
 #'
 #' @param exprData The expression data.  Must be one of the classes
 #' supported by [`GsvaExprData-class`].
@@ -40,13 +42,30 @@
 #' gene sets with genes enriched on either extreme (high or low) will be
 #' regarded as ’highly’ activated.
 #' 
-#' @return A new \linkS4class{gsvaParam} object.
+#' @return A new [`gsvaParam-class`] object.
 #'
-## #' @examples
-## #' gp <- gsvaParam()
-## #'
-## #' @importFrom methods new
-#' @rdname gsvaParam
+#' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
+#' variation analysis for microarray and RNA-Seq data.
+#' *BMC Bioinformatics*, 14:7, 2013.
+#' [DOI](https://doi.org/10.1186/1471-2105-14-7)
+#'
+#' @examples
+#' library("GSEABase")
+#' data(sample.ExpressionSet, package="Biobase")
+#' 
+#' ses <- sample.ExpressionSet[201:242,]
+#' gsc <- GeneSetCollection(ses, setType=GOCollection())
+#' gp1 <- gsvaParam(ses, gsc)
+#' gp1
+#' 
+#' xes <- exprs(ses)
+#' lgs <- geneIds(gsc)
+#' gp2 <- gsvaParam(exprData=xes, geneSets=lgs, kcdf="Poisson", tau=0.42, maxDiff=FALSE)
+#' gp2
+#'
+#' @importFrom methods new
+#' @rdname gsvaParam-class
+#' 
 #' @export
 gsvaParam <- function(exprData, geneSets, kcdf=c("Gaussian", "Poisson", "none"),
                       tau=1, maxDiff=TRUE, absRanking=FALSE) {
@@ -60,109 +79,59 @@ gsvaParam <- function(exprData, geneSets, kcdf=c("Gaussian", "Poisson", "none"),
 ## ----- validator -----
 
 setValidity("gsvaParam", function(object) {
-    invalid <- character()
+    inv <- NULL
     dd <- dim(object@exprData)
-    if(dd[1] == 0) invalid <- c(invalid, "@exprData has 0 rows")
-    if(dd[2] == 0) invalid <- c(invalid, "@exprData has 0 columns")
-    if(length(object@geneSets) == 0)
-        invalid <- c(invalid, "@geneSets has length 0")
-    if(length(object@tau) != 1)
-        invalid <- c(invalid, "@tau should be of length 1")
-    if(is.na(object@tau)) invalid <- c(invalid, "@tau should not be NA")
-    if(length(object@maxDiff) != 1)
-        invalid <- c(invalid, "@maxDiff should be of length 1")
-    if(is.na(object@maxDiff)) invalid <- c(invalid, "@maxDiff should not be NA")
-    if(length(object@absRanking) != 1)
-        invalid <- c(invalid, "@absRanking should be of length 1")
-    if(is.na(object@absRanking))
-        invalid <- c(invalid, "@absRanking should not be NA")
-    return(if(length(invalid) == 0) TRUE else invalid)
+    if(dd[1] == 0) {
+        inv <- c(inv, "@exprData has 0 rows")
+    }
+    if(dd[2] == 0) {
+        inv <- c(inv, "@exprData has 0 columns")
+    }
+    if(length(object@geneSets) == 0) {
+        inv <- c(inv, "@geneSets has length 0")
+    }
+    if(length(object@tau) != 1) {
+        inv <- c(inv, "@tau should be of length 1")
+    }
+    if(is.na(object@tau)) {
+        inv <- c(inv, "@tau should not be NA")
+    }
+    if(length(object@maxDiff) != 1) {
+        inv <- c(inv, "@maxDiff should be of length 1")
+    }
+    if(is.na(object@maxDiff)) {
+        inv <- c(inv, "@maxDiff should not be NA")
+    }
+    if(length(object@absRanking) != 1) {
+        inv <- c(inv, "@absRanking should be of length 1")
+    }
+    if(is.na(object@absRanking)) {
+        inv <- c(inv, "@absRanking should not be NA")
+    }
+    return(if(length(inv) == 0) TRUE else inv)
 })
 
 
 ## ----- getters -----
 
-#' Return the `kcdf` parameter from a `gsvaParam` object
-#'
-#' Returns the `kcdf` parameter from a \linkS4class{gsvaParam} object.
-#'
-#' @param object A \linkS4class{gsvaParam} object.
-#' 
-#' @return The requested `kcdf` parameter from `object` or an error if `object`
-#' does not inherit from \linkS4class{gsvaParam}.
-#'
-## #' @examples
-## #' gp <- gsvaParam()
-## #' get_kcdf(gp)
-## #' gp <- gsvaParam(kcdf="Poisson")
-## #' get_kcdf(gp)
-## #'
 #' @noRd
 get_kcdf <- function(object) {
   stopifnot(inherits(object, "gsvaParam"))
   return(object@kcdf)
 }
 
-
-#' Return the `tau` parameter from a `gsvaParam` object
-#'
-#' Returns the `tau` parameter from a \linkS4class{gsvaParam} object.
-#'
-#' @param object A \linkS4class{gsvaParam} object.
-#' 
-#' @return The requested `tau` parameter from `object` or an error if `object`
-#' does not inherit from \linkS4class{gsvaParam}.
-#'
-## #' @examples
-## #' gp <- gsvaParam()
-## #' get_tau(gp)
-## #' gp <- gsvaParam(tau=0.42)
-## #' get_tau(gp)
-## #'
 #' @noRd
 get_tau <- function(object) {
   stopifnot(inherits(object, "gsvaParam"))
   return(object@tau)
 }
 
-
-#' Return the `maxDiff` parameter from a `gsvaParam` object
-#'
-#' Returns the `maxDiff` parameter from a \linkS4class{gsvaParam} object.
-#'
-#' @param object A \linkS4class{gsvaParam} object.
-#' 
-#' @return The requested `maxDiff` parameter from `object` or an error if
-#' `object` does not inherit from \linkS4class{gsvaParam}.
-#'
-## #' @examples
-## #' gp <- gsvaParam()
-## #' get_maxDiff(gp)
-## #' gp <- gsvaParam(maxDiff=FALSE)
-## #' get_maxDiff(gp)
-## #'
 #' @noRd
 get_maxDiff <- function(object) {
   stopifnot(inherits(object, "gsvaParam"))
   return(object@maxDiff)
 }
 
-
-#' Return the `absRanking` parameter from a `gsvaParam` object
-#'
-#' Returns the `absRanking` parameter from a \linkS4class{gsvaParam} object.
-#'
-#' @param object A \linkS4class{gsvaParam} object.
-#' 
-#' @return The requested `absRanking` parameter from `object` or an error if
-#' `object` does not inherit from \linkS4class{gsvaParam}.
-#'
-## #' @examples
-## #' gp <- gsvaParam()
-## #' get_absRanking(gp)
-## #' gp <- gsvaParam(absRanking=TRUE)
-## #' get_absRanking(gp)
-## #'
 #' @noRd
 get_absRanking <- function(object) {
   stopifnot(inherits(object, "gsvaParam"))
@@ -172,6 +141,7 @@ get_absRanking <- function(object) {
 
 ## ----- show -----
 
+#' @exportMethod show
 setMethod("show",
           signature=signature(object="gsvaParam"),
           function(object) {
