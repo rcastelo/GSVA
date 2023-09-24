@@ -6,7 +6,7 @@
 \alias{zscoreParam}
 \title{\code{zscoreParam} class}
 \usage{
-zscoreParam(exprData, geneSets)
+zscoreParam(exprData, geneSets, assay = NA_character_)
 }
 \arguments{
 \item{exprData}{The expression data.  Must be one of the classes
@@ -14,12 +14,15 @@ supported by \code{\linkS4class{GsvaExprData}}.}
 
 \item{geneSets}{The gene sets.  Must be one of the classes supported by
 \code{\linkS4class{GsvaGeneSets}}.}
+
+\item{assay}{The name of the assay to use in case \code{exprData} is a multi-assay
+container, otherwise ignored.  By default, the first assay is used.}
 }
 \value{
 A new \code{\linkS4class{zscoreParam}} object.
 }
 \description{
-Method-specific parameters for the \verb{combined z-scores} method.
+Method-specific parameters for the combined z-scores method.
 
 Objects of class \code{zscoreParam} contain the parameters for running
 the combined z-scores method.

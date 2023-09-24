@@ -17,8 +17,8 @@ data matrix and one or many gene sets as input.  This virtual class provides
 the necessary slots for this minimum parameter set and serves as all \code{GSVA}
 method parameter classes,
 
-The \code{GSVA} packages implements four single-sample gene set analysis
-methods (\code{PLAGE}, combined z-scores, \code{ssGSEA}, and \code{GSVA}) and a respective
+The \code{GSVA} package implements four single-sample gene set analysis
+methods (PLAGE, combined z-scores, ssGSEA, and GSVA) and a respective
 method-specific parameter class that is used to invoke each of them with a
 matching set of parameters.
 }

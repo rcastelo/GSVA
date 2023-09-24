@@ -13,6 +13,9 @@
 #' @param geneSets The gene sets.  Must be one of the classes supported by
 #' [`GsvaGeneSets-class`].
 #' 
+#' @param assay The name of the assay to use in case `exprData` is a multi-assay
+#' container, otherwise ignored.  By default, the first assay is used.
+#' 
 #' @return A new [`plageParam-class`] object.
 #'
 #' @references Tomfohr, J. et al. Pathway level analysis of gene expression
@@ -37,8 +40,8 @@
 #' @rdname plageParam-class
 #' 
 #' @export
-plageParam <- function(exprData, geneSets) {
-  new("plageParam", exprData=exprData, geneSets=geneSets)
+plageParam <- function(exprData, geneSets, assay=NA_character_) {
+  new("plageParam", exprData=exprData, geneSets=geneSets, assay=assay)
 }
 
 
@@ -55,6 +58,9 @@ setValidity("plageParam", function(object) {
     }
     if(length(object@geneSets) == 0) {
         inv <- c(inv, "@geneSets has length 0")
+    }
+    if(length(object@assay) != 1) {
+        inv <- c(inv, "@assay should be of length 1")
     }
     return(if(length(inv) == 0) TRUE else inv)
 })

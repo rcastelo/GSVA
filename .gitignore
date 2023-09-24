@@ -7,4 +7,3 @@
 src/*.o
 src/*.so
 *~
-*.RData

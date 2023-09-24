@@ -4,8 +4,8 @@
 #' @description A virtual superclass of the `GSVA` packages' method-specific
 #' parameter classes.
 #'
-#' @details The `GSVA` packages implements four single-sample gene set analysis
-#' methods (`PLAGE`, combined z-scores, `ssGSEA`, and `GSVA`) and a respective
+#' @details The `GSVA` package implements four single-sample gene set analysis
+#' methods (PLAGE, combined z-scores, ssGSEA, and GSVA) and a respective
 #' method-specific parameter class that is used to invoke each of them with a
 #' matching set of parameters.
 #'
@@ -25,4 +25,9 @@ setMethod("get_exprData", signature("GsvaMethodParam"),
 setMethod("get_geneSets", signature("GsvaMethodParam"),
           function(object) {
               return(object@geneSets)
+          })
+
+setMethod("get_assay", signature("GsvaMethodParam"),
+          function(object) {
+              return(object@assay)
           })

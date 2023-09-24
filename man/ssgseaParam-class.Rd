@@ -6,7 +6,13 @@
 \alias{ssgseaParam}
 \title{\code{ssgseaParam} class}
 \usage{
-ssgseaParam(exprData, geneSets, alpha = 0.25, normalize = TRUE)
+ssgseaParam(
+  exprData,
+  geneSets,
+  assay = NA_character_,
+  alpha = 0.25,
+  normalize = TRUE
+)
 }
 \arguments{
 \item{exprData}{The expression data.  Must be one of the classes
@@ -14,6 +20,9 @@ supported by \code{\linkS4class{GsvaExprData}}.}
 
 \item{geneSets}{The gene sets.  Must be one of the classes supported by
 \code{\linkS4class{GsvaGeneSets}}.}
+
+\item{assay}{The name of the assay to use in case \code{exprData} is a multi-assay
+container, otherwise ignored.  By default, the first assay is used.}
 
 \item{alpha}{Numeric vector of length 1.  The exponent defining the
 weight of the tail in the random walk performed by the \code{ssGSEA} (Barbie et
@@ -28,7 +37,7 @@ this last normalization step is skipped.}
 A new \code{\linkS4class{ssgseaParam}} object.
 }
 \description{
-Method-specific parameters for the \code{ssGSEA} method.
+Method-specific parameters for the ssGSEA method.
 
 Objects of class \code{ssgseaParam} contain the parameters for running
 the \code{ssGSEA} method.
@@ -45,10 +54,10 @@ gene sets, \code{ssGSEA} takes two method-specific parameters as described below
 
 \describe{
 \item{\code{alpha}}{Numeric vector of length 1.  The exponent defining the
-weight of the tail in the random walk performed by the \code{ssGSEA} (Barbie et
+weight of the tail in the random walk performed by the ssGSEA (Barbie et
 al., 2009) method.}
 
-\item{\code{normalize}}{Logical vector of length 1.  If \code{TRUE} runs the \code{ssGSEA}
+\item{\code{normalize}}{Logical vector of length 1.  If \code{TRUE} runs the ssGSEA
 method from Barbie et al. (2009) normalizing the scores by the absolute
 difference between the minimum and the maximum, as described in their paper.
 Otherwise this last normalization step is skipped.}

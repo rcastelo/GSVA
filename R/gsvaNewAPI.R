@@ -118,18 +118,14 @@ setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
               param <- expr
               
               exprData <- get_exprData(param)
-              dataMatrix <- unwrapData(exprData, annotation)
+              assay <- get_assay(param)
+              dataMatrix <- unwrapData(exprData, assay)
               
               ## filter genes according to various criteria,
               ## e.g., constant expression
               expr <- .filterFeatures_newAPI(dataMatrix)
 
-              anno <- if(missing(annotation)) {
-                          Biobase::annotation(exprData)
-                      } else {
-                          Biobase::annotation(exprData, annotation)
-                      }
-              
+              anno <- Biobase::annotation(exprData, annotation)
               gset.idx.list <- get_geneSets(param)
               gset.idx.list <- mapGeneSetsToAnno(gset.idx.list, anno)
               
@@ -139,8 +135,8 @@ setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                                     minSize=max(1, minSize),
-                                                     maxSize=maxSize)
+                                                     min.sz=max(1, minSize),
+                                                     max.sz=maxSize)
 
               rval <- .gsva_newAPI(expr = expr,
                                    gset.idx.list = mapped.gset.idx.list,
@@ -166,18 +162,14 @@ setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
               param <- expr
               
               exprData <- get_exprData(param)
-              dataMatrix <- unwrapData(exprData, annotation)
+              assay <- get_assay(param)
+              dataMatrix <- unwrapData(exprData, assay)
               
               ## filter genes according to verious criteria,
               ## e.g., constant expression
               expr <- .filterFeatures_newAPI(dataMatrix)
 
-              anno <- if(missing(annotation)) {
-                          Biobase::annotation(exprData)
-                      } else {
-                          Biobase::annotation(exprData, annotation)
-                      }
-              
+              anno <- Biobase::annotation(exprData, annotation)
               gset.idx.list <- get_geneSets(param)
               gset.idx.list <- mapGeneSetsToAnno(gset.idx.list, anno)
               
@@ -187,8 +179,8 @@ setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                                     minSize=max(1, minSize),
-                                                     maxSize=maxSize)
+                                                     min.sz=max(1, minSize),
+                                                     max.sz=maxSize)
 
               rval <- .gsva_newAPI(expr = expr,
                                    gset.idx.list = mapped.gset.idx.list,
@@ -214,18 +206,14 @@ setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
               param <- expr
               
               exprData <- get_exprData(param)
-              dataMatrix <- unwrapData(exprData, annotation)
+              assay <- get_assay(param)
+              dataMatrix <- unwrapData(exprData, assay)
               
               ## filter genes according to verious criteria,
               ## e.g., constant expression
               expr <- .filterFeatures_newAPI(dataMatrix, dropConstantRows = FALSE)
 
-              anno <- if(missing(annotation)) {
-                          Biobase::annotation(exprData)
-                      } else {
-                          Biobase::annotation(exprData, annotation)
-                      }
-              
+              anno <- Biobase::annotation(exprData, annotation)
               gset.idx.list <- get_geneSets(param)
               gset.idx.list <- mapGeneSetsToAnno(gset.idx.list, anno)
               
@@ -235,8 +223,8 @@ setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                                     minSize=max(1, minSize),
-                                                     maxSize=maxSize)
+                                                     min.sz=max(1, minSize),
+                                                     max.sz=maxSize)
 
               rval <- .gsva_newAPI(expr = expr,
                                    gset.idx.list = mapped.gset.idx.list,
@@ -262,18 +250,14 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
               param <- expr
               
               exprData <- get_exprData(param)
-              dataMatrix <- unwrapData(exprData, annotation)
+              assay <- get_assay(param)
+              dataMatrix <- unwrapData(exprData, assay)
               
               ## filter genes according to verious criteria,
               ## e.g., constant expression
               expr <- .filterFeatures_newAPI(dataMatrix)
 
-              anno <- if(missing(annotation)) {
-                          Biobase::annotation(exprData)
-                      } else {
-                          Biobase::annotation(exprData, annotation)
-                      }
-              
+              anno <- Biobase::annotation(exprData, annotation)
               gset.idx.list <- get_geneSets(param)
               gset.idx.list <- mapGeneSetsToAnno(gset.idx.list, anno)
               
@@ -283,8 +267,8 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                                     minSize=max(1, minSize),
-                                                     maxSize=maxSize)
+                                                     min.sz=max(1, minSize),
+                                                     max.sz=maxSize)
 
               rval <- .gsva_newAPI(expr = expr,
                                    gset.idx.list = mapped.gset.idx.list,
@@ -422,17 +406,17 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
 
 ## unwrapData: extract a data matrix from a container object
 setMethod("unwrapData", signature("matrix"),
-          function(container, unused) {
+          function(container, assay) {
               return(container)
           })
 
 setMethod("unwrapData", signature("dgCMatrix"),
-          function(container, unused) {
+          function(container, assay) {
               return(container)
           })
 
 setMethod("unwrapData", signature("ExpressionSet"),
-          function(container, unused) {
+          function(container, assay) {
               return(exprs(container))
           })
 
@@ -441,7 +425,7 @@ setMethod("unwrapData", signature("SummarizedExperiment"),
               if (length(assays(container)) == 0L)
                   stop("The input SummarizedExperiment object has no assay data.")
 
-              if (missing(assay)) {
+              if (missing(assay) || is.na(assay)) {
                   assay <- names(assays(container))[1]
               } else {
                   if (!is.character(assay))
@@ -461,7 +445,7 @@ setMethod("unwrapData", signature("SingleCellExperiment"),
               if (length(assays(container)) == 0L)
                   stop("The input SingleCellExperiment object has no assay data.")
 
-              if (missing(assay)) {
+              if (missing(assay) || is.na(assay)) {
                   assay <- names(assays(container))[1]
               } else {
                   if (!is.character(assay))

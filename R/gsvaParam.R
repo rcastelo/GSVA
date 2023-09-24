@@ -12,6 +12,9 @@
 #'
 #' @param geneSets The gene sets.  Must be one of the classes supported by
 #' [`GsvaGeneSets-class`].
+#'
+#' @param assay The name of the assay to use in case `exprData` is a multi-assay
+#' container, otherwise ignored.  By default, the first assay is used.
 #' 
 #' @param kcdf Character vector of length 1 denoting the kernel to use during
 #' the non-parametric estimation of the cumulative distribution function of
@@ -67,11 +70,12 @@
 #' @rdname gsvaParam-class
 #' 
 #' @export
-gsvaParam <- function(exprData, geneSets, kcdf=c("Gaussian", "Poisson", "none"),
+gsvaParam <- function(exprData, geneSets, assay = NA_character_,
+                      kcdf=c("Gaussian", "Poisson", "none"),
                       tau=1, maxDiff=TRUE, absRanking=FALSE) {
   kcdf <- match.arg(kcdf)
   new("gsvaParam",
-      exprData=exprData, geneSets=geneSets,
+      exprData=exprData, geneSets=geneSets, assay=assay,
       kcdf=kcdf, tau=tau, maxDiff=maxDiff, absRanking=absRanking)
 }
 
@@ -89,6 +93,9 @@ setValidity("gsvaParam", function(object) {
     }
     if(length(object@geneSets) == 0) {
         inv <- c(inv, "@geneSets has length 0")
+    }
+    if(length(object@assay) != 1) {
+        inv <- c(inv, "@assay should be of length 1")
     }
     if(length(object@tau) != 1) {
         inv <- c(inv, "@tau should be of length 1")

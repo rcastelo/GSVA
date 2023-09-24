@@ -66,7 +66,8 @@ setClassUnion("GsvaGeneSets",
 #' @exportClass GsvaMethodParam
 setClass("GsvaMethodParam",
          slots=c(exprData="GsvaExprData",
-                 geneSets="GsvaGeneSets"),
+                 geneSets="GsvaGeneSets",
+                 assay="character"),
          contains="VIRTUAL")
 
 
@@ -74,7 +75,7 @@ setClass("GsvaMethodParam",
 
 #' `plageParam` class
 #'
-#' Method-specific parameters for the `PLAGE` method.
+#' Method-specific parameters for the PLAGE method.
 #' 
 #' Since this method does not take any method-specific parameters, the parameter
 #' class does not add any slots to the common slots inherited from
@@ -94,14 +95,15 @@ setClass("GsvaMethodParam",
 setClass("plageParam",
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
-                        geneSets=NULL))
+                        geneSets=NULL,
+                        assay=NA_character_))
 
 
 ## ----- Combined z-Scores Parameter Class -----
 
 #' `zscoreParam` class
 #'
-#' Method-specific parameters for the `combined z-scores` method.
+#' Method-specific parameters for the combined z-scores method.
 #' 
 #' Since this method does not take any method-specific parameters, the parameter
 #' class does not add any slots to the common slots inherited from
@@ -121,7 +123,8 @@ setClass("plageParam",
 setClass("zscoreParam",
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
-                        geneSets=NULL))
+                        geneSets=NULL,
+                        assay=NA_character_))
 
 
 
@@ -129,17 +132,17 @@ setClass("zscoreParam",
 
 #' `ssgseaParam` class
 #'
-#' Method-specific parameters for the `ssGSEA` method.
+#' Method-specific parameters for the ssGSEA method.
 #'
 #' In addition to the two common parameter slots inherited from
 #' `[GsvaMethodParam]`, this class has slots for the two method-specific
 #' parameters of the `ssGSEA` method described below.
 #' 
 #' @slot alpha Numeric vector of length 1.  The exponent defining the
-#' weight of the tail in the random walk performed by the `ssGSEA` (Barbie et
+#' weight of the tail in the random walk performed by the ssGSEA (Barbie et
 #' al., 2009) method.
 #'
-#' @slot normalize Logical vector of length 1.  If `TRUE` runs the `ssGSEA`
+#' @slot normalize Logical vector of length 1.  If `TRUE` runs the ssGSEA
 #' method from Barbie et al. (2009) normalizing the scores by the absolute
 #' difference between the minimum and the maximum, as described in their paper.
 #' Otherwise this last normalization step is skipped.
@@ -161,6 +164,7 @@ setClass("ssgseaParam",
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
+                        assay=NA_character_,
                         alpha=NA_real_,
                         normalize=NA))
 
@@ -169,11 +173,11 @@ setClass("ssgseaParam",
 
 #' `gsvaParam` class
 #'
-#' Method-specific parameters for the `GSVA` method.
+#' Method-specific parameters for the GSVA method.
 #'
 #' In addition to the two common parameter slots inherited from
 #' `[GsvaMethodParam]`, this class has slots for the two method-specific
-#' parameters of the `GSVA` method described below.
+#' parameters of the GSVA method described below.
 #'
 #' @slot kcdf Character vector of length 1 denoting the kernel to use during
 #' the non-parametric estimation of the cumulative distribution function of
@@ -184,7 +188,7 @@ setClass("ssgseaParam",
 #' experiments, then this argument should be set to `kcdf="Poisson"`.
 #'
 #' @slot tau Numeric vector of length 1.  The exponent defining the weight of
-#' the tail in the random walk performed by the `GSVA` (Hänzelmann et al., 2013)
+#' the tail in the random walk performed by the GSVA (Hänzelmann et al., 2013)
 #' method.
 #'
 #' @slot maxDiff Logical vector of length 1 which offers two approaches to
@@ -221,6 +225,7 @@ setClass("gsvaParam",
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
+                        assay=NA_character_,
                         kcdf=NA_character_,
                         tau=NA_real_,
                         maxDiff=NA,
