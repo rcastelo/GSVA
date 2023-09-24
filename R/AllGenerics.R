@@ -25,3 +25,5 @@ setGeneric("mapGeneSetsToAnno",
 setGeneric("get_exprData", function(object) standardGeneric("get_exprData"))
 
 setGeneric("get_geneSets", function(object) standardGeneric("get_geneSets"))
+
+setGeneric("get_assay", function(object) standardGeneric("get_assay"))

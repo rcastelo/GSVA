@@ -82,6 +82,54 @@ depending on the input) of GSVA enrichment scores.
 \description{
 Run Gene Set Variation Analysis on a matrix with gene sets in a list.
 }
+\examples{
+library(GSVA)
+library(limma)
+
+p <- 10 ## number of genes
+n <- 30 ## number of samples
+nGrp1 <- 15 ## number of samples in group 1
+nGrp2 <- n - nGrp1 ## number of samples in group 2
+
+## consider three disjoint gene sets
+geneSets <- list(set1=paste("g", 1:3, sep=""),
+                 set2=paste("g", 4:6, sep=""),
+                 set3=paste("g", 7:10, sep=""))
+
+## sample data from a normal distribution with mean 0 and st.dev. 1
+y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+            dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+
+## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
+y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
+
+## build design matrix
+design <- cbind(sampleGroup1=1, sampleGroup2vs1=c(rep(0, nGrp1), rep(1, nGrp2)))
+
+## fit linear model
+fit <- lmFit(y, design)
+
+## estimate moderated t-statistics
+fit <- eBayes(fit)
+
+## genes in set1 are differentially expressed
+topTable(fit, coef="sampleGroup2vs1")
+
+## build GSVA parameter object
+gsvapar <- gsvaParam(y, geneSets, maxDiff=TRUE)
+
+## estimate GSVA enrichment scores for the three sets
+gsva_es <- gsva(gsvapar)
+
+## fit the same linear model now to the GSVA enrichment scores
+fit <- lmFit(gsva_es, design)
+
+## estimate moderated t-statistics
+fit <- eBayes(fit)
+
+## set1 is differentially expressed
+topTable(fit, coef="sampleGroup2vs1")
+}
 \references{
 Barbie, D.A. et al. Systematic RNA interference reveals that
 oncogenic KRAS-driven cancers require TBK1.

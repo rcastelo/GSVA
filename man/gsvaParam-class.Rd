@@ -9,6 +9,7 @@
 gsvaParam(
   exprData,
   geneSets,
+  assay = NA_character_,
   kcdf = c("Gaussian", "Poisson", "none"),
   tau = 1,
   maxDiff = TRUE,
@@ -21,6 +22,9 @@ supported by \code{\linkS4class{GsvaExprData}}.}
 
 \item{geneSets}{The gene sets.  Must be one of the classes supported by
 \code{\linkS4class{GsvaGeneSets}}.}
+
+\item{assay}{The name of the assay to use in case \code{exprData} is a multi-assay
+container, otherwise ignored.  By default, the first assay is used.}
 
 \item{kcdf}{Character vector of length 1 denoting the kernel to use during
 the non-parametric estimation of the cumulative distribution function of
@@ -57,7 +61,7 @@ regarded as ’highly’ activated.}
 A new \code{\linkS4class{gsvaParam}} object.
 }
 \description{
-Method-specific parameters for the \code{GSVA} method.
+Method-specific parameters for the GSVA method.
 
 Objects of class \code{gsvaParam} contain the parameters for running
 the \code{GSVA} method.
@@ -65,7 +69,7 @@ the \code{GSVA} method.
 \details{
 In addition to the two common parameter slots inherited from
 \verb{[GsvaMethodParam]}, this class has slots for the two method-specific
-parameters of the \code{GSVA} method described below.
+parameters of the GSVA method described below.
 
 In addition to an expression data set and a collection of
 gene sets, \code{GSVA} takes four method-specific parameters as described below.
@@ -82,7 +86,7 @@ expression values are integer counts, such as those derived from RNA-seq
 experiments, then this argument should be set to \code{kcdf="Poisson"}.}
 
 \item{\code{tau}}{Numeric vector of length 1.  The exponent defining the weight of
-the tail in the random walk performed by the \code{GSVA} (Hänzelmann et al., 2013)
+the tail in the random walk performed by the GSVA (Hänzelmann et al., 2013)
 method.}
 
 \item{\code{maxDiff}}{Logical vector of length 1 which offers two approaches to

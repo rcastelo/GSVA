@@ -14,6 +14,9 @@
 #' @param geneSets The gene sets.  Must be one of the classes supported by
 #' [`GsvaGeneSets-class`].
 #' 
+#' @param assay The name of the assay to use in case `exprData` is a multi-assay
+#' container, otherwise ignored.  By default, the first assay is used.
+#' 
 #' @return A new [`zscoreParam-class`] object.
 #'
 #' @references Lee, E. et al. Inferring pathway activity toward precise
@@ -39,8 +42,8 @@
 #' @rdname zscoreParam-class
 #' 
 #' @export
-zscoreParam <- function(exprData, geneSets) {
-  new("zscoreParam", exprData=exprData, geneSets=geneSets)
+zscoreParam <- function(exprData, geneSets, assay=NA_character_) {
+  new("zscoreParam", exprData=exprData, geneSets=geneSets, assay=assay)
 }
 
 
@@ -57,6 +60,9 @@ setValidity("zscoreParam", function(object) {
     }
     if(length(object@geneSets) == 0) {
         inv <- c(inv, "@geneSets has length 0")
+    }
+    if(length(object@assay) != 1) {
+        inv <- c(inv, "@assay should be of length 1")
     }
     return(if(length(inv) == 0) TRUE else inv)
 })

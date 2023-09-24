@@ -13,6 +13,9 @@
 #' @param geneSets The gene sets.  Must be one of the classes supported by
 #' [`GsvaGeneSets-class`].
 #' 
+#' @param assay The name of the assay to use in case `exprData` is a multi-assay
+#' container, otherwise ignored.  By default, the first assay is used.
+#' 
 #' @param alpha Numeric vector of length 1.  The exponent defining the
 #' weight of the tail in the random walk performed by the `ssGSEA` (Barbie et
 #' al., 2009) method.  The default value is 0.25 as described in the paper.
@@ -46,9 +49,11 @@
 #' @rdname ssgseaParam-class
 #' 
 #' @export
-ssgseaParam <- function(exprData, geneSets, alpha=0.25, normalize=TRUE) {
+ssgseaParam <- function(exprData, geneSets, assay = NA_character_,
+                        alpha=0.25, normalize=TRUE) {
     new("ssgseaParam",
-        exprData=exprData, geneSets=geneSets, alpha=alpha, normalize=normalize)
+        exprData=exprData, geneSets=geneSets, assay=assay,
+        alpha=alpha, normalize=normalize)
 }
 
 
@@ -65,6 +70,9 @@ setValidity("ssgseaParam", function(object) {
     }
     if(length(object@geneSets) == 0) {
         inv <- c(inv, "@geneSets has length 0")
+    }
+    if(length(object@assay) != 1) {
+        inv <- c(inv, "@assay should be of length 1")
     }
     if(length(object@alpha) != 1) {
         inv <- c(inv, "@alpha should be of length 1")
