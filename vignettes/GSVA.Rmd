@@ -92,19 +92,24 @@ names(gs) <- paste0("gs", 1:length(gs))
 We can calculate GSVA enrichment scores as follows:
 
 ```{r}
-gsva.es <- gsva(X, gs, verbose=FALSE)
+gsvaPar <- gsvaParam(X, gs)
+gsva.es <- gsva(gsvaPar, verbose=FALSE)
 dim(gsva.es)
 gsva.es[1:5, 1:5]
 ```
 
-The first argument to the `gsva()` function is the gene expression data matrix
-and the second the collection of gene sets. The `gsva()` function can take the
-input expression data and gene sets using different specialized containers that
-facilitate the access and manipulation of molecular and phenotype data, as well
-as their associated metadata. Another advanced features include the use of
-on-disk and parallel backends to enable, respectively, using GSVA on large
-molecular data sets and speed up computing time. You will find information on
-these features in this vignette.
+The main argument to the `gsva()` function is a parameter object
+collecting and validating the input to the GSVA algorithm that it
+causes `gsva()` to apply.  The first argument to the `gsvaParam()`
+function constructing this parameter object is the gene expression
+data matrix and the second the collection of gene sets. The `gsva()`
+function can take the input expression data and gene sets using
+different specialized containers that facilitate the access and
+manipulation of molecular and phenotype data, as well as their
+associated metadata. Another advanced features include the use of
+on-disk and parallel backends to enable, respectively, using GSVA on
+large molecular data sets and speed up computing time. You will find
+information on these features in this vignette.
 
 # Introduction
 
@@ -159,8 +164,11 @@ publication, please cite them with the given bibliographic reference.
 
 # Overview of the GSVA functionality
 
-The workhorse of the GSVA package is the function `gsva()`, which requires
-the following two input arguments:
+The workhorse of the GSVA package is the function `gsva()`, which takes
+a *parameter object* as its main input.  There are four classes of parameter
+objects corresponding to the methods listed above and their particular
+parameter lists but all of them require at a minimum the following two input
+arguments:
 
 1. A normalized gene expression dataset, which can be provided in one of the
    following containers:
@@ -210,12 +218,14 @@ provided using some of the specialized containers described above or the
 necessary metadata in those containers that allows the software to successfully
 map gene identifiers, is missing.
 
-By default, the `gsva()` function employs the method described by
-@haenzelmann_castelo_guinney_2013 but this can be changed using the argument
-`method`, which can take values `gsva` (default), `zscore`, `plage` or
-`ssgsea`, corresponding to the methods briefly described in the introduction.
+The method employed by the `gsva()` function is determined by the
+class of the parameter object that it receives as an input.  An
+object constructed using `gsvaParam()` runs the method described by
+@haenzelmann_castelo_guinney_2013 but this can be changed using
+`plageParam()`, `zscoreParam()`, or `ssgseaParam()`, corresponding
+to the methods briefly described in the introduction.
 
-When `method="gsva"` (default), the user can additionally tune the following
+When using `gsvaParam()`, the user can additionally tune the following
 parameters:
 
 * `kcdf`: The first step of the GSVA algorithm brings gene expression
@@ -230,7 +240,7 @@ parameters:
   `"none"`, which will enforce a direct estimation of the CDF without a kernel
   function.
 
-* `mx.diff`: The last step of the GSVA algorithm calculates the gene set
+* `maxDiff`: The last step of the GSVA algorithm calculates the gene set
   enrichment score from two Kolmogorov-Smirnov random walk statistics. This
   parameter is a logical flag that allows the user to specify two possible ways
   to do such calculation: (1) `TRUE`, the default value, where the enrichment
@@ -238,18 +248,19 @@ parameters:
   and negative random walk deviations; (2) `FALSE`, where the enrichment score
   is calculated as the maximum distance of the random walk from zero.
 
-* `abs.ranking`: Logical flag used only when `mx.diff=TRUE`. By default,
-  `abs.ranking=FALSE` and it implies that a modified Kuiper statistic is used
+* `absRanking`: Logical flag used only when `maxDiff=TRUE`. By default,
+  `absRanking=FALSE` and it implies that a modified Kuiper statistic is used
   to calculate enrichment scores, taking the magnitude difference between the
-  largest positive and negative random walk deviations. When `abs.ranking=TRUE`
+  largest positive and negative random walk deviations. When `absRanking=TRUE`
   the original Kuiper statistic is used, by which the largest positive and
   negative random walk deviations are added together. In this case, gene sets
   with genes enriched on either extreme (high or low) will be regarded as
   highly activated.
 
-* `tau`: Exponent defining the weight of the tail in the random walk. By
-  default `tau=1`. When `method="ssgsea"`, this parameter is also used and its
-  default value becomes then `tau=0.25` to match the methodology described in
+* `tau`: Exponent defining the weight of the tail in the random
+  walk. By default `tau=1`. When `method="ssgsea"`, an analogous
+  parameter is used but called `alpha` and its default value becomes
+  then `alpha=0.25` to match the methodology described in
   [@barbie_systematic_2009].
 
 In general, the default values for the previous parameters are suitable for
@@ -379,9 +390,8 @@ levels would be continuous, such as log-CPMs, log-RPKMs or log-TPMs, the default
 value of the `kcdf` argument should remain unchanged.
 
 ```{r, results="hide"}
-esmicro <- gsva(huangArrayRMAnoBatchCommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500)
-esrnaseq <- gsva(pickrellCountsArgonneCQNcommon_eset, canonicalC2BroadSets, min.sz=5, max.sz=500,
-                 kcdf="Poisson")
+esmicro <- gsva(gsvaParam(huangArrayRMAnoBatchCommon_eset, canonicalC2BroadSets, minSize=5, maxSize=500))
+esrnaseq <- gsva(gsvaParam(pickrellCountsArgonneCQNcommon_eset, canonicalC2BroadSets, minSize=5, maxSize=500, kcdf="Poisson"))
 ```
 We are going to assess how gene expression profiles correlate between microarray
 and RNA-seq data and compare those correlations with the ones derived at pathway
@@ -493,7 +503,7 @@ GSVA enrichment scores for the gene sets contained in `brainTxDbSets`
 are calculated, in this case using `mx.diff=FALSE`,  as follows:
 
 ```{r, results="hide"}
-gbm_es <- gsva(gbm_eset, brainTxDbSets, mx.diff=FALSE)
+gbm_es <- gsva(gsvaParam(gbm_eset, brainTxDbSets, maxDiff=FALSE))
 ```
 
 Figure \@ref(fig:gbmSignature) shows the GSVA enrichment scores obtained for the
@@ -562,7 +572,7 @@ Next, we calculate GSVA enrichment scores setting the minimum and maximum
 gene set size to 10 and 500 genes, respectively.
 
 ```{r, results="hide"}
-leukemia_es <- gsva(leukemia_eset, c2BroadSets, min.sz=10, max.sz=500)
+leukemia_es <- gsva(gsvaParam(leukemia_eset, c2BroadSets, minSize=10, maxSize=500))
 ```
 The object returned by the function `gsva()` is always of the same class
 as the input object with the expression data. Therefore, in this case,

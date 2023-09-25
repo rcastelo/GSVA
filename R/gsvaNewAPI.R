@@ -122,7 +122,12 @@ setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
               ## e.g., constant expression
               dataMatrix <- .filterFeatures_newAPI(dataMatrix)
 
-              anno <- annotation(exprData, get_annotation(param))
+              if(is.na(pAnno <- get_annotation(param))) {
+                  anno <- annotation(exprData)
+              } else {
+                  anno <- annotation(exprData, pAnno)
+              }
+              
               geneSets <- get_geneSets(param)
               geneSets <- mapGeneSetsToAnno(geneSets, anno)
               
@@ -163,7 +168,12 @@ setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
               ## e.g., constant expression
               dataMatrix <- .filterFeatures_newAPI(dataMatrix)
 
-              anno <- annotation(exprData, get_annotation(param))
+              if(is.na(pAnno <- get_annotation(param))) {
+                  anno <- annotation(exprData)
+              } else {
+                  anno <- annotation(exprData, pAnno)
+              }
+              
               geneSets <- get_geneSets(param)
               geneSets <- mapGeneSetsToAnno(geneSets, anno)
               
@@ -205,7 +215,12 @@ setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
               dataMatrix <- .filterFeatures_newAPI(dataMatrix,
                                                    dropConstantRows=FALSE)
 
-              anno <- annotation(exprData, get_annotation(param))
+              if(is.na(pAnno <- get_annotation(param))) {
+                  anno <- annotation(exprData)
+              } else {
+                  anno <- annotation(exprData, pAnno)
+              }
+              
               geneSets <- get_geneSets(param)
               geneSets <- mapGeneSetsToAnno(geneSets, anno)
               
@@ -246,7 +261,12 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
               ## e.g., constant expression
               dataMatrix <- .filterFeatures_newAPI(dataMatrix)
 
-              anno <- annotation(exprData, get_annotation(param))
+              if(is.na(pAnno <- get_annotation(param))) {
+                  anno <- annotation(exprData)
+              } else {
+                  anno <- annotation(exprData, pAnno)
+              }
+              
               geneSets <- get_geneSets(param)
               geneSets <- mapGeneSetsToAnno(geneSets, anno)
               
