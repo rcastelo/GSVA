@@ -34,6 +34,8 @@ importMethodsFrom(BiocParallel, bpiterate,
 importFrom(graphics, plot)
 importFrom(stats, ecdf,
                   na.omit,
+                  rnorm,
+                  rpois,
                   sd)
 importFrom(utils, installed.packages,
                   setTxtProgressBar,
@@ -73,3 +75,8 @@ exportMethods(gsva,
               computeGeneSetsOverlap)
 
 export(igsva)
+
+exportClasses(GsvaExprData, GsvaGeneSets, GsvaMethodParam)
+exportClasses(plageParam, zscoreParam, ssgseaParam, gsvaParam)
+export(plageParam, zscoreParam, ssgseaParam, gsvaParam)
+

@@ -21,7 +21,7 @@ ks_sample(double* x, int* x_sort_indxs, int n_genes, int* geneset_mask,
 	}
 	//Rprintf("%d\n", mx_diff);
 
-	double mx_value = 0.0;
+	//double mx_value = 0.0;
 	double mx_value_sign = 0.0;
 	double cum_sum = 0.0;
 
