@@ -68,7 +68,11 @@ A gene-set by sample matrix (of \code{matrix} or \code{\linkS4class{dgCMatrix}} 
 depending on the input) of GSVA enrichment scores.
 }
 \description{
-Run Gene Set Variation Analysis on a matrix with gene sets in a list.
+Estimates GSVA enrichment scores. The API of this function has
+changed in the Bioconductor release 3.18 and this help page describes the
+new API. The old API is deprecated and will become defunct in the next
+Bioconductor release. If you are looking for the documentation of the old
+API to the \code{gsva()} function, please consult \code{\link{GSVA-pkg-deprecated}}.
 }
 \examples{
 library(GSVA)

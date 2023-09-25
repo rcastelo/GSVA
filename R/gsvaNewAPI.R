@@ -1,7 +1,11 @@
 
 #' @title Gene Set Variation Analysis
 #' 
-#' @description Run Gene Set Variation Analysis on a matrix with gene sets in a list.
+#' @description Estimates GSVA enrichment scores. The API of this function has
+#' changed in the Bioconductor release 3.18 and this help page describes the
+#' new API. The old API is deprecated and will become defunct in the next
+#' Bioconductor release. If you are looking for the documentation of the old
+#' API to the `gsva()` function, please consult [`GSVA-pkg-deprecated`].
 #' 
 #' @param expr A parameter object of one of the following classes:
 #' * A [`gsvaParam`] object built using the constructor function [`gsvaParam`].
