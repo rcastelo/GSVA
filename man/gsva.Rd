@@ -11,8 +11,6 @@
 \S4method{gsva}{plageParam,missing}(
   expr,
   gset.idx.list,
-  minSize = 1,
-  maxSize = Inf,
   verbose = TRUE,
   BPPARAM = SerialParam(progressbar = verbose)
 )
@@ -20,8 +18,6 @@
 \S4method{gsva}{zscoreParam,missing}(
   expr,
   gset.idx.list,
-  minSize = 1,
-  maxSize = Inf,
   verbose = TRUE,
   BPPARAM = SerialParam(progressbar = verbose)
 )
@@ -29,8 +25,6 @@
 \S4method{gsva}{ssgseaParam,missing}(
   expr,
   gset.idx.list,
-  minSize = 1,
-  maxSize = Inf,
   verbose = TRUE,
   BPPARAM = SerialParam(progressbar = verbose)
 )
@@ -38,8 +32,6 @@
 \S4method{gsva}{gsvaParam,missing}(
   expr,
   gset.idx.list,
-  minSize = 1,
-  maxSize = Inf,
   verbose = TRUE,
   BPPARAM = SerialParam(progressbar = verbose)
 )
@@ -64,10 +56,6 @@ Barbie et al. (2009).
 \item{gset.idx.list}{Dummy parameter, only present for backward compatibility,
 do not use it. It will be removed once the deprecated version of 'gsva()'
 is defunct.}
-
-\item{minSize}{Minimum size of the resulting gene sets.}
-
-\item{maxSize}{Maximum size of the resulting gene sets.}
 
 \item{verbose}{Gives information about each calculation step. Default: \code{FALSE}.}
 

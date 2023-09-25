@@ -67,7 +67,10 @@ setClassUnion("GsvaGeneSets",
 setClass("GsvaMethodParam",
          slots=c(exprData="GsvaExprData",
                  geneSets="GsvaGeneSets",
-                 assay="character"),
+                 assay="character",
+                 annotation="character",
+                 minSize="numeric",
+                 maxSize="numeric"),
          contains="VIRTUAL")
 
 
@@ -96,7 +99,10 @@ setClass("plageParam",
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
-                        assay=NA_character_))
+                        assay=NA_character_,
+                        annotation=NA_character_,
+                        minSize=NA_integer_,
+                        maxSize=NA_integer_))
 
 
 ## ----- Combined z-Scores Parameter Class -----
@@ -124,7 +130,10 @@ setClass("zscoreParam",
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
-                        assay=NA_character_))
+                        assay=NA_character_,
+                        annotation=NA_character_,
+                        minSize=NA_integer_,
+                        maxSize=NA_integer_))
 
 
 
@@ -165,6 +174,9 @@ setClass("ssgseaParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
                         assay=NA_character_,
+                        annotation=NA_character_,
+                        minSize=NA_integer_,
+                        maxSize=NA_integer_,
                         alpha=NA_real_,
                         normalize=NA))
 
@@ -226,6 +238,9 @@ setClass("gsvaParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
                         assay=NA_character_,
+                        annotation=NA_character_,
+                        minSize=NA_integer_,
+                        maxSize=NA_integer_,
                         kcdf=NA_character_,
                         tau=NA_real_,
                         maxDiff=NA,

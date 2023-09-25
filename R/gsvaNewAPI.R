@@ -20,9 +20,9 @@
 #' @param gset.idx.list Dummy parameter, only present for backward compatibility,
 #' do not use it. It will be removed once the deprecated version of 'gsva()'
 #' is defunct.
-#' @param minSize Minimum size of the resulting gene sets.
-#' @param maxSize Maximum size of the resulting gene sets.
+#' 
 #' @param verbose Gives information about each calculation step. Default: `FALSE`.
+#' 
 #' @param BPPARAM An object of class [`BiocParallelParam`] specifiying parameters
 #'   related to the parallel execution of some of the tasks and calculations
 #'   within this function.
@@ -110,36 +110,33 @@ NULL
 #' @exportMethod
 setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
           function(expr, gset.idx.list,
-                   minSize=1,
-                   maxSize=Inf,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              param <- expr
+              param <- expr # for backward compatibility with the old API only
               
               exprData <- get_exprData(param)
-              assay <- get_assay(param)
-              dataMatrix <- unwrapData(exprData, assay)
+              dataMatrix <- unwrapData(exprData, get_assay(param))
               
               ## filter genes according to various criteria,
               ## e.g., constant expression
-              expr <- .filterFeatures_newAPI(dataMatrix)
+              dataMatrix <- .filterFeatures_newAPI(dataMatrix)
 
-              anno <- Biobase::annotation(exprData, annotation)
-              gset.idx.list <- get_geneSets(param)
-              gset.idx.list <- mapGeneSetsToAnno(gset.idx.list, anno)
+              anno <- annotation(exprData, get_annotation(param))
+              geneSets <- get_geneSets(param)
+              geneSets <- mapGeneSetsToAnno(geneSets, anno)
               
               ## map to the actual features for which expression data is available
-              mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+              mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(dataMatrix))
               
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
-              mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                                     min.sz=max(1, minSize),
-                                                     max.sz=maxSize)
+              mappedGeneSets <- filterGeneSets(mappedGeneSets,
+                                               min.sz=get_minSize(param),
+                                               max.sz=get_maxSize(param))
 
-              rval <- .gsva_newAPI(expr = expr,
-                                   gset.idx.list = mapped.gset.idx.list,
+              rval <- .gsva_newAPI(expr = dataMatrix,
+                                   gset.idx.list = mappedGeneSets,
                                    param = param,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
@@ -154,41 +151,38 @@ setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
 #' @exportMethod
 setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
           function(expr, gset.idx.list,
-                   minSize=1,
-                   maxSize=Inf,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              param <- expr
+              param <- expr # for backward compatibility with the old API only
               
               exprData <- get_exprData(param)
-              assay <- get_assay(param)
-              dataMatrix <- unwrapData(exprData, assay)
+              dataMatrix <- unwrapData(exprData, get_assay(param))
               
-              ## filter genes according to verious criteria,
+              ## filter genes according to various criteria,
               ## e.g., constant expression
-              expr <- .filterFeatures_newAPI(dataMatrix)
+              dataMatrix <- .filterFeatures_newAPI(dataMatrix)
 
-              anno <- Biobase::annotation(exprData, annotation)
-              gset.idx.list <- get_geneSets(param)
-              gset.idx.list <- mapGeneSetsToAnno(gset.idx.list, anno)
+              anno <- annotation(exprData, get_annotation(param))
+              geneSets <- get_geneSets(param)
+              geneSets <- mapGeneSetsToAnno(geneSets, anno)
               
               ## map to the actual features for which expression data is available
-              mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+              mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(dataMatrix))
               
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
-              mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                                     min.sz=max(1, minSize),
-                                                     max.sz=maxSize)
+              mappedGeneSets <- filterGeneSets(mappedGeneSets,
+                                               min.sz=get_minSize(param),
+                                               max.sz=get_maxSize(param))
 
-              rval <- .gsva_newAPI(expr = expr,
-                                   gset.idx.list = mapped.gset.idx.list,
+              rval <- .gsva_newAPI(expr = dataMatrix,
+                                   gset.idx.list = mappedGeneSets,
                                    param = param,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
               rval <- wrapData(rval, exprData)
-
+              
               return(rval)
           })
 
@@ -198,36 +192,34 @@ setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
 #' @exportMethod
 setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
           function(expr, gset.idx.list,
-                   minSize=1,
-                   maxSize=Inf,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              param <- expr
+              param <- expr # for backward compatibility with the old API only
               
               exprData <- get_exprData(param)
-              assay <- get_assay(param)
-              dataMatrix <- unwrapData(exprData, assay)
+              dataMatrix <- unwrapData(exprData, get_assay(param))
               
-              ## filter genes according to verious criteria,
+              ## filter genes according to various criteria,
               ## e.g., constant expression
-              expr <- .filterFeatures_newAPI(dataMatrix, dropConstantRows = FALSE)
+              dataMatrix <- .filterFeatures_newAPI(dataMatrix,
+                                                   dropConstantRows=FALSE)
 
-              anno <- Biobase::annotation(exprData, annotation)
-              gset.idx.list <- get_geneSets(param)
-              gset.idx.list <- mapGeneSetsToAnno(gset.idx.list, anno)
+              anno <- annotation(exprData, get_annotation(param))
+              geneSets <- get_geneSets(param)
+              geneSets <- mapGeneSetsToAnno(geneSets, anno)
               
               ## map to the actual features for which expression data is available
-              mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+              mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(dataMatrix))
               
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
-              mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                                     min.sz=max(1, minSize),
-                                                     max.sz=maxSize)
+              mappedGeneSets <- filterGeneSets(mappedGeneSets,
+                                               min.sz=get_minSize(param),
+                                               max.sz=get_maxSize(param))
 
-              rval <- .gsva_newAPI(expr = expr,
-                                   gset.idx.list = mapped.gset.idx.list,
+              rval <- .gsva_newAPI(expr = dataMatrix,
+                                   gset.idx.list = mappedGeneSets,
                                    param = param,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
@@ -242,36 +234,33 @@ setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
 #' @exportMethod
 setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
           function(expr, gset.idx.list,
-                   minSize=1,
-                   maxSize=Inf,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              param <- expr
+              param <- expr # for backward compatibility with the old API only
               
               exprData <- get_exprData(param)
-              assay <- get_assay(param)
-              dataMatrix <- unwrapData(exprData, assay)
+              dataMatrix <- unwrapData(exprData, get_assay(param))
               
-              ## filter genes according to verious criteria,
+              ## filter genes according to various criteria,
               ## e.g., constant expression
-              expr <- .filterFeatures_newAPI(dataMatrix)
+              dataMatrix <- .filterFeatures_newAPI(dataMatrix)
 
-              anno <- Biobase::annotation(exprData, annotation)
-              gset.idx.list <- get_geneSets(param)
-              gset.idx.list <- mapGeneSetsToAnno(gset.idx.list, anno)
+              anno <- annotation(exprData, get_annotation(param))
+              geneSets <- get_geneSets(param)
+              geneSets <- mapGeneSetsToAnno(geneSets, anno)
               
               ## map to the actual features for which expression data is available
-              mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+              mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(dataMatrix))
               
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
-              mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                                     min.sz=max(1, minSize),
-                                                     max.sz=maxSize)
+              mappedGeneSets <- filterGeneSets(mappedGeneSets,
+                                               min.sz=get_minSize(param),
+                                               max.sz=get_maxSize(param))
 
-              rval <- .gsva_newAPI(expr = expr,
-                                   gset.idx.list = mapped.gset.idx.list,
+              rval <- .gsva_newAPI(expr = dataMatrix,
+                                   gset.idx.list = mappedGeneSets,
                                    param = param,
                                    verbose = verbose,
                                    BPPARAM = BPPARAM)
@@ -518,6 +507,7 @@ isAnnoPkgValid <- function(ap) {
     return((!is.null(ap)) &&
            (length(ap) == 1) &&
            (is.character(ap)) &&
+           (!is.na(ap)) &&
            (nchar(ap)> 0))
 }
 

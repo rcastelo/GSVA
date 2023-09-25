@@ -10,6 +10,9 @@ ssgseaParam(
   exprData,
   geneSets,
   assay = NA_character_,
+  annotation = NA_character_,
+  minSize = 1,
+  maxSize = Inf,
   alpha = 0.25,
   normalize = TRUE
 )
@@ -23,6 +26,18 @@ supported by \code{\linkS4class{GsvaExprData}}.}
 
 \item{assay}{The name of the assay to use in case \code{exprData} is a multi-assay
 container, otherwise ignored.  By default, the first assay is used.}
+
+\item{annotation}{The name of a Bioconductor annotation package for the gene
+identifiers occurring in the row names of the expression data matrix.  This
+can be used to map gene identifiers occurring in the gene sets if those are
+provided in a \code{\link{GeneSetCollection}}.  By default gene identifiers used in
+expression data matrix and gene sets are matched directly.}
+
+\item{minSize}{Minimum size of the resulting gene sets after gene identifier
+mapping. By default, the minimum size is 1.}
+
+\item{maxSize}{Maximum size of the resulting gene sets after gene identifier
+mapping. By default, the maximum size is \code{Inf}.}
 
 \item{alpha}{Numeric vector of length 1.  The exponent defining the
 weight of the tail in the random walk performed by the \code{ssGSEA} (Barbie et
