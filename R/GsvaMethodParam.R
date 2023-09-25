@@ -31,3 +31,18 @@ setMethod("get_assay", signature("GsvaMethodParam"),
           function(object) {
               return(object@assay)
           })
+
+setMethod("get_annotation", signature("GsvaMethodParam"),
+          function(object) {
+              return(object@annotation)
+          })
+
+setMethod("get_minSize", signature("GsvaMethodParam"),
+          function(object) {
+              return(object@minSize)
+          })
+
+setMethod("get_maxSize", signature("GsvaMethodParam"),
+          function(object) {
+              return(object@maxSize)
+          })
