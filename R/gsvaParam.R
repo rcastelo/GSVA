@@ -183,20 +183,10 @@ get_absRanking <- function(object) {
 setMethod("show",
           signature=signature(object="gsvaParam"),
           function(object) {
-              some <- function(x)
-                  paste0(paste(Biobase::selectSome(x, 4), collapse=", "),
-                        " (", length(x), " total)")
-              ds <- get_exprData(object)
-              dsDim <- sprintf(" [%s, %d]", nrow(ds), ncol(ds))
-              gs <- get_geneSets(object)
-              gsDim <- sprintf(" [%d, %d]", nrow(gs), ncol(gs))
-              gs
-              cat("GSVA Parameter object\n",
-                  "  data set: ", class(ds)[1], dsDim, "\n",
-                  "    rows: ", some(rownames(ds)), "\n",
-                  "      (annotation: ", annotation(ds), ")", "\n",
-                  "    columns: ", some(colnames(ds)), "\n",
-                  "  gene sets: ", class(gs)[1], gsDim, "\n",
-                  "    names: ", some(names(gs)), "\n",
+              callNextMethod(object)
+              cat("kcdf: ", get_kcdf(object), "\n",
+                  "tau: ", get_tau(object), "\n",
+                  "maxDiff: ", get_maxDiff(object), "\n",
+                  "absRanking: ", get_absRanking(object), "\n",
                   sep="")
           })

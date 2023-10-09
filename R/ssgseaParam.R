@@ -142,20 +142,7 @@ do_normalize <- function(object) {
 setMethod("show",
           signature=signature(object="ssgseaParam"),
           function(object) {
-              some <- function(x)
-                  paste0(paste(Biobase::selectSome(x, 4), collapse=", "),
-                        " (", length(x), " total)")
-              ds <- get_exprData(object)
-              dsDim <- sprintf(" [%s, %d]", nrow(ds), ncol(ds))
-              gs <- get_geneSets(object)
-              gsDim <- sprintf(" [%d, %d]", nrow(gs), ncol(gs))
-              gs
-              cat("ssGSEA Parameter object\n",
-                  "  data set: ", class(ds)[1], dsDim, "\n",
-                  "    rows: ", some(rownames(ds)), "\n",
-                  "      (annotation: ", annotation(ds), ")", "\n",
-                  "    columns: ", some(colnames(ds)), "\n",
-                  "  gene sets: ", class(gs)[1], gsDim, "\n",
-                  "    names: ", some(names(gs)), "\n",
-                  sep="")
+              callNextMethod(object)
+              cat("alpha: ", get_alpha(object), "\n", 
+                  "normalize: ", do_normalize(object), "\n", sep="")
           })

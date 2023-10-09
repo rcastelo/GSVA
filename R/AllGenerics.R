@@ -33,3 +33,5 @@ setGeneric("get_annotation", function(object) standardGeneric("get_annotation"))
 setGeneric("get_minSize", function(object) standardGeneric("get_minSize"))
 
 setGeneric("get_maxSize", function(object) standardGeneric("get_maxSize"))
+
+setGeneric("gsvaShow", function(object) standardGeneric("gsvaShow"))
