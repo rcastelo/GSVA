@@ -15,6 +15,25 @@
 #' @rdname GsvaMethodParam-class
 NULL
 
+
+## ----- show -----
+
+#' @exportMethod show
+setMethod("show",
+          signature=signature(object="GsvaMethodParam"),
+          function(object) {
+              cat("A ", .objPkgClass(object), " object\n",
+                  "expression data:\n", sep="")
+              .catObj(get_exprData(object))
+              oa <- if(is.na(get_assay(object))) "none" else get_assay(object)
+              cat("using assay: ", oa, "\n", sep="")
+              cat("gene sets:\n")
+              .catObj(get_geneSets(object))
+              cat("gene set size: [", get_minSize(object), ", ",
+                  get_maxSize(object),  "]\n", sep="")
+          })
+
+
 ## ----- getters -----
 
 setMethod("get_exprData", signature("GsvaMethodParam"),
@@ -45,4 +64,44 @@ setMethod("get_minSize", signature("GsvaMethodParam"),
 setMethod("get_maxSize", signature("GsvaMethodParam"),
           function(object) {
               return(object@maxSize)
+          })
+
+
+## ----- show component objects without overriding their show() method -----
+
+setMethod("gsvaShow",
+          signature=signature(object="GsvaExprData"),
+          function(object) {
+              show(object)
+          })
+
+setMethod("gsvaShow",
+          signature=signature(object="matrix"),
+          function(object) {
+              cat("matrix [", nrow(object), ", ", ncol(object), "]\n",
+                  "  rows: ", .showSome(rownames(object)), "\n",
+                  "  cols: ", .showSome(colnames(object)), "\n", sep="")
+          })
+
+setMethod("gsvaShow",
+          signature=signature(object="GsvaGeneSets"),
+          function(object) {
+              show(object)
+          })
+
+setMethod("gsvaShow",
+          signature=signature(object="list"),
+          function(object) {
+              cat("list\n",
+                  "  names: ", .showSome(names(object)), "\n",
+                  "  unique identifiers: ",
+                  .showSome(unique(unname(unlist(object)))), "\n", sep="")
+          })
+
+## as it turns out, GeneSetCollection is() a list as well as a GsvaGeneSets
+## and list is 'older' and hence wins when dispatching gsvaShow() :-|
+setMethod("gsvaShow",
+          signature=signature(object="GeneSetCollection"),
+          function(object) {
+              show(object)
           })

@@ -570,31 +570,3 @@ setMethod("mapGeneSetsToAnno", signature("GeneSetCollection"),
               return(rval)
           })
 
-
-### ----- generate test input data -----
-generateTestInputData <- function(p = 10, nGS = 3,
-                                  n = 30, nGrp1 = round(n / 2), nGrp2 = n - nGrp1) {
-    ## we need to be able to reproduce this
-    set.seed(2023-08-18)
-    tid <- list()
-
-    geneSets <- split(paste0("g", seq.int(p)),
-                      cut(seq.int(p), breaks = nGS, labels = paste0("GeneSet", seq.int(nGS))))
-    tid[["geneSets"]] <- geneSets
-
-    ## sample data from a normal distribution with mean 0 and st.dev. 1
-    y <- matrix(rnorm(n*p), nrow=p, ncol=n,
-                dimnames=list(paste0("g", 1:p) , paste0("s", 1:n)))
-    ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
-    y[geneSets[["GeneSet1"]], seq.int(nGrp1+1, n)] <- y[geneSets[["GeneSet1"]], seq.int(nGrp1+1, n)] + 2
-    tid[["continuousData"]] <- y
-
-    ## same structure with count data
-    d <- matrix(rpois(n*p, 42), nrow=p, ncol=n,
-                dimnames=list(paste0("g", 1:p) , paste0("s", 1:n)))
-    d[geneSets[["GeneSet1"]], seq.int(nGrp1+1, n)] <- d[geneSets[["GeneSet1"]], seq.int(nGrp1+1, n)] + 23
-    tid[["countData"]] <- d
-
-    return(tid)
-}
-
