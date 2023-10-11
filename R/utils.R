@@ -72,7 +72,28 @@
 }
 
 
-guessIfCountData <- function(x, tolerance = sqrt(.Machine$double.eps)) {
+.guessIfCountData <- function(x, tolerance = sqrt(.Machine$double.eps)) {
     return(typeof(x) == "integer" ||
            (all(x >= 0) && all(x - round(x) < tolerance)))
+}
+
+
+.objPkgClass <- function(obj) {
+    oc <- class(obj)
+    pkg <- attr(oc, "package", exact=TRUE)
+    opc <- if(is.null(pkg)) {
+               oc[1]
+           } else {
+               paste(pkg[1], oc[1], sep = "::")
+           }
+    return(opc)
+}
+
+.showSome <- function(x) {
+    paste0(paste(Biobase::selectSome(x, 4), collapse=", "),
+           " (", length(x), " total)")
+}
+
+.catObj <- function(x, prefix = "  ") {
+    cat(paste0(prefix, capture.output(gsvaShow(x))), sep="\n")
 }

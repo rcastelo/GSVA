@@ -41,7 +41,8 @@ importFrom(utils, installed.packages,
                   setTxtProgressBar,
                   txtProgressBar,
                   read.csv,
-                  write.csv)
+                  write.csv,
+                  capture.output)
 importFrom(S4Vectors, SimpleList)
 importFrom(IRanges, CharacterList)
 importFrom(GSEABase, AnnoOrEntrezIdentifier,
