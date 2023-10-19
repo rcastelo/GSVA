@@ -105,3 +105,46 @@ setMethod("gsvaShow",
           function(object) {
               show(object)
           })
+
+
+## ----- uniform access to annotation -----
+
+setMethod("gsvaAnnotation",
+          signature=signature(object="GsvaExprData"),
+          function(object) {
+              return(NA_character_)
+          })
+
+setMethod("gsvaAnnotation",
+          signature=signature(object="ExpressionSet"),
+          function(object) {
+              return(annotation(object))
+          })
+
+setMethod("gsvaAnnotation", signature("SummarizedExperiment"),
+          function(object) {
+              a <- metadata(object)$annotation
+              return(if(.isCharLength1(a)) a else NA_character_)
+          })
+
+setMethod("gsvaAnnotation", signature("SingleCellExperiment"),
+          function(object) {
+              a <- metadata(object)$annotation
+              return(if(.isCharLength1(a)) a else NA_character_)
+          })
+
+
+
+## ----- uniform access to assay names -----
+
+setMethod("gsvaAssayNames",
+          signature=signature(object="GsvaExprData"),
+          function(object) {
+              return(NA_character_)
+          })
+
+setMethod("gsvaAssayNames", signature("SummarizedExperiment"),
+          function(object) {
+              a <- assayNames(object)
+              return(if(.isCharNonEmpty(a)) a else NA_character_)
+          })

@@ -54,7 +54,14 @@
 #' @export
 plageParam <- function(exprData, geneSets,
                        assay=NA_character_, annotation=NA_character_,
-                       minSize=1,maxSize=Inf) {
+                       minSize=1, maxSize=Inf) {
+    an <- gsvaAssayNames(exprData)
+    if((!is.na(assay)) && (!.isCharNonEmpty(an)))
+        warning("argument assay='", assay,
+                "' ignored since exprData has no assayNames()")
+    if(is.na(assay) && .isCharNonEmpty(an))
+        assay <- na.omit(an)[1]
+    
     new("plageParam", exprData=exprData, geneSets=geneSets,
         assay=assay, annotation=annotation,
         minSize=minSize, maxSize=maxSize)
@@ -65,7 +72,11 @@ plageParam <- function(exprData, geneSets,
 
 setValidity("plageParam", function(object) {
     inv <- NULL
-    dd <- dim(object@exprData)
+    xd <- object@exprData
+    dd <- dim(xd)
+    an <- gsvaAssayNames(xd)
+    oa <- object@assay
+    
     if(dd[1] == 0) {
         inv <- c(inv, "@exprData has 0 rows")
     }
@@ -75,8 +86,11 @@ setValidity("plageParam", function(object) {
     if(length(object@geneSets) == 0) {
         inv <- c(inv, "@geneSets has length 0")
     }
-    if(length(object@assay) != 1) {
+    if(length(oa) != 1) {
         inv <- c(inv, "@assay should be of length 1")
+    }
+    if(.isCharLength1(oa) && .isCharNonEmpty(an) && (!(oa %in% an))) {
+        inv <- c(inv, "@assay should be one of assayNames(@exprData)")
     }
     if(length(object@annotation) != 1) {
         inv <- c(inv, "@annotation should be of length 1")

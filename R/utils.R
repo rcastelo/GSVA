@@ -97,3 +97,26 @@
 .catObj <- function(x, prefix = "  ") {
     cat(paste0(prefix, capture.output(gsvaShow(x))), sep="\n")
 }
+
+.isCharNonEmpty <- function(x) {
+    return((!is.null(x)) &&
+           (length(x) > 0) &&
+           (is.character(x)) &&
+           (!all(is.na(x))) &&
+           (any(nchar(x) > 0)))
+}
+
+.isCharLength1 <- function(x) {
+    return((.isCharNonEmpty(x)) && (length(x) == 1))
+}
+
+## annotation package checks
+.isAnnoPkgValid <- function(ap) {
+    return(.isCharLength1(ap))
+}
+
+.isAnnoPkgInstalled <- function(ap) {
+    ap <- c(ap, paste0(ap, ".db"))
+    return(any(ap %in% rownames(installed.packages())))
+}
+

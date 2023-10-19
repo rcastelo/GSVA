@@ -35,3 +35,8 @@ setGeneric("get_minSize", function(object) standardGeneric("get_minSize"))
 setGeneric("get_maxSize", function(object) standardGeneric("get_maxSize"))
 
 setGeneric("gsvaShow", function(object) standardGeneric("gsvaShow"))
+
+setGeneric("gsvaAnnotation", function(object) standardGeneric("gsvaAnnotation"))
+
+setGeneric("gsvaAssayNames", function(object) standardGeneric("gsvaAssayNames"))
+
