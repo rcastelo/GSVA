@@ -1,90 +1,101 @@
 
-# 2023-08-11  axel: test functions for various parameter classes and their constructors
+###
+### test functions for GSVA method parameter objects and their constructors
+###
+
 test_plageParam <- function() {
-    DEACTIVATED("Unit tests need to be adapted to new API.")
-    
-    plgPrm <- plageParam()
+    p <- 10; n <- 30; ngs <- 5 # number of genes, samples, gene sets
+    y <- matrix(rnorm(n * p), nrow=p, ncol=n,
+                dimnames=list(paste0("g", seq.int(p)),
+                              paste0("s", seq.int(n))))
+    gs <- replicate(ngs, sample(rownames(y), 25, replace=TRUE), simplify=FALSE)
 
-    checkTrue(inherits(plgPrm, "PlageParam"))
-    checkTrue(inherits(plgPrm, "EmptyParam"))
-    checkTrue(!inherits(plgPrm, "GsvaParam"))
+    pp <- plageParam(y, gs)
 
-    checkException(plageParam(42), msg = "unexpected argument to plageParam()")
+    checkTrue(inherits(pp, "plageParam"))
+    checkTrue(inherits(pp, "GsvaMethodParam"))
+
+    checkException(plageParam(42))
 }
 
 test_zscoreParam <- function() {
-    DEACTIVATED("Unit tests need to be adapted to new API.")
+    p <- 10; n <- 30; ngs <- 5 # number of genes, samples, gene sets
+    y <- matrix(rnorm(n * p), nrow=p, ncol=n,
+                dimnames=list(paste0("g", seq.int(p)),
+                              paste0("s", seq.int(n))))
+    gs <- replicate(ngs, sample(rownames(y), 25, replace=TRUE), simplify=FALSE)
     
-    zscPrm <- zscoreParam()
+    zp <- zscoreParam(y, gs)
 
-    checkTrue(inherits(zscPrm, "ZScoreParam"))
-    checkTrue(inherits(zscPrm, "EmptyParam"))
-    checkTrue(!inherits(zscPrm, "GsvaParam"))
+    checkTrue(inherits(zp, "zscoreParam"))
+    checkTrue(inherits(zp, "GsvaMethodParam"))
 
-    checkException(zscoreParam(42), msg = "unexpected argument to zscoreParam()")
+    checkException(zscoreParam(42))
 }
 
 test_ssgseaParam <- function() {
-    DEACTIVATED("Unit tests need to be adapted to new API.")
+    p <- 10; n <- 30; ngs <- 5 # number of genes, samples, gene sets
+    y <- matrix(rnorm(n * p), nrow=p, ncol=n,
+                dimnames=list(paste0("g", seq.int(p)),
+                              paste0("s", seq.int(n))))
+    gs <- replicate(ngs, sample(rownames(y), 25, replace=TRUE), simplify=FALSE)
     
-    ssgPrm <- ssgseaParam()
+    sp <- ssgseaParam(y, gs)
 
-    checkTrue(inherits(ssgPrm, "SsGseaParam"))
-    checkTrue(inherits(ssgPrm, "EmptyParam"))
-    checkTrue(!inherits(ssgPrm, "GsvaParam"))
+    checkTrue(inherits(sp, "ssgseaParam"))
+    checkTrue(inherits(sp, "GsvaMethodParam"))
 
-    checkEqualsNumeric(ssgPrm@alpha, 0.25)
-    checkTrue(ssgPrm@normalize)
+    checkEqualsNumeric(sp@alpha, 0.25)
+    checkTrue(sp@normalize)
 
-    ssgPrm <- ssgseaParam(0.5, FALSE)
+    sp <- ssgseaParam(y, gs, alpha=0.5, normalize=FALSE)
 
-    checkTrue(inherits(ssgPrm, "SsGseaParam"))
-    checkTrue(inherits(ssgPrm, "EmptyParam"))
-    checkTrue(!inherits(ssgPrm, "GsvaParam"))
+    checkTrue(inherits(sp, "ssgseaParam"))
+    checkTrue(inherits(sp, "GsvaMethodParam"))
 
-    checkEqualsNumeric(ssgPrm@alpha, 0.5)
-    checkTrue(!ssgPrm@normalize)
+    checkEqualsNumeric(sp@alpha, 0.5)
+    checkTrue(!sp@normalize)
 
-    checkException(ssgseaParam(0.5, FALSE, "gaga"), msg = "unexpected argument to ssgseaParam()")
-    checkException(ssgseaParam(bla = "gaga"), msg = "unexpected argument to ssgseaParam()")
+    checkException(ssgseaParam(y, gs, alpha=0.5, normalize=FALSE, bla="gaga"))
 }
 
-test_gsvaParam = function() {
-    DEACTIVATED("Unit tests need to be adapted to new API.")
+test_gsvaParam <- function() {
+    p <- 10; n <- 30; ngs <- 5 # number of genes, samples, gene sets
+    y <- matrix(rnorm(n * p), nrow=p, ncol=n,
+                dimnames=list(paste0("g", seq.int(p)),
+                              paste0("s", seq.int(n))))
+    gs <- replicate(ngs, sample(rownames(y), 25, replace=TRUE), simplify=FALSE)
     
-    gsvaPrm <- gsvaParam()
+    gp <- gsvaParam(y, gs)
 
-    checkTrue(inherits(gsvaPrm, "GsvaParam"))
-    checkTrue(inherits(gsvaPrm, "EmptyParam"))
-    checkTrue(!inherits(gsvaPrm, "SsGseaParam"))
+    checkTrue(inherits(gp, "gsvaParam"))
+    checkTrue(inherits(gp, "GsvaMethodParam"))
 
-    checkEquals(gsvaPrm@kcdf, "Gaussian")
-    checkEqualsNumeric(gsvaPrm@tau, 1)
-    checkTrue(gsvaPrm@mx.diff)
-    checkTrue(!gsvaPrm@abs.ranking)
+    checkEquals(gp@kcdf, "Gaussian")
+    checkEqualsNumeric(gp@tau, 1)
+    checkTrue(gp@maxDiff)
+    checkTrue(!gp@absRanking)
 
-    gsvaPrm <- gsvaParam(kcdf = "Poisson", tau = 0.5,
-                         mx.diff = FALSE, abs.ranking = TRUE)
+    gp <- gsvaParam(y, gs,
+                    kcdf="Poisson", tau=0.5, maxDiff=FALSE, absRanking=TRUE)
 
-    checkTrue(inherits(gsvaPrm, "GsvaParam"))
-    checkTrue(inherits(gsvaPrm, "EmptyParam"))
-    checkTrue(!inherits(gsvaPrm, "SsGseaParam"))
+    checkTrue(inherits(gp, "gsvaParam"))
+    checkTrue(inherits(gp, "GsvaMethodParam"))
 
-    checkEquals(gsvaPrm@kcdf, "Poisson")
-    checkEqualsNumeric(gsvaPrm@tau, 0.5)
-    checkTrue(!gsvaPrm@mx.diff)
-    checkTrue(gsvaPrm@abs.ranking)
+    checkEquals(gp@kcdf, "Poisson")
+    checkEqualsNumeric(gp@tau, 0.5)
+    checkTrue(!gp@maxDiff)
+    checkTrue(gp@absRanking)
 
-    gsvaPrm <- gsvaParam(kcdf = "none")
+    gp <- gsvaParam(y, gs, kcdf="none")
 
-    checkTrue(inherits(gsvaPrm, "GsvaParam"))
-    checkTrue(inherits(gsvaPrm, "EmptyParam"))
-    checkTrue(!inherits(gsvaPrm, "SsGseaParam"))
+    checkTrue(inherits(gp, "gsvaParam"))
+    checkTrue(inherits(gp, "GsvaMethodParam"))
 
-    checkEquals(gsvaPrm@kcdf, "none")
+    checkEquals(gp@kcdf, "none")
 
-    checkException(gsvaParam(kcdf = "Poison"))
-    checkException(gsvaParam(kcdf = "Poisson", bla= "gaga"))
-    checkException(gsvaParam(kcdf = "Poison", tau = 0.42,
-                             mx.diff = TRUE, abs.ranking = FALSE, 42))
+    checkException(gsvaParam(kcdf="Poison"))
+    checkException(gsvaParam(kcdf="Poisson", bla= "gaga"))
+    checkException(gsvaParam(kcdf="Poison", tau=0.42,
+                             maxDiff=TRUE, absRanking=FALSE, 42))
 }
