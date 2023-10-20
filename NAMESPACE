@@ -21,6 +21,7 @@ importMethodsFrom(S4Vectors, metadata,
 importMethodsFrom(IRanges, match)
 
 importMethodsFrom(SummarizedExperiment, assays,
+                                        assayNames,
                                         colData)
 
 importMethodsFrom(GSEABase, geneIds,

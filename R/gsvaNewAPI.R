@@ -126,13 +126,8 @@ setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
               ## e.g., constant expression
               dataMatrix <- .filterFeatures_newAPI(dataMatrix)
 
-              if(is.na(pAnno <- get_annotation(param))) {
-                  anno <- annotation(exprData)
-              } else {
-                  anno <- annotation(exprData, pAnno)
-              }
-              
               geneSets <- get_geneSets(param)
+              anno <- gsvaAnnotation(exprData)
               geneSets <- mapGeneSetsToAnno(geneSets, anno)
               
               ## map to the actual features for which expression data is available
@@ -172,13 +167,8 @@ setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
               ## e.g., constant expression
               dataMatrix <- .filterFeatures_newAPI(dataMatrix)
 
-              if(is.na(pAnno <- get_annotation(param))) {
-                  anno <- annotation(exprData)
-              } else {
-                  anno <- annotation(exprData, pAnno)
-              }
-              
               geneSets <- get_geneSets(param)
+              anno <- gsvaAnnotation(exprData)
               geneSets <- mapGeneSetsToAnno(geneSets, anno)
               
               ## map to the actual features for which expression data is available
@@ -219,13 +209,8 @@ setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
               dataMatrix <- .filterFeatures_newAPI(dataMatrix,
                                                    dropConstantRows=FALSE)
 
-              if(is.na(pAnno <- get_annotation(param))) {
-                  anno <- annotation(exprData)
-              } else {
-                  anno <- annotation(exprData, pAnno)
-              }
-              
               geneSets <- get_geneSets(param)
+              anno <- gsvaAnnotation(exprData)
               geneSets <- mapGeneSetsToAnno(geneSets, anno)
               
               ## map to the actual features for which expression data is available
@@ -265,13 +250,8 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
               ## e.g., constant expression
               dataMatrix <- .filterFeatures_newAPI(dataMatrix)
 
-              if(is.na(pAnno <- get_annotation(param))) {
-                  anno <- annotation(exprData)
-              } else {
-                  anno <- annotation(exprData, pAnno)
-              }
-              
               geneSets <- get_geneSets(param)
+              anno <- gsvaAnnotation(exprData)
               geneSets <- mapGeneSetsToAnno(geneSets, anno)
               
               ## map to the actual features for which expression data is available
@@ -510,35 +490,6 @@ setMethod("wrapData", signature("matrix", "SingleCellExperiment"),
               return(rval)
           })
 
-## annotation: from BiocGenerics, some more methods for us
-setMethod("annotation", signature("SingleCellExperiment"),
-          function(object) {
-              return(metadata(object)$annotation)
-          })
-
-setMethod("annotation", signature("SummarizedExperiment"),
-          function(object) {
-              return(metadata(object)$annotation)
-          })
-
-setMethod("annotation", signature("GsvaExprData"),
-          function(object, default = NULL) {
-              return(default)
-          })
-
-## annotation package checks
-isAnnoPkgValid <- function(ap) {
-    return((!is.null(ap)) &&
-           (length(ap) == 1) &&
-           (is.character(ap)) &&
-           (!is.na(ap)) &&
-           (nchar(ap)> 0))
-}
-
-isAnnoPkgInstalled <- function(ap) {
-    ap <- c(ap, paste0(ap, ".db"))
-    return(any(ap %in% rownames(installed.packages())))
-}
 
 ## mapGeneSetsToAnno: translate feature IDs used in gene sets to specified annotation type (if any, and if possible)
 setMethod("mapGeneSetsToAnno", signature("list"),
@@ -548,8 +499,8 @@ setMethod("mapGeneSetsToAnno", signature("list"),
 
 setMethod("mapGeneSetsToAnno", signature("GeneSetCollection"),
           function(geneSets, anno) {
-              if(isAnnoPkgValid(anno)) {
-                  if(!isAnnoPkgInstalled(anno))
+              if(.isAnnoPkgValid(anno)) {
+                  if(!.isAnnoPkgInstalled(anno))
                       stop(sprintf("Please install the annotation package %s. If %s does not seem to exist as a package, please try to append the suffix .db to its name.", anno, anno))
                   ## TODO: provide a check for verbosity
                   cat("Mapping identifiers between gene sets and feature names\n")
