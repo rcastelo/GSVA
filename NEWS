@@ -1,3 +1,15 @@
+CHANGES IN VERSION 1.50
+-----------------------
+
+USER VISIBLE CHANGES
+
+  o The API has changed. The main function remains under the same name 'gsva()', but the way in which is called is different. From this release, it has three parameters only: the first is a parameter object whose class depends on the method to be used, the second is a flag to set verbosity and the third controls the parallelization of the calculations. The old way of using 'gsva()' has been deprecated, which means that during this release, the user may still use the old API, but will get a deprecation warning message. In the next release, the old way of using 'gsva()' will become defunct and prompt an error. Please check the help page of 'gsva()' for details.
+
+BUG FIXES
+
+  o Bugfix for https://github.com/rcastelo/GSVA/issues/88 to correctly deal with a GeneSetCollection object as input gene sets, when the input expression data is a SingleCellExperiment object.
+
+  o Bugfix for https://github.com/rcastelo/GSVA/issues/90 to enable working with long vectors in the calls to C code by the GSVA algorithm.
 
 CHANGES IN VERSION 1.46
 -----------------------

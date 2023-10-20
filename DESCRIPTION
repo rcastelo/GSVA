@@ -1,10 +1,10 @@
 Package: GSVA
-Version: 1.49.7
+Version: 1.49.8
 Title: Gene Set Variation Analysis for Microarray and RNA-Seq Data
 Authors@R: c(person("Robert", "Castelo", role=c("aut", "cre"), email="robert.castelo@upf.edu"),
              person("Justin", "Guinney", role="aut", email="jguinney@gmail.com"),
              person("Alexey", "Sergushichev", role="ctb", email="alsergbox@gmail.com"),
-             person("Pablo Sebastian", "Rodriguez", role="ctb", email="pablosebastian.rodriguez@upf.edu"),
+             person("Pablo Sebastian", "Rodriguez", role="ctb", email="pablo.rodriguez.bio2@gmail.com"),
              person("Axel", "Klenk", role="ctb", email="axelvolker.klenk@upf.edu"))
 Depends: R (>= 3.5.0)
 Imports: methods, stats, utils, graphics, S4Vectors, IRanges,
