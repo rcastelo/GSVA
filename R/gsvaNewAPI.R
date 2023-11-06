@@ -124,25 +124,24 @@ setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
               
               ## filter genes according to various criteria,
               ## e.g., constant expression
-              dataMatrix <- .filterFeatures_newAPI(dataMatrix)
+              filteredDataMatrix <- .filterGenes(dataMatrix)
 
-              geneSets <- get_geneSets(param)
-              anno <- gsvaAnnotation(exprData)
-              geneSets <- mapGeneSetsToAnno(geneSets, anno)
+              geneSets <- mapGeneSetsToAnno(geneSets=get_geneSets(param),
+                                            anno=gsvaAnnotation(exprData))
               
               ## map to the actual features for which expression data is available
-              mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(dataMatrix))
+              mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(filteredDataMatrix))
               
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
-              mappedGeneSets <- filterGeneSets(mappedGeneSets,
-                                               min.sz=get_minSize(param),
-                                               max.sz=get_maxSize(param))
+              filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
+                                                       min.sz=get_minSize(param),
+                                                       max.sz=get_maxSize(param))
 
-              if(length(mappedGeneSets) == 0)
+              if(length(filteredMappedGeneSets) == 0)
                   stop("The gene set list is empty! Filter may be too stringent.")
 
-              if(any(lengths(mappedGeneSets) == 1))
+              if(any(lengths(filteredMappedGeneSets) == 1))
                   warning("Some gene sets have size one. Consider setting 'minSize > 1'.")
 
               if (!inherits(BPPARAM, "SerialParam") && verbose)
@@ -153,14 +152,14 @@ setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
               ##     stop("rnaseq=TRUE does not work with method='plage'.")
 
               if(verbose)
-                  cat("Estimating PLAGE scores for", length(mappedGeneSets), "gene sets.\n")
+                  cat("Estimating PLAGE scores for", length(filteredMappedGeneSets), "gene sets.\n")
 
-              rval <- plage(X=dataMatrix,
-                            geneSets=mappedGeneSets,
-                            verbose=verbose,
-                            BPPARAM=BPPARAM)
+              plageScores <- plage(X=filteredDataMatrix,
+                                   geneSets=filteredMappedGeneSets,
+                                   verbose=verbose,
+                                   BPPARAM=BPPARAM)
 
-              rval <- wrapData(rval, exprData)
+              rval <- wrapData(plageScores, exprData)
               
               return(rval)
           })
@@ -181,25 +180,24 @@ setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
               
               ## filter genes according to various criteria,
               ## e.g., constant expression
-              dataMatrix <- .filterFeatures_newAPI(dataMatrix)
+              filteredDataMatrix <- .filterGenes(dataMatrix)
 
-              geneSets <- get_geneSets(param)
-              anno <- gsvaAnnotation(exprData)
-              geneSets <- mapGeneSetsToAnno(geneSets, anno)
+              geneSets <- mapGeneSetsToAnno(geneSets=get_geneSets(param),
+                                            anno=gsvaAnnotation(exprData))
               
               ## map to the actual features for which expression data is available
-              mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(dataMatrix))
+              mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(filteredDataMatrix))
               
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
-              mappedGeneSets <- filterGeneSets(mappedGeneSets,
-                                               min.sz=get_minSize(param),
-                                               max.sz=get_maxSize(param))
+              filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
+                                                       min.sz=get_minSize(param),
+                                                       max.sz=get_maxSize(param))
 
-              if(length(mappedGeneSets) == 0)
+              if(length(filteredMappedGeneSets) == 0)
                   stop("The gene set list is empty! Filter may be too stringent.")
 
-              if(any(lengths(mappedGeneSets) == 1))
+              if(any(lengths(filteredMappedGeneSets) == 1))
                   warning("Some gene sets have size one. Consider setting 'minSize > 1'.")
 
               if (!inherits(BPPARAM, "SerialParam") && verbose)
@@ -210,14 +208,14 @@ setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
               ##     stop("rnaseq=TRUE does not work with method='zscore'.")
 
               if(verbose)
-                  cat("Estimating combined z-scores for", length(mappedGeneSets), "gene sets.\n")
+                  cat("Estimating combined z-scores for", length(filteredMappedGeneSets), "gene sets.\n")
 
-              rval <- zscore(X=dataMatrix,
-                             geneSets=mappedGeneSets,
-                             verbose=verbose,
-                             BPPARAM=BPPARAM)
+              zScores <- zscore(X=filteredDataMatrix,
+                                geneSets=filteredMappedGeneSets,
+                                verbose=verbose,
+                                BPPARAM=BPPARAM)
 
-              rval <- wrapData(rval, exprData)
+              rval <- wrapData(zScores, exprData)
               
               return(rval)
           })
@@ -238,26 +236,25 @@ setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
               
               ## filter genes according to various criteria,
               ## e.g., constant expression
-              dataMatrix <- .filterFeatures_newAPI(dataMatrix,
+              filteredDataMatrix <- .filterGenes(dataMatrix,
                                                    dropConstantRows=FALSE)
 
-              geneSets <- get_geneSets(param)
-              anno <- gsvaAnnotation(exprData)
-              geneSets <- mapGeneSetsToAnno(geneSets, anno)
+              geneSets <- mapGeneSetsToAnno(geneSets=get_geneSets(param),
+                                            anno=gsvaAnnotation(exprData))
               
               ## map to the actual features for which expression data is available
-              mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(dataMatrix))
+              mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(filteredDataMatrix))
               
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
-              mappedGeneSets <- filterGeneSets(mappedGeneSets,
-                                               min.sz=get_minSize(param),
-                                               max.sz=get_maxSize(param))
+              filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
+                                                       min.sz=get_minSize(param),
+                                                       max.sz=get_maxSize(param))
 
-              if(length(mappedGeneSets) == 0)
+              if(length(filteredMappedGeneSets) == 0)
                   stop("The gene set list is empty! Filter may be too stringent.")
 
-              if(any(lengths(mappedGeneSets) == 1))
+              if(any(lengths(filteredMappedGeneSets) == 1))
                   warning("Some gene sets have size one. Consider setting 'minSize > 1'.")
 
               if (!inherits(BPPARAM, "SerialParam") && verbose)
@@ -265,16 +262,16 @@ setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
                               class(BPPARAM), bpnworkers(BPPARAM)))
 
               if(verbose)
-                  cat("Estimating ssGSEA scores for", length(mappedGeneSets), "gene sets.\n")
+                  cat("Estimating ssGSEA scores for", length(filteredMappedGeneSets), "gene sets.\n")
 
-              rval <- ssgsea(X=dataMatrix,
-                             geneSets=mappedGeneSets,
-                             alpha=get_alpha(param), 
-                             normalization=do_normalize(param),
-                             verbose=verbose,
-                             BPPARAM=BPPARAM)
+              ssgseaScores <- ssgsea(X=filteredDataMatrix,
+                                     geneSets=filteredMappedGeneSets,
+                                     alpha=get_alpha(param), 
+                                     normalization=do_normalize(param),
+                                     verbose=verbose,
+                                     BPPARAM=BPPARAM)
 
-              rval <- wrapData(rval, exprData)
+              rval <- wrapData(ssgseaScores, exprData)
               
               return(rval)
           })
@@ -295,25 +292,24 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
               
               ## filter genes according to various criteria,
               ## e.g., constant expression
-              dataMatrix <- .filterFeatures_newAPI(dataMatrix)
+              filteredDataMatrix <- .filterGenes(dataMatrix)
 
-              geneSets <- get_geneSets(param)
-              anno <- gsvaAnnotation(exprData)
-              geneSets <- mapGeneSetsToAnno(geneSets, anno)
+              geneSets <- mapGeneSetsToAnno(geneSets=get_geneSets(param),
+                                            anno=gsvaAnnotation(exprData))
               
               ## map to the actual features for which expression data is available
-              mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(dataMatrix))
+              mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(filteredDataMatrix))
               
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
-              mappedGeneSets <- filterGeneSets(mappedGeneSets,
-                                               min.sz=get_minSize(param),
-                                               max.sz=get_maxSize(param))
+              filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
+                                                       min.sz=get_minSize(param),
+                                                       max.sz=get_maxSize(param))
 
-              if(length(mappedGeneSets) == 0)
+              if(length(filteredMappedGeneSets) == 0)
                   stop("The gene set list is empty! Filter may be too stringent.")
 
-              if(any(lengths(mappedGeneSets) == 1))
+              if(any(lengths(filteredMappedGeneSets) == 1))
                   warning("Some gene sets have size one. Consider setting 'minSize > 1'.")
 
               if (!inherits(BPPARAM, "SerialParam") && verbose)
@@ -321,11 +317,11 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
                               class(BPPARAM), bpnworkers(BPPARAM)))
 
               if(verbose)
-                  cat("Estimating GSVA scores for", length(mappedGeneSets),"gene sets.\n")
+                  cat("Estimating GSVA scores for", length(filteredMappedGeneSets),"gene sets.\n")
               
-              nSamples <- ncol(dataMatrix)
-              ## nGenes <- nrow(dataMatrix)
-              nGeneSets <- length(mappedGeneSets)
+              nSamples <- ncol(filteredDataMatrix)
+              ## nGenes <- nrow(filteredDataMatrix)
+              nGeneSets <- length(filteredMappedGeneSets)
 
               if (get_kcdf(param) == "Gaussian") {
                   rnaseq <- FALSE
@@ -336,27 +332,22 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
               } else
                   kernel <- FALSE
               
-              es.obs <- matrix(NaN, nGeneSets, nSamples,
-                               dimnames=list(names(mappedGeneSets), colnames(dataMatrix)))
-              colnames(es.obs) <- colnames(dataMatrix)
-              rownames(es.obs) <- names(mappedGeneSets)
+              gsvaScores <- compute.geneset.es(expr=filteredDataMatrix,
+                                               gset.idx.list=filteredMappedGeneSets,
+                                               sample.idxs=seq.int(nSamples),
+                                               rnaseq=rnaseq,
+                                               abs.ranking=get_absRanking(param),
+                                               parallel.sz=if(inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM),
+                                               mx.diff=get_maxDiff(param),
+                                               tau=get_tau(param),
+                                               kernel=kernel,
+                                               verbose=verbose,
+                                               BPPARAM=BPPARAM)
               
-              es.obs <- compute.geneset.es(expr=dataMatrix,
-                                           gset.idx.list=mappedGeneSets,
-                                           sample.idxs=seq.int(nSamples),
-                                           rnaseq=rnaseq,
-                                           abs.ranking=get_absRanking(param),
-                                           parallel.sz=if(inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM),
-                                           mx.diff=get_maxDiff(param),
-                                           tau=get_tau(param),
-                                           kernel=kernel,
-                                           verbose=verbose,
-                                           BPPARAM=BPPARAM)
-              
-              colnames(es.obs) <- colnames(dataMatrix)
-              rownames(es.obs) <- names(mappedGeneSets)
+              colnames(gsvaScores) <- colnames(filteredDataMatrix)
+              rownames(gsvaScores) <- names(filteredMappedGeneSets)
 
-              rval <- wrapData(es.obs, exprData)
+              rval <- wrapData(gsvaScores, exprData)
               
               return(rval)
           })
@@ -364,7 +355,7 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
 
 
 ### ----- GSVA utility functions, slightly adapted for new API -----
-.filterFeatures_newAPI <- function(expr, dropConstantRows = TRUE) {
+.filterGenes <- function(expr, dropConstantRows = TRUE) {
     ## filter out genes with constant expression values
     ## DelayedMatrixStats::rowSds() works for both base and 
     ## DelayedArray matrices
