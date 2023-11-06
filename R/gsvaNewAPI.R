@@ -139,11 +139,27 @@ setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
                                                min.sz=get_minSize(param),
                                                max.sz=get_maxSize(param))
 
-              rval <- .gsva_newAPI(expr = dataMatrix,
-                                   gset.idx.list = mappedGeneSets,
-                                   param = param,
-                                   verbose = verbose,
-                                   BPPARAM = BPPARAM)
+              if(length(mappedGeneSets) == 0)
+                  stop("The gene set list is empty! Filter may be too stringent.")
+
+              if(any(lengths(mappedGeneSets) == 1))
+                  warning("Some gene sets have size one. Consider setting 'minSize > 1'.")
+
+              if (!inherits(BPPARAM, "SerialParam") && verbose)
+                  cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
+                              class(BPPARAM), bpnworkers(BPPARAM)))
+
+              ## if(rnaseq)
+              ##     stop("rnaseq=TRUE does not work with method='plage'.")
+
+              if(verbose)
+                  cat("Estimating PLAGE scores for", length(mappedGeneSets), "gene sets.\n")
+
+              rval <- plage(X=dataMatrix,
+                            geneSets=mappedGeneSets,
+                            verbose=verbose,
+                            BPPARAM=BPPARAM)
+
               rval <- wrapData(rval, exprData)
               
               return(rval)
@@ -180,11 +196,27 @@ setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
                                                min.sz=get_minSize(param),
                                                max.sz=get_maxSize(param))
 
-              rval <- .gsva_newAPI(expr = dataMatrix,
-                                   gset.idx.list = mappedGeneSets,
-                                   param = param,
-                                   verbose = verbose,
-                                   BPPARAM = BPPARAM)
+              if(length(mappedGeneSets) == 0)
+                  stop("The gene set list is empty! Filter may be too stringent.")
+
+              if(any(lengths(mappedGeneSets) == 1))
+                  warning("Some gene sets have size one. Consider setting 'minSize > 1'.")
+
+              if (!inherits(BPPARAM, "SerialParam") && verbose)
+                  cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
+                              class(BPPARAM), bpnworkers(BPPARAM)))
+
+              ## if (rnaseq)
+              ##     stop("rnaseq=TRUE does not work with method='zscore'.")
+
+              if(verbose)
+                  cat("Estimating combined z-scores for", length(mappedGeneSets), "gene sets.\n")
+
+              rval <- zscore(X=dataMatrix,
+                             geneSets=mappedGeneSets,
+                             verbose=verbose,
+                             BPPARAM=BPPARAM)
+
               rval <- wrapData(rval, exprData)
               
               return(rval)
@@ -222,11 +254,26 @@ setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
                                                min.sz=get_minSize(param),
                                                max.sz=get_maxSize(param))
 
-              rval <- .gsva_newAPI(expr = dataMatrix,
-                                   gset.idx.list = mappedGeneSets,
-                                   param = param,
-                                   verbose = verbose,
-                                   BPPARAM = BPPARAM)
+              if(length(mappedGeneSets) == 0)
+                  stop("The gene set list is empty! Filter may be too stringent.")
+
+              if(any(lengths(mappedGeneSets) == 1))
+                  warning("Some gene sets have size one. Consider setting 'minSize > 1'.")
+
+              if (!inherits(BPPARAM, "SerialParam") && verbose)
+                  cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
+                              class(BPPARAM), bpnworkers(BPPARAM)))
+
+              if(verbose)
+                  cat("Estimating ssGSEA scores for", length(mappedGeneSets), "gene sets.\n")
+
+              rval <- ssgsea(X=dataMatrix,
+                             geneSets=mappedGeneSets,
+                             alpha=get_alpha(param), 
+                             normalization=do_normalize(param),
+                             verbose=verbose,
+                             BPPARAM=BPPARAM)
+
               rval <- wrapData(rval, exprData)
               
               return(rval)
@@ -263,12 +310,53 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
                                                min.sz=get_minSize(param),
                                                max.sz=get_maxSize(param))
 
-              rval <- .gsva_newAPI(expr = dataMatrix,
-                                   gset.idx.list = mappedGeneSets,
-                                   param = param,
-                                   verbose = verbose,
-                                   BPPARAM = BPPARAM)
-              rval <- wrapData(rval, exprData)
+              if(length(mappedGeneSets) == 0)
+                  stop("The gene set list is empty! Filter may be too stringent.")
+
+              if(any(lengths(mappedGeneSets) == 1))
+                  warning("Some gene sets have size one. Consider setting 'minSize > 1'.")
+
+              if (!inherits(BPPARAM, "SerialParam") && verbose)
+                  cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
+                              class(BPPARAM), bpnworkers(BPPARAM)))
+
+              if(verbose)
+                  cat("Estimating GSVA scores for", length(mappedGeneSets),"gene sets.\n")
+              
+              nSamples <- ncol(dataMatrix)
+              ## nGenes <- nrow(dataMatrix)
+              nGeneSets <- length(mappedGeneSets)
+
+              if (get_kcdf(param) == "Gaussian") {
+                  rnaseq <- FALSE
+                  kernel <- TRUE
+              } else if (get_kcdf(param) == "Poisson") {
+                  rnaseq <- TRUE
+                  kernel <- TRUE
+              } else
+                  kernel <- FALSE
+              
+              es.obs <- matrix(NaN, nGeneSets, nSamples,
+                               dimnames=list(names(mappedGeneSets), colnames(dataMatrix)))
+              colnames(es.obs) <- colnames(dataMatrix)
+              rownames(es.obs) <- names(mappedGeneSets)
+              
+              es.obs <- compute.geneset.es(expr=dataMatrix,
+                                           gset.idx.list=mappedGeneSets,
+                                           sample.idxs=seq.int(nSamples),
+                                           rnaseq=rnaseq,
+                                           abs.ranking=get_absRanking(param),
+                                           parallel.sz=if(inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM),
+                                           mx.diff=get_maxDiff(param),
+                                           tau=get_tau(param),
+                                           kernel=kernel,
+                                           verbose=verbose,
+                                           BPPARAM=BPPARAM)
+              
+              colnames(es.obs) <- colnames(dataMatrix)
+              rownames(es.obs) <- names(mappedGeneSets)
+
+              rval <- wrapData(es.obs, exprData)
               
               return(rval)
           })
@@ -329,69 +417,6 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
     if (!inherits(BPPARAM, "SerialParam") && verbose)
         cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
                     class(BPPARAM), bpnworkers(BPPARAM)))
-
-    if (inherits(param, "ssgseaParam")) {
-        if(verbose)
-            cat("Estimating ssGSEA scores for", length(gset.idx.list),"gene sets.\n")
-
-        return(ssgsea(expr, gset.idx.list, alpha=get_alpha(param), parallel.sz=parallel.sz,
-                      normalization=do_normalize(param), verbose=verbose, BPPARAM=BPPARAM))
-    }
-
-    ## CHECK: AFAICS rnaseq is either FALSE because kcdf=="Gaussian" by default (and kcdf shouldn't be considered
-    ## for methods other than 'gsva')or it is missing and consequently FALSE by the default of this function; and
-    ## the only way rnaseq could be TRUE would be to set kcdf = "Poisson", regardless of the method?!?
-    if (inherits(param, "zscoreParam")) {
-        if (rnaseq)
-            stop("rnaseq=TRUE does not work with method='zscore'.")
-
-        if(verbose)
-            cat("Estimating combined z-scores for", length(gset.idx.list), "gene sets.\n")
-
-        return(zscore(expr, gset.idx.list, parallel.sz, verbose, BPPARAM=BPPARAM))
-    }
-
-    if (inherits(param, "plageParam")) {
-        if (rnaseq)
-            stop("rnaseq=TRUE does not work with method='plage'.")
-
-        if(verbose)
-            cat("Estimating PLAGE scores for", length(gset.idx.list),"gene sets.\n")
-
-        return(plage(expr, gset.idx.list, parallel.sz, verbose, BPPARAM=BPPARAM))
-    }
-
-    if(verbose)
-        cat("Estimating GSVA scores for", length(gset.idx.list),"gene sets.\n")
-    
-    n.samples <- ncol(expr)
-    n.genes <- nrow(expr)
-    n.gset <- length(gset.idx.list)
-
-    ## CHECK: isn't this the only place this should be used?!?
-    if (get_kcdf(param) == "Gaussian") {
-        rnaseq <- FALSE
-        kernel <- TRUE
-    } else if (get_kcdf(param) == "Poisson") {
-        rnaseq <- TRUE
-        kernel <- TRUE
-    } else
-        kernel <- FALSE
-    
-    es.obs <- matrix(NaN, n.gset, n.samples, dimnames=list(names(gset.idx.list),colnames(expr)))
-    colnames(es.obs) <- colnames(expr)
-    rownames(es.obs) <- names(gset.idx.list)
-    
-    es.obs <- compute.geneset.es(expr, gset.idx.list, 1:n.samples,
-                                 rnaseq=rnaseq, abs.ranking=get_absRanking(param),
-                                 parallel.sz=parallel.sz,
-                                 mx.diff=get_maxDiff(param), tau=get_tau(param), kernel=kernel,
-                                 verbose=verbose, BPPARAM=BPPARAM)
-    
-    colnames(es.obs) <- colnames(expr)
-    rownames(es.obs) <- names(gset.idx.list)
-
-    es.obs
 }
 
 
