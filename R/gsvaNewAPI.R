@@ -385,32 +385,6 @@ setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
 }
 
 
-.gsva_newAPI <- function(expr, gset.idx.list, param,
-                         rnaseq = FALSE,
-                         verbose=TRUE,
-                         BPPARAM=SerialParam(progressbar=verbose)) {
-    
-    if(is(expr, "DelayedArray")){
-        warning("Using 'DelayedArray' objects as input is still in an experimental stage.")
-
-#         return(.gsvaDelayedArray(expr, gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-#                                  parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM))
-    }
-
-    if (length(gset.idx.list) == 0)
-        stop("The gene set list is empty! Filter may be too stringent.")
-
-    if (any(lengths(gset.idx.list) == 1))
-        warning("Some gene sets have size one. Consider setting 'minSize > 1'.")
-
-    parallel.sz <- if (inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM)
-    
-    if (!inherits(BPPARAM, "SerialParam") && verbose)
-        cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
-                    class(BPPARAM), bpnworkers(BPPARAM)))
-}
-
-
 ### -----  methods for data pre-/post-processing -----
 
 ## unwrapData: extract a data matrix from a container object
@@ -472,6 +446,16 @@ setMethod("unwrapData", signature("SingleCellExperiment"),
 
 ## wrapData: put the resulting data into the original data container type
 setMethod("wrapData", signature("matrix", "matrix"),
+          function(dataMatrix, container) {
+              return(dataMatrix)
+          })
+
+setMethod("wrapData", signature("matrix", "dgCMatrix"),
+          function(dataMatrix, container) {
+              return(as(dataMatrix, "dgCMatrix"))
+          })
+
+setMethod("wrapData", signature("dgCMatrix", "dgCMatrix"),
           function(dataMatrix, container) {
               return(dataMatrix)
           })
