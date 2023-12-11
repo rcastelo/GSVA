@@ -748,7 +748,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 	  if(verbose)
 		  cat("Estimating ssGSEA scores for", length(gset.idx.list),"gene sets.\n")
 
-    return(ssgsea(expr, gset.idx.list, alpha=tau, parallel.sz=parallel.sz,
+    return(ssgsea(X=expr, geneSets=gset.idx.list, alpha=tau, 
                   normalization=ssgsea.norm, verbose=verbose, BPPARAM=BPPARAM))
   }
 
@@ -759,7 +759,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 	  if(verbose)
 		  cat("Estimating combined z-scores for", length(gset.idx.list), "gene sets.\n")
 
-    return(zscore(expr, gset.idx.list, parallel.sz, verbose, BPPARAM=BPPARAM))
+    return(zscore(X=expr, geneSets=gset.idx.list, verbose=verbose, BPPARAM=BPPARAM))
   }
 
   if (method == "plage") {
@@ -769,7 +769,7 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
 	  if(verbose)
 		  cat("Estimating PLAGE scores for", length(gset.idx.list),"gene sets.\n")
 
-    return(plage(expr, gset.idx.list, parallel.sz, verbose, BPPARAM=BPPARAM))
+    return(plage(X=expr, geneSets=gset.idx.list, verbose=verbose, BPPARAM=BPPARAM))
   }
 
 	if(verbose)
@@ -827,62 +827,62 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
                                abs.ranking, parallel.sz=1L, 
                                mx.diff=TRUE, tau=1, kernel=TRUE,
                                verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose)) {
-	num_genes <- nrow(expr)
-	if (verbose) {
-    if (kernel) {
-      if (rnaseq)
-        cat("Estimating ECDFs with Poisson kernels\n")
-      else
-        cat("Estimating ECDFs with Gaussian kernels\n")
-    } else
-      cat("Estimating ECDFs directly\n")
-  }
-
-  ## open parallelism only if ECDFs have to be estimated for
-  ## more than 100 genes on more than 100 samples
-  if (parallel.sz > 1 && length(sample.idxs > 100) && nrow(expr) > 100) {
-    if (verbose)
-      cat(sprintf("Estimating ECDFs in parallel on %d cores\n", as.integer(parallel.sz)))
-    iter <- function(Y, n_chunks=BiocParallel::multicoreWorkers()) {
-      idx <- splitIndices(nrow(Y), min(nrow(Y), n_chunks))
-      i <- 0L
-      function() {
-        if (i == length(idx))
-          return(NULL)
-        i <<- i + 1L
-        Y[idx[[i]], , drop=FALSE]
-      }
+    num_genes <- nrow(expr)
+    if (verbose) {
+        if (kernel) {
+            if (rnaseq)
+                cat("Estimating ECDFs with Poisson kernels\n")
+            else
+                cat("Estimating ECDFs with Gaussian kernels\n")
+        } else
+            cat("Estimating ECDFs directly\n")
     }
-    gene.density <- bpiterate(iter(expr, 100),
-                              compute.gene.density,
-                              sample.idxs=sample.idxs,
-                              rnaseq=rnaseq, kernel=kernel,
-                              REDUCE=rbind, reduce.in.order=TRUE,
-                              BPPARAM=BPPARAM)
-  } else 
-	  gene.density <- compute.gene.density(expr, sample.idxs, rnaseq, kernel)
-	
-	compute_rank_score <- function(sort_idx_vec){
-		tmp <- rep(0, num_genes)
-		tmp[sort_idx_vec] <- abs(seq(from=num_genes,to=1) - num_genes/2)
-		return (tmp)
-	}
-	
-	rank.scores <- rep(0, num_genes)
-  sort.sgn.idxs <- apply(gene.density, 2, order, decreasing=TRUE) # n.genes * n.samples
-	
-	rank.scores <- apply(sort.sgn.idxs, 2, compute_rank_score)
 
-  m <- bplapply(gset.idx.list, ks_test_m,
-                gene.density=rank.scores,
-                sort.idxs=sort.sgn.idxs,
-                mx.diff=mx.diff, abs.ranking=abs.ranking,
-                tau=tau, verbose=verbose,
-                BPPARAM=BPPARAM)
-  m <- do.call("rbind", m)
-  colnames(m) <- colnames(expr)
+    ## open parallelism only if ECDFs have to be estimated for
+    ## more than 100 genes on more than 100 samples
+    if (parallel.sz > 1 && length(sample.idxs > 100) && nrow(expr) > 100) {
+        if (verbose)
+            cat(sprintf("Estimating ECDFs in parallel on %d cores\n", as.integer(parallel.sz)))
+        iter <- function(Y, n_chunks=BiocParallel::multicoreWorkers()) {
+            idx <- splitIndices(nrow(Y), min(nrow(Y), n_chunks))
+            i <- 0L
+            function() {
+                if (i == length(idx))
+                    return(NULL)
+                i <<- i + 1L
+                Y[idx[[i]], , drop=FALSE]
+            }
+        }
+        gene.density <- bpiterate(iter(expr, 100),
+                                  compute.gene.density,
+                                  sample.idxs=sample.idxs,
+                                  rnaseq=rnaseq, kernel=kernel,
+                                  REDUCE=rbind, reduce.in.order=TRUE,
+                                  BPPARAM=BPPARAM)
+    } else 
+        gene.density <- compute.gene.density(expr, sample.idxs, rnaseq, kernel)
+    
+    compute_rank_score <- function(sort_idx_vec){
+        tmp <- rep(0, num_genes)
+        tmp[sort_idx_vec] <- abs(seq(from=num_genes,to=1) - num_genes/2)
+        return (tmp)
+    }
+    
+    rank.scores <- rep(0, num_genes)
+    sort.sgn.idxs <- apply(gene.density, 2, order, decreasing=TRUE) # n.genes * n.samples
+    
+    rank.scores <- apply(sort.sgn.idxs, 2, compute_rank_score)
 
-	return (m)
+    m <- bplapply(gset.idx.list, ks_test_m,
+                  gene.density=rank.scores,
+                  sort.idxs=sort.sgn.idxs,
+                  mx.diff=mx.diff, abs.ranking=abs.ranking,
+                  tau=tau, verbose=verbose,
+                  BPPARAM=BPPARAM)
+    m <- do.call("rbind", m)
+    colnames(m) <- colnames(expr)
+
+    return (m)
 }
 
 
@@ -979,7 +979,7 @@ ks_test_Rcode <- function(gene.density, gset_idxs, tau=1, make.plot=FALSE){
 }
 
 
-ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
+ssgsea <- function(X, geneSets, alpha=0.25,
                    normalization=TRUE, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose)) {
 
@@ -1026,7 +1026,7 @@ ssgsea <- function(X, geneSets, alpha=0.25, parallel.sz,
 
 combinez <- function(gSetIdx, j, Z) sum(Z[gSetIdx, j]) / sqrt(length(gSetIdx))
 
-zscore <- function(X, geneSets, parallel.sz, verbose=TRUE,
+zscore <- function(X, geneSets, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose)) {
   if(is(X, "dgCMatrix")){
     message("Please bear in mind that this method first scales the values of the gene
@@ -1057,7 +1057,7 @@ rightsingularsvdvectorgset <- function(gSetIdx, Z) {
   s$v[, 1]
 }
 
-plage <- function(X, geneSets, parallel.sz, verbose=TRUE,
+plage <- function(X, geneSets, verbose=TRUE,
                   BPPARAM=SerialParam(progressbar=verbose)) {
   if(is(X, "dgCMatrix")){
     message("Please bear in mind that this method first scales the values of the gene

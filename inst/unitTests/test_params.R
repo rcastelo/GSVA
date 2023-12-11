@@ -4,6 +4,8 @@
 ###
 
 test_plageParam <- function() {
+    message("Running unit tests for plageParam.")
+    
     p <- 10; n <- 30; ngs <- 5 # number of genes, samples, gene sets
     y <- matrix(rnorm(n * p), nrow=p, ncol=n,
                 dimnames=list(paste0("g", seq.int(p)),
@@ -19,6 +21,8 @@ test_plageParam <- function() {
 }
 
 test_zscoreParam <- function() {
+    message("Running unit tests for zscoreParam.")
+    
     p <- 10; n <- 30; ngs <- 5 # number of genes, samples, gene sets
     y <- matrix(rnorm(n * p), nrow=p, ncol=n,
                 dimnames=list(paste0("g", seq.int(p)),
@@ -34,6 +38,8 @@ test_zscoreParam <- function() {
 }
 
 test_ssgseaParam <- function() {
+    message("Running unit tests for ssgseaParam.")
+    
     p <- 10; n <- 30; ngs <- 5 # number of genes, samples, gene sets
     y <- matrix(rnorm(n * p), nrow=p, ncol=n,
                 dimnames=list(paste0("g", seq.int(p)),
@@ -60,6 +66,8 @@ test_ssgseaParam <- function() {
 }
 
 test_gsvaParam <- function() {
+    message("Running unit tests for gsvaParam.")
+    
     p <- 10; n <- 30; ngs <- 5 # number of genes, samples, gene sets
     y <- matrix(rnorm(n * p), nrow=p, ncol=n,
                 dimnames=list(paste0("g", seq.int(p)),
