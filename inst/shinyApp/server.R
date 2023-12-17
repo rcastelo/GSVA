@@ -57,20 +57,37 @@ function(input, output, session) {
     future({
       ## sink() will redirect all console cats and prints to a
       ## text file that the main session will be reading in order
-      ## to print the progress bar from bplaply()
+      ## to print the progress bar from bplapply()
       sink(rout)
-      result <- gsva(isolate(matrix()),
-                     isolate(genesets()), 
-                     method=isolate(argInp$method()),
-                     kcdf=isolate(argInp$kcdf()),
-                     abs.ranking=isolate(argInp$absRanking()),
-                     min.sz= isolate(argInp$varMinsz()),
-                     max.sz=isolate(argInp$varMaxsz()),
-                     parallel.sz=1L, ## by now, disable parallelism
-                     mx.diff=isolate(argInp$mxDiff()),
-                     tau=isolate(argInp$selectedTau()),
-                     ssgsea.norm=isolate(argInp$ssgseaNorm()),
-                     verbose=TRUE)
+
+      param <- switch(EXPR=isolate(argInp[["method"]]()),
+                      plage=plageParam(
+                          exprData=isolate(matrix()),
+                          geneSets=isolate(genesets()),
+                          minSize=isolate(argInp[["varMinsz"]]()),
+                          maxSize=isolate(argInp[["varMaxsz"]]())),
+                      zscore=zscoreParam(
+                          exprData=isolate(matrix()),
+                          geneSets=isolate(genesets()),
+                          minSize=isolate(argInp[["varMinsz"]]()),
+                          maxSize=isolate(argInp[["varMaxsz"]]())),
+                      ssgsea=ssgseaParam(
+                          exprData=isolate(matrix()),
+                          geneSets=isolate(genesets()),
+                          minSize=isolate(argInp[["varMinsz"]]()),
+                          maxSize=isolate(argInp[["varMaxsz"]]()),
+                          alpha=isolate(argInp[["selectedTau"]]()),
+                          normalize=isolate(argInp[["ssgseaNorm"]]())),
+                      gsvaParam(
+                          exprData=isolate(matrix()),
+                          geneSets=isolate(genesets()),
+                          minSize=isolate(argInp[["varMinsz"]]()),
+                          maxSize=isolate(argInp[["varMaxsz"]]()),
+                          kcdf=isolate(argInp[["kcdf"]]()),
+                          tau=isolate(argInp[["selectedTau"]]()),
+                          maxDiff=isolate(argInp[["mxDiff"]]()),
+                          absRanking=isolate(argInp[["absRanking"]]())))
+      result <- gsva(expr=param, verbose=TRUE)
       sink()
       ## when gsva() ends, we reset the console text file to empty
       write("", file=rout)
