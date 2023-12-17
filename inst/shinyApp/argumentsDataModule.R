@@ -17,16 +17,16 @@ argumentsDataUI <- function(id) {
                   choices = methodChoices),
       selectInput(ns("kcdf"), "kcdf",
                   c("Gaussian","Poisson","none")),
-      radioButtons(ns("absRanking"), "abs.ranking:",
+      radioButtons(ns("absRanking"), "absRanking:",
                    c("False" = FALSE,
                      "True" = TRUE)),
-      numericInput(ns("minSz"),"min.sz", value = 1),
-      numericInput(ns("maxSz"),"max.sz (Write 0 for infinite)", value = 0),
-      radioButtons(ns("mxDiff"), "mx.diff",
+      numericInput(ns("minSz"),"minSize", value = 1),
+      numericInput(ns("maxSz"),"maxSize (Write 0 for infinite)", value = 0),
+      radioButtons(ns("mxDiff"), "maxDiff",
                    c("True" = TRUE,
                      "False" = FALSE)),
       numericInput(ns("tau"),"tau", value = 1),
-      radioButtons(ns("ssgseaNorm"), "ssgsea.norm:",
+      radioButtons(ns("ssgseaNorm"), "normalize:",
                    c("True" = TRUE,
                      "False" = FALSE))
     )
@@ -37,7 +37,7 @@ argumentsDataServer <- function(id){
   moduleServer(id, function(input, output, session){
     
     observeEvent(input$method, {
-      toggleElement("kcdf", condition = input$method %in% c("gsva", "ssgsea"))
+      toggleElement("kcdf", condition = input$method %in% c("gsva"))
       toggleElement("absRanking", condition = input$method %in% "gsva")
       toggleElement("ssgseaNorm", condition = input$method %in% "ssgsea")
       toggleElement("mxDiff", condition = input$method %in% "gsva")
@@ -55,16 +55,15 @@ argumentsDataServer <- function(id){
       
     })
     
-    #"absRanking", "ssgseaNorm", "mxDiff", "tau"
     varMinsz <-  reactive({
-      validate(need(!is.na(input$minSz), "Value 'min.sz' cannot be empty and must be an integer value"))
+      validate(need(!is.na(input$minSz), "Value 'minSize' cannot be empty and must be an integer value"))
       input$minSz })
     varMaxsz <- reactive({
-      validate(need(!is.na(input$maxSz), "Value 'max.sz' cannot be empty and must be an integer value"))
+      validate(need(!is.na(input$maxSz), "Value 'maxSize' cannot be empty and must be an integer value"))
       ifelse(input$maxSz==0, Inf, input$maxSz) })
     selectedTau <-  reactive({
       if(input$method %in% c("gsva", "ssgsea")){
-        validate(need(!is.na(input$tau), "Value 'tau' cannot be empty and must be an integer value"))
+        validate(need(!is.na(input$tau), "Value 'tau' cannot be empty and must be an numeric value"))
         input$tau
       } else {
         NULL
