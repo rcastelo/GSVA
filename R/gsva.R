@@ -4,18 +4,18 @@
 ##          scores for each given gene-set
 
 #' @title Gene Set Variation Analysis
-#' @description This is the old manual page of the deprecated version
+#' @description This is the old manual page of the defunct version
 #' of the function `gsva()`.
 #'
-#' @name gsva-deprecated
+#' @name gsva-defunct
 #' @usage gsva(expr, gset.idx.list, ...)
-#' @seealso [`GSVA-pkg-deprecated`]
+#' @seealso [`GSVA-pkg-defunct`]
 #' @keywords internal
 ## #' @aliases gsva,HDF5Array,list-method
-## #' @rdname gsva-deprecated
+## #' @rdname gsva-defunct
 NULL
 
-#' @rdname GSVA-pkg-deprecated
+#' @rdname GSVA-pkg-defunct
 #' @section Details:
 #' Instead of gsva(expr=., gset.idx.list=., method=., ...), use a method-specific
 #' parameter object,
@@ -40,8 +40,8 @@ setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
 
-  .Deprecated(new = "gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is deprecated; use a method-specific parameter object (see '?gsva').")
+  .Defunct(new = "gsva()", package="GSVA",
+              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
   warning("Using 'HDF5Array' objects as input is still in an experimental stage.")
 
@@ -75,31 +75,31 @@ setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),
   rval
 })
 
-#' @name gsva-deprecated
+#' @name gsva-defunct
 ## #' @aliases gsva,SingleCellExperiment,GeneSetCollection-method
-## #' @rdname gsva-deprecated
+## #' @rdname gsva-defunct
 #' @keywords internal
 NULL
 
-#' @rdname GSVA-pkg-deprecated
+#' @rdname GSVA-pkg-defunct
 #'
 #' @export
 setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="GeneSetCollection"),
           function(expr, gset.idx.list, ...)
 {
-  .Deprecated(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is deprecated; use a method-specific parameter object (see '?gsva').")
+  .Defunct(new="gsva()", package="GSVA",
+              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
   gsva(expr, geneIds(gset.idx.list), ...)
 })
 
-#' @name gsva-deprecated
+#' @name gsva-defunct
 ## #' @aliases gsva,SingleCellExperiment,list-method
-## #' @rdname gsva-deprecated
+## #' @rdname gsva-defunct
 #' @keywords internal
 NULL
 
-#' @rdname GSVA-pkg-deprecated
+#' @rdname GSVA-pkg-defunct
 #'
 #' @export
 setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
@@ -119,8 +119,8 @@ setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
   
-  .Deprecated(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is deprecated; use a method-specific parameter object (see '?gsva').")
+  .Defunct(new="gsva()", package="GSVA",
+              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
   warning("Using 'SingleCellExperiment' objects as input is still in an experimental stage.")
 
@@ -177,13 +177,13 @@ setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
   rval
           })
           
-#' @name gsva-deprecated
+#' @name gsva-defunct
 ## #' @aliases gsva,dgCMatrix,list-method
-## #' @rdname gsva-deprecated
+## #' @rdname gsva-defunct
 #' @keywords internal
 NULL
 
-#' @rdname GSVA-pkg-deprecated
+#' @rdname GSVA-pkg-defunct
 #'
 #' @export
 setMethod("gsva", signature(expr="dgCMatrix", gset.idx.list="list"),
@@ -203,8 +203,8 @@ setMethod("gsva", signature(expr="dgCMatrix", gset.idx.list="list"),
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
   
-  .Deprecated(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is deprecated; use a method-specific parameter object (see '?gsva').")
+  .Defunct(new="gsva()", package="GSVA",
+              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
   warning("Using 'dgCMatrix' objects as input is still in an experimental stage.")
 
@@ -238,13 +238,13 @@ setMethod("gsva", signature(expr="dgCMatrix", gset.idx.list="list"),
   rval
 })
 
-#' @name gsva-deprecated
+#' @name gsva-defunct
 ## #' @aliases gsva,SummarizedExperiment,GeneSetCollection-method
-## #' @rdname gsva-deprecated
+## #' @rdname gsva-defunct
 #' @keywords internal
 NULL
 
-#' @rdname GSVA-pkg-deprecated
+#' @rdname GSVA-pkg-defunct
 #'
 #' @export
 setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetCollection"),
@@ -264,8 +264,8 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
 
-  .Deprecated(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is deprecated; use a method-specific parameter object (see '?gsva').")
+  .Defunct(new="gsva()", package="GSVA",
+              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
   if (length(assays(expr)) == 0L)
     stop("The input SummarizedExperiment object has no assay data.")
@@ -340,13 +340,13 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetC
   rval
 })
 
-#' @name gsva-deprecated
+#' @name gsva-defunct
 ## #' @aliases gsva,SummarizedExperiment,list-method
-## #' @rdname gsva-deprecated
+## #' @rdname gsva-defunct
 #' @keywords internal
 NULL
 
-#' @rdname GSVA-pkg-deprecated
+#' @rdname GSVA-pkg-defunct
 #'
 #' @export
 setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
@@ -366,8 +366,8 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
 
-  .Deprecated(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is deprecated; use a method-specific parameter object (see '?gsva').")
+  .Defunct(new="gsva()", package="GSVA",
+              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
   if (length(assays(expr)) == 0L)
     stop("The input SummarizedExperiment object has no assay data.")
@@ -420,13 +420,13 @@ setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
   rval
 })
 
-#' @name gsva-deprecated
+#' @name gsva-defunct
 ## #' @aliases gsva,ExpressionSet,list-method
-## #' @rdname gsva-deprecated
+## #' @rdname gsva-defunct
 #' @keywords internal
 NULL
 
-#' @rdname GSVA-pkg-deprecated
+#' @rdname GSVA-pkg-defunct
 #'
 #' @export
 setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
@@ -446,8 +446,8 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
 
-  .Deprecated(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is deprecated; use a method-specific parameter object (see '?gsva').")
+  .Defunct(new="gsva()", package="GSVA",
+              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
   eset <- expr
   expr <- exprs(eset)
@@ -484,13 +484,13 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
   rval
 })
 
-#' @name gsva-deprecated
+#' @name gsva-defunct
 ## #' @aliases gsva,ExpressionSet,GeneSetCollection-method
-## #' @rdname gsva-deprecated
+## #' @rdname gsva-defunct
 #' @keywords internal
 NULL
 
-#' @rdname GSVA-pkg-deprecated
+#' @rdname GSVA-pkg-defunct
 #'
 #' @export
 setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollection"),
@@ -510,8 +510,8 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
 
-  .Deprecated(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is deprecated; use a method-specific parameter object (see '?gsva').")
+  .Defunct(new="gsva()", package="GSVA",
+              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
   eset <- expr
   expr <- exprs(eset)
@@ -570,13 +570,13 @@ setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollecti
   rval
 })
 
-#' @name gsva-deprecated
+#' @name gsva-defunct
 ## #' @aliases gsva,matrix,GeneSetCollection-method
-## #' @rdname gsva-deprecated
+## #' @rdname gsva-defunct
 #' @keywords internal
 NULL
 
-#' @rdname GSVA-pkg-deprecated
+#' @rdname GSVA-pkg-defunct
 #'
 #' @export
 setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
@@ -596,8 +596,8 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
 
-  .Deprecated(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is deprecated; use a method-specific parameter object (see '?gsva').")
+  .Defunct(new="gsva()", package="GSVA",
+              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
   ## filter genes according to various criteria,
   ## e.g., constant expression
@@ -641,13 +641,13 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
   rval
 })
 
-#' @name gsva-deprecated
+#' @name gsva-defunct
 ## #' @aliases gsva,matrix,list-method
-## #' @rdname gsva-deprecated
+## #' @rdname gsva-defunct
 #' @keywords internal
 NULL
 
-#' @rdname GSVA-pkg-deprecated
+#' @rdname GSVA-pkg-defunct
 #'
 #' @export
 setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
@@ -667,8 +667,8 @@ setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
   method <- match.arg(method)
   kcdf <- match.arg(kcdf)
 
-  .Deprecated(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is deprecated; use a method-specific parameter object (see '?gsva').")
+  .Defunct(new="gsva()", package="GSVA",
+              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
 
   ## filter genes according to various criteria,
   ## e.g., constant expression
