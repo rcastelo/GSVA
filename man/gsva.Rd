@@ -54,8 +54,8 @@ Barbie et al. (2009).
 }}
 
 \item{gset.idx.list}{Dummy parameter, only present for backward compatibility,
-do not use it. It will be removed once the deprecated version of 'gsva()'
-is defunct.}
+do not use it. It will be removed once the defunct version of 'gsva()'
+is removed.}
 
 \item{verbose}{Gives information about each calculation step. Default: \code{FALSE}.}
 
@@ -70,9 +70,9 @@ depending on the input) of GSVA enrichment scores.
 \description{
 Estimates GSVA enrichment scores. The API of this function has
 changed in the Bioconductor release 3.18 and this help page describes the
-new API. The old API is deprecated and will become defunct in the next
+new API. The old API is defunct and will be removed in the next
 Bioconductor release. If you are looking for the documentation of the old
-API to the \code{gsva()} function, please consult \code{\link{GSVA-pkg-deprecated}}.
+API to the \code{gsva()} function, please consult \code{\link{GSVA-pkg-defunct}}.
 }
 \examples{
 library(GSVA)

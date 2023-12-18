@@ -3,9 +3,9 @@
 #' 
 #' @description Estimates GSVA enrichment scores. The API of this function has
 #' changed in the Bioconductor release 3.18 and this help page describes the
-#' new API. The old API is deprecated and will become defunct in the next
+#' new API. The old API is defunct and will be removed in the next
 #' Bioconductor release. If you are looking for the documentation of the old
-#' API to the `gsva()` function, please consult [`GSVA-pkg-deprecated`].
+#' API to the `gsva()` function, please consult [`GSVA-pkg-defunct`].
 #' 
 #' @param expr A parameter object of one of the following classes:
 #' * A [`gsvaParam`] object built using the constructor function [`gsvaParam`].
@@ -22,8 +22,8 @@
 #'   Barbie et al. (2009).
 #'
 #' @param gset.idx.list Dummy parameter, only present for backward compatibility,
-#' do not use it. It will be removed once the deprecated version of 'gsva()'
-#' is defunct.
+#' do not use it. It will be removed once the defunct version of 'gsva()'
+#' is removed.
 #' 
 #' @param verbose Gives information about each calculation step. Default: `FALSE`.
 #' 
