@@ -2,172 +2,25 @@
 % Please edit documentation in R/GSVA-pkg-defunct.R, R/gsva.R
 \name{GSVA-pkg-defunct}
 \alias{GSVA-pkg-defunct}
-\alias{gsva,HDF5Array,list-method}
-\alias{gsva,SingleCellExperiment,GeneSetCollection-method}
-\alias{gsva,SingleCellExperiment,list-method}
-\alias{gsva,dgCMatrix,list-method}
-\alias{gsva,SummarizedExperiment,GeneSetCollection-method}
-\alias{gsva,SummarizedExperiment,list-method}
-\alias{gsva,ExpressionSet,list-method}
-\alias{gsva,ExpressionSet,GeneSetCollection-method}
-\alias{gsva,matrix,GeneSetCollection-method}
-\alias{gsva,matrix,list-method}
+\alias{gsva,missing-method}
+\alias{gsva,matrix-method}
+\alias{gsva,ExpressionSet-method}
+\alias{gsva,SummarizedExperiment-method}
+\alias{gsva,dgCMatrix-method}
+\alias{gsva,SingleCellExperiment-method}
 \title{Defunct functions in package \code{GSVA}.}
 \usage{
-\S4method{gsva}{HDF5Array,list}(
-  expr,
-  gset.idx.list,
-  annotation,
-  method = c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf = c("Gaussian", "Poisson", "none"),
-  abs.ranking = FALSE,
-  min.sz = 1,
-  max.sz = Inf,
-  parallel.sz = 1L,
-  mx.diff = TRUE,
-  tau = switch(method, gsva = 1, ssgsea = 0.25, NA),
-  ssgsea.norm = TRUE,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose)
-)
+\S4method{gsva}{missing}(param, ...)
 
-\S4method{gsva}{SingleCellExperiment,GeneSetCollection}(expr, gset.idx.list, ...)
+\S4method{gsva}{matrix}(param, ...)
 
-\S4method{gsva}{SingleCellExperiment,list}(
-  expr,
-  gset.idx.list,
-  annotation,
-  method = c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf = c("Gaussian", "Poisson", "none"),
-  abs.ranking = FALSE,
-  min.sz = 1,
-  max.sz = Inf,
-  parallel.sz = 1L,
-  mx.diff = TRUE,
-  tau = switch(method, gsva = 1, ssgsea = 0.25, NA),
-  ssgsea.norm = TRUE,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose)
-)
+\S4method{gsva}{ExpressionSet}(param, ...)
 
-\S4method{gsva}{dgCMatrix,list}(
-  expr,
-  gset.idx.list,
-  annotation,
-  method = c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf = c("Gaussian", "Poisson", "none"),
-  abs.ranking = FALSE,
-  min.sz = 1,
-  max.sz = Inf,
-  parallel.sz = 1L,
-  mx.diff = TRUE,
-  tau = switch(method, gsva = 1, ssgsea = 0.25, NA),
-  ssgsea.norm = TRUE,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose)
-)
+\S4method{gsva}{SummarizedExperiment}(param, ...)
 
-\S4method{gsva}{SummarizedExperiment,GeneSetCollection}(
-  expr,
-  gset.idx.list,
-  annotation,
-  method = c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf = c("Gaussian", "Poisson", "none"),
-  abs.ranking = FALSE,
-  min.sz = 1,
-  max.sz = Inf,
-  parallel.sz = 1L,
-  mx.diff = TRUE,
-  tau = switch(method, gsva = 1, ssgsea = 0.25, NA),
-  ssgsea.norm = TRUE,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose)
-)
+\S4method{gsva}{dgCMatrix}(param, ...)
 
-\S4method{gsva}{SummarizedExperiment,list}(
-  expr,
-  gset.idx.list,
-  annotation,
-  method = c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf = c("Gaussian", "Poisson", "none"),
-  abs.ranking = FALSE,
-  min.sz = 1,
-  max.sz = Inf,
-  parallel.sz = 1L,
-  mx.diff = TRUE,
-  tau = switch(method, gsva = 1, ssgsea = 0.25, NA),
-  ssgsea.norm = TRUE,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose)
-)
-
-\S4method{gsva}{ExpressionSet,list}(
-  expr,
-  gset.idx.list,
-  annotation,
-  method = c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf = c("Gaussian", "Poisson", "none"),
-  abs.ranking = FALSE,
-  min.sz = 1,
-  max.sz = Inf,
-  parallel.sz = 1L,
-  mx.diff = TRUE,
-  tau = switch(method, gsva = 1, ssgsea = 0.25, NA),
-  ssgsea.norm = TRUE,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose)
-)
-
-\S4method{gsva}{ExpressionSet,GeneSetCollection}(
-  expr,
-  gset.idx.list,
-  annotation,
-  method = c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf = c("Gaussian", "Poisson", "none"),
-  abs.ranking = FALSE,
-  min.sz = 1,
-  max.sz = Inf,
-  parallel.sz = 1L,
-  mx.diff = TRUE,
-  tau = switch(method, gsva = 1, ssgsea = 0.25, NA),
-  ssgsea.norm = TRUE,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose)
-)
-
-\S4method{gsva}{matrix,GeneSetCollection}(
-  expr,
-  gset.idx.list,
-  annotation,
-  method = c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf = c("Gaussian", "Poisson", "none"),
-  abs.ranking = FALSE,
-  min.sz = 1,
-  max.sz = Inf,
-  parallel.sz = 1L,
-  mx.diff = TRUE,
-  tau = switch(method, gsva = 1, ssgsea = 0.25, NA),
-  ssgsea.norm = TRUE,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose)
-)
-
-\S4method{gsva}{matrix,list}(
-  expr,
-  gset.idx.list,
-  annotation,
-  method = c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf = c("Gaussian", "Poisson", "none"),
-  abs.ranking = FALSE,
-  min.sz = 1,
-  max.sz = Inf,
-  parallel.sz = 1L,
-  mx.diff = TRUE,
-  tau = switch(method, gsva = 1, ssgsea = 0.25, NA),
-  ssgsea.norm = TRUE,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose)
-)
+\S4method{gsva}{SingleCellExperiment}(param, ...)
 }
 \description{
 The functions listed below are defunct and will be removed
@@ -179,7 +32,7 @@ available at \code{\link{gsva-defunct}}.
 
 Instead of gsva(expr=., gset.idx.list=., method=., ...), use a method-specific
 parameter object,
-see [\code{plageParam}][\code{zscoreParam}][\code{ssgseaParam}][\code{gsvaParam}],
+see \code{\link{plageParam}} \code{\link{zscoreParam}} \code{\link{ssgseaParam}} \code{\link{gsvaParam}},
 followed by a call to the new \code{gsva()} function, see \code{\link{gsva}}.
 }
 

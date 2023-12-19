@@ -9,7 +9,7 @@
 #' method-specific parameter class that is used to invoke each of them with a
 #' matching set of parameters.
 #'
-#' @seealso [`plageParam`][`zscoreParam`][`ssgseaParam`][`gsvaParam`]
+#' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`]
 #' 
 #' @name GsvaMethodParam-class
 #' @rdname GsvaMethodParam-class

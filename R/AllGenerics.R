@@ -1,7 +1,7 @@
 
 #' @export 
 setGeneric("gsva",
-           function(expr, gset.idx.list, ...) standardGeneric("gsva"))
+           function(param, ...) standardGeneric("gsva"))
 
 #' @export 
 setGeneric("filterGeneSets",

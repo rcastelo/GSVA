@@ -3,9 +3,6 @@
 \name{gsva-defunct}
 \alias{gsva-defunct}
 \title{Gene Set Variation Analysis}
-\usage{
-gsva(expr, gset.idx.list, ...)
-}
 \description{
 This is the old manual page of the defunct version
 of the function \code{gsva()}.
