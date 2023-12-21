@@ -8,697 +8,678 @@
 #' of the function `gsva()`.
 #'
 #' @name gsva-defunct
-#' @usage gsva(expr, gset.idx.list, ...)
+## #' @usage gsva(expr, gset.idx.list, ...)
 #' @seealso [`GSVA-pkg-defunct`]
 #' @keywords internal
-## #' @aliases gsva,HDF5Array,list-method
-## #' @rdname gsva-defunct
 NULL
 
 #' @rdname GSVA-pkg-defunct
 #' @section Details:
-#' Instead of gsva(expr=., gset.idx.list=., method=., ...), use a method-specific
-#' parameter object,
-#' see [`plageParam`][`zscoreParam`][`ssgseaParam`][`gsvaParam`],
+#' Instead of `gsva(expr=., gset.idx.list=., method=., ...)`, use a
+#' method-specific parameter object,
+#' see [`plageParam`] [`zscoreParam`] [`ssgseaParam`] [`gsvaParam`],
 #' followed by a call to the new `gsva()` function, see [`gsva`].
-#'
 #' @export
-setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),
-          function(expr, gset.idx.list, annotation,
-  method=c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf=c("Gaussian", "Poisson", "none"),
-  abs.ranking=FALSE,
-  min.sz=1,
-  max.sz=Inf,
-  parallel.sz=1L,
-  mx.diff=TRUE,
-  tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  ssgsea.norm=TRUE,
-  verbose=TRUE,
-  BPPARAM=SerialParam(progressbar=verbose))
-{
-  method <- match.arg(method)
-  kcdf <- match.arg(kcdf)
-
-  .Defunct(new = "gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
-  
-  warning("Using 'HDF5Array' objects as input is still in an experimental stage.")
-
-  ## filter genes according to verious criteria,
-  ## e.g., constant expression
-  expr <- .filterFeatures(expr, method)
-  
-  ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
-  
-  ## remove gene sets from the analysis for which no features are available
-  ## and meet the minimum and maximum gene-set size specified by the user
-  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                         min.sz=max(1, min.sz),
-                                         max.sz=max.sz)
-  
-  if (!missing(kcdf)) {
-    if (kcdf == "Gaussian") {
-      rnaseq <- FALSE
-      kernel <- TRUE
-    } else if (kcdf == "Poisson") {
-      rnaseq <- TRUE
-      kernel <- TRUE
-    } else
-      kernel <- FALSE
-  }
-  
-  rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
-  
-  rval
+setMethod("gsva", signature(param="missing"), function(param, ...) {
+    .Defunct(new = "gsva()", package="GSVA",
+             msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
 })
 
-#' @name gsva-defunct
-## #' @aliases gsva,SingleCellExperiment,GeneSetCollection-method
-## #' @rdname gsva-defunct
-#' @keywords internal
-NULL
-
 #' @rdname GSVA-pkg-defunct
-#'
 #' @export
-setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="GeneSetCollection"),
-          function(expr, gset.idx.list, ...)
-{
-  .Defunct(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
-  
-  gsva(expr, geneIds(gset.idx.list), ...)
+setMethod("gsva", signature(param="matrix"), function(param, ...) {
+    .Defunct(new = "gsva()", package="GSVA",
+             msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
 })
 
-#' @name gsva-defunct
-## #' @aliases gsva,SingleCellExperiment,list-method
-## #' @rdname gsva-defunct
-#' @keywords internal
-NULL
+#' @rdname GSVA-pkg-defunct
+#' @export
+setMethod("gsva", signature(param="ExpressionSet"), function(param, ...) {
+    .Defunct(new = "gsva()", package="GSVA",
+             msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
+})
 
 #' @rdname GSVA-pkg-defunct
-#'
 #' @export
-setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
-          function(expr, gset.idx.list, annotation,
-  method=c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf=c("Gaussian", "Poisson", "none"),
-  abs.ranking=FALSE,
-  min.sz=1,
-  max.sz=Inf,
-  parallel.sz=1L, 
-  mx.diff=TRUE,
-  tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  ssgsea.norm=TRUE,
-  verbose=TRUE,
-  BPPARAM=SerialParam(progressbar=verbose))
-{
-  method <- match.arg(method)
-  kcdf <- match.arg(kcdf)
-  
-  .Defunct(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
-  
-  warning("Using 'SingleCellExperiment' objects as input is still in an experimental stage.")
+setMethod("gsva", signature(param="SummarizedExperiment"), function(param, ...) {
+    .Defunct(new = "gsva()", package="GSVA",
+             msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
+})
 
-  if (length(assays(expr)) == 0L)
-    stop("The input SummarizedExperiment object has no assay data.")
+#' @rdname GSVA-pkg-defunct
+#' @export
+setMethod("gsva", signature(param="dgCMatrix"), function(param, ...) {
+    .Defunct(new = "gsva()", package="GSVA",
+             msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
+})
+
+#' @rdname GSVA-pkg-defunct
+#' @export
+setMethod("gsva", signature(param="SingleCellExperiment"), function(param, ...) {
+    .Defunct(new = "gsva()", package="GSVA",
+             msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
+})
+
+
+## setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),
+##           function(param, expr, gset.idx.list, annotation,
+##   method=c("gsva", "ssgsea", "zscore", "plage"),
+##   kcdf=c("Gaussian", "Poisson", "none"),
+##   abs.ranking=FALSE,
+##   min.sz=1,
+##   max.sz=Inf,
+##   parallel.sz=1L,
+##   mx.diff=TRUE,
+##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
+##   ssgsea.norm=TRUE,
+##   verbose=TRUE,
+##   BPPARAM=SerialParam(progressbar=verbose))
+## {
+##   method <- match.arg(method)
+##   kcdf <- match.arg(kcdf)
+
+##   .Defunct(new = "gsva()", package="GSVA",
+##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
-  se <- expr
+##   warning("Using 'HDF5Array' objects as input is still in an experimental stage.")
+
+##   ## filter genes according to verious criteria,
+##   ## e.g., constant expression
+##   expr <- .filterFeatures(expr, method)
   
-  if (missing(annotation))
-    annotation <- names(assays(se))[1]
-  else {
-    if (!is.character(annotation))
-      stop("The 'annotation' argument must contain a character string.")
-    annotation <- annotation[1]
+##   ## map to the actual features for which expression data is available
+##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+  
+##   ## remove gene sets from the analysis for which no features are available
+##   ## and meet the minimum and maximum gene-set size specified by the user
+##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+##                                          min.sz=max(1, min.sz),
+##                                          max.sz=max.sz)
+  
+##   if (!missing(kcdf)) {
+##     if (kcdf == "Gaussian") {
+##       rnaseq <- FALSE
+##       kernel <- TRUE
+##     } else if (kcdf == "Poisson") {
+##       rnaseq <- TRUE
+##       kernel <- TRUE
+##     } else
+##       kernel <- FALSE
+##   }
+  
+##   rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
+  
+##   rval
+## })
+
+## setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="GeneSetCollection"),
+##           function(expr, gset.idx.list, ...)
+## {
+##   .Defunct(new="gsva()", package="GSVA",
+##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
+  
+##   gsva(expr, geneIds(gset.idx.list), ...)
+## })
+
+## #' @rdname GSVA-pkg-defunct
+## #'
+## #' @export
+## setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
+##           function(expr, gset.idx.list, annotation,
+##   method=c("gsva", "ssgsea", "zscore", "plage"),
+##   kcdf=c("Gaussian", "Poisson", "none"),
+##   abs.ranking=FALSE,
+##   min.sz=1,
+##   max.sz=Inf,
+##   parallel.sz=1L, 
+##   mx.diff=TRUE,
+##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
+##   ssgsea.norm=TRUE,
+##   verbose=TRUE,
+##   BPPARAM=SerialParam(progressbar=verbose))
+## {
+##   method <- match.arg(method)
+##   kcdf <- match.arg(kcdf)
+  
+##   .Defunct(new="gsva()", package="GSVA",
+##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
+  
+##   warning("Using 'SingleCellExperiment' objects as input is still in an experimental stage.")
+
+##   if (length(assays(expr)) == 0L)
+##     stop("The input SummarizedExperiment object has no assay data.")
+  
+##   se <- expr
+  
+##   if (missing(annotation))
+##     annotation <- names(assays(se))[1]
+##   else {
+##     if (!is.character(annotation))
+##       stop("The 'annotation' argument must contain a character string.")
+##     annotation <- annotation[1]
     
-    if (!annotation %in% names(assays(se)))
-      stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
-  }
-  expr <- assays(se)[[annotation]]
+##     if (!annotation %in% names(assays(se)))
+##       stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
+##   }
+##   expr <- assays(se)[[annotation]]
   
-  ## filter genes according to various criteria,
-  ## e.g., constant expression
+##   ## filter genes according to various criteria,
+##   ## e.g., constant expression
   
-  expr <- .filterFeatures(expr, method)
+##   expr <- .filterFeatures(expr, method)
   
-  ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+##   ## map to the actual features for which expression data is available
+##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
   
-  ## remove gene sets from the analysis for which no features are available
-  ## and meet the minimum and maximum gene-set size specified by the user
-  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                         min.sz=max(1, min.sz),
-                                         max.sz=max.sz)
+##   ## remove gene sets from the analysis for which no features are available
+##   ## and meet the minimum and maximum gene-set size specified by the user
+##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+##                                          min.sz=max(1, min.sz),
+##                                          max.sz=max.sz)
   
-  if (!missing(kcdf)) {
-    if (kcdf == "Gaussian") {
-      rnaseq <- FALSE
-      kernel <- TRUE
-    } else if (kcdf == "Poisson") {
-      rnaseq <- TRUE
-      kernel <- TRUE
-    } else
-      kernel <- FALSE
-  }
+##   if (!missing(kcdf)) {
+##     if (kcdf == "Gaussian") {
+##       rnaseq <- FALSE
+##       kernel <- TRUE
+##     } else if (kcdf == "Poisson") {
+##       rnaseq <- TRUE
+##       kernel <- TRUE
+##     } else
+##       kernel <- FALSE
+##   }
   
-  eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
+##   eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
   
-  rval <- SingleCellExperiment(assays=SimpleList(es=eSco),
-                               colData=colData(se),
-                               metadata=metadata(se))
-  metadata(rval)$annotation <- NULL
+##   rval <- SingleCellExperiment(assays=SimpleList(es=eSco),
+##                                colData=colData(se),
+##                                metadata=metadata(se))
+##   metadata(rval)$annotation <- NULL
   
-  rval
-          })
+##   rval
+##           })
           
-#' @name gsva-defunct
-## #' @aliases gsva,dgCMatrix,list-method
-## #' @rdname gsva-defunct
-#' @keywords internal
-NULL
-
-#' @rdname GSVA-pkg-defunct
-#'
-#' @export
-setMethod("gsva", signature(expr="dgCMatrix", gset.idx.list="list"),
-          function(expr, gset.idx.list, annotation,
-  method=c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf=c("Gaussian", "Poisson", "none"),
-  abs.ranking=FALSE,
-  min.sz=1,
-  max.sz=Inf,
-  parallel.sz=1L,
-  mx.diff=TRUE,
-  tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  ssgsea.norm=TRUE,
-  verbose=TRUE,
-  BPPARAM=SerialParam(progressbar=verbose))
-{
-  method <- match.arg(method)
-  kcdf <- match.arg(kcdf)
+## #' @rdname GSVA-pkg-defunct
+## #'
+## #' @export
+## setMethod("gsva", signature(expr="dgCMatrix", gset.idx.list="list"),
+##           function(expr, gset.idx.list, annotation,
+##   method=c("gsva", "ssgsea", "zscore", "plage"),
+##   kcdf=c("Gaussian", "Poisson", "none"),
+##   abs.ranking=FALSE,
+##   min.sz=1,
+##   max.sz=Inf,
+##   parallel.sz=1L,
+##   mx.diff=TRUE,
+##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
+##   ssgsea.norm=TRUE,
+##   verbose=TRUE,
+##   BPPARAM=SerialParam(progressbar=verbose))
+## {
+##   method <- match.arg(method)
+##   kcdf <- match.arg(kcdf)
   
-  .Defunct(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
+##   .Defunct(new="gsva()", package="GSVA",
+##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
-  warning("Using 'dgCMatrix' objects as input is still in an experimental stage.")
+##   warning("Using 'dgCMatrix' objects as input is still in an experimental stage.")
 
-  ## filter genes according to verious criteria,
-  ## e.g., constant expression
-  expr <- .filterFeatures(expr, method)
+##   ## filter genes according to verious criteria,
+##   ## e.g., constant expression
+##   expr <- .filterFeatures(expr, method)
   
-  ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+##   ## map to the actual features for which expression data is available
+##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
   
-  ## remove gene sets from the analysis for which no features are available
-  ## and meet the minimum and maximum gene-set size specified by the user
-  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                         min.sz=max(1, min.sz),
-                                         max.sz=max.sz)
+##   ## remove gene sets from the analysis for which no features are available
+##   ## and meet the minimum and maximum gene-set size specified by the user
+##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+##                                          min.sz=max(1, min.sz),
+##                                          max.sz=max.sz)
   
-  if (!missing(kcdf)) {
-    if (kcdf == "Gaussian") {
-      rnaseq <- FALSE
-      kernel <- TRUE
-    } else if (kcdf == "Poisson") {
-      rnaseq <- TRUE
-      kernel <- TRUE
-    } else
-      kernel <- FALSE
-  }
+##   if (!missing(kcdf)) {
+##     if (kcdf == "Gaussian") {
+##       rnaseq <- FALSE
+##       kernel <- TRUE
+##     } else if (kcdf == "Poisson") {
+##       rnaseq <- TRUE
+##       kernel <- TRUE
+##     } else
+##       kernel <- FALSE
+##   }
   
-  rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
+##   rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
   
-  rval
-})
+##   rval
+## })
 
-#' @name gsva-defunct
-## #' @aliases gsva,SummarizedExperiment,GeneSetCollection-method
-## #' @rdname gsva-defunct
-#' @keywords internal
-NULL
+## #' @rdname GSVA-pkg-defunct
+## #'
+## #' @export
+## setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetCollection"),
+##           function(expr, gset.idx.list, annotation,
+##   method=c("gsva", "ssgsea", "zscore", "plage"),
+##   kcdf=c("Gaussian", "Poisson", "none"),
+##   abs.ranking=FALSE,
+##   min.sz=1,
+##   max.sz=Inf,
+##   parallel.sz=1L, 
+##   mx.diff=TRUE,
+##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
+##   ssgsea.norm=TRUE,
+##   verbose=TRUE,
+##   BPPARAM=SerialParam(progressbar=verbose))
+## {
+##   method <- match.arg(method)
+##   kcdf <- match.arg(kcdf)
 
-#' @rdname GSVA-pkg-defunct
-#'
-#' @export
-setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetCollection"),
-          function(expr, gset.idx.list, annotation,
-  method=c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf=c("Gaussian", "Poisson", "none"),
-  abs.ranking=FALSE,
-  min.sz=1,
-  max.sz=Inf,
-  parallel.sz=1L, 
-  mx.diff=TRUE,
-  tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  ssgsea.norm=TRUE,
-  verbose=TRUE,
-  BPPARAM=SerialParam(progressbar=verbose))
-{
-  method <- match.arg(method)
-  kcdf <- match.arg(kcdf)
-
-  .Defunct(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
+##   .Defunct(new="gsva()", package="GSVA",
+##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
-  if (length(assays(expr)) == 0L)
-    stop("The input SummarizedExperiment object has no assay data.")
+##   if (length(assays(expr)) == 0L)
+##     stop("The input SummarizedExperiment object has no assay data.")
 
-  se <- expr
-  if (missing(annotation))
-    annotation <- names(assays(se))[1]
-  else {
-    if (!is.character(annotation))
-      stop("The 'annotation' argument must contain a character string.")
-    annotation <- annotation[1]
+##   se <- expr
+##   if (missing(annotation))
+##     annotation <- names(assays(se))[1]
+##   else {
+##     if (!is.character(annotation))
+##       stop("The 'annotation' argument must contain a character string.")
+##     annotation <- annotation[1]
 
-    if (!annotation %in% names(assays(se)))
-      stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
-  }
-  expr <- as.matrix(assays(se)[[annotation]])
+##     if (!annotation %in% names(assays(se)))
+##       stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
+##   }
+##   expr <- as.matrix(assays(se)[[annotation]])
 
-  ## filter genes according to verious criteria,
-  ## e.g., constant expression
-  expr <- .filterFeatures(expr, method)
+##   ## filter genes according to verious criteria,
+##   ## e.g., constant expression
+##   expr <- .filterFeatures(expr, method)
 
-  annotpkg <- metadata(se)$annotation
-  if (!is.null(annotpkg) && length(annotpkg) > 0 && is.character(annotpkg) && annotpkg != "") {
-    if (all(!c(annotpkg, paste0(annotpkg, ".db")) %in% installed.packages()))
-      stop(sprintf("Please install the annotation package %s. If %s does not seem to exist as a package, please try to append the suffix .db to its name.", annotpkg, annotpkg))
+##   annotpkg <- metadata(se)$annotation
+##   if (!is.null(annotpkg) && length(annotpkg) > 0 && is.character(annotpkg) && annotpkg != "") {
+##     if (all(!c(annotpkg, paste0(annotpkg, ".db")) %in% installed.packages()))
+##       stop(sprintf("Please install the annotation package %s. If %s does not seem to exist as a package, please try to append the suffix .db to its name.", annotpkg, annotpkg))
 
-    if (verbose)
-      cat("Mapping identifiers between gene sets and feature names\n")
+##     if (verbose)
+##       cat("Mapping identifiers between gene sets and feature names\n")
 
-    ## map gene identifiers of the gene sets to the features in the chip
-    ## Biobase::annotation() is necessary to disambiguate from the
-    ## 'annotation' argument
-    mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
-                                           AnnoOrEntrezIdentifier(annotpkg))
-  } else {
-    mapped.gset.idx.list <- gset.idx.list
-    if (verbose) {
-      cat("No annotation package name available in the input 'SummarizedExperiment' object 'expr'.",
-          "Attempting to directly match identifiers in 'expr' to gene sets.", sep="\n")
-    }
-  }
-  mapped.gset.idx.list <- geneIds(mapped.gset.idx.list) 
+##     ## map gene identifiers of the gene sets to the features in the chip
+##     ## Biobase::annotation() is necessary to disambiguate from the
+##     ## 'annotation' argument
+##     mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
+##                                            AnnoOrEntrezIdentifier(annotpkg))
+##   } else {
+##     mapped.gset.idx.list <- gset.idx.list
+##     if (verbose) {
+##       cat("No annotation package name available in the input 'SummarizedExperiment' object 'expr'.",
+##           "Attempting to directly match identifiers in 'expr' to gene sets.", sep="\n")
+##     }
+##   }
+##   mapped.gset.idx.list <- geneIds(mapped.gset.idx.list) 
 
-  ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
+##   ## map to the actual features for which expression data is available
+##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
 
-  ## remove gene sets from the analysis for which no features are available
-  ## and meet the minimum and maximum gene-set size specified by the user
-  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                         min.sz=max(1, min.sz),
-                                         max.sz=max.sz)
+##   ## remove gene sets from the analysis for which no features are available
+##   ## and meet the minimum and maximum gene-set size specified by the user
+##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+##                                          min.sz=max(1, min.sz),
+##                                          max.sz=max.sz)
 
-  if (!missing(kcdf)) {
-    if (kcdf == "Gaussian") {
-      rnaseq <- FALSE
-      kernel <- TRUE
-    } else if (kcdf == "Poisson") {
-      rnaseq <- TRUE
-      kernel <- TRUE
-    } else
-      kernel <- FALSE
-  }
+##   if (!missing(kcdf)) {
+##     if (kcdf == "Gaussian") {
+##       rnaseq <- FALSE
+##       kernel <- TRUE
+##     } else if (kcdf == "Poisson") {
+##       rnaseq <- TRUE
+##       kernel <- TRUE
+##     } else
+##       kernel <- FALSE
+##   }
 
-  eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
+##   eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
 
-  rval <- SummarizedExperiment(assays=SimpleList(es=eSco),
-                               colData=colData(se),
-                               metadata=metadata(se))
-  metadata(rval)$annotation <- NULL
+##   rval <- SummarizedExperiment(assays=SimpleList(es=eSco),
+##                                colData=colData(se),
+##                                metadata=metadata(se))
+##   metadata(rval)$annotation <- NULL
 
-  rval
-})
+##   rval
+## })
 
-#' @name gsva-defunct
-## #' @aliases gsva,SummarizedExperiment,list-method
-## #' @rdname gsva-defunct
-#' @keywords internal
-NULL
+## #' @rdname GSVA-pkg-defunct
+## #'
+## #' @export
+## setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
+##           function(expr, gset.idx.list, annotation,
+##   method=c("gsva", "ssgsea", "zscore", "plage"),
+##   kcdf=c("Gaussian", "Poisson", "none"),
+##   abs.ranking=FALSE,
+##   min.sz=1,
+##   max.sz=Inf,
+##   parallel.sz=1L, 
+##   mx.diff=TRUE,
+##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
+##   ssgsea.norm=TRUE,
+##   verbose=TRUE,
+##   BPPARAM=SerialParam(progressbar=verbose))
+## {
+##   method <- match.arg(method)
+##   kcdf <- match.arg(kcdf)
 
-#' @rdname GSVA-pkg-defunct
-#'
-#' @export
-setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
-          function(expr, gset.idx.list, annotation,
-  method=c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf=c("Gaussian", "Poisson", "none"),
-  abs.ranking=FALSE,
-  min.sz=1,
-  max.sz=Inf,
-  parallel.sz=1L, 
-  mx.diff=TRUE,
-  tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  ssgsea.norm=TRUE,
-  verbose=TRUE,
-  BPPARAM=SerialParam(progressbar=verbose))
-{
-  method <- match.arg(method)
-  kcdf <- match.arg(kcdf)
-
-  .Defunct(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
+##   .Defunct(new="gsva()", package="GSVA",
+##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
-  if (length(assays(expr)) == 0L)
-    stop("The input SummarizedExperiment object has no assay data.")
+##   if (length(assays(expr)) == 0L)
+##     stop("The input SummarizedExperiment object has no assay data.")
 
-  se <- expr
-  if (missing(annotation))
-    annotation <- names(assays(se))[1]
-  else {
-    if (!is.character(annotation))
-      stop("The 'annotation' argument must contain a character string.")
-    annotation <- annotation[1]
+##   se <- expr
+##   if (missing(annotation))
+##     annotation <- names(assays(se))[1]
+##   else {
+##     if (!is.character(annotation))
+##       stop("The 'annotation' argument must contain a character string.")
+##     annotation <- annotation[1]
 
-    if (!annotation %in% names(assays(se)))
-      stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
-  }
-  expr <- as.matrix(assays(se)[[annotation]])
+##     if (!annotation %in% names(assays(se)))
+##       stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
+##   }
+##   expr <- as.matrix(assays(se)[[annotation]])
 
-  ## filter genes according to verious criteria,
-  ## e.g., constant expression
-  expr <- .filterFeatures(expr, method)
+##   ## filter genes according to verious criteria,
+##   ## e.g., constant expression
+##   expr <- .filterFeatures(expr, method)
 
-  ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+##   ## map to the actual features for which expression data is available
+##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
   
-  ## remove gene sets from the analysis for which no features are available
-  ## and meet the minimum and maximum gene-set size specified by the user
-  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                         min.sz=max(1, min.sz),
-                                         max.sz=max.sz)
+##   ## remove gene sets from the analysis for which no features are available
+##   ## and meet the minimum and maximum gene-set size specified by the user
+##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+##                                          min.sz=max(1, min.sz),
+##                                          max.sz=max.sz)
 
-  if (!missing(kcdf)) {
-    if (kcdf == "Gaussian") {
-      rnaseq <- FALSE
-      kernel <- TRUE
-    } else if (kcdf == "Poisson") {
-      rnaseq <- TRUE
-      kernel <- TRUE
-    } else
-      kernel <- FALSE
-  }
+##   if (!missing(kcdf)) {
+##     if (kcdf == "Gaussian") {
+##       rnaseq <- FALSE
+##       kernel <- TRUE
+##     } else if (kcdf == "Poisson") {
+##       rnaseq <- TRUE
+##       kernel <- TRUE
+##     } else
+##       kernel <- FALSE
+##   }
 
-  eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
+##   eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
 
-  rval <- SummarizedExperiment(assays=SimpleList(es=eSco),
-                               colData=colData(se),
-                               metadata=metadata(se))
-  metadata(rval)$annotation <- NULL
+##   rval <- SummarizedExperiment(assays=SimpleList(es=eSco),
+##                                colData=colData(se),
+##                                metadata=metadata(se))
+##   metadata(rval)$annotation <- NULL
 
-  rval
-})
+##   rval
+## })
 
-#' @name gsva-defunct
-## #' @aliases gsva,ExpressionSet,list-method
-## #' @rdname gsva-defunct
-#' @keywords internal
-NULL
+## #' @rdname GSVA-pkg-defunct
+## #'
+## #' @export
+## setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
+##           function(expr, gset.idx.list, annotation,
+##   method=c("gsva", "ssgsea", "zscore", "plage"),
+##   kcdf=c("Gaussian", "Poisson", "none"),
+##   abs.ranking=FALSE,
+##   min.sz=1,
+##   max.sz=Inf,
+##   parallel.sz=1L, 
+##   mx.diff=TRUE,
+##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
+##   ssgsea.norm=TRUE,
+##   verbose=TRUE,
+##   BPPARAM=SerialParam(progressbar=verbose))
+## {
+##   method <- match.arg(method)
+##   kcdf <- match.arg(kcdf)
 
-#' @rdname GSVA-pkg-defunct
-#'
-#' @export
-setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
-          function(expr, gset.idx.list, annotation,
-  method=c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf=c("Gaussian", "Poisson", "none"),
-  abs.ranking=FALSE,
-  min.sz=1,
-  max.sz=Inf,
-  parallel.sz=1L, 
-  mx.diff=TRUE,
-  tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  ssgsea.norm=TRUE,
-  verbose=TRUE,
-  BPPARAM=SerialParam(progressbar=verbose))
-{
-  method <- match.arg(method)
-  kcdf <- match.arg(kcdf)
-
-  .Defunct(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
+##   .Defunct(new="gsva()", package="GSVA",
+##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
-  eset <- expr
-  expr <- exprs(eset)
-  ## filter genes according to verious criteria,
-  ## e.g., constant expression
-  expr <- .filterFeatures(expr, method)
+##   eset <- expr
+##   expr <- exprs(eset)
+##   ## filter genes according to verious criteria,
+##   ## e.g., constant expression
+##   expr <- .filterFeatures(expr, method)
 
-  ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+##   ## map to the actual features for which expression data is available
+##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
   
-  ## remove gene sets from the analysis for which no features are available
-  ## and meet the minimum and maximum gene-set size specified by the user
-  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                         min.sz=max(1, min.sz),
-                                         max.sz=max.sz)
+##   ## remove gene sets from the analysis for which no features are available
+##   ## and meet the minimum and maximum gene-set size specified by the user
+##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+##                                          min.sz=max(1, min.sz),
+##                                          max.sz=max.sz)
 
-  if (!missing(kcdf)) {
-    if (kcdf == "Gaussian") {
-      rnaseq <- FALSE
-      kernel <- TRUE
-    } else if (kcdf == "Poisson") {
-      rnaseq <- TRUE
-      kernel <- TRUE
-    } else
-      kernel <- FALSE
-  }
+##   if (!missing(kcdf)) {
+##     if (kcdf == "Gaussian") {
+##       rnaseq <- FALSE
+##       kernel <- TRUE
+##     } else if (kcdf == "Poisson") {
+##       rnaseq <- TRUE
+##       kernel <- TRUE
+##     } else
+##       kernel <- FALSE
+##   }
 
-  eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
+##   eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
 
-  rval <- new("ExpressionSet", exprs=eSco, phenoData=phenoData(eset),
-              experimentData=experimentData(eset), annotation="")
+##   rval <- new("ExpressionSet", exprs=eSco, phenoData=phenoData(eset),
+##               experimentData=experimentData(eset), annotation="")
 
-  rval
-})
+##   rval
+## })
 
-#' @name gsva-defunct
-## #' @aliases gsva,ExpressionSet,GeneSetCollection-method
-## #' @rdname gsva-defunct
-#' @keywords internal
-NULL
+## #' @rdname GSVA-pkg-defunct
+## #'
+## #' @export
+## setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollection"),
+##           function(expr, gset.idx.list, annotation,
+##   method=c("gsva", "ssgsea", "zscore", "plage"),
+##   kcdf=c("Gaussian", "Poisson", "none"),
+##   abs.ranking=FALSE,
+##   min.sz=1,
+##   max.sz=Inf,
+##   parallel.sz=1L, 
+##   mx.diff=TRUE,
+##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
+##   ssgsea.norm=TRUE,
+##   verbose=TRUE,
+##   BPPARAM=SerialParam(progressbar=verbose))
+## {
+##   method <- match.arg(method)
+##   kcdf <- match.arg(kcdf)
 
-#' @rdname GSVA-pkg-defunct
-#'
-#' @export
-setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollection"),
-          function(expr, gset.idx.list, annotation,
-  method=c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf=c("Gaussian", "Poisson", "none"),
-  abs.ranking=FALSE,
-  min.sz=1,
-  max.sz=Inf,
-  parallel.sz=1L, 
-  mx.diff=TRUE,
-  tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  ssgsea.norm=TRUE,
-  verbose=TRUE,
-  BPPARAM=SerialParam(progressbar=verbose))
-{
-  method <- match.arg(method)
-  kcdf <- match.arg(kcdf)
-
-  .Defunct(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
+##   .Defunct(new="gsva()", package="GSVA",
+##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
-  eset <- expr
-  expr <- exprs(eset)
-  ## filter genes according to verious criteria,
-  ## e.g., constant expression
-  expr <- .filterFeatures(expr, method)
+##   eset <- expr
+##   expr <- exprs(eset)
+##   ## filter genes according to verious criteria,
+##   ## e.g., constant expression
+##   expr <- .filterFeatures(expr, method)
 
-  annotpkg <- Biobase::annotation(eset)
-  if (length(annotpkg) > 0 && annotpkg != "") {
-    if (all(!c(annotpkg, paste0(annotpkg, ".db")) %in% installed.packages()))
-      stop(sprintf("Please install the annotation package %s. If %s does not seem to exist as a package, please try to append the suffix .db to its name.", annotpkg, annotpkg))
+##   annotpkg <- Biobase::annotation(eset)
+##   if (length(annotpkg) > 0 && annotpkg != "") {
+##     if (all(!c(annotpkg, paste0(annotpkg, ".db")) %in% installed.packages()))
+##       stop(sprintf("Please install the annotation package %s. If %s does not seem to exist as a package, please try to append the suffix .db to its name.", annotpkg, annotpkg))
 
-    if (verbose)
-      cat("Mapping identifiers between gene sets and feature names\n")
+##     if (verbose)
+##       cat("Mapping identifiers between gene sets and feature names\n")
 
-    ## map gene identifiers of the gene sets to the features in the chip
-    ## Biobase::annotation() is necessary to disambiguate from the
-    ## 'annotation' argument
-    mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
-                                           AnnoOrEntrezIdentifier(annotpkg))
-  } else {
-    mapped.gset.idx.list <- gset.idx.list
-    if (verbose) {
-      cat("No annotation package name available in the input 'ExpressionSet' object 'expr'.",
-        "Attempting to directly match identifiers in 'expr' to gene sets.", sep="\n")
-    }
-  }
-  mapped.gset.idx.list <- geneIds(mapped.gset.idx.list) 
+##     ## map gene identifiers of the gene sets to the features in the chip
+##     ## Biobase::annotation() is necessary to disambiguate from the
+##     ## 'annotation' argument
+##     mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
+##                                            AnnoOrEntrezIdentifier(annotpkg))
+##   } else {
+##     mapped.gset.idx.list <- gset.idx.list
+##     if (verbose) {
+##       cat("No annotation package name available in the input 'ExpressionSet' object 'expr'.",
+##         "Attempting to directly match identifiers in 'expr' to gene sets.", sep="\n")
+##     }
+##   }
+##   mapped.gset.idx.list <- geneIds(mapped.gset.idx.list) 
 
-  ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
+##   ## map to the actual features for which expression data is available
+##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
   
-  ## remove gene sets from the analysis for which no features are available
-  ## and meet the minimum and maximum gene-set size specified by the user
-  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                         min.sz=max(1, min.sz),
-                                         max.sz=max.sz)
+##   ## remove gene sets from the analysis for which no features are available
+##   ## and meet the minimum and maximum gene-set size specified by the user
+##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+##                                          min.sz=max(1, min.sz),
+##                                          max.sz=max.sz)
 
-  if (!missing(kcdf)) {
-    if (kcdf == "Gaussian") {
-      rnaseq <- FALSE
-      kernel <- TRUE
-    } else if (kcdf == "Poisson") {
-      rnaseq <- TRUE
-      kernel <- TRUE
-    } else
-      kernel <- FALSE
-  }
+##   if (!missing(kcdf)) {
+##     if (kcdf == "Gaussian") {
+##       rnaseq <- FALSE
+##       kernel <- TRUE
+##     } else if (kcdf == "Poisson") {
+##       rnaseq <- TRUE
+##       kernel <- TRUE
+##     } else
+##       kernel <- FALSE
+##   }
 
-  eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
+##   eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
 
-  rval <- new("ExpressionSet", exprs=eSco, phenoData=phenoData(eset),
-              experimentData=experimentData(eset), annotation="")
+##   rval <- new("ExpressionSet", exprs=eSco, phenoData=phenoData(eset),
+##               experimentData=experimentData(eset), annotation="")
 
-  rval
-})
+##   rval
+## })
 
-#' @name gsva-defunct
-## #' @aliases gsva,matrix,GeneSetCollection-method
-## #' @rdname gsva-defunct
-#' @keywords internal
-NULL
+## #' @rdname GSVA-pkg-defunct
+## #'
+## #' @export
+## setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
+##           function(expr, gset.idx.list, annotation,
+##   method=c("gsva", "ssgsea", "zscore", "plage"),
+##   kcdf=c("Gaussian", "Poisson", "none"),
+##   abs.ranking=FALSE,
+##   min.sz=1,
+##   max.sz=Inf,
+##   parallel.sz=1L, 
+##   mx.diff=TRUE,
+##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
+##   ssgsea.norm=TRUE,
+##   verbose=TRUE,
+##   BPPARAM=SerialParam(progressbar=verbose))
+## {
+##   method <- match.arg(method)
+##   kcdf <- match.arg(kcdf)
 
-#' @rdname GSVA-pkg-defunct
-#'
-#' @export
-setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
-          function(expr, gset.idx.list, annotation,
-  method=c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf=c("Gaussian", "Poisson", "none"),
-  abs.ranking=FALSE,
-  min.sz=1,
-  max.sz=Inf,
-  parallel.sz=1L, 
-  mx.diff=TRUE,
-  tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  ssgsea.norm=TRUE,
-  verbose=TRUE,
-  BPPARAM=SerialParam(progressbar=verbose))
-{
-  method <- match.arg(method)
-  kcdf <- match.arg(kcdf)
-
-  .Defunct(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
+##   .Defunct(new="gsva()", package="GSVA",
+##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
   
-  ## filter genes according to various criteria,
-  ## e.g., constant expression
-  expr <- .filterFeatures(expr, method)
+##   ## filter genes according to various criteria,
+##   ## e.g., constant expression
+##   expr <- .filterFeatures(expr, method)
 
-  ## map gene identifiers of the gene sets to the features in the matrix
-  mapped.gset.idx.list <- gset.idx.list
-  if (!missing(annotation)) {
-    if (verbose)
-      cat("Mapping identifiers between gene sets and feature names\n")
+##   ## map gene identifiers of the gene sets to the features in the matrix
+##   mapped.gset.idx.list <- gset.idx.list
+##   if (!missing(annotation)) {
+##     if (verbose)
+##       cat("Mapping identifiers between gene sets and feature names\n")
 
-    mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
-                                           AnnoOrEntrezIdentifier(annotation))
-  }
-  mapped.gset.idx.list <- geneIds(mapped.gset.idx.list)
+##     mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
+##                                            AnnoOrEntrezIdentifier(annotation))
+##   }
+##   mapped.gset.idx.list <- geneIds(mapped.gset.idx.list)
   
-  ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
+##   ## map to the actual features for which expression data is available
+##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
   
-  ## remove gene sets from the analysis for which no features are available
-  ## and meet the minimum and maximum gene-set size specified by the user
-  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                         min.sz=max(1, min.sz),
-                                         max.sz=max.sz)
+##   ## remove gene sets from the analysis for which no features are available
+##   ## and meet the minimum and maximum gene-set size specified by the user
+##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+##                                          min.sz=max(1, min.sz),
+##                                          max.sz=max.sz)
 
-  if (!missing(kcdf)) {
-    if (kcdf == "Gaussian") {
-      rnaseq <- FALSE
-      kernel <- TRUE
-    } else if (kcdf == "Poisson") {
-      rnaseq <- TRUE
-      kernel <- TRUE
-    } else
-      kernel <- FALSE
-  }
+##   if (!missing(kcdf)) {
+##     if (kcdf == "Gaussian") {
+##       rnaseq <- FALSE
+##       kernel <- TRUE
+##     } else if (kcdf == "Poisson") {
+##       rnaseq <- TRUE
+##       kernel <- TRUE
+##     } else
+##       kernel <- FALSE
+##   }
 
-  rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                parallel.sz, mx.diff, tau, kernel, ssgsea.norm,
-                verbose, BPPARAM)
+##   rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm,
+##                 verbose, BPPARAM)
 
-  rval
-})
+##   rval
+## })
 
-#' @name gsva-defunct
-## #' @aliases gsva,matrix,list-method
-## #' @rdname gsva-defunct
-#' @keywords internal
-NULL
+## #' @rdname GSVA-pkg-defunct
+## #'
+## #' @export
+## setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
+##           function(expr, gset.idx.list, annotation,
+##   method=c("gsva", "ssgsea", "zscore", "plage"),
+##   kcdf=c("Gaussian", "Poisson", "none"),
+##   abs.ranking=FALSE,
+##   min.sz=1,
+##   max.sz=Inf,
+##   parallel.sz=1L, 
+##   mx.diff=TRUE,
+##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
+##   ssgsea.norm=TRUE,
+##   verbose=TRUE,
+##   BPPARAM=SerialParam(progressbar=verbose))
+## {
+##   method <- match.arg(method)
+##   kcdf <- match.arg(kcdf)
 
-#' @rdname GSVA-pkg-defunct
-#'
-#' @export
-setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
-          function(expr, gset.idx.list, annotation,
-  method=c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf=c("Gaussian", "Poisson", "none"),
-  abs.ranking=FALSE,
-  min.sz=1,
-  max.sz=Inf,
-  parallel.sz=1L, 
-  mx.diff=TRUE,
-  tau=switch(method, gsva=1, ssgsea=0.25, NA),
-  ssgsea.norm=TRUE,
-  verbose=TRUE,
-  BPPARAM=SerialParam(progressbar=verbose))
-{
-  method <- match.arg(method)
-  kcdf <- match.arg(kcdf)
+##   .Defunct(new="gsva()", package="GSVA",
+##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
 
-  .Defunct(new="gsva()", package="GSVA",
-              msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
+##   ## filter genes according to various criteria,
+##   ## e.g., constant expression
+##   expr <- .filterFeatures(expr, method)
 
-  ## filter genes according to various criteria,
-  ## e.g., constant expression
-  expr <- .filterFeatures(expr, method)
-
-  ## map to the actual features for which expression data is available
-  mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
+##   ## map to the actual features for which expression data is available
+##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
   
-  ## remove gene sets from the analysis for which no features are available
-  ## and meet the minimum and maximum gene-set size specified by the user
-  mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-                                         min.sz=max(1, min.sz),
-                                         max.sz=max.sz)
+##   ## remove gene sets from the analysis for which no features are available
+##   ## and meet the minimum and maximum gene-set size specified by the user
+##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
+##                                          min.sz=max(1, min.sz),
+##                                          max.sz=max.sz)
 
-  if (!missing(kcdf)) {
-    if (kcdf == "Gaussian") {
-      rnaseq <- FALSE
-      kernel <- TRUE
-    } else if (kcdf == "Poisson") {
-      rnaseq <- TRUE
-      kernel <- TRUE
-    } else
-      kernel <- FALSE
-  }
+##   if (!missing(kcdf)) {
+##     if (kcdf == "Gaussian") {
+##       rnaseq <- FALSE
+##       kernel <- TRUE
+##     } else if (kcdf == "Poisson") {
+##       rnaseq <- TRUE
+##       kernel <- TRUE
+##     } else
+##       kernel <- FALSE
+##   }
 
-  rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
+##   rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
+##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
 
-  rval
-})
+##   rval
+## })
 
 .gsva <- function(expr, gset.idx.list,
   method=c("gsva", "ssgsea", "zscore", "plage"),

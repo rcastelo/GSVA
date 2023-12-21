@@ -30,5 +30,5 @@ matching set of parameters.
 \code{\linkS4class{ssgseaParam}},
 \code{\linkS4class{gsvaParam}}
 
-[\code{plageParam}][\code{zscoreParam}][\code{ssgseaParam}][\code{gsvaParam}]
+\code{\link{plageParam}}, \code{\link{zscoreParam}}, \code{\link{ssgseaParam}}, \code{\link{gsvaParam}}
 }

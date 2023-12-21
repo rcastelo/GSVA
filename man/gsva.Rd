@@ -2,64 +2,44 @@
 % Please edit documentation in R/gsvaNewAPI.R
 \name{gsva}
 \alias{gsva}
-\alias{gsva,plageParam,missing-method}
-\alias{gsva,zscoreParam,missing-method}
-\alias{gsva,ssgseaParam,missing-method}
-\alias{gsva,gsvaParam,missing-method}
+\alias{gsva,plageParam-method}
+\alias{gsva,zscoreParam-method}
+\alias{gsva,ssgseaParam-method}
+\alias{gsva,gsvaParam-method}
 \title{Gene Set Variation Analysis}
 \usage{
-\S4method{gsva}{plageParam,missing}(
-  expr,
-  gset.idx.list,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose)
-)
+\S4method{gsva}{plageParam}(param, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
 
-\S4method{gsva}{zscoreParam,missing}(
-  expr,
-  gset.idx.list,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose)
-)
+\S4method{gsva}{zscoreParam}(param, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
 
-\S4method{gsva}{ssgseaParam,missing}(
-  expr,
-  gset.idx.list,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose)
-)
+\S4method{gsva}{ssgseaParam}(param, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
 
-\S4method{gsva}{gsvaParam,missing}(
-  expr,
-  gset.idx.list,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose)
-)
+\S4method{gsva}{gsvaParam}(param, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
 }
 \arguments{
-\item{expr}{A parameter object of one of the following classes:
+\item{param}{A parameter object of one of the following classes:
 \itemize{
-\item A \code{\link{gsvaParam}} object built using the constructor function \code{\link{gsvaParam}}.
+\item A \code{\link{gsvaParam}} object built using the constructor function
+\code{\link{gsvaParam}}.
 This object will trigger \code{gsva()} to use the GSVA algorithm by
 Hänzelmann et al. (2013).
-\item A \code{\link{plageParam}} object built using the constructor function \code{\link{plageParam}}.
+\item A \code{\link{plageParam}} object built using the constructor function
+\code{\link{plageParam}}.
 This object will trigger \code{gsva()} to use the PLAGE algorithm by
 Tomfohr et al. (2005).
-\item A \code{\link{zscoreParam}} object built using the constructor function \code{\link{zscoreParam}}
+\item A \code{\link{zscoreParam}} object built using the constructor function
+\code{\link{zscoreParam}}.
 This object will trigger \code{gsva()} to use the combined z-score algorithm by
 Lee et al. (2008).
-\item A \code{\link{ssgseaParam}} object built using the constructor function \code{\link{ssgseaParam}}
+\item A \code{\link{ssgseaParam}} object built using the constructor function
+\code{\link{ssgseaParam}}.
 This object will trigger \code{gsva()} to use the ssGSEA algorithm by
 Barbie et al. (2009).
 }}
 
-\item{gset.idx.list}{Dummy parameter, only present for backward compatibility,
-do not use it. It will be removed once the defunct version of 'gsva()'
-is removed.}
+\item{verbose}{Gives information about each calculation step. Default: \code{TRUE}.}
 
-\item{verbose}{Gives information about each calculation step. Default: \code{FALSE}.}
-
-\item{BPPARAM}{An object of class \code{\link{BiocParallelParam}} specifiying parameters
+\item{BPPARAM}{An object of class \code{\link{BiocParallelParam}} specifying parameters
 related to the parallel execution of some of the tasks and calculations
 within this function.}
 }

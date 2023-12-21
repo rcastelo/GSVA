@@ -7,27 +7,27 @@
 #' Bioconductor release. If you are looking for the documentation of the old
 #' API to the `gsva()` function, please consult [`GSVA-pkg-defunct`].
 #' 
-#' @param expr A parameter object of one of the following classes:
-#' * A [`gsvaParam`] object built using the constructor function [`gsvaParam`].
+#' @param param A parameter object of one of the following classes:
+#' * A [`gsvaParam`] object built using the constructor function
+#' [`gsvaParam`].
 #'   This object will trigger `gsva()` to use the GSVA algorithm by
 #'   Hänzelmann et al. (2013).
-#' * A [`plageParam`] object built using the constructor function [`plageParam`].
+#' * A [`plageParam`] object built using the constructor function
+#' [`plageParam`].
 #'   This object will trigger `gsva()` to use the PLAGE algorithm by
 #'   Tomfohr et al. (2005).
-#' * A [`zscoreParam`] object built using the constructor function [`zscoreParam`]
+#' * A [`zscoreParam`] object built using the constructor function
+#' [`zscoreParam`].
 #'   This object will trigger `gsva()` to use the combined z-score algorithm by
 #'   Lee et al. (2008).
-#' * A [`ssgseaParam`] object built using the constructor function [`ssgseaParam`]
+#' * A [`ssgseaParam`] object built using the constructor function
+#' [`ssgseaParam`].
 #'   This object will trigger `gsva()` to use the ssGSEA algorithm by
 #'   Barbie et al. (2009).
 #'
-#' @param gset.idx.list Dummy parameter, only present for backward compatibility,
-#' do not use it. It will be removed once the defunct version of 'gsva()'
-#' is removed.
+#' @param verbose Gives information about each calculation step. Default: `TRUE`.
 #' 
-#' @param verbose Gives information about each calculation step. Default: `FALSE`.
-#' 
-#' @param BPPARAM An object of class [`BiocParallelParam`] specifiying parameters
+#' @param BPPARAM An object of class [`BiocParallelParam`] specifying parameters
 #'   related to the parallel execution of some of the tasks and calculations
 #'   within this function.
 #' 
@@ -109,16 +109,14 @@
 #' topTable(fit, coef="sampleGroup2vs1")
 NULL
 
-#' @aliases gsva,plageParam,missing-method
+#' @aliases gsva,plageParam-method
 #' @rdname gsva
 #' @exportMethod
-setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
-          function(expr, gset.idx.list,
+setMethod("gsva", signature(param="plageParam"),
+          function(param,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              param <- expr # for backward compatibility with the old API only
-              
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
               
@@ -165,16 +163,14 @@ setMethod("gsva", signature(expr="plageParam", gset.idx.list="missing"),
           })
 
 
-#' @aliases gsva,zscoreParam,missing-method
+#' @aliases gsva,zscoreParam-method
 #' @rdname gsva
 #' @exportMethod
-setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
-          function(expr, gset.idx.list,
+setMethod("gsva", signature(param="zscoreParam"),
+          function(param,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              param <- expr # for backward compatibility with the old API only
-              
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
               
@@ -221,16 +217,14 @@ setMethod("gsva", signature(expr="zscoreParam", gset.idx.list="missing"),
           })
 
 
-#' @aliases gsva,ssgseaParam,missing-method
+#' @aliases gsva,ssgseaParam-method
 #' @rdname gsva
 #' @exportMethod
-setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
-          function(expr, gset.idx.list,
+setMethod("gsva", signature(param="ssgseaParam"),
+          function(param,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              param <- expr # for backward compatibility with the old API only
-              
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
               
@@ -277,16 +271,14 @@ setMethod("gsva", signature(expr="ssgseaParam", gset.idx.list="missing"),
           })
 
 
-#' @aliases gsva,gsvaParam,missing-method
+#' @aliases gsva,gsvaParam-method
 #' @rdname gsva
 #' @exportMethod
-setMethod("gsva", signature(expr="gsvaParam", gset.idx.list="missing"),
-          function(expr, gset.idx.list,
+setMethod("gsva", signature(param="gsvaParam"),
+          function(param,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              param <- expr # for backward compatibility with the old API only
-              
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
               
