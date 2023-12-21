@@ -15,8 +15,8 @@ NULL
 
 #' @rdname GSVA-pkg-defunct
 #' @section Details:
-#' Instead of gsva(expr=., gset.idx.list=., method=., ...), use a method-specific
-#' parameter object,
+#' Instead of `gsva(expr=., gset.idx.list=., method=., ...)`, use a
+#' method-specific parameter object,
 #' see [`plageParam`] [`zscoreParam`] [`ssgseaParam`] [`gsvaParam`],
 #' followed by a call to the new `gsva()` function, see [`gsva`].
 #' @export
