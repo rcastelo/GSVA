@@ -11,7 +11,7 @@ setGeneric("filterGeneSets",
 setGeneric("computeGeneSetsOverlap",
            function(gSets, uniqGenes=unique(unlist(gSets, use.names=FALSE)), ...) standardGeneric("computeGeneSetsOverlap"))
 
-## by now, these should be private methods
+## for now, these should be private methods
 
 setGeneric("unwrapData",
            function(container, ...) standardGeneric("unwrapData"))
