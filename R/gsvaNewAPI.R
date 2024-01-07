@@ -133,8 +133,8 @@ setMethod("gsva", signature(param="plageParam"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
-                                                       min.sz=get_minSize(param),
-                                                       max.sz=get_maxSize(param))
+                                                       minSize=get_minSize(param),
+                                                       maxSize=get_maxSize(param))
 
               if(length(filteredMappedGeneSets) == 0)
                   stop("The gene set list is empty! Filter may be too stringent.")
@@ -187,8 +187,8 @@ setMethod("gsva", signature(param="zscoreParam"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
-                                                       min.sz=get_minSize(param),
-                                                       max.sz=get_maxSize(param))
+                                                       minSize=get_minSize(param),
+                                                       maxSize=get_maxSize(param))
 
               if(length(filteredMappedGeneSets) == 0)
                   stop("The gene set list is empty! Filter may be too stringent.")
@@ -242,8 +242,8 @@ setMethod("gsva", signature(param="ssgseaParam"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
-                                                       min.sz=get_minSize(param),
-                                                       max.sz=get_maxSize(param))
+                                                       minSize=get_minSize(param),
+                                                       maxSize=get_maxSize(param))
 
               if(length(filteredMappedGeneSets) == 0)
                   stop("The gene set list is empty! Filter may be too stringent.")
@@ -295,8 +295,8 @@ setMethod("gsva", signature(param="gsvaParam"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
-                                                       min.sz=get_minSize(param),
-                                                       max.sz=get_maxSize(param))
+                                                       minSize=get_minSize(param),
+                                                       maxSize=get_maxSize(param))
 
               if(length(filteredMappedGeneSets) == 0)
                   stop("The gene set list is empty! Filter may be too stringent.")

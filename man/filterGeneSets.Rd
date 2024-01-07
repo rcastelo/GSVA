@@ -6,17 +6,17 @@
 \alias{filterGeneSets,GeneSetCollection-method}
 \title{Filter gene sets}
 \usage{
-\S4method{filterGeneSets}{list}(gSets, min.sz = 1, max.sz = Inf)
+\S4method{filterGeneSets}{list}(gSets, minSize = 1, maxSize = Inf)
 
-\S4method{filterGeneSets}{GeneSetCollection}(gSets, min.sz = 1, max.sz = Inf)
+\S4method{filterGeneSets}{GeneSetCollection}(gSets, minSize = 1, maxSize = Inf)
 }
 \arguments{
 \item{gSets}{Gene sets given either as a \code{list} or a
 \code{GeneSetCollection} object.}
 
-\item{min.sz}{Minimum size.}
+\item{minSize}{Minimum size.}
 
-\item{max.sz}{Maximum size.}
+\item{maxSize}{Maximum size.}
 }
 \value{
 A collection of gene sets that meet the given minimum and maximum
@@ -30,7 +30,7 @@ maximum set size.
 }
 \examples{
 geneSets <- list(set1=as.character(1:4), set2=as.character(4:10))
-filterGeneSets(geneSets, min.sz=5)
+filterGeneSets(geneSets, minSize=5)
 }
 \references{
 Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set

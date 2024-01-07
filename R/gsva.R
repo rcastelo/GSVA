@@ -61,103 +61,6 @@ setMethod("gsva", signature(param="SingleCellExperiment"), function(param, ...) 
 })
 
 
-
-.gsva <- function(expr, gset.idx.list,
-  method=c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf=c("Gaussian", "Poisson", "none"),
-  rnaseq=FALSE,
-  abs.ranking=FALSE,
-  parallel.sz=1L,
-  mx.diff=TRUE,
-  tau=1,
-  kernel=TRUE,
-  ssgsea.norm=TRUE,
-  verbose=TRUE,
-  BPPARAM=SerialParam(progressbar=verbose)) {
-  
-  if(is(expr, "DelayedArray")){
-    warning("Using 'DelayedArray' objects as input is still in an experimental stage.")
-
-    return(.gsvaDelayedArray(expr, gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                             parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM))
-  }
-
-	if (length(gset.idx.list) == 0)
-		stop("The gene set list is empty! Filter may be too stringent.")
-
-  if (any(lengths(gset.idx.list) == 1))
-    warning("Some gene sets have size one. Consider setting 'min.sz > 1'.")
-
-  parallel.sz <- as.integer(parallel.sz)
-  if (parallel.sz < 1L)
-    parallel.sz <- 1L
-	
-  ## because we keep the argument 'parallel.sz' for backwards compatibility
-  ## we need to harmonize it with the contents of BPPARAM
-  if (parallel.sz > 1L && inherits(BPPARAM, "SerialParam")) {
-    BPPARAM=MulticoreParam(progressbar=verbose, workers=parallel.sz, tasks=100)
-  } else if (parallel.sz == 1L && !inherits(BPPARAM, "SerialParam")) {
-    parallel.sz <- bpnworkers(BPPARAM)
-  } else if (parallel.sz > 1L && !inherits(BPPARAM, "SerialParam")) {
-    bpworkers(BPPARAM) <- parallel.sz
-  }
-
-  if (!inherits(BPPARAM, "SerialParam") && verbose)
-    cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
-                    class(BPPARAM), parallel.sz))
-
-  if (method == "ssgsea") {
-	  if(verbose)
-		  cat("Estimating ssGSEA scores for", length(gset.idx.list),"gene sets.\n")
-
-    return(ssgsea(X=expr, geneSets=gset.idx.list, alpha=tau, 
-                  normalization=ssgsea.norm, verbose=verbose, BPPARAM=BPPARAM))
-  }
-
-  if (method == "zscore") {
-    if (rnaseq)
-      stop("rnaseq=TRUE does not work with method='zscore'.")
-
-	  if(verbose)
-		  cat("Estimating combined z-scores for", length(gset.idx.list), "gene sets.\n")
-
-    return(zscore(X=expr, geneSets=gset.idx.list, verbose=verbose, BPPARAM=BPPARAM))
-  }
-
-  if (method == "plage") {
-    if (rnaseq)
-      stop("rnaseq=TRUE does not work with method='plage'.")
-
-	  if(verbose)
-		  cat("Estimating PLAGE scores for", length(gset.idx.list),"gene sets.\n")
-
-    return(plage(X=expr, geneSets=gset.idx.list, verbose=verbose, BPPARAM=BPPARAM))
-  }
-
-	if(verbose)
-		cat("Estimating GSVA scores for", length(gset.idx.list),"gene sets.\n")
-	
-	n.samples <- ncol(expr)
-	n.genes <- nrow(expr)
-	n.gset <- length(gset.idx.list)
-	
-	es.obs <- matrix(NaN, n.gset, n.samples, dimnames=list(names(gset.idx.list),colnames(expr)))
-	colnames(es.obs) <- colnames(expr)
-	rownames(es.obs) <- names(gset.idx.list)
-	
-	es.obs <- compute.geneset.es(expr, gset.idx.list, 1:n.samples,
-                               rnaseq=rnaseq, abs.ranking=abs.ranking,
-                               parallel.sz=parallel.sz,
-                               mx.diff=mx.diff, tau=tau, kernel=kernel,
-                               verbose=verbose, BPPARAM=BPPARAM)
-	
-	colnames(es.obs) <- colnames(expr)
-	rownames(es.obs) <- names(gset.idx.list)
-
-	es.obs
-}
-
-
 compute.gene.density <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
 	n.test.samples <- ncol(expr)
 	n.genes <- nrow(expr)
@@ -465,9 +368,6 @@ plage <- function(X, geneSets, verbose=TRUE,
 #' This function filters the input gene sets according to a given minimum and
 #' maximum set size.
 #' 
-## #' @usage \S4method{filterGeneSetslist}(gSets, min.sz=1, max.sz=Inf)
-## #' \S4method{filterGeneSetsGeneSetCollection}(gSets, min.sz=1, max.sz=Inf)
-#' 
 #' @aliases filterGeneSets
 #'
 #' @name filterGeneSets
@@ -477,9 +377,9 @@ plage <- function(X, geneSets, verbose=TRUE,
 #' @param gSets Gene sets given either as a `list` or a
 #' `GeneSetCollection` object.
 #' 
-#' @param min.sz Minimum size.
+#' @param minSize Minimum size.
 #' 
-#' @param max.sz Maximum size.
+#' @param maxSize Maximum size.
 #' 
 #' @return A collection of gene sets that meet the given minimum and maximum
 #' set size.
@@ -496,24 +396,24 @@ plage <- function(X, geneSets, verbose=TRUE,
 #' 
 #' @examples
 #' geneSets <- list(set1=as.character(1:4), set2=as.character(4:10))
-#' filterGeneSets(geneSets, min.sz=5)
+#' filterGeneSets(geneSets, minSize=5)
 NULL
 
 #' @aliases filterGeneSets,list-method
 #' @rdname filterGeneSets
 #' @exportMethod filterGeneSets
 setMethod("filterGeneSets", signature(gSets="list"),
-          function(gSets, min.sz=1, max.sz=Inf) {
+          function(gSets, minSize=1, maxSize=Inf) {
 	gSetsLen <- lengths(gSets)
-	return (gSets[gSetsLen >= min.sz & gSetsLen <= max.sz])	
+	return (gSets[gSetsLen >= minSize & gSetsLen <= maxSize])	
 })
 
 #' @aliases filterGeneSets,GeneSetCollection-method
 #' @rdname filterGeneSets
 #' @exportMethod filterGeneSets
 setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
-          function(gSets, min.sz=1, max.sz=Inf) {
-  filterGeneSets(geneIds(gSets), min.sz, max.sz)
+          function(gSets, minSize=1, maxSize=Inf) {
+  filterGeneSets(geneIds(gSets), minSize, maxSize)
 })
 
 
@@ -527,7 +427,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 #' sets in `gSets` are firstly filtered to discard genes that do not match
 #' to the identifiers in `uniqGenes`. Secondly, they are further filtered
 #' to meet the minimum and/or maximum size specified with the arguments
-#' `min.sz` and `max.sz`. The overlap between two gene sets is
+#' `minSize` and `maxSize`. The overlap between two gene sets is
 #' calculated as the number of common genes between the two gene sets divided
 #' by the smallest size of the two gene sets.
 #' 
@@ -537,24 +437,15 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 #'
 #' @rdname computeGeneSetsOverlap
 #' 
-## #' @usage \S4method{computeGeneSetsOverlaplist,character}(gSets, uniqGenes,
-## #' min.sz=1, max.sz=Inf)
-## #' \S4method{computeGeneSetsOverlaplist,ExpressionSet}(gSets, uniqGenes,
-## #' min.sz=1, max.sz=Inf)
-## #' \S4method{computeGeneSetsOverlapGeneSetCollection,character}(gSets,
-## #' uniqGenes, min.sz=1, max.sz=Inf)
-## #' \S4method{computeGeneSetsOverlapGeneSetCollection,ExpressionSet}(gSets,
-## #' uniqGenes, min.sz=1, max.sz=Inf)
-## #' 
 #' @param gSets Gene sets given either as a `list` or a
 #' `GeneSetCollection` object.
 #' 
 #' @param uniqGenes Vector of unique genes to be considered when calculating
 #' the overlaps.
 #' 
-#' @param min.sz Minimum size.
+#' @param minSize Minimum size.
 #' 
-#' @param max.sz Maximum size.
+#' @param maxSize Maximum size.
 #' 
 #' @return A gene-set by gene-set matrix of the overlap among every pair of
 #' gene sets.
@@ -578,7 +469,7 @@ NULL
 #' @rdname computeGeneSetsOverlap
 #' @exportMethod computeGeneSetsOverlap
 setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="character"),
-          function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
+          function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
   totalGenes <- length(uniqGenes)
 
   ## map to the actual features for which expression data is available
@@ -592,14 +483,14 @@ setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="character
   members <- cbind(unlist(gSets, use.names=FALSE), rep(1:totalGsets, times=lenGsets))
   gSetsMembershipMatrix[members] <- 1
 
-  .computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
+  .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
 })
 
 #' @aliases computeGeneSetsOverlap,list,ExpressionSet-method
 #' @rdname computeGeneSetsOverlap
 #' @exportMethod computeGeneSetsOverlap
 setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="ExpressionSet"),
-          function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
+          function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
   uniqGenes <- featureNames(uniqGenes)
   totalGenes <- length(uniqGenes)
 
@@ -614,26 +505,26 @@ setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="Expressio
   members <- cbind(unlist(gSets, use.names=FALSE), rep(1:totalGsets, times=lenGsets))
   gSetsMembershipMatrix[members] <- 1
 
-  .computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
+  .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
 })
 
 #' @aliases computeGeneSetsOverlap,GeneSetCollection,character-method
 #' @rdname computeGeneSetsOverlap
 #' @exportMethod computeGeneSetsOverlap
 setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGenes="character"),
-          function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
+          function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
 
   gSetsMembershipMatrix <- incidence(gSets)
   gSetsMembershipMatrix <- t(gSetsMembershipMatrix[, colnames(gSetsMembershipMatrix) %in% uniqGenes])
 
-  .computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
+  .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
 })
 
 #' @aliases computeGeneSetsOverlap,GeneSetCollection,ExpressionSet-method
 #' @rdname computeGeneSetsOverlap
 #' @exportMethod computeGeneSetsOverlap
 setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGenes="ExpressionSet"),
-          function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
+          function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
   ## map gene identifiers of the gene sets to the features in the chip
   ## Biobase::annotation() is necessary to disambiguate from the
   ## 'annotation' argument
@@ -644,15 +535,15 @@ setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGen
   gSetsMembershipMatrix <- incidence(gSets)
   gSetsMembershipMatrix <- t(gSetsMembershipMatrix[, colnames(gSetsMembershipMatrix) %in% uniqGenes])
 
-  .computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
+  .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
 })
 
-.computeGeneSetsOverlap <- function(gSetsMembershipMatrix, min.sz=1, max.sz=Inf) {
+.computeGeneSetsOverlap <- function(gSetsMembershipMatrix, minSize=1, maxSize=Inf) {
   ## gSetsMembershipMatrix should be a (genes x gene-sets) incidence matrix
 
   lenGsets <- colSums(gSetsMembershipMatrix)
 
-  szFilterMask <- lenGsets >= max(1, min.sz) & lenGsets <= max.sz
+  szFilterMask <- lenGsets >= max(1, minSize) & lenGsets <= maxSize
   if (!any(szFilterMask))
     stop("No gene set meets the minimum and maximum size filter\n")
 

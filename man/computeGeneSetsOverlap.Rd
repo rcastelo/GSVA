@@ -8,13 +8,13 @@
 \alias{computeGeneSetsOverlap,GeneSetCollection,ExpressionSet-method}
 \title{Compute gene-sets overlap}
 \usage{
-\S4method{computeGeneSetsOverlap}{list,character}(gSets, uniqGenes, min.sz = 1, max.sz = Inf)
+\S4method{computeGeneSetsOverlap}{list,character}(gSets, uniqGenes, minSize = 1, maxSize = Inf)
 
-\S4method{computeGeneSetsOverlap}{list,ExpressionSet}(gSets, uniqGenes, min.sz = 1, max.sz = Inf)
+\S4method{computeGeneSetsOverlap}{list,ExpressionSet}(gSets, uniqGenes, minSize = 1, maxSize = Inf)
 
-\S4method{computeGeneSetsOverlap}{GeneSetCollection,character}(gSets, uniqGenes, min.sz = 1, max.sz = Inf)
+\S4method{computeGeneSetsOverlap}{GeneSetCollection,character}(gSets, uniqGenes, minSize = 1, maxSize = Inf)
 
-\S4method{computeGeneSetsOverlap}{GeneSetCollection,ExpressionSet}(gSets, uniqGenes, min.sz = 1, max.sz = Inf)
+\S4method{computeGeneSetsOverlap}{GeneSetCollection,ExpressionSet}(gSets, uniqGenes, minSize = 1, maxSize = Inf)
 }
 \arguments{
 \item{gSets}{Gene sets given either as a \code{list} or a
@@ -23,9 +23,9 @@
 \item{uniqGenes}{Vector of unique genes to be considered when calculating
 the overlaps.}
 
-\item{min.sz}{Minimum size.}
+\item{minSize}{Minimum size.}
 
-\item{max.sz}{Maximum size.}
+\item{maxSize}{Maximum size.}
 }
 \value{
 A gene-set by gene-set matrix of the overlap among every pair of
@@ -40,7 +40,7 @@ input argument \code{gSets}. Before this calculation takes place, the gene
 sets in \code{gSets} are firstly filtered to discard genes that do not match
 to the identifiers in \code{uniqGenes}. Secondly, they are further filtered
 to meet the minimum and/or maximum size specified with the arguments
-\code{min.sz} and \code{max.sz}. The overlap between two gene sets is
+\code{minSize} and \code{maxSize}. The overlap between two gene sets is
 calculated as the number of common genes between the two gene sets divided
 by the smallest size of the two gene sets.
 }
