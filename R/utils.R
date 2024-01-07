@@ -120,3 +120,8 @@
     return(any(ap %in% rownames(installed.packages())))
 }
 
+## utility function to make sure matrix to dgCMatrix coercion is uniform
+## (since direct coercion to dgCMatrix is deprecated (!) by Matrix pkg)
+.matrix2dgCMatrix <- function(m) {
+    return(as(as(as(m, "dMatrix"), "generalMatrix"), "CsparseMatrix"))
+}

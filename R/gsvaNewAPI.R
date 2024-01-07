@@ -444,12 +444,7 @@ setMethod("wrapData", signature("matrix", "matrix"),
 
 setMethod("wrapData", signature("matrix", "dgCMatrix"),
           function(dataMatrix, container) {
-              return(as(dataMatrix, "dgCMatrix"))
-          })
-
-setMethod("wrapData", signature("dgCMatrix", "dgCMatrix"),
-          function(dataMatrix, container) {
-              return(dataMatrix)
+              return(.matrix2dgCMatrix(dataMatrix))
           })
 
 setMethod("wrapData", signature("matrix", "ExpressionSet"),
