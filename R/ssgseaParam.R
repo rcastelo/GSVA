@@ -152,7 +152,6 @@ do_normalize <- function(object) {
 
 ## ----- show -----
 
-#' @exportMethod show
 setMethod("show",
           signature=signature(object="ssgseaParam"),
           function(object) {

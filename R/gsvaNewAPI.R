@@ -111,7 +111,7 @@ NULL
 
 #' @aliases gsva,plageParam-method
 #' @rdname gsva
-#' @exportMethod
+#' @exportMethod gsva
 setMethod("gsva", signature(param="plageParam"),
           function(param,
                    verbose=TRUE,
@@ -165,7 +165,7 @@ setMethod("gsva", signature(param="plageParam"),
 
 #' @aliases gsva,zscoreParam-method
 #' @rdname gsva
-#' @exportMethod
+#' @exportMethod gsva
 setMethod("gsva", signature(param="zscoreParam"),
           function(param,
                    verbose=TRUE,
@@ -219,7 +219,7 @@ setMethod("gsva", signature(param="zscoreParam"),
 
 #' @aliases gsva,ssgseaParam-method
 #' @rdname gsva
-#' @exportMethod
+#' @exportMethod gsva
 setMethod("gsva", signature(param="ssgseaParam"),
           function(param,
                    verbose=TRUE,
@@ -273,7 +273,7 @@ setMethod("gsva", signature(param="ssgseaParam"),
 
 #' @aliases gsva,gsvaParam-method
 #' @rdname gsva
-#' @exportMethod
+#' @exportMethod gsva
 setMethod("gsva", signature(param="gsvaParam"),
           function(param,
                    verbose=TRUE,

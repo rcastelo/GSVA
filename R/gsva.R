@@ -501,7 +501,7 @@ NULL
 
 #' @aliases filterGeneSets,list-method
 #' @rdname filterGeneSets
-#' @exportMethod
+#' @exportMethod filterGeneSets
 setMethod("filterGeneSets", signature(gSets="list"),
           function(gSets, min.sz=1, max.sz=Inf) {
 	gSetsLen <- lengths(gSets)
@@ -510,7 +510,7 @@ setMethod("filterGeneSets", signature(gSets="list"),
 
 #' @aliases filterGeneSets,GeneSetCollection-method
 #' @rdname filterGeneSets
-#' @exportMethod
+#' @exportMethod filterGeneSets
 setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
           function(gSets, min.sz=1, max.sz=Inf) {
   filterGeneSets(geneIds(gSets), min.sz, max.sz)
@@ -576,7 +576,7 @@ NULL
 
 #' @aliases computeGeneSetsOverlap,list,character-method
 #' @rdname computeGeneSetsOverlap
-#' @exportMethod
+#' @exportMethod computeGeneSetsOverlap
 setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="character"),
           function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
   totalGenes <- length(uniqGenes)
@@ -597,7 +597,7 @@ setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="character
 
 #' @aliases computeGeneSetsOverlap,list,ExpressionSet-method
 #' @rdname computeGeneSetsOverlap
-#' @exportMethod
+#' @exportMethod computeGeneSetsOverlap
 setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="ExpressionSet"),
           function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
   uniqGenes <- featureNames(uniqGenes)
@@ -619,7 +619,7 @@ setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="Expressio
 
 #' @aliases computeGeneSetsOverlap,GeneSetCollection,character-method
 #' @rdname computeGeneSetsOverlap
-#' @exportMethod
+#' @exportMethod computeGeneSetsOverlap
 setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGenes="character"),
           function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
 
@@ -631,7 +631,7 @@ setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGen
 
 #' @aliases computeGeneSetsOverlap,GeneSetCollection,ExpressionSet-method
 #' @rdname computeGeneSetsOverlap
-#' @exportMethod
+#' @exportMethod computeGeneSetsOverlap
 setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGenes="ExpressionSet"),
           function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
   ## map gene identifiers of the gene sets to the features in the chip

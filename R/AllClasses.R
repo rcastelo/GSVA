@@ -17,6 +17,13 @@
 #' [`SingleCellExperiment-class`],
 #' [`HDF5Array`]
 #'
+#' @importClassesFrom Matrix dgCMatrix
+#' @importClassesFrom Biobase ExpressionSet
+#' @importClassesFrom SummarizedExperiment SummarizedExperiment
+#' @importClassesFrom SingleCellExperiment SingleCellExperiment
+#' @importClassesFrom DelayedArray DelayedArray
+#' @importClassesFrom HDF5Array HDF5Array
+#'
 #' @name GsvaExprData-class
 #' @rdname GsvaExprData-class
 #' @exportClass GsvaExprData
@@ -36,6 +43,8 @@ setClassUnion("GsvaExprData",
 #' @seealso
 #' [`list`], 
 #' [`GeneSetCollection`]
+#'
+#' @importClassesFrom GSEABase GeneSetCollection
 #'
 #' @name GsvaGeneSets-class
 #' @rdname GsvaGeneSets-class
