@@ -111,7 +111,7 @@ NULL
 
 #' @aliases gsva,plageParam-method
 #' @rdname gsva
-#' @exportMethod
+#' @exportMethod gsva
 setMethod("gsva", signature(param="plageParam"),
           function(param,
                    verbose=TRUE,
@@ -133,8 +133,8 @@ setMethod("gsva", signature(param="plageParam"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
-                                                       min.sz=get_minSize(param),
-                                                       max.sz=get_maxSize(param))
+                                                       minSize=get_minSize(param),
+                                                       maxSize=get_maxSize(param))
 
               if(length(filteredMappedGeneSets) == 0)
                   stop("The gene set list is empty! Filter may be too stringent.")
@@ -165,7 +165,7 @@ setMethod("gsva", signature(param="plageParam"),
 
 #' @aliases gsva,zscoreParam-method
 #' @rdname gsva
-#' @exportMethod
+#' @exportMethod gsva
 setMethod("gsva", signature(param="zscoreParam"),
           function(param,
                    verbose=TRUE,
@@ -187,8 +187,8 @@ setMethod("gsva", signature(param="zscoreParam"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
-                                                       min.sz=get_minSize(param),
-                                                       max.sz=get_maxSize(param))
+                                                       minSize=get_minSize(param),
+                                                       maxSize=get_maxSize(param))
 
               if(length(filteredMappedGeneSets) == 0)
                   stop("The gene set list is empty! Filter may be too stringent.")
@@ -219,7 +219,7 @@ setMethod("gsva", signature(param="zscoreParam"),
 
 #' @aliases gsva,ssgseaParam-method
 #' @rdname gsva
-#' @exportMethod
+#' @exportMethod gsva
 setMethod("gsva", signature(param="ssgseaParam"),
           function(param,
                    verbose=TRUE,
@@ -242,8 +242,8 @@ setMethod("gsva", signature(param="ssgseaParam"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
-                                                       min.sz=get_minSize(param),
-                                                       max.sz=get_maxSize(param))
+                                                       minSize=get_minSize(param),
+                                                       maxSize=get_maxSize(param))
 
               if(length(filteredMappedGeneSets) == 0)
                   stop("The gene set list is empty! Filter may be too stringent.")
@@ -273,7 +273,7 @@ setMethod("gsva", signature(param="ssgseaParam"),
 
 #' @aliases gsva,gsvaParam-method
 #' @rdname gsva
-#' @exportMethod
+#' @exportMethod gsva
 setMethod("gsva", signature(param="gsvaParam"),
           function(param,
                    verbose=TRUE,
@@ -295,8 +295,8 @@ setMethod("gsva", signature(param="gsvaParam"),
               ## remove gene sets from the analysis for which no features are available
               ## and meet the minimum and maximum gene-set size specified by the user
               filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
-                                                       min.sz=get_minSize(param),
-                                                       max.sz=get_maxSize(param))
+                                                       minSize=get_minSize(param),
+                                                       maxSize=get_maxSize(param))
 
               if(length(filteredMappedGeneSets) == 0)
                   stop("The gene set list is empty! Filter may be too stringent.")
@@ -444,12 +444,7 @@ setMethod("wrapData", signature("matrix", "matrix"),
 
 setMethod("wrapData", signature("matrix", "dgCMatrix"),
           function(dataMatrix, container) {
-              return(as(dataMatrix, "dgCMatrix"))
-          })
-
-setMethod("wrapData", signature("dgCMatrix", "dgCMatrix"),
-          function(dataMatrix, container) {
-              return(dataMatrix)
+              return(.matrix2dgCMatrix(dataMatrix))
           })
 
 setMethod("wrapData", signature("matrix", "ExpressionSet"),

@@ -194,7 +194,6 @@ get_absRanking <- function(object) {
 
 ## ----- show -----
 
-#' @exportMethod show
 setMethod("show",
           signature=signature(object="gsvaParam"),
           function(object) {

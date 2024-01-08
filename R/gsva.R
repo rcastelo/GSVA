@@ -61,722 +61,6 @@ setMethod("gsva", signature(param="SingleCellExperiment"), function(param, ...) 
 })
 
 
-## setMethod("gsva", signature(expr="HDF5Array", gset.idx.list="list"),
-##           function(param, expr, gset.idx.list, annotation,
-##   method=c("gsva", "ssgsea", "zscore", "plage"),
-##   kcdf=c("Gaussian", "Poisson", "none"),
-##   abs.ranking=FALSE,
-##   min.sz=1,
-##   max.sz=Inf,
-##   parallel.sz=1L,
-##   mx.diff=TRUE,
-##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-##   ssgsea.norm=TRUE,
-##   verbose=TRUE,
-##   BPPARAM=SerialParam(progressbar=verbose))
-## {
-##   method <- match.arg(method)
-##   kcdf <- match.arg(kcdf)
-
-##   .Defunct(new = "gsva()", package="GSVA",
-##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
-  
-##   warning("Using 'HDF5Array' objects as input is still in an experimental stage.")
-
-##   ## filter genes according to verious criteria,
-##   ## e.g., constant expression
-##   expr <- .filterFeatures(expr, method)
-  
-##   ## map to the actual features for which expression data is available
-##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
-  
-##   ## remove gene sets from the analysis for which no features are available
-##   ## and meet the minimum and maximum gene-set size specified by the user
-##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-##                                          min.sz=max(1, min.sz),
-##                                          max.sz=max.sz)
-  
-##   if (!missing(kcdf)) {
-##     if (kcdf == "Gaussian") {
-##       rnaseq <- FALSE
-##       kernel <- TRUE
-##     } else if (kcdf == "Poisson") {
-##       rnaseq <- TRUE
-##       kernel <- TRUE
-##     } else
-##       kernel <- FALSE
-##   }
-  
-##   rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
-  
-##   rval
-## })
-
-## setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="GeneSetCollection"),
-##           function(expr, gset.idx.list, ...)
-## {
-##   .Defunct(new="gsva()", package="GSVA",
-##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
-  
-##   gsva(expr, geneIds(gset.idx.list), ...)
-## })
-
-## #' @rdname GSVA-pkg-defunct
-## #'
-## #' @export
-## setMethod("gsva", signature(expr="SingleCellExperiment", gset.idx.list="list"),
-##           function(expr, gset.idx.list, annotation,
-##   method=c("gsva", "ssgsea", "zscore", "plage"),
-##   kcdf=c("Gaussian", "Poisson", "none"),
-##   abs.ranking=FALSE,
-##   min.sz=1,
-##   max.sz=Inf,
-##   parallel.sz=1L, 
-##   mx.diff=TRUE,
-##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-##   ssgsea.norm=TRUE,
-##   verbose=TRUE,
-##   BPPARAM=SerialParam(progressbar=verbose))
-## {
-##   method <- match.arg(method)
-##   kcdf <- match.arg(kcdf)
-  
-##   .Defunct(new="gsva()", package="GSVA",
-##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
-  
-##   warning("Using 'SingleCellExperiment' objects as input is still in an experimental stage.")
-
-##   if (length(assays(expr)) == 0L)
-##     stop("The input SummarizedExperiment object has no assay data.")
-  
-##   se <- expr
-  
-##   if (missing(annotation))
-##     annotation <- names(assays(se))[1]
-##   else {
-##     if (!is.character(annotation))
-##       stop("The 'annotation' argument must contain a character string.")
-##     annotation <- annotation[1]
-    
-##     if (!annotation %in% names(assays(se)))
-##       stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
-##   }
-##   expr <- assays(se)[[annotation]]
-  
-##   ## filter genes according to various criteria,
-##   ## e.g., constant expression
-  
-##   expr <- .filterFeatures(expr, method)
-  
-##   ## map to the actual features for which expression data is available
-##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
-  
-##   ## remove gene sets from the analysis for which no features are available
-##   ## and meet the minimum and maximum gene-set size specified by the user
-##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-##                                          min.sz=max(1, min.sz),
-##                                          max.sz=max.sz)
-  
-##   if (!missing(kcdf)) {
-##     if (kcdf == "Gaussian") {
-##       rnaseq <- FALSE
-##       kernel <- TRUE
-##     } else if (kcdf == "Poisson") {
-##       rnaseq <- TRUE
-##       kernel <- TRUE
-##     } else
-##       kernel <- FALSE
-##   }
-  
-##   eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
-  
-##   rval <- SingleCellExperiment(assays=SimpleList(es=eSco),
-##                                colData=colData(se),
-##                                metadata=metadata(se))
-##   metadata(rval)$annotation <- NULL
-  
-##   rval
-##           })
-          
-## #' @rdname GSVA-pkg-defunct
-## #'
-## #' @export
-## setMethod("gsva", signature(expr="dgCMatrix", gset.idx.list="list"),
-##           function(expr, gset.idx.list, annotation,
-##   method=c("gsva", "ssgsea", "zscore", "plage"),
-##   kcdf=c("Gaussian", "Poisson", "none"),
-##   abs.ranking=FALSE,
-##   min.sz=1,
-##   max.sz=Inf,
-##   parallel.sz=1L,
-##   mx.diff=TRUE,
-##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-##   ssgsea.norm=TRUE,
-##   verbose=TRUE,
-##   BPPARAM=SerialParam(progressbar=verbose))
-## {
-##   method <- match.arg(method)
-##   kcdf <- match.arg(kcdf)
-  
-##   .Defunct(new="gsva()", package="GSVA",
-##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
-  
-##   warning("Using 'dgCMatrix' objects as input is still in an experimental stage.")
-
-##   ## filter genes according to verious criteria,
-##   ## e.g., constant expression
-##   expr <- .filterFeatures(expr, method)
-  
-##   ## map to the actual features for which expression data is available
-##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
-  
-##   ## remove gene sets from the analysis for which no features are available
-##   ## and meet the minimum and maximum gene-set size specified by the user
-##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-##                                          min.sz=max(1, min.sz),
-##                                          max.sz=max.sz)
-  
-##   if (!missing(kcdf)) {
-##     if (kcdf == "Gaussian") {
-##       rnaseq <- FALSE
-##       kernel <- TRUE
-##     } else if (kcdf == "Poisson") {
-##       rnaseq <- TRUE
-##       kernel <- TRUE
-##     } else
-##       kernel <- FALSE
-##   }
-  
-##   rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
-  
-##   rval
-## })
-
-## #' @rdname GSVA-pkg-defunct
-## #'
-## #' @export
-## setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="GeneSetCollection"),
-##           function(expr, gset.idx.list, annotation,
-##   method=c("gsva", "ssgsea", "zscore", "plage"),
-##   kcdf=c("Gaussian", "Poisson", "none"),
-##   abs.ranking=FALSE,
-##   min.sz=1,
-##   max.sz=Inf,
-##   parallel.sz=1L, 
-##   mx.diff=TRUE,
-##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-##   ssgsea.norm=TRUE,
-##   verbose=TRUE,
-##   BPPARAM=SerialParam(progressbar=verbose))
-## {
-##   method <- match.arg(method)
-##   kcdf <- match.arg(kcdf)
-
-##   .Defunct(new="gsva()", package="GSVA",
-##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
-  
-##   if (length(assays(expr)) == 0L)
-##     stop("The input SummarizedExperiment object has no assay data.")
-
-##   se <- expr
-##   if (missing(annotation))
-##     annotation <- names(assays(se))[1]
-##   else {
-##     if (!is.character(annotation))
-##       stop("The 'annotation' argument must contain a character string.")
-##     annotation <- annotation[1]
-
-##     if (!annotation %in% names(assays(se)))
-##       stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
-##   }
-##   expr <- as.matrix(assays(se)[[annotation]])
-
-##   ## filter genes according to verious criteria,
-##   ## e.g., constant expression
-##   expr <- .filterFeatures(expr, method)
-
-##   annotpkg <- metadata(se)$annotation
-##   if (!is.null(annotpkg) && length(annotpkg) > 0 && is.character(annotpkg) && annotpkg != "") {
-##     if (all(!c(annotpkg, paste0(annotpkg, ".db")) %in% installed.packages()))
-##       stop(sprintf("Please install the annotation package %s. If %s does not seem to exist as a package, please try to append the suffix .db to its name.", annotpkg, annotpkg))
-
-##     if (verbose)
-##       cat("Mapping identifiers between gene sets and feature names\n")
-
-##     ## map gene identifiers of the gene sets to the features in the chip
-##     ## Biobase::annotation() is necessary to disambiguate from the
-##     ## 'annotation' argument
-##     mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
-##                                            AnnoOrEntrezIdentifier(annotpkg))
-##   } else {
-##     mapped.gset.idx.list <- gset.idx.list
-##     if (verbose) {
-##       cat("No annotation package name available in the input 'SummarizedExperiment' object 'expr'.",
-##           "Attempting to directly match identifiers in 'expr' to gene sets.", sep="\n")
-##     }
-##   }
-##   mapped.gset.idx.list <- geneIds(mapped.gset.idx.list) 
-
-##   ## map to the actual features for which expression data is available
-##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
-
-##   ## remove gene sets from the analysis for which no features are available
-##   ## and meet the minimum and maximum gene-set size specified by the user
-##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-##                                          min.sz=max(1, min.sz),
-##                                          max.sz=max.sz)
-
-##   if (!missing(kcdf)) {
-##     if (kcdf == "Gaussian") {
-##       rnaseq <- FALSE
-##       kernel <- TRUE
-##     } else if (kcdf == "Poisson") {
-##       rnaseq <- TRUE
-##       kernel <- TRUE
-##     } else
-##       kernel <- FALSE
-##   }
-
-##   eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
-
-##   rval <- SummarizedExperiment(assays=SimpleList(es=eSco),
-##                                colData=colData(se),
-##                                metadata=metadata(se))
-##   metadata(rval)$annotation <- NULL
-
-##   rval
-## })
-
-## #' @rdname GSVA-pkg-defunct
-## #'
-## #' @export
-## setMethod("gsva", signature(expr="SummarizedExperiment", gset.idx.list="list"),
-##           function(expr, gset.idx.list, annotation,
-##   method=c("gsva", "ssgsea", "zscore", "plage"),
-##   kcdf=c("Gaussian", "Poisson", "none"),
-##   abs.ranking=FALSE,
-##   min.sz=1,
-##   max.sz=Inf,
-##   parallel.sz=1L, 
-##   mx.diff=TRUE,
-##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-##   ssgsea.norm=TRUE,
-##   verbose=TRUE,
-##   BPPARAM=SerialParam(progressbar=verbose))
-## {
-##   method <- match.arg(method)
-##   kcdf <- match.arg(kcdf)
-
-##   .Defunct(new="gsva()", package="GSVA",
-##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
-  
-##   if (length(assays(expr)) == 0L)
-##     stop("The input SummarizedExperiment object has no assay data.")
-
-##   se <- expr
-##   if (missing(annotation))
-##     annotation <- names(assays(se))[1]
-##   else {
-##     if (!is.character(annotation))
-##       stop("The 'annotation' argument must contain a character string.")
-##     annotation <- annotation[1]
-
-##     if (!annotation %in% names(assays(se)))
-##       stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", annotation))
-##   }
-##   expr <- as.matrix(assays(se)[[annotation]])
-
-##   ## filter genes according to verious criteria,
-##   ## e.g., constant expression
-##   expr <- .filterFeatures(expr, method)
-
-##   ## map to the actual features for which expression data is available
-##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
-  
-##   ## remove gene sets from the analysis for which no features are available
-##   ## and meet the minimum and maximum gene-set size specified by the user
-##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-##                                          min.sz=max(1, min.sz),
-##                                          max.sz=max.sz)
-
-##   if (!missing(kcdf)) {
-##     if (kcdf == "Gaussian") {
-##       rnaseq <- FALSE
-##       kernel <- TRUE
-##     } else if (kcdf == "Poisson") {
-##       rnaseq <- TRUE
-##       kernel <- TRUE
-##     } else
-##       kernel <- FALSE
-##   }
-
-##   eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
-
-##   rval <- SummarizedExperiment(assays=SimpleList(es=eSco),
-##                                colData=colData(se),
-##                                metadata=metadata(se))
-##   metadata(rval)$annotation <- NULL
-
-##   rval
-## })
-
-## #' @rdname GSVA-pkg-defunct
-## #'
-## #' @export
-## setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="list"),
-##           function(expr, gset.idx.list, annotation,
-##   method=c("gsva", "ssgsea", "zscore", "plage"),
-##   kcdf=c("Gaussian", "Poisson", "none"),
-##   abs.ranking=FALSE,
-##   min.sz=1,
-##   max.sz=Inf,
-##   parallel.sz=1L, 
-##   mx.diff=TRUE,
-##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-##   ssgsea.norm=TRUE,
-##   verbose=TRUE,
-##   BPPARAM=SerialParam(progressbar=verbose))
-## {
-##   method <- match.arg(method)
-##   kcdf <- match.arg(kcdf)
-
-##   .Defunct(new="gsva()", package="GSVA",
-##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
-  
-##   eset <- expr
-##   expr <- exprs(eset)
-##   ## filter genes according to verious criteria,
-##   ## e.g., constant expression
-##   expr <- .filterFeatures(expr, method)
-
-##   ## map to the actual features for which expression data is available
-##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
-  
-##   ## remove gene sets from the analysis for which no features are available
-##   ## and meet the minimum and maximum gene-set size specified by the user
-##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-##                                          min.sz=max(1, min.sz),
-##                                          max.sz=max.sz)
-
-##   if (!missing(kcdf)) {
-##     if (kcdf == "Gaussian") {
-##       rnaseq <- FALSE
-##       kernel <- TRUE
-##     } else if (kcdf == "Poisson") {
-##       rnaseq <- TRUE
-##       kernel <- TRUE
-##     } else
-##       kernel <- FALSE
-##   }
-
-##   eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM) 
-
-##   rval <- new("ExpressionSet", exprs=eSco, phenoData=phenoData(eset),
-##               experimentData=experimentData(eset), annotation="")
-
-##   rval
-## })
-
-## #' @rdname GSVA-pkg-defunct
-## #'
-## #' @export
-## setMethod("gsva", signature(expr="ExpressionSet", gset.idx.list="GeneSetCollection"),
-##           function(expr, gset.idx.list, annotation,
-##   method=c("gsva", "ssgsea", "zscore", "plage"),
-##   kcdf=c("Gaussian", "Poisson", "none"),
-##   abs.ranking=FALSE,
-##   min.sz=1,
-##   max.sz=Inf,
-##   parallel.sz=1L, 
-##   mx.diff=TRUE,
-##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-##   ssgsea.norm=TRUE,
-##   verbose=TRUE,
-##   BPPARAM=SerialParam(progressbar=verbose))
-## {
-##   method <- match.arg(method)
-##   kcdf <- match.arg(kcdf)
-
-##   .Defunct(new="gsva()", package="GSVA",
-##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
-  
-##   eset <- expr
-##   expr <- exprs(eset)
-##   ## filter genes according to verious criteria,
-##   ## e.g., constant expression
-##   expr <- .filterFeatures(expr, method)
-
-##   annotpkg <- Biobase::annotation(eset)
-##   if (length(annotpkg) > 0 && annotpkg != "") {
-##     if (all(!c(annotpkg, paste0(annotpkg, ".db")) %in% installed.packages()))
-##       stop(sprintf("Please install the annotation package %s. If %s does not seem to exist as a package, please try to append the suffix .db to its name.", annotpkg, annotpkg))
-
-##     if (verbose)
-##       cat("Mapping identifiers between gene sets and feature names\n")
-
-##     ## map gene identifiers of the gene sets to the features in the chip
-##     ## Biobase::annotation() is necessary to disambiguate from the
-##     ## 'annotation' argument
-##     mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
-##                                            AnnoOrEntrezIdentifier(annotpkg))
-##   } else {
-##     mapped.gset.idx.list <- gset.idx.list
-##     if (verbose) {
-##       cat("No annotation package name available in the input 'ExpressionSet' object 'expr'.",
-##         "Attempting to directly match identifiers in 'expr' to gene sets.", sep="\n")
-##     }
-##   }
-##   mapped.gset.idx.list <- geneIds(mapped.gset.idx.list) 
-
-##   ## map to the actual features for which expression data is available
-##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
-  
-##   ## remove gene sets from the analysis for which no features are available
-##   ## and meet the minimum and maximum gene-set size specified by the user
-##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-##                                          min.sz=max(1, min.sz),
-##                                          max.sz=max.sz)
-
-##   if (!missing(kcdf)) {
-##     if (kcdf == "Gaussian") {
-##       rnaseq <- FALSE
-##       kernel <- TRUE
-##     } else if (kcdf == "Poisson") {
-##       rnaseq <- TRUE
-##       kernel <- TRUE
-##     } else
-##       kernel <- FALSE
-##   }
-
-##   eSco <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
-
-##   rval <- new("ExpressionSet", exprs=eSco, phenoData=phenoData(eset),
-##               experimentData=experimentData(eset), annotation="")
-
-##   rval
-## })
-
-## #' @rdname GSVA-pkg-defunct
-## #'
-## #' @export
-## setMethod("gsva", signature(expr="matrix", gset.idx.list="GeneSetCollection"),
-##           function(expr, gset.idx.list, annotation,
-##   method=c("gsva", "ssgsea", "zscore", "plage"),
-##   kcdf=c("Gaussian", "Poisson", "none"),
-##   abs.ranking=FALSE,
-##   min.sz=1,
-##   max.sz=Inf,
-##   parallel.sz=1L, 
-##   mx.diff=TRUE,
-##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-##   ssgsea.norm=TRUE,
-##   verbose=TRUE,
-##   BPPARAM=SerialParam(progressbar=verbose))
-## {
-##   method <- match.arg(method)
-##   kcdf <- match.arg(kcdf)
-
-##   .Defunct(new="gsva()", package="GSVA",
-##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
-  
-##   ## filter genes according to various criteria,
-##   ## e.g., constant expression
-##   expr <- .filterFeatures(expr, method)
-
-##   ## map gene identifiers of the gene sets to the features in the matrix
-##   mapped.gset.idx.list <- gset.idx.list
-##   if (!missing(annotation)) {
-##     if (verbose)
-##       cat("Mapping identifiers between gene sets and feature names\n")
-
-##     mapped.gset.idx.list <- mapIdentifiers(gset.idx.list,
-##                                            AnnoOrEntrezIdentifier(annotation))
-##   }
-##   mapped.gset.idx.list <- geneIds(mapped.gset.idx.list)
-  
-##   ## map to the actual features for which expression data is available
-##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(mapped.gset.idx.list, rownames(expr))
-  
-##   ## remove gene sets from the analysis for which no features are available
-##   ## and meet the minimum and maximum gene-set size specified by the user
-##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-##                                          min.sz=max(1, min.sz),
-##                                          max.sz=max.sz)
-
-##   if (!missing(kcdf)) {
-##     if (kcdf == "Gaussian") {
-##       rnaseq <- FALSE
-##       kernel <- TRUE
-##     } else if (kcdf == "Poisson") {
-##       rnaseq <- TRUE
-##       kernel <- TRUE
-##     } else
-##       kernel <- FALSE
-##   }
-
-##   rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm,
-##                 verbose, BPPARAM)
-
-##   rval
-## })
-
-## #' @rdname GSVA-pkg-defunct
-## #'
-## #' @export
-## setMethod("gsva", signature(expr="matrix", gset.idx.list="list"),
-##           function(expr, gset.idx.list, annotation,
-##   method=c("gsva", "ssgsea", "zscore", "plage"),
-##   kcdf=c("Gaussian", "Poisson", "none"),
-##   abs.ranking=FALSE,
-##   min.sz=1,
-##   max.sz=Inf,
-##   parallel.sz=1L, 
-##   mx.diff=TRUE,
-##   tau=switch(method, gsva=1, ssgsea=0.25, NA),
-##   ssgsea.norm=TRUE,
-##   verbose=TRUE,
-##   BPPARAM=SerialParam(progressbar=verbose))
-## {
-##   method <- match.arg(method)
-##   kcdf <- match.arg(kcdf)
-
-##   .Defunct(new="gsva()", package="GSVA",
-##               msg="Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct; use a method-specific parameter object (see '?gsva').")
-
-##   ## filter genes according to various criteria,
-##   ## e.g., constant expression
-##   expr <- .filterFeatures(expr, method)
-
-##   ## map to the actual features for which expression data is available
-##   mapped.gset.idx.list <- .mapGeneSetsToFeatures(gset.idx.list, rownames(expr))
-  
-##   ## remove gene sets from the analysis for which no features are available
-##   ## and meet the minimum and maximum gene-set size specified by the user
-##   mapped.gset.idx.list <- filterGeneSets(mapped.gset.idx.list,
-##                                          min.sz=max(1, min.sz),
-##                                          max.sz=max.sz)
-
-##   if (!missing(kcdf)) {
-##     if (kcdf == "Gaussian") {
-##       rnaseq <- FALSE
-##       kernel <- TRUE
-##     } else if (kcdf == "Poisson") {
-##       rnaseq <- TRUE
-##       kernel <- TRUE
-##     } else
-##       kernel <- FALSE
-##   }
-
-##   rval <- .gsva(expr, mapped.gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-##                 parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM)
-
-##   rval
-## })
-
-.gsva <- function(expr, gset.idx.list,
-  method=c("gsva", "ssgsea", "zscore", "plage"),
-  kcdf=c("Gaussian", "Poisson", "none"),
-  rnaseq=FALSE,
-  abs.ranking=FALSE,
-  parallel.sz=1L,
-  mx.diff=TRUE,
-  tau=1,
-  kernel=TRUE,
-  ssgsea.norm=TRUE,
-  verbose=TRUE,
-  BPPARAM=SerialParam(progressbar=verbose)) {
-  
-  if(is(expr, "DelayedArray")){
-    warning("Using 'DelayedArray' objects as input is still in an experimental stage.")
-
-    return(.gsvaDelayedArray(expr, gset.idx.list, method, kcdf, rnaseq, abs.ranking,
-                             parallel.sz, mx.diff, tau, kernel, ssgsea.norm, verbose, BPPARAM))
-  }
-
-	if (length(gset.idx.list) == 0)
-		stop("The gene set list is empty! Filter may be too stringent.")
-
-  if (any(lengths(gset.idx.list) == 1))
-    warning("Some gene sets have size one. Consider setting 'min.sz > 1'.")
-
-  parallel.sz <- as.integer(parallel.sz)
-  if (parallel.sz < 1L)
-    parallel.sz <- 1L
-	
-  ## because we keep the argument 'parallel.sz' for backwards compatibility
-  ## we need to harmonize it with the contents of BPPARAM
-  if (parallel.sz > 1L && inherits(BPPARAM, "SerialParam")) {
-    BPPARAM=MulticoreParam(progressbar=verbose, workers=parallel.sz, tasks=100)
-  } else if (parallel.sz == 1L && !inherits(BPPARAM, "SerialParam")) {
-    parallel.sz <- bpnworkers(BPPARAM)
-  } else if (parallel.sz > 1L && !inherits(BPPARAM, "SerialParam")) {
-    bpworkers(BPPARAM) <- parallel.sz
-  }
-
-  if (!inherits(BPPARAM, "SerialParam") && verbose)
-    cat(sprintf("Setting parallel calculations through a %s back-end\nwith workers=%d and tasks=100.\n",
-                    class(BPPARAM), parallel.sz))
-
-  if (method == "ssgsea") {
-	  if(verbose)
-		  cat("Estimating ssGSEA scores for", length(gset.idx.list),"gene sets.\n")
-
-    return(ssgsea(X=expr, geneSets=gset.idx.list, alpha=tau, 
-                  normalization=ssgsea.norm, verbose=verbose, BPPARAM=BPPARAM))
-  }
-
-  if (method == "zscore") {
-    if (rnaseq)
-      stop("rnaseq=TRUE does not work with method='zscore'.")
-
-	  if(verbose)
-		  cat("Estimating combined z-scores for", length(gset.idx.list), "gene sets.\n")
-
-    return(zscore(X=expr, geneSets=gset.idx.list, verbose=verbose, BPPARAM=BPPARAM))
-  }
-
-  if (method == "plage") {
-    if (rnaseq)
-      stop("rnaseq=TRUE does not work with method='plage'.")
-
-	  if(verbose)
-		  cat("Estimating PLAGE scores for", length(gset.idx.list),"gene sets.\n")
-
-    return(plage(X=expr, geneSets=gset.idx.list, verbose=verbose, BPPARAM=BPPARAM))
-  }
-
-	if(verbose)
-		cat("Estimating GSVA scores for", length(gset.idx.list),"gene sets.\n")
-	
-	n.samples <- ncol(expr)
-	n.genes <- nrow(expr)
-	n.gset <- length(gset.idx.list)
-	
-	es.obs <- matrix(NaN, n.gset, n.samples, dimnames=list(names(gset.idx.list),colnames(expr)))
-	colnames(es.obs) <- colnames(expr)
-	rownames(es.obs) <- names(gset.idx.list)
-	
-	es.obs <- compute.geneset.es(expr, gset.idx.list, 1:n.samples,
-                               rnaseq=rnaseq, abs.ranking=abs.ranking,
-                               parallel.sz=parallel.sz,
-                               mx.diff=mx.diff, tau=tau, kernel=kernel,
-                               verbose=verbose, BPPARAM=BPPARAM)
-	
-	colnames(es.obs) <- colnames(expr)
-	rownames(es.obs) <- names(gset.idx.list)
-
-	es.obs
-}
-
-
 compute.gene.density <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
 	n.test.samples <- ncol(expr)
 	n.genes <- nrow(expr)
@@ -998,10 +282,6 @@ ssgsea <- function(X, geneSets, alpha=0.25,
   rownames(es) <- names(geneSets)
   colnames(es) <- colnames(X)
   
-  if(is(X, "dgCMatrix")){
-    es <- as(as(as(es, "dMatrix"), "generalMatrix"), "CsparseMatrix")
-  }
-  
   es
 }
 
@@ -1054,9 +334,6 @@ plage <- function(X, geneSets, verbose=TRUE,
                    BPPARAM=BPPARAM)
     
     es <- do.call(rbind, es)
-    
-    es <- as(as(as(es, "dMatrix"), "generalMatrix"), "CsparseMatrix")
-    
   } else {
     
     Z <- t(scale(t(X)))
@@ -1076,21 +353,116 @@ plage <- function(X, geneSets, verbose=TRUE,
   es
 }
 
+
+#' @title Filter gene sets
+#' 
+#' @description Filters gene sets through a given minimum and maximum set size.
+#' 
+#' This function filters the input gene sets according to a given minimum and
+#' maximum set size.
+#' 
+#' @aliases filterGeneSets
+#'
+#' @name filterGeneSets
+#' 
+#' @rdname filterGeneSets
+#'
+#' @param gSets Gene sets given either as a `list` or a
+#' `GeneSetCollection` object.
+#' 
+#' @param minSize Minimum size.
+#' 
+#' @param maxSize Maximum size.
+#' 
+#' @return A collection of gene sets that meet the given minimum and maximum
+#' set size.
+#' 
+#' @author J. Guinney
+#' 
+#' @seealso [`computeGeneSetsOverlap`]
+#' 
+#' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
+#' variation analysis for microarray and RNA-Seq data.
+#' *BMC Bioinformatics*, 14:7, 2013.
+#' 
+#' @keywords Gene set
+#' 
+#' @examples
+#' geneSets <- list(set1=as.character(1:4), set2=as.character(4:10))
+#' filterGeneSets(geneSets, minSize=5)
+NULL
+
+#' @aliases filterGeneSets,list-method
+#' @rdname filterGeneSets
+#' @exportMethod filterGeneSets
 setMethod("filterGeneSets", signature(gSets="list"),
-          function(gSets, min.sz=1, max.sz=Inf) {
+          function(gSets, minSize=1, maxSize=Inf) {
 	gSetsLen <- lengths(gSets)
-	return (gSets[gSetsLen >= min.sz & gSetsLen <= max.sz])	
+	return (gSets[gSetsLen >= minSize & gSetsLen <= maxSize])	
 })
 
+#' @aliases filterGeneSets,GeneSetCollection-method
+#' @rdname filterGeneSets
+#' @exportMethod filterGeneSets
 setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
-          function(gSets, min.sz=1, max.sz=Inf) {
-  filterGeneSets(geneIds(gSets), min.sz, max.sz)
+          function(gSets, minSize=1, maxSize=Inf) {
+  filterGeneSets(geneIds(gSets), minSize, maxSize)
 })
 
 
+#' @title Compute gene-sets overlap
+#' 
+#' @description Calculates the overlap among every pair of gene-sets given as
+#' input.
+#' 
+#' This function calculates the overlap between every pair of gene sets of the
+#' input argument `gSets`. Before this calculation takes place, the gene
+#' sets in `gSets` are firstly filtered to discard genes that do not match
+#' to the identifiers in `uniqGenes`. Secondly, they are further filtered
+#' to meet the minimum and/or maximum size specified with the arguments
+#' `minSize` and `maxSize`. The overlap between two gene sets is
+#' calculated as the number of common genes between the two gene sets divided
+#' by the smallest size of the two gene sets.
+#' 
+#' @aliases computeGeneSetsOverlap
+#'
+#' @name computeGeneSetsOverlap
+#'
+#' @rdname computeGeneSetsOverlap
+#' 
+#' @param gSets Gene sets given either as a `list` or a
+#' `GeneSetCollection` object.
+#' 
+#' @param uniqGenes Vector of unique genes to be considered when calculating
+#' the overlaps.
+#' 
+#' @param minSize Minimum size.
+#' 
+#' @param maxSize Maximum size.
+#' 
+#' @return A gene-set by gene-set matrix of the overlap among every pair of
+#' gene sets.
+#' 
+#' @author J. Guinney
+#' 
+#' @seealso [`filterGeneSets`]
+#' 
+#' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
+#' variation analysis for microarray and RNA-Seq data.
+#' *BMC Bioinformatics*, 14:7, 2013.
+#' 
+#' @keywords Gene set
+#' 
+#' @examples
+#' geneSets <- list(set1=as.character(1:4), set2=as.character(4:10))
+#' computeGeneSetsOverlap(geneSets, unique(unlist(geneSets)))
+NULL
 
+#' @aliases computeGeneSetsOverlap,list,character-method
+#' @rdname computeGeneSetsOverlap
+#' @exportMethod computeGeneSetsOverlap
 setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="character"),
-          function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
+          function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
   totalGenes <- length(uniqGenes)
 
   ## map to the actual features for which expression data is available
@@ -1104,11 +476,14 @@ setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="character
   members <- cbind(unlist(gSets, use.names=FALSE), rep(1:totalGsets, times=lenGsets))
   gSetsMembershipMatrix[members] <- 1
 
-  .computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
+  .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
 })
 
+#' @aliases computeGeneSetsOverlap,list,ExpressionSet-method
+#' @rdname computeGeneSetsOverlap
+#' @exportMethod computeGeneSetsOverlap
 setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="ExpressionSet"),
-          function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
+          function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
   uniqGenes <- featureNames(uniqGenes)
   totalGenes <- length(uniqGenes)
 
@@ -1123,20 +498,26 @@ setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="Expressio
   members <- cbind(unlist(gSets, use.names=FALSE), rep(1:totalGsets, times=lenGsets))
   gSetsMembershipMatrix[members] <- 1
 
-  .computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
+  .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
 })
 
+#' @aliases computeGeneSetsOverlap,GeneSetCollection,character-method
+#' @rdname computeGeneSetsOverlap
+#' @exportMethod computeGeneSetsOverlap
 setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGenes="character"),
-          function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
+          function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
 
   gSetsMembershipMatrix <- incidence(gSets)
   gSetsMembershipMatrix <- t(gSetsMembershipMatrix[, colnames(gSetsMembershipMatrix) %in% uniqGenes])
 
-  .computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
+  .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
 })
 
+#' @aliases computeGeneSetsOverlap,GeneSetCollection,ExpressionSet-method
+#' @rdname computeGeneSetsOverlap
+#' @exportMethod computeGeneSetsOverlap
 setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGenes="ExpressionSet"),
-          function(gSets, uniqGenes, min.sz=1, max.sz=Inf) {
+          function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
   ## map gene identifiers of the gene sets to the features in the chip
   ## Biobase::annotation() is necessary to disambiguate from the
   ## 'annotation' argument
@@ -1147,15 +528,15 @@ setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGen
   gSetsMembershipMatrix <- incidence(gSets)
   gSetsMembershipMatrix <- t(gSetsMembershipMatrix[, colnames(gSetsMembershipMatrix) %in% uniqGenes])
 
-  .computeGeneSetsOverlap(gSetsMembershipMatrix, min.sz, max.sz)
+  .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
 })
 
-.computeGeneSetsOverlap <- function(gSetsMembershipMatrix, min.sz=1, max.sz=Inf) {
+.computeGeneSetsOverlap <- function(gSetsMembershipMatrix, minSize=1, maxSize=Inf) {
   ## gSetsMembershipMatrix should be a (genes x gene-sets) incidence matrix
 
   lenGsets <- colSums(gSetsMembershipMatrix)
 
-  szFilterMask <- lenGsets >= max(1, min.sz) & lenGsets <= max.sz
+  szFilterMask <- lenGsets >= max(1, minSize) & lenGsets <= maxSize
   if (!any(szFilterMask))
     stop("No gene set meets the minimum and maximum size filter\n")
 

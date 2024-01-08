@@ -18,7 +18,6 @@ NULL
 
 ## ----- show -----
 
-#' @exportMethod show
 setMethod("show",
           signature=signature(object="GsvaMethodParam"),
           function(object) {
