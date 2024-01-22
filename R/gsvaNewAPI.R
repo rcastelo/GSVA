@@ -231,7 +231,7 @@ setMethod("gsva", signature(param="ssgseaParam"),
               ## filter genes according to various criteria,
               ## e.g., constant expression
               filteredDataMatrix <- .filterGenes(dataMatrix,
-                                                   dropConstantRows=FALSE)
+                                                   dropConstantGenes=FALSE)
 
               geneSets <- mapGeneSetsToAnno(geneSets=get_geneSets(param),
                                             anno=gsvaAnnotation(exprData))
@@ -343,38 +343,6 @@ setMethod("gsva", signature(param="gsvaParam"),
               
               return(rval)
           })
-
-
-
-### ----- GSVA utility functions, slightly adapted for new API -----
-.filterGenes <- function(expr, dropConstantRows = TRUE) {
-    ## filter out genes with constant expression values
-    ## DelayedMatrixStats::rowSds() works for both base and 
-    ## DelayedArray matrices
-    sdGenes <- DelayedMatrixStats::rowSds(expr)
-    ## the following fixes this bug, see issues
-    ## https://github.com/rcastelo/GSVA/issues/54
-    ## https://github.com/HenrikBengtsson/matrixStats/issues/204
-    sdGenes[sdGenes < 1e-10] <- 0
-    if(any(sdGenes == 0) || any(is.na(sdGenes))) {
-        ## CHECK: unless we actually drop, we do all this only for this warning, right?
-        warning(sum(sdGenes == 0 | is.na(sdGenes)),
-                " rows with constant values throughout the samples.")
-        if(dropConstantRows) {
-            warning("Rows with constant values are discarded.")
-            expr <- expr[sdGenes > 0 & !is.na(sdGenes), ]
-        }
-    } 
-
-    if(nrow(expr) < 2)
-        stop("Less than two genes in the input assay object\n")
-    
-    ## CHECK: is this the right place to check this?
-    if(is.null(rownames(expr)))
-        stop("The input assay object doesn't have rownames\n")
-    
-    return(expr)
-}
 
 
 ### -----  methods for data pre-/post-processing -----

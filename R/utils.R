@@ -1,30 +1,31 @@
-.filterFeatures <- function(expr, method) {
+.filterGenes <- function(expr, dropConstantGenes=TRUE, eps=1e-20, refine=FALSE) {
+    ## filter out genes with constant expression values
+    ## DelayedMatrixStats::rowSds() works for base, sparse and 
+    ## DelayedArray matrices
+    sdGenes <- DelayedMatrixStats::rowSds(expr, refine=refine)
+    ## the following fixes this bug, see issues
+    ## https://github.com/rcastelo/GSVA/issues/54
+    ## https://github.com/HenrikBengtsson/matrixStats/issues/204
+    sdGenes[sdGenes < eps] <- 0
+    if(any(sdGenes == 0) || any(is.na(sdGenes))) {
+        warning(sum(sdGenes == 0 | is.na(sdGenes)),
+                " genes with constant values throughout the samples.")
+        if(dropConstantGenes) {
+            warning("Genes with constant values are discarded.")
+            expr <- expr[sdGenes > 0 & !is.na(sdGenes), ]
+        }
+    } 
 
-  ## filter out genes with constant expression values
-  ## DelayedMatrixStats::rowSds() works for both base and 
-  ## DelayedArray matrices
-  sdGenes <- DelayedMatrixStats::rowSds(expr)
-  ## the following fixes this bug, see issues
-  ## https://github.com/rcastelo/GSVA/issues/54
-  ## https://github.com/HenrikBengtsson/matrixStats/issues/204
-  sdGenes[sdGenes < 1e-10] <- 0
-  if (any(sdGenes == 0) || any(is.na(sdGenes))) {
-    warning(sum(sdGenes == 0 | is.na(sdGenes)),
-            " genes with constant expression values throughout the samples.")
-    if (method != "ssgsea") {
-      warning("Since argument method!=\"ssgsea\", genes with constant expression values are discarded.")
-      expr <- expr[sdGenes > 0 & !is.na(sdGenes), ]
-    }
-  } 
-
-  if (nrow(expr) < 2)
-    stop("Less than two genes in the input assay object\n")
-  
-  if(is.null(rownames(expr)))
-    stop("The input assay object doesn't have rownames\n")
-  
-  expr
+    if(nrow(expr) < 2)
+        stop("Less than two genes in the input assay object\n")
+    
+    ## CHECK: is this the right place to check this?
+    if(is.null(rownames(expr)))
+        stop("The input assay object doesn't have rownames\n")
+    
+    return(expr)
 }
+
 
 ## maps gene sets content in 'gsets' to 'features', where 'gsets'
 ## is a 'list' object with character string vectors as elements,
