@@ -231,7 +231,8 @@ setMethod("gsva", signature(param="ssgseaParam"),
               ## filter genes according to various criteria,
               ## e.g., constant expression
               filteredDataMatrix <- .filterGenes(dataMatrix,
-                                                   dropConstantGenes=FALSE)
+                                                 removeConstant=FALSE,
+                                                 removeNzConstant=FALSE)
 
               geneSets <- mapGeneSetsToAnno(geneSets=get_geneSets(param),
                                             anno=gsvaAnnotation(exprData))
