@@ -1,5 +1,5 @@
 Package: GSVA
-Version: 1.51.5
+Version: 1.51.6
 Title: Gene Set Variation Analysis for Microarray and RNA-Seq Data
 Authors@R: c(person("Robert", "Castelo", role=c("aut", "cre"), email="robert.castelo@upf.edu"),
              person("Justin", "Guinney", role="aut", email="jguinney@gmail.com"),
@@ -22,4 +22,4 @@ BugReports: https://github.com/rcastelo/GSVA/issues
 Encoding: UTF-8
 biocViews: FunctionalGenomics, Microarray, RNASeq, Pathways, GeneSetEnrichment
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.1

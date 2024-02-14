@@ -15,6 +15,7 @@
 #' @importFrom stats ecdf na.omit rnorm rpois sd
 #' @importFrom utils installed.packages setTxtProgressBar txtProgressBar
 #' read.csv write.csv capture.output
+#' @importFrom Matrix nnzero
 #' @importFrom S4Vectors SimpleList
 #' @importFrom IRanges CharacterList
 #' @importFrom  GSEABase AnnoOrEntrezIdentifier mapIdentifiers getGmt
@@ -22,10 +23,9 @@
 #' @importFrom parallel splitIndices
 #' @importFrom BiocParallel SerialParam MulticoreParam multicoreWorkers bpnworkers
 #' @importFrom SingleCellExperiment SingleCellExperiment
-#' @importFrom sparseMatrixStats colRanks
+#' @importFrom sparseMatrixStats colRanks rowRanges
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid defaultAutoGrid
 #' currentBlockId read_block gridReduce write_block close t colSums
 #' @importFrom HDF5Array HDF5RealizationSink writeHDF5Array
-#' @importFrom DelayedMatrixStats rowSds
 #' @importFrom BiocSingular runRandomSVD
 NULL

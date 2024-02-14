@@ -62,30 +62,30 @@ setMethod("gsva", signature(param="SingleCellExperiment"), function(param, ...) 
 
 
 compute.gene.density <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
-	n.test.samples <- ncol(expr)
-	n.genes <- nrow(expr)
-	n.density.samples <- length(sample.idxs)
+    n.test.samples <- ncol(expr)
+    n.genes <- nrow(expr)
+    n.density.samples <- length(sample.idxs)
+    
+    gene.density <- NA
+    if (kernel) {
+        A = .Call("matrix_density_R",
+                  as.double(t(expr[ ,sample.idxs, drop=FALSE])),
+                  as.double(t(expr)),
+                  n.density.samples,
+                  n.test.samples,
+                  n.genes,
+                  as.integer(rnaseq))
 	
-  gene.density <- NA
-  if (kernel) {
-	  A = .Call("matrix_density_R",
-              as.double(t(expr[ ,sample.idxs, drop=FALSE])),
-              as.double(t(expr)),
-              n.density.samples,
-              n.test.samples,
-              n.genes,
-              as.integer(rnaseq))
-	
-	  gene.density <- t(matrix(A, n.test.samples, n.genes))
-  } else {
-    gene.density <- t(apply(expr, 1, function(x, sample.idxs) {
-                                     f <- ecdf(x[sample.idxs])
-                                     f(x)
-                                   }, sample.idxs))
-    gene.density <- log(gene.density / (1-gene.density))
-  }
+        gene.density <- t(matrix(A, n.test.samples, n.genes))
+    } else {
+        gene.density <- t(apply(expr, 1, function(x, sample.idxs) {
+            f <- ecdf(x[sample.idxs])
+            f(x)
+        }, sample.idxs))
+        gene.density <- log(gene.density / (1-gene.density))
+    }
 
-	return(gene.density)	
+    return(gene.density)	
 }
 
 compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
@@ -105,7 +105,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
 
     ## open parallelism only if ECDFs have to be estimated for
     ## more than 100 genes on more than 100 samples
-    if (parallel.sz > 1 && length(sample.idxs > 100) && nrow(expr) > 100) {
+    if (parallel.sz > 1 && length(sample.idxs) > 100 && nrow(expr) > 100) {
         if (verbose)
             cat(sprintf("Estimating ECDFs in parallel on %d cores\n", as.integer(parallel.sz)))
         iter <- function(Y, n_chunks=BiocParallel::multicoreWorkers()) {
@@ -289,24 +289,19 @@ combinez <- function(gSetIdx, j, Z) sum(Z[gSetIdx, j]) / sqrt(length(gSetIdx))
 
 zscore <- function(X, geneSets, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose)) {
-  if(is(X, "dgCMatrix")){
-    message("Please bear in mind that this method first scales the values of the gene
-    expression data. In order to take advantage of the sparse Matrix type, the scaling
-    will only be applied to the non-zero values of the data. This is a provisional 
-    solution in order to give support to the dgCMatrix format.")
+    if(is(X, "dgCMatrix")){
+        .sparseScaleMessage()
+        Z <- t(.sparseColumnApplyAndReplace(t(X), FUN=scale))
+    } else {
+        Z <- t(scale(t(X)))
+    }
+
+    es <- bplapply(geneSets, function(gSetIdx) {
+        colSums(Z[gSetIdx, ]) / sqrt(length(gSetIdx))
+    }, BPPARAM=BPPARAM)
     
-    Z <- t(X)
-    Z <- .dgCapply(Z, scale, 2)
-    Z <- t(Z)
-  } else {
-    Z <- t(scale(t(X)))
-  }
-  es <- bplapply(geneSets, function(gSetIdx) {
-    colSums(Z[gSetIdx, ]) / sqrt(length(gSetIdx))
-  },BPPARAM=BPPARAM)
-  
-  es <- do.call("rbind",es)
-  es
+    es <- do.call("rbind", es)
+    es
 }
 
 rightsingularsvdvectorgset <- function(gSetIdx, Z) {
@@ -320,37 +315,36 @@ rightsingularsvdvectorgset <- function(gSetIdx, Z) {
 
 plage <- function(X, geneSets, verbose=TRUE,
                   BPPARAM=SerialParam(progressbar=verbose)) {
-  if(is(X, "dgCMatrix")){
-    message("Please bear in mind that this method first scales the values of the gene
-    expression data. In order to take advantage of the sparse Matrix type, the scaling
-    will only be applied to the non-zero values of the data. This is a provisional 
-    solution in order to give support to the dgCMatrix format.")
+    if(is(X, "dgCMatrix")){
+        .sparseScaleMessage()
+        Z <- t(.sparseColumnApplyAndReplace(t(X), FUN=scale))
+
+        es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
+                       BPPARAM=BPPARAM)
+        
+        es <- do.call(rbind, es)
+    } else {
+        
+        Z <- t(scale(t(X)))
+        
+        es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
+                       BPPARAM=BPPARAM)
+        
+        es <- do.call(rbind, es)
+        
+        ## why these extra steps for dense matrices?
+        ## svd() removes all dimnames, while BiocSingular::runExactSVD()
+        ## retains them.  colnames must be set; however, I don't see a reason
+        ## to set rownames nor recreating the matrix if only one gene set.
+        ## hmmm...
+        if (length(geneSets) == 1)
+            es <- matrix(es, nrow=1)
+        
+        rownames(es) <- names(geneSets)
+        colnames(es) <- colnames(X)
+    }
     
-    Z <- Matrix::t(X)
-    Z <- .dgCapply(Z, scale, 2)
-    Z <- Matrix::t(Z)
-    
-    es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
-                   BPPARAM=BPPARAM)
-    
-    es <- do.call(rbind, es)
-  } else {
-    
-    Z <- t(scale(t(X)))
-    
-    es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
-                   BPPARAM=BPPARAM)
-    
-    es <- do.call(rbind, es)
-    
-    if (length(geneSets) == 1)
-      es <- matrix(es, nrow=1)
-    
-    rownames(es) <- names(geneSets)
-    colnames(es) <- colnames(X)
-  }
-  
-  es
+    es
 }
 
 
