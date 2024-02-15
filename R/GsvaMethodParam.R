@@ -83,6 +83,15 @@ setMethod("gsvaShow",
           })
 
 setMethod("gsvaShow",
+          signature=signature(object="dgCMatrix"),
+          function(object) {
+              cat("dgCMatrix [", nrow(object), ", ", ncol(object), "]\n",
+                  "  rows: ", .showSome(rownames(object)), "\n",
+                  "  cols: ", .showSome(colnames(object)), "\n",
+                  "  sparsity: ", 1 - nnzero(object) / length(object), "\n", sep="")
+          })
+
+setMethod("gsvaShow",
           signature=signature(object="GsvaGeneSets"),
           function(object) {
               show(object)
