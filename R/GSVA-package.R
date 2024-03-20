@@ -23,6 +23,7 @@
 #' @importFrom parallel splitIndices
 #' @importFrom BiocParallel SerialParam MulticoreParam multicoreWorkers bpnworkers
 #' @importFrom SingleCellExperiment SingleCellExperiment
+#' @importFrom SpatialExperiment SpatialExperiment
 #' @importFrom sparseMatrixStats colRanks rowRanges
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid defaultAutoGrid
 #' currentBlockId read_block gridReduce write_block close t colSums
