@@ -421,7 +421,7 @@ setMethod("unwrapData", signature("SpatialExperiment"),
                 stop(sprintf("Assay %s not found in the input SpatialExperiment object.", assay))
             }
             
-            return(as.matrix(assays(container)[[assay]]))
+            return(assays(container)[[assay]])
           })
 
 
