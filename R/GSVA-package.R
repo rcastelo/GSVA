@@ -8,6 +8,7 @@
 #' @importMethodsFrom S4Vectors metadata "metadata<-"
 #' @importMethodsFrom IRanges match
 #' @importMethodsFrom SummarizedExperiment assays assayNames colData
+#' @importMethodsFrom SpatialExperiment imgData spatialCoords
 #' @importMethodsFrom GSEABase geneIds incidence
 #' @importMethodsFrom BiocParallel bpiterate "bpworkers<-" bplapply "bpprogressbar<-"
 #'
