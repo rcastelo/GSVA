@@ -381,7 +381,7 @@ setMethod("unwrapData", signature("SummarizedExperiment"),
                       stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", assay))
               }
 
-              return(as.matrix(assays(container)[[assay]]))
+              return(assays(container)[[assay]])
           })
 
 setMethod("unwrapData", signature("SingleCellExperiment"),
@@ -401,7 +401,7 @@ setMethod("unwrapData", signature("SingleCellExperiment"),
                       stop(sprintf("Assay %s not found in the input SingleCellExperiment object.", assay))
               }
 
-              return(as.matrix(assays(container)[[assay]]))
+              return(assays(container)[[assay]])
           })
 
 setMethod("unwrapData", signature("SpatialExperiment"),
