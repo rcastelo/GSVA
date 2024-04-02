@@ -29,7 +29,10 @@
 #' @exportClass GsvaExprData
 setClassUnion("GsvaExprData",
               c("matrix", "dgCMatrix", "ExpressionSet",
-                "SummarizedExperiment", "SingleCellExperiment", "HDF5Array"))
+                "SummarizedExperiment", "HDF5Array"))
+## setClassUnion("GsvaExprData",
+##               c("matrix", "dgCMatrix", "ExpressionSet",
+##                 "SummarizedExperiment", "SingleCellExperiment", "HDF5Array"))
 
 #' `GsvaGeneSets` class
 #'

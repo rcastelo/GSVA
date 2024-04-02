@@ -384,25 +384,25 @@ setMethod("unwrapData", signature("SummarizedExperiment"),
               return(assays(container)[[assay]])
           })
 
-setMethod("unwrapData", signature("SingleCellExperiment"),
-          function(container, assay) {
-              if (length(assays(container)) == 0L)
-                  stop("The input SingleCellExperiment object has no assay data.")
+## setMethod("unwrapData", signature("SingleCellExperiment"),
+##           function(container, assay) {
+##               if (length(assays(container)) == 0L)
+##                   stop("The input SingleCellExperiment object has no assay data.")
 
-              if (missing(assay) || is.na(assay)) {
-                  assay <- names(assays(container))[1]
-              } else {
-                  if (!is.character(assay))
-                      stop("The 'assay' argument must contain a character string.")
+##               if (missing(assay) || is.na(assay)) {
+##                   assay <- names(assays(container))[1]
+##               } else {
+##                   if (!is.character(assay))
+##                       stop("The 'assay' argument must contain a character string.")
 
-                  assay <- assay[1]
+##                   assay <- assay[1]
 
-                  if (!assay %in% names(assays(container)))
-                      stop(sprintf("Assay %s not found in the input SingleCellExperiment object.", assay))
-              }
+##                   if (!assay %in% names(assays(container)))
+##                       stop(sprintf("Assay %s not found in the input SingleCellExperiment object.", assay))
+##               }
 
-              return(assays(container)[[assay]])
-          })
+##               return(assays(container)[[assay]])
+##           })
 
 
 ## wrapData: put the resulting data into the original data container type
@@ -436,15 +436,15 @@ setMethod("wrapData", signature("matrix", "SummarizedExperiment"),
               return(rval)
           })
 
-setMethod("wrapData", signature("matrix", "SingleCellExperiment"),
-          function(dataMatrix, container) {
-              rval <- SingleCellExperiment(assays=SimpleList(es=dataMatrix),
-                                           colData=colData(container),
-                                           metadata=metadata(container))
-              metadata(rval)$annotation <- NULL
+## setMethod("wrapData", signature("matrix", "SingleCellExperiment"),
+##           function(dataMatrix, container) {
+##               rval <- SingleCellExperiment(assays=SimpleList(es=dataMatrix),
+##                                            colData=colData(container),
+##                                            metadata=metadata(container))
+##               metadata(rval)$annotation <- NULL
               
-              return(rval)
-          })
+##               return(rval)
+##           })
 
 
 ## mapGeneSetsToAnno: translate feature IDs used in gene sets to specified annotation type (if any, and if possible)

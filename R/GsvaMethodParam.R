@@ -135,11 +135,11 @@ setMethod("gsvaAnnotation", signature("SummarizedExperiment"),
               return(if(.isCharLength1(a)) a else NA_character_)
           })
 
-setMethod("gsvaAnnotation", signature("SingleCellExperiment"),
-          function(object) {
-              a <- metadata(object)$annotation
-              return(if(.isCharLength1(a)) a else NA_character_)
-          })
+## setMethod("gsvaAnnotation", signature("SingleCellExperiment"),
+##           function(object) {
+##               a <- metadata(object)$annotation
+##               return(if(.isCharLength1(a)) a else NA_character_)
+##           })
 
 
 
@@ -157,8 +157,8 @@ setMethod("gsvaAssayNames", signature("SummarizedExperiment"),
               return(if(.isCharNonEmpty(a)) a else NA_character_)
           })
 
-setMethod("gsvaAssayNames", signature("SingleCellExperiment"),
-          function(object) {
-              a <- assayNames(object)
-              return(if(.isCharNonEmpty(a)) a else NA_character_)
-          })
+## setMethod("gsvaAssayNames", signature("SingleCellExperiment"),
+##           function(object) {
+##               a <- assayNames(object)
+##               return(if(.isCharNonEmpty(a)) a else NA_character_)
+##           })
