@@ -79,6 +79,40 @@
 }
 
 
+.filterAndMapGenesAndGeneSets <- function(param,
+                                          removeConstant=TRUE,
+                                          removeNzConstant=TRUE) {
+    exprData <- get_exprData(param)
+    dataMatrix <- unwrapData(exprData, get_assay(param))
+    
+    ## filter genes according to various criteria,
+    ## e.g., constant expression
+    filteredDataMatrix <- .filterGenes(dataMatrix,
+                                       removeConstant=removeConstant,
+                                       removeNzConstant=removeNzConstant)
+
+    geneSets <- mapGeneSetsToAnno(geneSets=get_geneSets(param),
+                                  anno=gsvaAnnotation(exprData))
+    
+    ## map to the actual features for which expression data is available
+    mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(filteredDataMatrix))
+    
+    ## remove gene sets from the analysis for which no features are available
+    ## and meet the minimum and maximum gene-set size specified by the user
+    filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
+                                             minSize=get_minSize(param),
+                                             maxSize=get_maxSize(param))
+
+    if(length(filteredMappedGeneSets) == 0)
+        stop("The gene set list is empty! Filter may be too stringent.")
+
+    if(any(lengths(filteredMappedGeneSets) == 1))
+        warning("Some gene sets have size one. Consider setting 'minSize > 1'.")
+
+    return(list(filteredDataMatrix=filteredDataMatrix,
+                filteredMappedGeneSets=filteredMappedGeneSets))
+}
+
 ## converts a dgCMatrix into a list of its columns, based on
 ## https://rpubs.com/will_townes/sparse-apply
 ## it is only slightly more efficient than .sparseToList() below BUT simpler
