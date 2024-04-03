@@ -632,6 +632,29 @@ res <- decideTests(fit, p.value=0.01)
 summary(res)
 ```
 
+As Figure \@ref(fig:setsizebysigma) below shows, GSVA scores have higher
+precision for larger gene sets^[Thanks to Gordon Smyth for point this out to us.].
+
+```{r setsizebysigma, height=700, width=500, fig.cap="Residual standard deviation of GSVA scores as function of gene set size."}
+gssizes <- lengths(geneIds(cgpC2BroadSets)) ## fetch gene set sizes
+mt <- match(rownames(leukemia_es), names(gssizes))
+gssizes <- gssizes[mt] ## rearrange gene set sizes to the rows of GSVA scores
+plot(sqrt(gssizes), sqrt(fit$sigma), xlab="Sqrt(gene sets sizes)",
+     ylab="Sqrt(standard deviation)", las=1, pch=".", cex=3)
+```
+
+In such a setting, we can improve the analysis of differentially expressed
+pathways by using the limma-trend approach [@phipson2016robust] setting the
+`trend` parameter in the call to the `eBayes()` function to the vector of gene
+set sizes, in one-to-one correspondence with the gene sets in the rows of the
+GSVA scores container, as calculated before in `gssizes`.
+
+```{r}
+fit <- eBayes(fit, trend=gssizes)
+res <- decideTests(fit, p.value=0.01)
+summary(res)
+```
+
 There are `r sum(res[, 2] != 0)` MSigDB C2 differentially expressed pathways
 with FDR < 5%. Figure \@ref(fig:leukemiavolcano) below shows a volcano plot
 of the expression changes.
@@ -640,7 +663,7 @@ of the expression changes.
 tt <- topTable(fit, coef=2, n=Inf)
 DEpwys <- rownames(tt)[tt$adj.P.Val <= 0.01]
 plot(tt$logFC, -log10(tt$P.Value), pch=".", cex=4, col=grey(0.75),
-     main="", xlab="GSVA enrichment score difference",
+     main="", xlab="GSVA enrichment score difference", las=1,
      ylab=expression(-log[10]~~Raw~P-value))
 abline(h=-log10(max(tt$P.Value[tt$adj.P.Val <= 0.01])),
        col=grey(0.5), lwd=1, lty=2)
