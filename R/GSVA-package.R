@@ -8,6 +8,7 @@
 #' @importMethodsFrom S4Vectors metadata "metadata<-"
 #' @importMethodsFrom IRanges match
 #' @importMethodsFrom SummarizedExperiment assays assayNames colData
+#' @importMethodsFrom SpatialExperiment imgData spatialCoords
 #' @importMethodsFrom GSEABase geneIds incidence
 #' @importMethodsFrom BiocParallel bpiterate "bpworkers<-" bplapply "bpprogressbar<-"
 #'
@@ -23,6 +24,7 @@
 #' @importFrom parallel splitIndices
 #' @importFrom BiocParallel SerialParam MulticoreParam multicoreWorkers bpnworkers
 #' @importFrom SingleCellExperiment SingleCellExperiment
+#' @importFrom SpatialExperiment SpatialExperiment
 #' @importFrom sparseMatrixStats colRanks rowRanges
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid defaultAutoGrid
 #' currentBlockId read_block gridReduce write_block close t colSums

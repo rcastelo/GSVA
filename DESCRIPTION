@@ -1,5 +1,5 @@
 Package: GSVA
-Version: 1.51.8
+Version: 1.51.9
 Title: Gene Set Variation Analysis for Microarray and RNA-Seq Data
 Authors@R: c(person("Robert", "Castelo", role=c("aut", "cre"), email="robert.castelo@upf.edu"),
              person("Justin", "Guinney", role="aut", email="jguinney@gmail.com"),
@@ -9,7 +9,7 @@ Authors@R: c(person("Robert", "Castelo", role=c("aut", "cre"), email="robert.cas
 Depends: R (>= 3.5.0)
 Imports: methods, stats, utils, graphics, S4Vectors, IRanges,
          Biobase, SummarizedExperiment, GSEABase, Matrix (>= 1.5-0), parallel,
-         BiocParallel, SingleCellExperiment, sparseMatrixStats, DelayedArray,
+         BiocParallel, SingleCellExperiment, SpatialExperiment, sparseMatrixStats, DelayedArray,
          DelayedMatrixStats, HDF5Array, BiocSingular
 Suggests: BiocGenerics, RUnit, BiocStyle, knitr, rmarkdown, limma, RColorBrewer,
           org.Hs.eg.db, genefilter, edgeR, GSVAdata, shiny, shinydashboard, ggplot2,

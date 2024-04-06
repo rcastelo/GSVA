@@ -330,6 +330,26 @@ setMethod("unwrapData", signature("SingleCellExperiment"),
               return(assays(container)[[assay]])
           })
 
+setMethod("unwrapData", signature("SpatialExperiment"),
+          function(container, assay) {
+            if (length(assays(container)) == 0L)
+              stop("The input SpatialExperiment object has no assay data.")
+            
+            if (missing(assay) || is.na(assay)) {
+              assay <- names(assays(container))[1]
+            } else {
+              if (!is.character(assay))
+                stop("The 'assay' argument must contain a character string.")
+              
+              assay <- assay[1]
+              
+              if (!assay %in% names(assays(container)))
+                stop(sprintf("Assay %s not found in the input SpatialExperiment object.", assay))
+            }
+            
+            return(assays(container)[[assay]])
+          })
+
 
 ## wrapData: put the resulting data into the original data container type
 setMethod("wrapData", signature("matrix", "matrix"),
@@ -370,6 +390,19 @@ setMethod("wrapData", signature("matrix", "SingleCellExperiment"),
               metadata(rval)$annotation <- NULL
               
               return(rval)
+          })
+
+setMethod("wrapData", signature("matrix", "SpatialExperiment"),
+          function(dataMatrix, container) {
+            rval <- SpatialExperiment(assays=SimpleList(es=dataMatrix),
+                                         colData=colData(container),
+                                         metadata=metadata(container),
+                                         imgData = imgData(container),
+                                         spatialCoords = spatialCoords(container)
+                                      )
+            metadata(rval)$annotation <- NULL
+            
+            return(rval)
           })
 
 
