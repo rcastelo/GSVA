@@ -7,7 +7,7 @@
 #' @importMethodsFrom Biobase featureNames phenoData experimentData exprs annotation
 #' @importMethodsFrom S4Vectors metadata "metadata<-"
 #' @importMethodsFrom IRanges match
-#' @importMethodsFrom SummarizedExperiment assays assayNames colData
+#' @importMethodsFrom SummarizedExperiment assays assayNames colData rowData
 #' @importMethodsFrom SpatialExperiment imgData spatialCoords
 #' @importMethodsFrom GSEABase geneIds incidence
 #' @importMethodsFrom BiocParallel bpiterate "bpworkers<-" bplapply "bpprogressbar<-"
@@ -17,7 +17,7 @@
 #' @importFrom utils installed.packages setTxtProgressBar txtProgressBar
 #' read.csv write.csv capture.output
 #' @importFrom Matrix nnzero
-#' @importFrom S4Vectors SimpleList
+#' @importFrom S4Vectors SimpleList DataFrame
 #' @importFrom IRanges CharacterList
 #' @importFrom  GSEABase AnnoOrEntrezIdentifier mapIdentifiers getGmt
 #' @importFrom SummarizedExperiment SummarizedExperiment

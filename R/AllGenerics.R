@@ -11,13 +11,22 @@ setGeneric("filterGeneSets",
 setGeneric("computeGeneSetsOverlap",
            function(gSets, uniqGenes=unique(unlist(gSets, use.names=FALSE)), ...) standardGeneric("computeGeneSetsOverlap"))
 
+#' @export
+setGeneric("geneSets",
+           function(obj, ...) standardGeneric("geneSets"))
+
+#' @export
+setGeneric("geneSetSizes",
+           function(obj, ...) standardGeneric("geneSetSizes"))
+
+
 ## for now, these should be private methods
 
 setGeneric("unwrapData",
            function(container, ...) standardGeneric("unwrapData"))
 
 setGeneric("wrapData",
-           function(dataMatrix, container) standardGeneric("wrapData"))
+           function(container, dataMatrix, geneSets) standardGeneric("wrapData"))
 
 setGeneric("mapGeneSetsToAnno",
            function(geneSets, ...) standardGeneric("mapGeneSetsToAnno"))

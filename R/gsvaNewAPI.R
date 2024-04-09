@@ -118,6 +118,8 @@ setMethod("gsva", signature(param="plageParam"),
                    BPPARAM=SerialParam(progressbar=verbose))
           {
               famGaGS <- .filterAndMapGenesAndGeneSets(param)
+              filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
+              filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
               if (!inherits(BPPARAM, "SerialParam") && verbose)
                   cat(sprintf("Setting parallel calculations through a %s back-end\n",
@@ -129,17 +131,18 @@ setMethod("gsva", signature(param="plageParam"),
 
               if(verbose)
                   cat("Estimating PLAGE scores for",
-                      length(famGaGS[["filteredMappedGeneSets"]]),
-                      "gene sets.\n")
+                      length(filteredMappedGeneSets), "gene sets.\n")
 
-              plageScores <- plage(X=famGaGS[["filteredDataMatrix"]],
-                                   geneSets=famGaGS[["filteredMappedGeneSets"]],
+              plageScores <- plage(X=filteredDataMatrix,
+                                   geneSets=filteredMappedGeneSets,
                                    verbose=verbose,
                                    BPPARAM=BPPARAM)
 
-              rval <- wrapData(plageScores, get_exprData(param))
-              attr(rval, "geneSetLengths") <- lengths(famGaGS[["filteredMappedGeneSets"]])
-              
+              gs <- .geneSetsIndices2Names(
+                  indices=filteredMappedGeneSets,
+                  names=rownames(filteredDataMatrix))
+              rval <- wrapData(get_exprData(param), plageScores, gs)
+
               return(rval)
           })
 
@@ -153,6 +156,8 @@ setMethod("gsva", signature(param="zscoreParam"),
                    BPPARAM=SerialParam(progressbar=verbose))
           {
               famGaGS <- .filterAndMapGenesAndGeneSets(param)
+              filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
+              filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
               if (!inherits(BPPARAM, "SerialParam") && verbose)
                   cat(sprintf("Setting parallel calculations through a %s back-end\n",
@@ -164,16 +169,17 @@ setMethod("gsva", signature(param="zscoreParam"),
 
               if(verbose)
                   cat("Estimating combined z-scores for",
-                      length(famGaGS[["filteredMappedGeneSets"]]),
-                      "gene sets.\n")
+                      length(filteredMappedGeneSets), "gene sets.\n")
 
-              zScores <- zscore(X=famGaGS[["filteredDataMatrix"]],
-                                geneSets=famGaGS[["filteredMappedGeneSets"]],
+              zScores <- zscore(X=filteredDataMatrix,
+                                geneSets=filteredMappedGeneSets,
                                 verbose=verbose,
                                 BPPARAM=BPPARAM)
 
-              rval <- wrapData(zScores, get_exprData(param))
-              attr(rval, "geneSetLengths") <- lengths(famGaGS[["filteredMappedGeneSets"]])
+              gs <- .geneSetsIndices2Names(
+                  indices=filteredMappedGeneSets,
+                  names=rownames(filteredDataMatrix))
+              rval <- wrapData(get_exprData(param), zScores, gs)
               
               return(rval)
           })
@@ -190,6 +196,8 @@ setMethod("gsva", signature(param="ssgseaParam"),
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=FALSE,
                                                        removeNzConstant=FALSE)
+              filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
+              filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
               if (!inherits(BPPARAM, "SerialParam") && verbose)
                   cat(sprintf("Setting parallel calculations through a %s back-end\n",
@@ -198,18 +206,19 @@ setMethod("gsva", signature(param="ssgseaParam"),
 
               if(verbose)
                   cat("Estimating ssGSEA scores for",
-                      length(famGaGS[["filteredMappedGeneSets"]]),
-                      "gene sets.\n")
+                      length(filteredMappedGeneSets), "gene sets.\n")
 
-              ssgseaScores <- ssgsea(X=famGaGS[["filteredDataMatrix"]],
-                                     geneSets=famGaGS[["filteredMappedGeneSets"]],
+              ssgseaScores <- ssgsea(X=filteredDataMatrix,
+                                     geneSets=filteredMappedGeneSets,
                                      alpha=get_alpha(param), 
                                      normalization=do_normalize(param),
                                      verbose=verbose,
                                      BPPARAM=BPPARAM)
 
-              rval <- wrapData(ssgseaScores, get_exprData(param))
-              attr(rval, "geneSetLengths") <- lengths(famGaGS[["filteredMappedGeneSets"]])
+              gs <- .geneSetsIndices2Names(
+                  indices=filteredMappedGeneSets,
+                  names=rownames(filteredDataMatrix))
+              rval <- wrapData(get_exprData(param), ssgseaScores, gs)
               
               return(rval)
           })
@@ -265,14 +274,114 @@ setMethod("gsva", signature(param="gsvaParam"),
               colnames(gsvaScores) <- colnames(filteredDataMatrix)
               rownames(gsvaScores) <- names(filteredMappedGeneSets)
 
-              rval <- wrapData(gsvaScores, get_exprData(param))
-              attr(rval, "geneSetLengths") <- lengths(filteredMappedGeneSets)
+              gs <- .geneSetsIndices2Names(
+                  indices=filteredMappedGeneSets,
+                  names=rownames(filteredDataMatrix))
+              rval <- wrapData(get_exprData(param), gsvaScores, gs)
               
               return(rval)
           })
 
 
-### -----  methods for data pre-/post-processing -----
+### ----- methods for retrieving gene sets and their sizes -----
+
+## #' @title Retrieve Gene Set Sizes
+## #' 
+## #' @description Retrieves or determines the gene set sizes that have been used
+## #' or would be used in a `gsva()` gene set analysis.  These are not necessarily
+## #' the same as the sizes of the input gene sets.  See Details.
+## #' 
+## #' @param obj An object of one of the following classes:
+## #' * An expression data object of one of the classes described in
+## #' [`GsvaExprData-class`] that is the return value of a call to `gsva()`.
+## #' * A parameter object of one of the classes described in
+## #' [`GsvaMethodParam-class`] that could be used in a call to `gsva()`.
+## #'
+## #' @return A gene-set by sample matrix (of `matrix` or [`dgCMatrix-class`] type, 
+## #'   depending on the input) of GSVA enrichment scores.
+## #' 
+## #' @details The gene set sizes used in a `gsva()` gene set analysis may be a
+## #' valuable input to subsequent analyses.  However, they are not necessarily the
+## #' same as the original sizes of the input gene sets since during preparation of
+## #' an analysis run, `gsva()` may have to perform one of the following
+## #' modifications:
+## #' * a translation of gene IDs used in the gene sets to the gene IDs used in the
+## #' expression data set that is not necessarily 1:1,
+## #' * omitting genes from gene sets that cannot be found in the expression data
+## #' set that may itself have been subject to a filtering step, or
+## #' * filtering 
+## #'
+## #' @aliases geneSetSizes
+## #' @name geneSetSizes
+## #' @rdname geneSetSizes
+## #' 
+## NULL
+
+
+#' @aliases geneSets,GsvaMethodParam-method
+#' @rdname geneSets
+#' @exportMethod geneSets
+setMethod("geneSets", signature("GsvaMethodParam"),
+          function(obj) {
+              famGaGS <- .filterAndMapGenesAndGeneSets(obj)
+
+              return(.geneSetsIndices2Names(
+                  indices=famGaGS[["filteredMappedGeneSets"]],
+                  names=rownames(famGaGS[["filteredDataMatrix"]])
+              ))
+          })
+
+#' @aliases geneSets,SummarizedExperiment-method
+#' @rdname geneSets
+#' @exportMethod geneSets
+setMethod("geneSets", signature("SummarizedExperiment"),
+          function(obj) {
+              return(as(rowData(obj)$gs, "list"))
+          })
+
+#' @aliases geneSets,SingleCellExperiment-method
+#' @rdname geneSets
+#' @exportMethod geneSets
+setMethod("geneSets", signature("SingleCellExperiment"),
+          function(obj) {
+              return(as(rowData(obj)$gs, "list"))
+          })
+
+#' @aliases geneSets,SpatialExperiment-method
+#' @rdname geneSets
+#' @exportMethod geneSets
+setMethod("geneSets", signature("SpatialExperiment"),
+          function(obj) {
+              return(as(rowData(obj)$gs, "list"))
+          })
+
+#' @aliases geneSets,GsvaExprData-method
+#' @rdname geneSets
+#' @exportMethod geneSets
+setMethod("geneSets", signature("GsvaExprData"),
+          function(obj) {
+              return(.geneSets(obj))
+          })
+
+
+#' @aliases geneSetSizes,GsvaMethodParam-method
+#' @rdname geneSetSizes
+#' @exportMethod geneSetSizes
+setMethod("geneSetSizes", signature("GsvaMethodParam"),
+          function(obj) {
+              return(lengths(geneSets(obj)))
+          })
+
+#' @aliases geneSetSizes,GsvaExprData-method
+#' @rdname geneSetSizes
+#' @exportMethod geneSetSizes
+setMethod("geneSetSizes", signature("GsvaExprData"),
+          function(obj) {
+              return(lengths(geneSets(obj)))
+          })
+
+
+### ----- methods for data pre-/post-processing -----
 
 ## unwrapData: extract a data matrix from a container object
 setMethod("unwrapData", signature("matrix"),
@@ -351,62 +460,71 @@ setMethod("unwrapData", signature("SpatialExperiment"),
           })
 
 
-## wrapData: put the resulting data into the original data container type
-setMethod("wrapData", signature("matrix", "matrix"),
-          function(dataMatrix, container) {
+## wrapData: put the resulting data and gene sets into the original data container type
+setMethod("wrapData", signature(container="matrix"),
+          function(container, dataMatrix, geneSets) {
+              attr(dataMatrix, "geneSets") <- geneSets
               return(dataMatrix)
           })
 
-setMethod("wrapData", signature("matrix", "dgCMatrix"),
-          function(dataMatrix, container) {
+setMethod("wrapData", signature(container="dgCMatrix"),
+          function(container, dataMatrix, geneSets) {
+              attr(dataMatrix, "geneSets") <- geneSets
               return(dataMatrix)
           })
 
-setMethod("wrapData", signature("matrix", "ExpressionSet"),
-          function(dataMatrix, container) {
+setMethod("wrapData", signature(container="ExpressionSet"),
+          function(container, dataMatrix, geneSets) {
               rval <- new("ExpressionSet", exprs=dataMatrix,
                           phenoData=phenoData(container),
                           experimentData=experimentData(container),
                           annotation="")
-
+              attr(rval, "geneSets") <- geneSets
+              
               return(rval)
           })
 
-setMethod("wrapData", signature("matrix", "SummarizedExperiment"),
-          function(dataMatrix, container) {
-              rval <- SummarizedExperiment(assays=SimpleList(es=dataMatrix),
-                                           colData=colData(container),
-                                           metadata=metadata(container))
+setMethod("wrapData", signature(container="SummarizedExperiment"),
+          function(container, dataMatrix, geneSets) {
+              rval <- SummarizedExperiment(
+                  assays=SimpleList(es=dataMatrix),
+                  colData=colData(container),
+                  rowData=DataFrame(gs=CharacterList(geneSets)),
+                  metadata=metadata(container))
               metadata(rval)$annotation <- NULL
 
               return(rval)
           })
 
-setMethod("wrapData", signature("matrix", "SingleCellExperiment"),
-          function(dataMatrix, container) {
-              rval <- SingleCellExperiment(assays=SimpleList(es=dataMatrix),
-                                           colData=colData(container),
-                                           metadata=metadata(container))
+setMethod("wrapData", signature(container="SingleCellExperiment"),
+          function(container, dataMatrix, geneSets) {
+              rval <- SingleCellExperiment(
+                  assays=SimpleList(es=dataMatrix),
+                  colData=colData(container),
+                  rowData=DataFrame(gs=CharacterList(geneSets)),
+                  metadata=metadata(container))
               metadata(rval)$annotation <- NULL
               
               return(rval)
           })
 
-setMethod("wrapData", signature("matrix", "SpatialExperiment"),
-          function(dataMatrix, container) {
-            rval <- SpatialExperiment(assays=SimpleList(es=dataMatrix),
-                                         colData=colData(container),
-                                         metadata=metadata(container),
-                                         imgData = imgData(container),
-                                         spatialCoords = spatialCoords(container)
-                                      )
-            metadata(rval)$annotation <- NULL
-            
-            return(rval)
+setMethod("wrapData", signature(container="SpatialExperiment"),
+          function(container, dataMatrix, geneSets) {
+              rval <- SpatialExperiment(
+                  assays=SimpleList(es=dataMatrix),
+                  colData=colData(container),
+                  rowData=DataFrame(gs=CharacterList(geneSets)),
+                  metadata=metadata(container),
+                  imgData = imgData(container),
+                  spatialCoords = spatialCoords(container))
+              metadata(rval)$annotation <- NULL
+              
+              return(rval)
           })
 
 
-## mapGeneSetsToAnno: translate feature IDs used in gene sets to specified annotation type (if any, and if possible)
+## mapGeneSetsToAnno: translate feature IDs used in gene sets to specified
+##                    annotation type (if any, and if possible)
 setMethod("mapGeneSetsToAnno", signature("list"),
           function(geneSets, anno) {
               return(geneSets)

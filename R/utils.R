@@ -91,10 +91,14 @@
                                        removeConstant=removeConstant,
                                        removeNzConstant=removeNzConstant)
 
+    ## note that the method for 'GeneSetCollection' calls geneIds(), i.e., 
+    ## whatever the input, from here on we have a list of character vectors
     geneSets <- mapGeneSetsToAnno(geneSets=get_geneSets(param),
                                   anno=gsvaAnnotation(exprData))
     
     ## map to the actual features for which expression data is available
+    ## note that the result is a list of integer vectors (indices to rownames)
+    ## and not a list of character vector any longer
     mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(filteredDataMatrix))
     
     ## remove gene sets from the analysis for which no features are available
@@ -106,12 +110,35 @@
     if(length(filteredMappedGeneSets) == 0)
         stop("The gene set list is empty! Filter may be too stringent.")
 
+    ## this should NEVER happen -- just to make sure it doesn't...
+    if(anyDuplicated(names(filteredMappedGeneSets)) > 0)
+        stop("The gene set list contains duplicated gene set names.")
+
     if(any(lengths(filteredMappedGeneSets) == 1))
         warning("Some gene sets have size one. Consider setting 'minSize > 1'.")
 
     return(list(filteredDataMatrix=filteredDataMatrix,
                 filteredMappedGeneSets=filteredMappedGeneSets))
 }
+
+
+## (re-)extract a list of gene names from a list of indices
+## (indices resulting from the matching above)
+.geneSetsIndices2Names <- function(indices, names) {
+    return(lapply(indices, function(i, n) n[i], n=names))
+}
+
+
+## access to gene set attribute without explicit use of attributes
+.geneSets <- function(obj) {
+    gs <- attr(obj, "geneSets", exact=TRUE)
+
+    if(is.null(gs))
+        stop("The object does not contain information about gene sets.")
+
+    return(gs)
+}
+
 
 ## converts a dgCMatrix into a list of its columns, based on
 ## https://rpubs.com/will_townes/sparse-apply
