@@ -35,7 +35,12 @@ test_inputdatacontainers <- function() {
                                                   "AnnotatedDataFrame"))
     es.eset <- gsva(gsvaParam(eset, geneSets), verbose=FALSE)
 
-    checkTrue(identical(es.mat, Biobase::exprs(es.eset)))
+    ## as of 1.51.9, gene sets will be returned as attributes for containers not
+    ## inheriting from SummarizedExperiment and interfere with the check
+    es.mat2 <- es.mat
+    attr(es.mat2, "geneSets") <- NULL
+    attr(es.eset, "geneSets") <- NULL
+    checkTrue(identical(es.mat2, Biobase::exprs(es.eset)))
 
     ## estimate GSVA enrichment scores with input as a SummarizedExperiment object
     se <- SummarizedExperiment::SummarizedExperiment(assay=list(counts=y2),
@@ -45,7 +50,7 @@ test_inputdatacontainers <- function() {
                                                                                              row.names=colnames(y))))
     es.se <- gsva(gsvaParam(se, geneSets), verbose=FALSE)
 
-    checkTrue(identical(es.mat, SummarizedExperiment::assays(es.se)[[1]]))
+    checkTrue(identical(es.mat2, SummarizedExperiment::assays(es.se)[[1]]))
 
     ## estimate GSVA enrichment scores with input as a dgCMatrix object
     yMat <- Matrix::Matrix(y, sparse=TRUE)
