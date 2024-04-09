@@ -283,39 +283,45 @@ setMethod("gsva", signature(param="gsvaParam"),
           })
 
 
-### ----- methods for retrieving gene sets and their sizes -----
+### ----- methods for retrieving gene sets -----
 
-## #' @title Retrieve Gene Set Sizes
-## #' 
-## #' @description Retrieves or determines the gene set sizes that have been used
-## #' or would be used in a `gsva()` gene set analysis.  These are not necessarily
-## #' the same as the sizes of the input gene sets.  See Details.
-## #' 
-## #' @param obj An object of one of the following classes:
-## #' * An expression data object of one of the classes described in
-## #' [`GsvaExprData-class`] that is the return value of a call to `gsva()`.
-## #' * A parameter object of one of the classes described in
-## #' [`GsvaMethodParam-class`] that could be used in a call to `gsva()`.
-## #'
-## #' @return A gene-set by sample matrix (of `matrix` or [`dgCMatrix-class`] type, 
-## #'   depending on the input) of GSVA enrichment scores.
-## #' 
-## #' @details The gene set sizes used in a `gsva()` gene set analysis may be a
-## #' valuable input to subsequent analyses.  However, they are not necessarily the
-## #' same as the original sizes of the input gene sets since during preparation of
-## #' an analysis run, `gsva()` may have to perform one of the following
-## #' modifications:
-## #' * a translation of gene IDs used in the gene sets to the gene IDs used in the
-## #' expression data set that is not necessarily 1:1,
-## #' * omitting genes from gene sets that cannot be found in the expression data
-## #' set that may itself have been subject to a filtering step, or
-## #' * filtering 
-## #'
-## #' @aliases geneSetSizes
-## #' @name geneSetSizes
-## #' @rdname geneSetSizes
-## #' 
-## NULL
+#' @title Retrieve or Determine Gene Sets
+#' 
+#' @description Retrieves or determines the gene sets that have been used
+#' or would be used in a `gsva()` gene set analysis.  These are not necessarily
+#' the same as the input gene sets.  See Details.
+#' 
+#' @param obj An object of one of the following classes:
+#' * An expression data object of one of the classes described in
+#' [`GsvaExprData-class`] that is the return value of a call to `gsva()`.
+#' * A parameter object of one of the classes described in
+#' [`GsvaMethodParam-class`] that could be used in a call to `gsva()`.
+#'
+#' @return The `geneSets()` methods return a named list of character vectors
+#' where each character vector contains the gene IDs of a gene set.
+#' The `geneSetSizes()` methods return a named integer vector of gene set sizes.
+#' 
+#' @details The gene sets used in a `gsva()` gene set analysis, or just their
+#' sizes, may be a valuable input to subsequent analyses.  However, they are not
+#' necessarily the same as the original input gene sets, or their sizes: based
+#' on user choices, the gene annotation used, or presence/absence of genes in
+#' gene sets and expression data set, `gsva()` may have to modify them during
+#' the preparation of an analysis run.
+#' In order to make use of these gene sets or their sizes, you can either
+#' * retrieve them from the object returned by `gsva()` by passing this object
+#' to `geneSets()` or `geneSetSizes()`, or
+#' * predict them by calling `geneSets()` or `geneSetSizes()` on the parameter
+#' object that would also be passed to `gsva()`.  This is much slower and should
+#' only be done if you do not intend to run an actual gene set analysis.
+#'
+#' `geneSetSizes()` is a convenience wrapper running `lengths()` on the list of
+#' gene sets returned by `geneSets()`.
+#'
+#' @aliases geneSets geneSetSizes
+#' @name geneSets
+#' @rdname geneSets
+#' 
+NULL
 
 
 #' @aliases geneSets,GsvaMethodParam-method
@@ -365,7 +371,7 @@ setMethod("geneSets", signature("GsvaExprData"),
 
 
 #' @aliases geneSetSizes,GsvaMethodParam-method
-#' @rdname geneSetSizes
+#' @rdname geneSets
 #' @exportMethod geneSetSizes
 setMethod("geneSetSizes", signature("GsvaMethodParam"),
           function(obj) {
@@ -373,7 +379,7 @@ setMethod("geneSetSizes", signature("GsvaMethodParam"),
           })
 
 #' @aliases geneSetSizes,GsvaExprData-method
-#' @rdname geneSetSizes
+#' @rdname geneSets
 #' @exportMethod geneSetSizes
 setMethod("geneSetSizes", signature("GsvaExprData"),
           function(obj) {
