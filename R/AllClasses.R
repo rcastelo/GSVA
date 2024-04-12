@@ -15,8 +15,7 @@
 #' [`ExpressionSet-class`],
 #' [`SummarizedExperiment-class`],
 #' [`SingleCellExperiment-class`],
-#' [`SpatialExperiment-class`],
-#' [`HDF5Array`]
+#' [`SpatialExperiment-class`]
 #'
 #' @importClassesFrom Matrix dgCMatrix
 #' @importClassesFrom Biobase ExpressionSet

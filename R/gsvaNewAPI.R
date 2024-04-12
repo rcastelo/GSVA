@@ -31,8 +31,19 @@
 #'   related to the parallel execution of some of the tasks and calculations
 #'   within this function.
 #' 
-#' @return A gene-set by sample matrix (of `matrix` or [`dgCMatrix-class`] type, 
-#'   depending on the input) of GSVA enrichment scores.
+#' @return A gene-set by sample matrix of GSVA enrichment scores stored in a
+#' container object of the same type as the input expression data container. If
+#' the input was a base matrix or a [`dgCMatrix`] object, then the output will
+#' be a base matrix object with the gene sets employed in the calculations
+#' stored in an attribute called `geneSets`. If the input was an
+#' [`ExpressionSet`] object, then the output will be also an [`ExpressionSet`]
+#' object with the gene sets employed in the calculations stored in an
+#' attributed called `geneSets`. If the input was an object of one of the
+#' classes described in [`GsvaExprData`], such as a [`SingleCellExperiment`],
+#' then the output will be of the same class, where enrichment scores will be
+#' stored in an assay called `es` and the gene sets employed in the
+#' calculations will be stored in the `rowData` slot of the object under the
+#' column name `gs`.
 #' 
 #' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`]
 #'
