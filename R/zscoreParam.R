@@ -9,7 +9,8 @@
 #' sets.
 #'
 #' @param exprData The expression data.  Must be one of the classes
-#' supported by [`GsvaExprData-class`].
+#' supported by [`GsvaExprData-class`].  Type `help(GsvaExprData)` to consult
+#' the available classes.
 #'
 #' @param geneSets The gene sets.  Must be one of the classes supported by
 #' [`GsvaGeneSets-class`].

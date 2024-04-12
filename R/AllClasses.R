@@ -26,6 +26,7 @@
 #' @importClassesFrom DelayedArray DelayedArray
 #' @importClassesFrom HDF5Array HDF5Array
 #'
+#' @aliases GsvaExprData
 #' @name GsvaExprData-class
 #' @rdname GsvaExprData-class
 #' @exportClass GsvaExprData
