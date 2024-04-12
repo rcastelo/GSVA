@@ -3,6 +3,7 @@
 \docType{class}
 \name{GsvaExprData-class}
 \alias{GsvaExprData-class}
+\alias{GsvaExprData}
 \title{\code{GsvaExprData} class}
 \description{
 Virtual superclass of expression data classes supported by \code{GSVA}.
@@ -18,6 +19,5 @@ of another class as well as defining common methods for all of them.
 \code{\linkS4class{ExpressionSet}},
 \code{\linkS4class{SummarizedExperiment}},
 \code{\linkS4class{SingleCellExperiment}},
-\code{\linkS4class{SpatialExperiment}},
-\code{\link{HDF5Array}}
+\code{\linkS4class{SpatialExperiment}}
 }

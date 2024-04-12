@@ -17,7 +17,8 @@ plageParam(
 }
 \arguments{
 \item{exprData}{The expression data.  Must be one of the classes
-supported by \code{\linkS4class{GsvaExprData}}.}
+supported by \code{\linkS4class{GsvaExprData}}.  Type \code{help(GsvaExprData)} to consult
+the available classes.}
 
 \item{geneSets}{The gene sets.  Must be one of the classes supported by
 \code{\linkS4class{GsvaGeneSets}}.}

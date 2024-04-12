@@ -44,8 +44,19 @@ related to the parallel execution of some of the tasks and calculations
 within this function.}
 }
 \value{
-A gene-set by sample matrix (of \code{matrix} or \code{\linkS4class{dgCMatrix}} type,
-depending on the input) of GSVA enrichment scores.
+A gene-set by sample matrix of GSVA enrichment scores stored in a
+container object of the same type as the input expression data container. If
+the input was a base matrix or a \code{\link{dgCMatrix}} object, then the output will
+be a base matrix object with the gene sets employed in the calculations
+stored in an attribute called \code{geneSets}. If the input was an
+\code{\link{ExpressionSet}} object, then the output will be also an \code{\link{ExpressionSet}}
+object with the gene sets employed in the calculations stored in an
+attributed called \code{geneSets}. If the input was an object of one of the
+classes described in \code{\link{GsvaExprData}}, such as a \code{\link{SingleCellExperiment}},
+then the output will be of the same class, where enrichment scores will be
+stored in an assay called \code{es} and the gene sets employed in the
+calculations will be stored in the \code{rowData} slot of the object under the
+column name \code{gs}.
 }
 \description{
 Estimates GSVA enrichment scores. The API of this function has
