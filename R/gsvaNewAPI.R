@@ -33,7 +33,7 @@
 #' 
 #' @return A gene-set by sample matrix of GSVA enrichment scores stored in a
 #' container object of the same type as the input expression data container. If
-#' the input was a base matrix or a [`dgCMatrix`] object, then the output will
+#' the input was a base matrix or a [`dgCMatrix-class`] object, then the output will
 #' be a base matrix object with the gene sets employed in the calculations
 #' stored in an attribute called `geneSets`. If the input was an
 #' [`ExpressionSet`] object, then the output will be also an [`ExpressionSet`]
