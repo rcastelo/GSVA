@@ -633,12 +633,10 @@ summary(res)
 ```
 
 As Figure \@ref(fig:setsizebysigma) below shows, GSVA scores have higher
-precision for larger gene sets^[Thanks to Gordon Smyth for point this out to us.].
+precision for larger gene sets^[Thanks to Gordon Smyth for pointing this out to us.].
 
 ```{r setsizebysigma, height=700, width=500, fig.cap="Residual standard deviation of GSVA scores as function of gene set size."}
-gssizes <- lengths(geneIds(cgpC2BroadSets)) ## fetch gene set sizes
-mt <- match(rownames(leukemia_es), names(gssizes))
-gssizes <- gssizes[mt] ## rearrange gene set sizes to the rows of GSVA scores
+gssizes <- geneSetSizes(leukemia_es)
 plot(sqrt(gssizes), sqrt(fit$sigma), xlab="Sqrt(gene sets sizes)",
      ylab="Sqrt(standard deviation)", las=1, pch=".", cex=3)
 ```
@@ -646,8 +644,9 @@ plot(sqrt(gssizes), sqrt(fit$sigma), xlab="Sqrt(gene sets sizes)",
 In such a setting, we can improve the analysis of differentially expressed
 pathways by using the limma-trend approach [@phipson2016robust] setting the
 `trend` parameter in the call to the `eBayes()` function to the vector of gene
-set sizes, in one-to-one correspondence with the gene sets in the rows of the
-GSVA scores container, as calculated before in `gssizes`.
+set sizes. The list of gene sets or a vector of gene set sizes can be obtained
+from the GSVA scores container using function `geneSets()` or `geneSetSizes()`
+and has been stored in `gssizes` before.
 
 ```{r}
 fit <- eBayes(fit, trend=gssizes)
