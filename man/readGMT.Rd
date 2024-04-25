@@ -17,7 +17,7 @@ contain anything that \code{readLines()} can handle.}
 \item{deduplUse}{With the exception of the special method \code{custom}, all
 handling of duplicated gene set names is delegated to function
 \code{\link{deduplicateGeneSets}} and this argument is directly passed on.
-Please see \code{?deduplicatedGeneSets}.
+Please see \code{?deduplicateGeneSets}.
 Using \code{deduplUse=custom} allows import of the GMT file for manual inspection
 and its content and remedy is the user's responsibility.  However, \code{gsva()}
 will \emph{not} accept the result for further use unless it is modified to have

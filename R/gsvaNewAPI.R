@@ -484,7 +484,7 @@ deduplicateGeneSets <- function(geneSets,
 #' @param deduplUse With the exception of the special method `custom`, all
 #' handling of duplicated gene set names is delegated to function
 #' [`deduplicateGeneSets`] and this argument is directly passed on.
-#' Please see `?deduplicatedGeneSets`.
+#' Please see `?deduplicateGeneSets`.
 #' Using `deduplUse=custom` allows import of the GMT file for manual inspection
 #' and its content and remedy is the user's responsibility.  However, `gsva()`
 #' will *not* accept the result for further use unless it is modified to have
