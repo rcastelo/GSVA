@@ -398,6 +398,131 @@ setMethod("geneSetSizes", signature("GsvaExprData"),
           })
 
 
+### ----- helper functions for gene set I/O and preprocessing -----
+
+#' @title Handling of Duplicated Gene Set Names
+#' 
+#' @description Offers a choice of ways for handling duplicated gene set names
+#' that may not be suitable as input to other gene set analysis functions.
+#' 
+#' @param geneSets A named list of gene sets represented as character vectors
+#' of gene IDs as e.g. returned by [`readGMT`].
+#'
+#' @param deduplUse A character vector of length 1 specifying one of several
+#' methods to handle duplicated gene set names.
+#' Duplicated gene set names are explicitly forbidden by the
+#' [GMT file format specification](https://software.broadinstitute.org/cancer/software/gsea/wiki/index.php/Data_formats)
+#' but can nevertheless be encountered in the wild.
+#' The available choices are:
+#' * `first` (the default): drops all gene sets whose names are [`duplicated`]
+#' according to the base R function and retains only the first occurence of a
+#' gene set name.
+#' * `drop`:  removes *all* gene sets that have a duplicated name, including its
+#' first occurrence.
+#' * `union`: replaces gene sets with duplicated names by a single gene set
+#' containing the union of all their gene IDs.
+#' * `smallest`: drops gene sets with duplicated names and retains only the
+#' smallest of them, i.e. the one with the fewest gene IDs.  If there are
+#' several smallest gene sets, the first will be selected.
+#' * `largest`: drops gene sets with duplicated names and retains only the
+#' largest of them, i.e. the one with the most gene IDs.  If there are
+#' several largest gene sets, the first will be selected.
+#'
+#' @return A named list of gene sets that represented as character vectors of
+#' gene IDs.
+#' 
+#' @aliases deduplicateGeneSets
+#' @name deduplicateGeneSets
+#' @rdname deduplicateGeneSets
+#' 
+deduplicateGeneSets <- function(geneSets,
+                                deduplUse = c("first", "drop", "union",
+                                              "smallest", "largest")) {
+    ddUse <- match.arg(deduplUse)
+    isNameDuplicated <- duplicated(names(geneSets))
+    duplicatedNames <- unique(names(geneSets[isNameDuplicated]))
+
+    ## a nested list containing sublists of duplicated gene sets
+    duplicatedGeneSets <- sapply(duplicatedNames,
+                                 function(dn, gs) unname(gs[dn == names(gs)]),
+                                 gs = geneSets, simplify=FALSE)
+
+    ## transformation function operating on sublists of such nested lists,
+    ## returning a single deduplicated gene set, i.e. character vector
+    ddFunc <- switch(ddUse,
+                     union=function(dgs) Reduce(union, dgs),
+                     smallest=function(dgs) dgs[which.min(lengths(dgs))],
+                     largest=function(dgs) dgs[which.max(lengths(dgs))])
+
+    ## apply transformation function to deduplicate gene sets (if requested)
+    if(!is.null(ddFunc))
+        dedupl <- sapply(duplicatedGeneSets, FUN=ddFunc, simplify=FALSE)
+
+    ## drop all duplicate gene sets (sufficient for default of "first")
+    geneSets[isNameDuplicated] <- NULL
+
+    ## remove or replace non-duplicated with deduplicated gene sets
+    if(ddUse == "drop") {
+        geneSets[duplicatedNames] <- NULL
+    } else if(!is.null(ddFunc)) {
+        geneSets[duplicatedNames] <- dedupl
+    }
+
+    return(geneSets)
+}
+
+
+#' @title Import Gene Sets from a GMT File
+#' 
+#' @description Imports a list of gene sets from a GMT (Gene Matrix Transposed)
+#' format file, offering a choice of ways to handle duplicated gene set names.
+#' 
+#' @param con A connection object or character string containing e.g.
+#' a file name or URL.  This is directly passed to [`readLines`] and hence may
+#' contain anything that `readLines()` can handle.
+#'
+#' @param deduplUse With the exception of the special method `custom`, all
+#' handling of duplicated gene set names is delegated to function
+#' [`deduplicateGeneSets`] and this argument is directly passed on.
+#' Please see `?deduplicatedGeneSets`.
+#' Using `deduplUse=custom` allows import of the GMT file for manual inspection
+#' and its content and remedy is the user's responsibility.  However, `gsva()`
+#' will *not* accept the result for further use unless it is modified to have
+#' duplicated gene set names removed.
+#'
+#' @return A named list of gene sets that represented as character vectors of
+#' gene IDs.
+#' 
+#' @seealso [`readLines`], [`deduplicateGeneSets`]
+#'
+#' @aliases readGMT
+#' @name readGMT
+#' @rdname readGMT
+#' 
+readGMT <- function(con,
+                    deduplUse = c("first", "drop", "union",
+                                  "smallest", "largest", "custom")) {
+    ddUse <- match.arg(deduplUse)
+    gmtLines <- strsplit(readLines(con=con), split="\t", fixed=TRUE)
+    gmt <- lapply(gmtLines, tail, -2)
+    names(gmt) <- sapply(gmtLines, head, 1)
+
+    if(anyDuplicated(names(gmt)) > 0) {
+        warning("GMT contains duplicated gene set names; deduplicated",
+                " using method: ", ddUse)
+        
+        if(ddUse != "custom") {
+            gmt <- deduplicateGeneSets(geneSets=gmt, deduplUse=ddUse)
+        } else {
+            warning("Method 'custom' requires YOU to remedy duplicate ",
+                    "gene set names as gsva() will not accept them")
+        }
+    }
+    
+    return(gmt)
+}
+
+
 ### ----- methods for data pre-/post-processing -----
 
 ## unwrapData: extract a data matrix from a container object

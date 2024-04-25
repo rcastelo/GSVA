@@ -14,7 +14,7 @@
 #'
 #' @importFrom graphics plot
 #' @importFrom stats ecdf na.omit rnorm rpois sd
-#' @importFrom utils installed.packages setTxtProgressBar txtProgressBar
+#' @importFrom utils installed.packages setTxtProgressBar txtProgressBar head tail
 #' read.csv write.csv capture.output
 #' @importFrom Matrix nnzero
 #' @importFrom S4Vectors SimpleList DataFrame
