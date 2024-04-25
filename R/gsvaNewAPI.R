@@ -498,6 +498,7 @@ deduplicateGeneSets <- function(geneSets,
 #' @aliases readGMT
 #' @name readGMT
 #' @rdname readGMT
+#' @export
 #' 
 readGMT <- function(con,
                     deduplUse = c("first", "drop", "union",
