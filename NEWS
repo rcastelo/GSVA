@@ -1,3 +1,34 @@
+CHANGES IN VERSION 1.52
+-----------------------
+
+USER VISIBLE CHANGES
+
+  o Moved old API from deprecated to defunct; see vignette and help pages for examples on how to use the new API.
+
+  o Documentation fixes.
+
+  o Gene/feature filtering is not based anymore on floating point arithmetic, but on comparing minimum and maximum values. In the case of expression data stored in dgCMatrix objects, this criterion applies to non-zero values only.
+
+  o Parameter objects have nicer show methods.
+
+  o Resulting enrichment score matrices are now always dense.
+
+  o Added a first version of the support to SpatialExperiment objects. At the moment, only GSVA scores are calculated without using spatial coordinates information.
+
+  o When expression data is stored in an input sparse matrix of class dgCMatrix, now it is handled as such a sparse matrix as much as possible to reduce memory consumption.
+
+  o Added geneSets() and geneSetSizes() methods that allow one to retrieve, respectively, the filtered collection of gene sets and their sizes from either the parameter object or the resulting object output by the gsva() function. This allows the user to more easily give this information to analysis pipelines that exploit it, such as limma-trend; see the vignette for an example.
+
+  o Added functions readGMT() and deduplicateGeneSets() to read GMT files, handling the case when the file contains gene sets with duplicated names; see the corresponding help pages for more information.
+
+  o The underlying code of the ssGSEA method has been optimized after discussion on https://github.com/rcastelo/GSVA/issues/71 and now it runs one order of magnitude faster and consumes one order of magnitude less memory.
+
+BUG FIXES
+
+  o Bugfix on accessing the assay names of a SingleCellExperiment object from the 'gsva()' function.
+
+  o Bugfix on a rare combination of input parameter for gsvaParam().
+
 CHANGES IN VERSION 1.50
 -----------------------
 

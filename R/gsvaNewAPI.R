@@ -435,6 +435,7 @@ setMethod("geneSetSizes", signature("GsvaExprData"),
 #' @aliases deduplicateGeneSets
 #' @name deduplicateGeneSets
 #' @rdname deduplicateGeneSets
+#' @export
 #' 
 deduplicateGeneSets <- function(geneSets,
                                 deduplUse = c("first", "drop", "union",
