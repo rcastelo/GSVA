@@ -248,8 +248,8 @@ setMethod("gsva", signature(param="gsvaParam"),
               filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
               if (!inherits(BPPARAM, "SerialParam") && verbose)
-                  cat(sprintf("Setting parallel calculations through a %s back-end\n",
-                              "with workers=%d and tasks=100.\n",
+                  cat(sprintf(paste("Setting parallel calculations through a %s back-end",
+                                    "with workers=%d and tasks=100.\n", collapse="\n"),
                               class(BPPARAM), bpnworkers(BPPARAM)))
 
               if(verbose)
@@ -261,6 +261,7 @@ setMethod("gsva", signature(param="gsvaParam"),
               ## nGenes <- nrow(filteredDataMatrix)
               nGeneSets <- length(filteredMappedGeneSets)
 
+              rnaseq <- FALSE
               if (get_kcdf(param) == "Gaussian") {
                   rnaseq <- FALSE
                   kernel <- TRUE
