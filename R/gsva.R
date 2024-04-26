@@ -226,24 +226,25 @@ ks_test_Rcode <- function(gene.density, gset_idxs, tau=1, make.plot=FALSE){
 ## optimized version of the function .rndWalk by Alexey Sergushichev
 ## https://github.com/rcastelo/GSVA/pull/15
 ## based on his paper https://doi.org/10.1101/060012
+## with further optimizations with Bob Policastro discussed in
+## https://github.com/rcastelo/GSVA/issues/71
 .fastRndWalk <- function(gSetIdx, geneRanking, j, Ra) {
     n <- length(geneRanking)
     k <- length(gSetIdx)
-    idxs <- sort.int(match(gSetIdx, geneRanking))
     
     stepCDFinGeneSet2 <- 
-        sum(Ra[geneRanking[idxs], j] * (n - idxs + 1)) /
-        sum((Ra[geneRanking[idxs], j]))    
+        sum(Ra[geneRanking[gSetIdx], j] * (n - gSetIdx + 1)) /
+        sum((Ra[geneRanking[gSetIdx], j]))    
     
     
-    stepCDFoutGeneSet2 <- (n * (n + 1) / 2 - sum(n - idxs + 1)) / (n - k)
+    stepCDFoutGeneSet2 <- (n * (n + 1) / 2 - sum(n - gSetIdx + 1)) / (n - k)
     
     walkStat <- stepCDFinGeneSet2 - stepCDFoutGeneSet2
 
     walkStat
 }
 
-
+#' @importFrom IRanges IntegerList match
 ssgsea <- function(X, geneSets, alpha=0.25,
                    normalization=TRUE, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose)) {
@@ -259,9 +260,11 @@ ssgsea <- function(X, geneSets, alpha=0.25,
   
   Ra <- abs(R)^alpha
   
+  geneSets <- IntegerList(geneSets)
   es <- bplapply(as.list(1:n), function(j) {
     geneRanking <- order(R[, j], decreasing=TRUE)
-    es_sample <- lapply(geneSets, .fastRndWalk, geneRanking, j, Ra)
+    geneSetsRankIdx <- match(geneSets, geneRanking)
+    es_sample <- lapply(geneSetsRankIdx, .fastRndWalk, geneRanking, j, Ra)
     
     unlist(es_sample)
   }, BPPARAM=BPPARAM)
