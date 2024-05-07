@@ -87,7 +87,7 @@ function(input, output, session) {
                           tau=isolate(argInp[["selectedTau"]]()),
                           maxDiff=isolate(argInp[["mxDiff"]]()),
                           absRanking=isolate(argInp[["absRanking"]]())))
-      result <- gsva(expr=param, verbose=TRUE)
+      result <- gsva(param=param, verbose=TRUE)
       sink()
       ## when gsva() ends, we reset the console text file to empty
       write("", file=rout)
