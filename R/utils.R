@@ -115,7 +115,7 @@
         stop("The gene set list contains duplicated gene set names.")
 
     if(any(lengths(filteredMappedGeneSets) == 1))
-        warning("Some gene sets have size one. Consider setting 'minSize > 1'.")
+        warning("Some gene sets have size one. Consider setting 'minSize' to a value > 1.")
 
     return(list(filteredDataMatrix=filteredDataMatrix,
                 filteredMappedGeneSets=filteredMappedGeneSets))
