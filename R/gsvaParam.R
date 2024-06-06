@@ -45,18 +45,20 @@
 #' @param maxDiff Logical vector of length 1 which offers two approaches to
 #' calculate the enrichment statistic (ES) from the KS random walk statistic.
 #' * `FALSE`: ES is calculated as the maximum distance of the random walk
-#' from 0.
+#' from 0. This approach produces a distribution of enrichment scores that is
+#' bimodal, but it can give large enrichment scores to gene sets whose genes
+#' are not concordantly activated in one direction only.
 #' * `TRUE` (the default): ES is calculated as the magnitude difference between
-#' the largest positive and negative random walk deviations.
+#' the largest positive and negative random walk deviations. This default value
+#' gives larger enrichment scores to gene sets whose genes are concordantly
+#' activated in one direction only.
 #'
 #' @param absRanking Logical vector of length 1 used only when `maxDiff=TRUE`.
 #' When `absRanking=FALSE` (default) a modified Kuiper statistic is used to
 #' calculate enrichment scores, taking the magnitude difference between the
 #' largest positive and negative random walk deviations. When
 #' `absRanking=TRUE` the original Kuiper statistic that sums the largest
-#' positive and negative random walk deviations, is used. In this latter case,
-#' gene sets with genes enriched on either extreme (high or low) will be
-#' regarded as ’highly’ activated.
+#' positive and negative random walk deviations is used.
 #' 
 #' @return A new [`gsvaParam-class`] object.
 #'
