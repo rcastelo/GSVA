@@ -20,7 +20,7 @@
 ##  an SD of 0 and therefore scaling them will result in division by 0.
 
 .filterGenes <- function(expr, removeConstant=TRUE, removeNzConstant=TRUE) {
-    geneRanges <- rowRanges(expr, useNames=FALSE)
+    geneRanges <- rowRanges(expr, na.rm=TRUE, useNames=FALSE)
     constantGenes <- (geneRanges[, 1] == geneRanges[, 2])
 
     if(any(constantGenes) || anyNA(constantGenes)) {

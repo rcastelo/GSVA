@@ -167,6 +167,15 @@ setClass("zscoreParam",
 #' difference between the minimum and the maximum, as described in their paper.
 #' Otherwise this last normalization step is skipped.
 #'
+#' @slot checkNA Character string. One of the strings `"auto"` (default),
+#' `"yes"`, or `"no"`, which refer to whether the input expression data should
+#' be checked for the presence of missing (`NA`) values; see [`ssgseaParam`].
+#'
+#' @slot use Character string. One of the strings `"everything"` (default),
+#' `"all.obs"`, or `"na.rm"`, which refer to three different policies to apply
+#' in the presence of missing values in the input expression data; see
+#' [`ssgseaParam`].
+#'
 #' @seealso
 #' [`GsvaExprData-class`],
 #' [`GsvaGeneSets-class`],
@@ -180,7 +189,9 @@ setClass("zscoreParam",
 #' @exportClass ssgseaParam
 setClass("ssgseaParam",
          slots=c(alpha="numeric",
-                 normalize="logical"),
+                 normalize="logical",
+                 checkNA="character",
+                 use="character"),
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
@@ -189,7 +200,9 @@ setClass("ssgseaParam",
                         minSize=NA_integer_,
                         maxSize=NA_integer_,
                         alpha=NA_real_,
-                        normalize=NA))
+                        normalize=NA,
+                        checkNA=NA_character_,
+                        use=NA_character_))
 
 
 ## ----- GSVA Parameter Class -----

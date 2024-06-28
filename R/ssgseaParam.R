@@ -33,11 +33,35 @@
 #' weight of the tail in the random walk performed by the `ssGSEA` (Barbie et
 #' al., 2009) method.  The default value is 0.25 as described in the paper.
 #' 
-#' @param normalize Logical vector of length 1; if `TRUE`  runs the `ssGSEA` method
-#' from Barbie et al. (2009) normalizing the scores by the absolute difference
-#' between the minimum and the maximum, as described in their paper. Otherwise
-#' this last normalization step is skipped.
+#' @param normalize Logical vector of length 1; if `TRUE` runs the `ssGSEA`
+#' method from Barbie et al. (2009) normalizing the scores by the absolute
+#' difference between the minimum and the maximum, as described in their paper.
+#' Otherwise this last normalization step is skipped.
 #' 
+#' @param checkNA Character string specifying whether the input expression data
+#' should be checked for the presence of missing (`NA`) values. This must be
+#' one of the strings `"auto"` (default), `"yes"`, or `"no"`. The default value
+#' `"auto"` means that the software will perform that check only when the input
+#' expression data is provided as a base [`matrix`], an [`ExpressionSet`] or a
+#' [`SummarizedExperiment`] object, while every other type of input expression
+#' data container (e.g., [`SingleCellExperiment`], etc.) will not be checked.
+#' If `checkNA="yes"`, then the input expression data will be checked for
+#' missing values irrespective of the object class of the data container, and
+#' if `checkNA="no"`, then that check will not be performed.
+#'
+#' @param use Character string specifying a policy for dealing with missing
+#' values (`NA`s) in the input expression data argument `exprData`. It only
+#' applies when either `checkNA="yes"`, or `checkNA="auto"` (see the `checkNA`
+#' parameter. The argument value must be one of the strings `"everything"`
+#' (default), `"all.obs"`, or `"na.rm"`. The policy of the default value
+#' `"everything"` consists of propagating `NA`s so that the resulting enrichment
+#' scores will be `NA`, whenever one or more of its contributing values is `NA`,
+#' giving a warning when that happens. When `use="all.obs"`, the presence of
+#' `NA`s in the input expression data will produce an error. Finally, when
+#' `use="na.rm"`, `NA` values in the input expression data will be removed from
+#' calculations, giving a warning when that happens, and giving an error if no
+#' values are left after removing the `NA` values.
+#'
 #' @return A new [`ssgseaParam-class`] object.
 #'
 #' @references Barbie, D.A. et al. Systematic RNA interference reveals that
@@ -65,7 +89,11 @@
 ssgseaParam <- function(exprData, geneSets,
                         assay=NA_character_, annotation=NA_character_,
                         minSize=1,maxSize=Inf,
-                        alpha=0.25, normalize=TRUE) {
+                        alpha=0.25, normalize=TRUE,
+                        checkNA=c("auto", "yes", "no"),
+                        use=c("everything", "all.obs", "na.rm")) {
+    checkNA <- match.arg(checkNA)
+    use <- match.arg(use)
     an <- gsvaAssayNames(exprData)
     if((!is.na(assay)) && (!.isCharNonEmpty(an)))
         warning("argument assay='", assay,
@@ -77,7 +105,8 @@ ssgseaParam <- function(exprData, geneSets,
         exprData=exprData, geneSets=geneSets,
         assay=assay, annotation=annotation,
         minSize=minSize, maxSize=maxSize,
-        alpha=alpha, normalize=normalize)
+        alpha=alpha, normalize=normalize,
+        checkNA=checkNA, use=use)
 }
 
 
@@ -132,6 +161,12 @@ setValidity("ssgseaParam", function(object) {
     if(is.na(object@normalize)) {
         inv <- c(inv, "@normalize should not be NA")
     }
+    if(!.isCharLength1(object@checkNA)) {
+        inv <- c(inv, "@use should be a single character string")
+    }
+    if(!.isCharLength1(object@use)) {
+        inv <- c(inv, "@use should be a single character string")
+    }
     return(if(length(inv) == 0) TRUE else inv)
 })
 
@@ -150,6 +185,17 @@ do_normalize <- function(object) {
   return(object@normalize)
 }
 
+#' @noRd
+checkNA <- function(object) {
+  stopifnot(inherits(object, "ssgseaParam"))
+  return(object@checkNA)
+}
+
+#' @noRd
+na_use <- function(object) {
+  stopifnot(inherits(object, "ssgseaParam"))
+  return(object@use)
+}
 
 ## ----- show -----
 
@@ -158,5 +204,7 @@ setMethod("show",
           function(object) {
               callNextMethod(object)
               cat("alpha: ", get_alpha(object), "\n", 
-                  "normalize: ", do_normalize(object), "\n", sep="")
+                  "normalize: ", do_normalize(object), "\n",
+                  "checkNA: ", checkNA(object), "\n",
+                  "na_use: ", na_use(object), "\n", sep="")
           })

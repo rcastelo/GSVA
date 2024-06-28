@@ -211,18 +211,29 @@ setMethod("gsva", signature(param="ssgseaParam"),
               filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
               if (!inherits(BPPARAM, "SerialParam") && verbose)
-                  cat(sprintf("Setting parallel calculations through a %s back-end\n",
-                              "with workers=%d and tasks=100.\n",
+                  cat(sprintf("Setting parallel calculations through a %s\n",
+                              "back-end with workers=%d and tasks=100.\n",
                               class(BPPARAM), bpnworkers(BPPARAM)))
 
               if(verbose)
                   cat("Estimating ssGSEA scores for",
                       length(filteredMappedGeneSets), "gene sets.\n")
 
+              autonaclasseswocheck <- c("matrix", "ExpressionSet",
+                                        "SummarizedExperiment")
+              check_na <- TRUE
+              if (checkNA(param) == "no" ||
+                  all(!class(get_exprData(param)) %in% autonaclasseswocheck))
+                  check_na <- FALSE
+
+
               ssgseaScores <- ssgsea(X=filteredDataMatrix,
                                      geneSets=filteredMappedGeneSets,
                                      alpha=get_alpha(param), 
                                      normalization=do_normalize(param),
+                                     check_na=check_na,
+                                     na_use=na_use(param),
+                                     minSize=get_minSize(param),
                                      verbose=verbose,
                                      BPPARAM=BPPARAM)
 
