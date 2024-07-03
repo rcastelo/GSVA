@@ -4,6 +4,7 @@
 \name{ssgseaParam-class}
 \alias{ssgseaParam-class}
 \alias{ssgseaParam}
+\alias{anyNA,ssgseaParam-method}
 \title{\code{ssgseaParam} class}
 \usage{
 ssgseaParam(
@@ -18,6 +19,8 @@ ssgseaParam(
   checkNA = c("auto", "yes", "no"),
   use = c("everything", "all.obs", "na.rm")
 )
+
+\S4method{anyNA}{ssgseaParam}(x, recursive = FALSE)
 }
 \arguments{
 \item{exprData}{The expression data.  Must be one of the classes
@@ -74,6 +77,10 @@ giving a warning when that happens. When \code{use="all.obs"}, the presence of
 \code{use="na.rm"}, \code{NA} values in the input expression data will be removed from
 calculations, giving a warning when that happens, and giving an error if no
 values are left after removing the \code{NA} values.}
+
+\item{x}{An object of class \code{\link{ssgseaParam}}.}
+
+\item{recursive}{Not used with \code{x} being an object of class \code{\link{ssgseaParam}}.}
 }
 \value{
 A new \code{\linkS4class{ssgseaParam}} object.
@@ -107,6 +114,9 @@ Otherwise this last normalization step is skipped.}
 \item{\code{checkNA}}{Character string. One of the strings \code{"auto"} (default),
 \code{"yes"}, or \code{"no"}, which refer to whether the input expression data should
 be checked for the presence of missing (\code{NA}) values; see \code{\link{ssgseaParam}}.}
+
+\item{\code{anyNA}}{Logical vector of length 1, indicating whether the input
+expression data contains missing (\code{NA}) values; see \code{\link{ssgseaParam}}.}
 
 \item{\code{use}}{Character string. One of the strings \code{"everything"} (default),
 \code{"all.obs"}, or \code{"na.rm"}, which refer to three different policies to apply

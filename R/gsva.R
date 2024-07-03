@@ -228,9 +228,24 @@ ks_test_Rcode <- function(gene.density, gset_idxs, tau=1, make.plot=FALSE){
 ## based on his paper https://doi.org/10.1101/060012
 ## with further optimizations with Bob Policastro discussed in
 ## https://github.com/rcastelo/GSVA/issues/71
-.fastRndWalk <- function(gSetIdx, geneRanking, j, Ra,
-                         anyna=FALSE, na_use="everything", minSize=1,
-                         wna_env=new.env()) {
+.fastRndWalk <- function(gSetIdx, geneRanking, j, Ra) {
+    n <- length(geneRanking)
+    k <- length(gSetIdx)
+    
+    stepCDFinGeneSet <- 
+        sum(Ra[geneRanking[gSetIdx], j] * (n - gSetIdx + 1)) /
+        sum((Ra[geneRanking[gSetIdx], j]))    
+    
+    stepCDFoutGeneSet <- (n * (n + 1) / 2 - sum(n - gSetIdx + 1)) / (n - k)
+    
+    walkStat <- stepCDFinGeneSet - stepCDFoutGeneSet
+
+    walkStat
+}
+
+.fastRndWalkNArm <- function(gSetIdx, geneRanking, j, Ra,
+                             anyna=FALSE, na_use="everything", minSize=1,
+                             wna_env=new.env()) {
     n <- length(geneRanking)
     if (anyna && na_use == "na.rm")
         gSetIdx <- na.omit(gSetIdx)
@@ -255,23 +270,11 @@ ks_test_Rcode <- function(gene.density, gset_idxs, tau=1, make.plot=FALSE){
 ssgsea <- function(X, geneSets, alpha=0.25,
                    normalization=TRUE,
                    check_na=FALSE,
+                   any_na=FALSE,
                    na_use=c("everything", "all.obs", "na.rm"),
                    minSize=1, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose)) {
   na_use <- match.arg(na_use)
-
-  anyna <- FALSE
-  if (check_na) {
-    anyna <- anyNA(X)
-    if (anyna) {
-      if (na_use == "all.obs")
-        stop("Input expression data has NA values.")
-      else if (na_use == "everything")
-        warning("Input expression data has NA values, which will be propagated through calculations.")
-      else ## na.rm
-        warning("Input expression data has NA values, which will be discarded from calculations.")
-    }
-  }
 
   n <- ncol(X)
   
@@ -290,19 +293,23 @@ ssgsea <- function(X, geneSets, alpha=0.25,
   assign("w", FALSE, envir=wna_env)
   geneSets <- IntegerList(geneSets)
   es <- bplapply(as.list(1:n), function(j) {
-    if (anyna && na_use == "na.rm")
+    if (any_na && na_use == "na.rm") {
       geneRanking <- order(R[, j], decreasing=TRUE, na.last=NA)
-    else
+      geneSetsRankIdx <- match(geneSets, geneRanking)
+      es_sample <- sapply(geneSetsRankIdx, .fastRndWalkNArm,
+                          geneRanking, j, Ra, any_na, na_use,
+                          minSize, wna_env, USE.NAMES=FALSE)
+    } else {
       geneRanking <- order(R[, j], decreasing=TRUE)
-    geneSetsRankIdx <- match(geneSets, geneRanking)
-    es_sample <- sapply(geneSetsRankIdx, .fastRndWalk,
-                        geneRanking, j, Ra, anyna, na_use, minSize, wna_env)
-    
-    ## unlist(es_sample, use.names=FALSE)
+      geneSetsRankIdx <- match(geneSets, geneRanking)
+      es_sample <- sapply(geneSetsRankIdx, .fastRndWalk,
+                          geneRanking, j, Ra)
+    }
+    es_sample
   }, BPPARAM=BPPARAM)
   es <- do.call("cbind", es)
   
-  if (anyna && na_use =="na.rm")
+  if (any_na && na_use =="na.rm")
     if (get("w", envir=wna_env))
       warning(sprintf(paste("one or more gene sets had less than %d genes after",
                             "after removing NA values, the corresponding",
@@ -314,13 +321,16 @@ ssgsea <- function(X, geneSets, alpha=0.25,
     ## normalize enrichment scores by using the entire data set, as indicated
     ## by Barbie et al., 2009, online methods, pg. 2
 
+    ## consider calculating the range on the fly to avoid having to do this
+    ## on a large matrix
     rng <- NULL
-    if (anyna)
+    if (any_na)
       rng <- range(es, na.rm=TRUE) ## discard always NA values to calculate the
                                    ## normalization factor to enable either the
                                    ## propogation of NA values or to avoid them
     else
       rng <- range(es) ## na.rm increases execution time and memory consumption
+
     if (any(is.na(rng) | !is.finite(rng)))
       stop(paste("Cannot calculate normalizing factor for the enrichment scores in",
                  "ssGSEA, likely due to NA values in the input expression data."))

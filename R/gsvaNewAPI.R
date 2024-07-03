@@ -219,19 +219,11 @@ setMethod("gsva", signature(param="ssgseaParam"),
                   cat("Estimating ssGSEA scores for",
                       length(filteredMappedGeneSets), "gene sets.\n")
 
-              autonaclasseswocheck <- c("matrix", "ExpressionSet",
-                                        "SummarizedExperiment")
-              check_na <- TRUE
-              if (checkNA(param) == "no" ||
-                  all(!class(get_exprData(param)) %in% autonaclasseswocheck))
-                  check_na <- FALSE
-
-
               ssgseaScores <- ssgsea(X=filteredDataMatrix,
                                      geneSets=filteredMappedGeneSets,
                                      alpha=get_alpha(param), 
                                      normalization=do_normalize(param),
-                                     check_na=check_na,
+                                     any_na=anyNA(param),
                                      na_use=na_use(param),
                                      minSize=get_minSize(param),
                                      verbose=verbose,

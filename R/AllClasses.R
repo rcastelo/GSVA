@@ -171,6 +171,9 @@ setClass("zscoreParam",
 #' `"yes"`, or `"no"`, which refer to whether the input expression data should
 #' be checked for the presence of missing (`NA`) values; see [`ssgseaParam`].
 #'
+#' @slot anyNA Logical vector of length 1, indicating whether the input
+#' expression data contains missing (`NA`) values; see [`ssgseaParam`].
+#'
 #' @slot use Character string. One of the strings `"everything"` (default),
 #' `"all.obs"`, or `"na.rm"`, which refer to three different policies to apply
 #' in the presence of missing values in the input expression data; see
@@ -191,6 +194,7 @@ setClass("ssgseaParam",
          slots=c(alpha="numeric",
                  normalize="logical",
                  checkNA="character",
+                 anyNA="logical",
                  use="character"),
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
@@ -202,6 +206,7 @@ setClass("ssgseaParam",
                         alpha=NA_real_,
                         normalize=NA,
                         checkNA=NA_character_,
+                        anyNA=NA,
                         use=NA_character_))
 
 

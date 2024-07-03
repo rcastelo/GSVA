@@ -101,12 +101,34 @@ ssgseaParam <- function(exprData, geneSets,
     if(is.na(assay) && .isCharNonEmpty(an))
         assay <- na.omit(an)[1]
     
+    autonaclasseswocheck <- c("matrix", "ExpressionSet",
+                              "SummarizedExperiment")
+    mask <- class(exprData) %in% autonaclasseswocheck
+    checkNAyesno <- switch(checkNA, yes="yes", no="no",
+                           ifelse(any(mask), "yes", "no"))
+    any_na <- FALSE
+    if (checkNAyesno == "yes") {
+        any_na <- anyNA(unwrapData(exprData))
+        if (any_na) {
+            if (use == "all.obs")
+                stop("Input expression data has NA values.")
+            else if (use == "everything")
+                warning(paste("Input expression data has NA values,",
+                              "which will be propagated through",
+                              "calculations."))
+            else ## na.rm
+                warning(paste("Input expression data has NA values,",
+                              "which will be discarded from",
+                              "calculations."))
+        }
+    }
+    
     new("ssgseaParam",
         exprData=exprData, geneSets=geneSets,
         assay=assay, annotation=annotation,
         minSize=minSize, maxSize=maxSize,
         alpha=alpha, normalize=normalize,
-        checkNA=checkNA, use=use)
+        checkNA=checkNA, anyNA=any_na, use=use)
 }
 
 
@@ -164,6 +186,12 @@ setValidity("ssgseaParam", function(object) {
     if(!.isCharLength1(object@checkNA)) {
         inv <- c(inv, "@use should be a single character string")
     }
+    if(length(object@anyNA) != 1) {
+        inv <- c(inv, "@anyNA should be of length 1")
+    }
+    if(is.na(object@anyNA)) {
+        inv <- c(inv, "@anyNA should not be NA")
+    }
     if(!.isCharLength1(object@use)) {
         inv <- c(inv, "@use should be a single character string")
     }
@@ -191,6 +219,16 @@ checkNA <- function(object) {
   return(object@checkNA)
 }
 
+#' @param x An object of class [`ssgseaParam`].
+#'
+#' @param recursive Not used with `x` being an object of class [`ssgseaParam`].
+#'
+#' @aliases anyNA,ssgseaParam-method
+#' @rdname ssgseaParam-class
+setMethod("anyNA", signature=c("ssgseaParam"),
+          function(x, recursive=FALSE)
+            return(x@anyNA))
+
 #' @noRd
 na_use <- function(object) {
   stopifnot(inherits(object, "ssgseaParam"))
@@ -206,5 +244,6 @@ setMethod("show",
               cat("alpha: ", get_alpha(object), "\n", 
                   "normalize: ", do_normalize(object), "\n",
                   "checkNA: ", checkNA(object), "\n",
+                  "anyNA: ", ifelse(anyNA(object), "yes", "no"), "\n",
                   "na_use: ", na_use(object), "\n", sep="")
           })
