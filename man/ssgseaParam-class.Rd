@@ -113,10 +113,13 @@ Otherwise this last normalization step is skipped.}
 
 \item{\code{checkNA}}{Character string. One of the strings \code{"auto"} (default),
 \code{"yes"}, or \code{"no"}, which refer to whether the input expression data should
-be checked for the presence of missing (\code{NA}) values; see \code{\link{ssgseaParam}}.}
+be checked for the presence of missing (\code{NA}) values.}
+
+\item{\code{didCheckNA}}{Logical vector of length 1, indicating whether the input
+expression data was checked for the presence of missing (\code{NA}) values.}
 
 \item{\code{anyNA}}{Logical vector of length 1, indicating whether the input
-expression data contains missing (\code{NA}) values; see \code{\link{ssgseaParam}}.}
+expression data contains missing (\code{NA}) values.}
 
 \item{\code{use}}{Character string. One of the strings \code{"everything"} (default),
 \code{"all.obs"}, or \code{"na.rm"}, which refer to three different policies to apply

@@ -106,9 +106,10 @@ ssgseaParam <- function(exprData, geneSets,
     mask <- class(exprData) %in% autonaclasseswocheck
     checkNAyesno <- switch(checkNA, yes="yes", no="no",
                            ifelse(any(mask), "yes", "no"))
-    any_na <- FALSE
+    didCheckNA <- any_na <- FALSE
     if (checkNAyesno == "yes") {
         any_na <- anyNA(unwrapData(exprData))
+        didCheckNA <- TRUE
         if (any_na) {
             if (use == "all.obs")
                 stop("Input expression data has NA values.")
@@ -128,7 +129,8 @@ ssgseaParam <- function(exprData, geneSets,
         assay=assay, annotation=annotation,
         minSize=minSize, maxSize=maxSize,
         alpha=alpha, normalize=normalize,
-        checkNA=checkNA, anyNA=any_na, use=use)
+        checkNA=checkNA, didCheckNA=didCheckNA,
+        anyNA=any_na, use=use)
 }
 
 
@@ -186,6 +188,12 @@ setValidity("ssgseaParam", function(object) {
     if(!.isCharLength1(object@checkNA)) {
         inv <- c(inv, "@use should be a single character string")
     }
+    if(length(object@didCheckNA) != 1) {
+        inv <- c(inv, "@didCheckNA should be of length 1")
+    }
+    if(is.na(object@didCheckNA)) {
+        inv <- c(inv, "@didCheckNA should not be NA")
+    }
     if(length(object@anyNA) != 1) {
         inv <- c(inv, "@anyNA should be of length 1")
     }
@@ -219,6 +227,12 @@ checkNA <- function(object) {
   return(object@checkNA)
 }
 
+#' @noRd
+didCheckNA <- function(object) {
+  stopifnot(inherits(object, "ssgseaParam"))
+  return(object@didCheckNA)
+}
+
 #' @param x An object of class [`ssgseaParam`].
 #'
 #' @param recursive Not used with `x` being an object of class [`ssgseaParam`].
@@ -243,7 +257,13 @@ setMethod("show",
               callNextMethod(object)
               cat("alpha: ", get_alpha(object), "\n", 
                   "normalize: ", do_normalize(object), "\n",
-                  "checkNA: ", checkNA(object), "\n",
-                  "anyNA: ", ifelse(anyNA(object), "yes", "no"), "\n",
-                  "na_use: ", na_use(object), "\n", sep="")
+                  "checkNA: ", checkNA(object), "\n", sep="")
+              if (didCheckNA(object)) {
+                  if (anyNA(object)) {
+                      cat("missing data: yes\n",
+                          "na_use: ", na_use(object), "\n", sep="")
+                  } else
+                      cat("missing data: no\n")
+              } else
+                  cat("missing data: didn't check\n")
           })
