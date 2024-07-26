@@ -78,10 +78,12 @@ compute.gene.density <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
 	
         gene.density <- t(matrix(A, n.test.samples, n.genes))
     } else {
-        gene.density <- t(apply(expr, 1, function(x, sample.idxs) {
-            f <- ecdf(x[sample.idxs])
-            f(x)
-        }, sample.idxs))
+        if (is(expr, "dgCMatrix"))
+            gene.density <- .ecdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE])
+        else if (is.matrix(expr))
+            gene.density <- .ecdfvals_dense_to_dense(expr[, sample.idxs, drop=FALSE])
+        else
+            stop(sprintf("matrix class %s cannot be handled yet.", class(expr)))
         gene.density <- log(gene.density / (1-gene.density))
     }
 
