@@ -61,12 +61,12 @@ setMethod("gsva", signature(param="SingleCellExperiment"), function(param, ...) 
 })
 
 
-compute.gene.density <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
+compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
     n.test.samples <- ncol(expr)
     n.genes <- nrow(expr)
     n.density.samples <- length(sample.idxs)
     
-    gene.density <- NA
+    gene.cdf <- NA
     if (kernel) {
         A = .Call("matrix_density_R",
                   as.double(t(expr[ ,sample.idxs, drop=FALSE])),
@@ -76,18 +76,18 @@ compute.gene.density <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
                   n.genes,
                   as.integer(rnaseq))
 	
-        gene.density <- t(matrix(A, n.test.samples, n.genes))
+        gene.cdf <- t(matrix(A, n.test.samples, n.genes))
     } else {
         if (is(expr, "dgCMatrix"))
-            gene.density <- .ecdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE])
+            gene.cdf <- .ecdfvals_sparse_to_sparse(expr[, sample.idxs, drop=FALSE])
         else if (is.matrix(expr))
-            gene.density <- .ecdfvals_dense_to_dense(expr[, sample.idxs, drop=FALSE])
+            gene.cdf <- .ecdfvals_dense_to_dense(expr[, sample.idxs, drop=FALSE])
         else
             stop(sprintf("matrix class %s cannot be handled yet.", class(expr)))
-        gene.density <- log(gene.density / (1-gene.density))
+        ## gene.cdf <- log(gene.cdf / (1-gene.cdf))
     }
 
-    return(gene.density)	
+    return(gene.cdf)	
 }
 
 compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
@@ -121,28 +121,22 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
             }
         }
         gene.density <- bpiterate(iter(expr, 100),
-                                  compute.gene.density,
+                                  compute.gene.cdf,
                                   sample.idxs=sample.idxs,
                                   rnaseq=rnaseq, kernel=kernel,
                                   REDUCE=rbind, reduce.in.order=TRUE,
                                   BPPARAM=BPPARAM)
     } else 
-        gene.density <- compute.gene.density(expr, sample.idxs, rnaseq, kernel)
+        gene.density <- compute.gene.cdf(expr, sample.idxs, rnaseq, kernel)
     
-    compute_rank_score <- function(sort_idx_vec){
-        tmp <- rep(0, num_genes)
-        tmp[sort_idx_vec] <- abs(seq(from=num_genes,to=1) - num_genes/2)
-        return (tmp)
-    }
-    
-    rank.scores <- rep(0, num_genes)
-    sort.sgn.idxs <- apply(gene.density, 2, order, decreasing=TRUE) # n.genes * n.samples
-    
-    rank.scores <- apply(sort.sgn.idxs, 2, compute_rank_score)
+    Zorder <- apply(gene.density, 2, order, decreasing=TRUE)
+    ZrankStat <- apply(Zorder, 2, function(x, p)
+                       do.call("[<-", list(rep(0, p), x, abs(p:1-p/2))),
+                       num_genes)
 
     m <- bplapply(gset.idx.list, ks_test_m,
-                  gene.density=rank.scores,
-                  sort.idxs=sort.sgn.idxs,
+                  gene.density=ZrankStat,
+                  sort.idxs=Zorder,
                   mx.diff=mx.diff, abs.ranking=abs.ranking,
                   tau=tau, verbose=verbose,
                   BPPARAM=BPPARAM)
