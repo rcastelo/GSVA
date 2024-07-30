@@ -49,3 +49,12 @@ setGeneric("gsvaAnnotation", function(object) standardGeneric("gsvaAnnotation"))
 
 setGeneric("gsvaAssayNames", function(object) standardGeneric("gsvaAssayNames"))
 
+## spatial methods
+
+#' @export
+setGeneric("spatCor",
+           function(spe, ...) standardGeneric("spatCor"))
+
+
+
+
