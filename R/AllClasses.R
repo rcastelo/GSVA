@@ -252,6 +252,13 @@ setClass("ssgseaParam",
 #' enriched on either extreme (high or low) will be regarded as ’highly’
 #' activated.
 #'
+#' @slot sparse Logical vector of length 1 used only when the input expression
+#' data in `exprData` is stored in a sparse matrix (e.g., a `dgCMatrix` or a
+#' `singleCellExperiment` object storing the expression data in a `dgCMatrix`).
+#' In such a case, when `sparse=TRUE`, a sparse version of the GSVA algorithm
+#' will be applied. Otherwise, when `sparse=FALSE`, the classical version of
+#' the GSVA algorithm will be used.
+#'
 #' @seealso
 #' [`GsvaExprData-class`],
 #' [`GsvaGeneSets-class`],
@@ -267,7 +274,8 @@ setClass("gsvaParam",
          slots=c(kcdf="character",
                  tau="numeric", 
                  maxDiff="logical",
-                 absRanking="logical"),
+                 absRanking="logical",
+                 sparse="logical"),
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
@@ -278,4 +286,5 @@ setClass("gsvaParam",
                         kcdf=NA_character_,
                         tau=NA_real_,
                         maxDiff=NA,
-                        absRanking=NA))
+                        absRanking=NA,
+                        sparse=FALSE))

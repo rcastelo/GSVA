@@ -16,7 +16,8 @@ gsvaParam(
   kcdf = c("Gaussian", "Poisson", "none"),
   tau = 1,
   maxDiff = TRUE,
-  absRanking = FALSE
+  absRanking = FALSE,
+  sparse = FALSE
 )
 }
 \arguments{
@@ -74,6 +75,13 @@ calculate enrichment scores, taking the magnitude difference between the
 largest positive and negative random walk deviations. When
 \code{absRanking=TRUE} the original Kuiper statistic that sums the largest
 positive and negative random walk deviations is used.}
+
+\item{sparse}{Logical vector of length 1 used only when the input expression
+data in \code{exprData} is stored in a sparse matrix (e.g., a \code{dgCMatrix} or a
+\code{singleCellExperiment} object storing the expression data in a \code{dgCMatrix}).
+In such a case, when \code{sparse=TRUE}, a sparse version of the GSVA algorithm
+will be applied. Otherwise, when \code{sparse=FALSE}, the classical version of
+the GSVA algorithm will be used.}
 }
 \value{
 A new \code{\linkS4class{gsvaParam}} object.
@@ -123,6 +131,13 @@ original Kuiper statistic that sums the largest positive and negative
 random walk deviations, is used. In this latter case, gene sets with genes
 enriched on either extreme (high or low) will be regarded as ’highly’
 activated.}
+
+\item{\code{sparse}}{Logical vector of length 1 used only when the input expression
+data in \code{exprData} is stored in a sparse matrix (e.g., a \code{dgCMatrix} or a
+\code{singleCellExperiment} object storing the expression data in a \code{dgCMatrix}).
+In such a case, when \code{sparse=TRUE}, a sparse version of the GSVA algorithm
+will be applied. Otherwise, when \code{sparse=FALSE}, the classical version of
+the GSVA algorithm will be used.}
 }}
 
 \examples{
