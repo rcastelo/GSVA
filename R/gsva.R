@@ -61,7 +61,7 @@ setMethod("gsva", signature(param="SingleCellExperiment"), function(param, ...) 
 })
 
 
-compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
+compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE, sparse=FALSE){
     n.test.samples <- ncol(expr)
     n.genes <- nrow(expr)
     n.density.samples <- length(sample.idxs)
@@ -78,9 +78,12 @@ compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
 	
         gene.cdf <- t(matrix(A, n.test.samples, n.genes))
     } else {
-        if (is(expr, "dgCMatrix"))
-            gene.cdf <- .ecdfvals_sparse_to_sparse(expr[, sample.idxs, drop=FALSE])
-        else if (is.matrix(expr))
+        if (is(expr, "dgCMatrix")) {
+            if (sparse)
+              gene.cdf <- .ecdfvals_sparse_to_sparse(expr[, sample.idxs, drop=FALSE])
+            else
+              gene.cdf <- .ecdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE])
+        } else if (is.matrix(expr))
             gene.cdf <- .ecdfvals_dense_to_dense(expr[, sample.idxs, drop=FALSE])
         else
             stop(sprintf("matrix class %s cannot be handled yet.", class(expr)))
@@ -92,7 +95,7 @@ compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE){
 
 compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
                                abs.ranking, parallel.sz=1L, 
-                               mx.diff=TRUE, tau=1, kernel=TRUE,
+                               mx.diff=TRUE, tau=1, kernel=TRUE, sparse=FALSE,
                                verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose)) {
     num_genes <- nrow(expr)
     if (verbose) {
@@ -123,11 +126,11 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
         gene.density <- bpiterate(iter(expr, 100),
                                   compute.gene.cdf,
                                   sample.idxs=sample.idxs,
-                                  rnaseq=rnaseq, kernel=kernel,
+                                  rnaseq=rnaseq, kernel=kernel, sparse=sparse,
                                   REDUCE=rbind, reduce.in.order=TRUE,
                                   BPPARAM=BPPARAM)
     } else 
-        gene.density <- compute.gene.cdf(expr, sample.idxs, rnaseq, kernel)
+        gene.density <- compute.gene.cdf(expr, sample.idxs, rnaseq, kernel, sparse)
     
     Zorder <- apply(gene.density, 2, order, decreasing=TRUE)
     ZrankStat <- apply(Zorder, 2, function(x, p)
