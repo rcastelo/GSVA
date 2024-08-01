@@ -22,6 +22,22 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR);
 SEXP
 ecdfvals_dense_to_dense_R(SEXP XR);
 
+SEXP
+order_rankstat_R(SEXP xR);
+
+SEXP
+gsva_rnd_walk_R(SEXP gsetidxR, SEXP generankingR, SEXP rankstatR);
+
+SEXP
+gsva_score_genesets_R(SEXP genesetsrankidxR, SEXP generankingR, SEXP rankstatR,
+                      SEXP maxdiffR, SEXP absrnkR);
+
+SEXP
+order_rankstat_sparse_to_dense_R(SEXP XCspR, SEXP jR);
+
+SEXP
+order_rankstat_sparse_to_sparse_R(SEXP XCspR, SEXP jR);
+
 /* registration of C-entry points */
 
 static R_CallMethodDef callMethods[] = {
@@ -30,6 +46,10 @@ static R_CallMethodDef callMethods[] = {
   {"ecdfvals_sparse_to_sparse_R", (DL_FUNC) &ecdfvals_sparse_to_sparse_R, 2},
   {"ecdfvals_sparse_to_dense_R", (DL_FUNC) &ecdfvals_sparse_to_dense_R, 2},
   {"ecdfvals_dense_to_dense_R", (DL_FUNC) &ecdfvals_dense_to_dense_R, 1},
+  {"gsva_rnd_walk_R", (DL_FUNC) &gsva_rnd_walk_R, 3},
+  {"gsva_scores_genesets_R", (DL_FUNC) &gsva_score_genesets_R, 5},
+  {"order_rankstat_sparse_to_dense_R", (DL_FUNC) &order_rankstat_sparse_to_dense_R, 2},
+  {"order_rankstat_sparse_to_sparse_R", (DL_FUNC) &order_rankstat_sparse_to_sparse_R, 2},
   {NULL, NULL, 0}
 };
 

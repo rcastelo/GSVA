@@ -93,6 +93,37 @@ compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE, spars
     return(gene.cdf)	
 }
 
+zorder_rankstat <- function(z, p) {
+  ## calculation of the ranks by expression-level statistic
+  zord <- apply(z, 2, order, decreasing=TRUE)
+
+  ## calculation of the rank-order statistic
+  zrs <- apply(zord, 2, function(x, p)
+               do.call("[<-", list(rep(0, p), x, abs(p:1-p/2))), p)
+
+  list(Zorder=zord, ZrankStat=zrs)
+}
+
+.gsvaRndWalk <- function(gSetIdx, geneRanking, rankStat) {
+    n <- length(geneRanking)
+    k <- length(gSetIdx)
+
+    stepCDFinGeneSet <- integer(n)
+    stepCDFinGeneSet[gSetIdx] <- rankStat[geneRanking[gSetIdx]]
+    stepCDFinGeneSet <- cumsum(stepCDFinGeneSet)
+    stepCDFinGeneSet <- stepCDFinGeneSet / stepCDFinGeneSet[n]
+
+    stepCDFoutGeneSet <- rep(1L, n)
+    stepCDFoutGeneSet[gSetIdx] <- 0L
+    stepCDFoutGeneSet <- cumsum(stepCDFoutGeneSet)
+    stepCDFoutGeneSet <- stepCDFoutGeneSet / stepCDFoutGeneSet[n]
+
+    walkStat <- stepCDFinGeneSet - stepCDFoutGeneSet
+
+    walkStat
+}
+
+#' @importFrom IRanges IntegerList match
 compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
                                abs.ranking, parallel.sz=1L, 
                                mx.diff=TRUE, tau=1, kernel=TRUE, sparse=FALSE,
@@ -132,21 +163,26 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
     } else 
         gene.density <- compute.gene.cdf(expr, sample.idxs, rnaseq, kernel, sparse)
     
-    Zorder <- apply(gene.density, 2, order, decreasing=TRUE)
-    ZrankStat <- apply(Zorder, 2, function(x, p)
-                       do.call("[<-", list(rep(0, p), x, abs(p:1-p/2))),
-                       num_genes)
+    gset.idx.list <- IntegerList(gset.idx.list)
+    n <- ncol(expr)
+    es <- bplapply(as.list(1:n), function(j, Z) {
 
-    m <- bplapply(gset.idx.list, ks_test_m,
-                  gene.density=ZrankStat,
-                  sort.idxs=Zorder,
-                  mx.diff=mx.diff, abs.ranking=abs.ranking,
-                  tau=tau, verbose=verbose,
-                  BPPARAM=BPPARAM)
-    m <- do.call("rbind", m)
-    colnames(m) <- colnames(expr)
+      gene_ord_rnkstat <- list()
+      if (is(Z, "dgCMatrix"))
+        gene_ord_rnkstat <- .order_rankstat_sparse_to_sparse(Z, j)
+      else
+        gene_ord_rnkstat <- .order_rankstat(Z[, j])
+      geneRanking <- gene_ord_rnkstat[[1]]
+      rankStat <- gene_ord_rnkstat[[2]]
 
-    return (m)
+      geneSetsRankIdx <- match(gset.idx.list, geneRanking)
+      .gsva_score_genesets(as.list(geneSetsRankIdx), geneRanking, rankStat,
+                           mx.diff, abs.ranking, tau)
+
+    }, Z=gene.density, BPPARAM=BPPARAM)
+    es <- do.call("cbind", es)
+
+    return(es)
 }
 
 
