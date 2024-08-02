@@ -283,6 +283,7 @@ setMethod("gsva", signature(param="gsvaParam"),
                                                mx.diff=get_maxDiff(param),
                                                tau=get_tau(param),
                                                kernel=kernel,
+                                               sparse=get_sparse(param),
                                                verbose=verbose,
                                                BPPARAM=BPPARAM)
               

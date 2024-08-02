@@ -1,0 +1,205 @@
+#include <R.h>
+#include <Rdefines.h>
+#include <Rinternals.h>
+#include <Rmath.h>
+#include <R_ext/Rdynload.h>
+
+/* global variables */
+extern SEXP Matrix_DimNamesSym,
+            Matrix_DimSym,
+            Matrix_xSym,
+            Matrix_iSym,
+            Matrix_jSym,
+            Matrix_pSym;
+
+/* indirect numerical (double) comparison for qsort() for obtaining
+ * permutations leading to a decreasing order
+ */
+double* global_dbl_p;
+
+int
+indirect_dbl_cmp_dec(const void* a, const void* b) {
+  const int *ai = (int *) a;
+  const int *bi = (int *) b;
+
+  /* assuming index are 1-based! */
+  if (global_dbl_p[*ai-1] < global_dbl_p[*bi-1])
+    return 1;
+  if (global_dbl_p[*ai-1] > global_dbl_p[*bi-1])
+    return -1;
+
+  return 0;
+}
+
+SEXP
+order_rankstat_R(SEXP xR);
+
+void
+order_rankstat(double* x, int n, int* ord, int* rst) {
+  for (int i=0; i < n; i++)
+    ord[i] = i + 1; /* 1-based to comply with R upstream */
+
+  global_dbl_p = x;
+  qsort(ord, n, sizeof(int), indirect_dbl_cmp_dec);
+
+  for (int i=0; i < n; i++)
+    rst[ord[i]-1] = abs(n - i - ((int) (n / 2)));
+}
+
+SEXP
+order_rankstat_R(SEXP xR) {
+  int  n = length(xR);
+  double* x;
+  SEXP ordR, rstR, ansR;
+  int* ord;
+  int* rst;
+
+  PROTECT(xR);
+  x = REAL(xR);
+
+  PROTECT(ordR = allocVector(INTSXP, n));
+  PROTECT(rstR = allocVector(INTSXP, n));
+
+  ord = INTEGER(ordR);
+  rst = INTEGER(rstR);
+
+  order_rankstat(x, n, ord, rst);
+
+  PROTECT(ansR = allocVector(VECSXP, 2));
+
+  SET_VECTOR_ELT(ansR, 0, ordR);
+  SET_VECTOR_ELT(ansR, 1, rstR);
+
+  UNPROTECT(4); /* xR ordR rstR ansR */
+
+  return(ansR);
+}
+
+SEXP
+order_rankstat_sparse_to_dense_R(SEXP XCspR, SEXP jR) { /* column in jR is 1-based! */
+  int  j = INTEGER(jR)[0];
+  int* XCsp_dim;
+  int* XCsp_i;
+  int* XCsp_p;
+  double* XCsp_x;
+  double* x;
+  int     nr;
+  SEXP    ordR, rstR, ansR;
+  int*    ord;
+  int*    rst;
+
+  PROTECT(XCspR);
+  XCsp_dim = INTEGER(GET_SLOT(XCspR, Matrix_DimSym));
+  nr = XCsp_dim[0]; /* number of rows */
+  XCsp_i = INTEGER(GET_SLOT(XCspR, Matrix_iSym));
+  XCsp_p = INTEGER(GET_SLOT(XCspR, Matrix_pSym));
+  XCsp_x = REAL(GET_SLOT(XCspR, Matrix_xSym));
+
+  /* put the sparse column into a dense vector */
+  x = Calloc(nr, double);
+  for (int i=XCsp_p[j-1]; i < XCsp_p[j]; i++)
+    x[XCsp_i[i]] = XCsp_x[i];
+
+  PROTECT(ordR = allocVector(INTSXP, nr));
+  PROTECT(rstR = allocVector(INTSXP, nr));
+
+  ord = INTEGER(ordR);
+  rst = INTEGER(rstR);
+
+  order_rankstat(x, nr, ord, rst);
+
+  Free(x);
+
+  PROTECT(ansR = allocVector(VECSXP, 2));
+
+  SET_VECTOR_ELT(ansR, 0, ordR);
+  SET_VECTOR_ELT(ansR, 1, rstR);
+
+  UNPROTECT(4); /* XCspR ordR rstR ansR */
+
+  return(ansR);
+}
+
+/* here the 'sparse_to_sparse' suffix does not refer to returning
+ * a sparse data structure, but to apply a sparse strategy, the
+ * returned value is anyway dense */
+SEXP
+order_rankstat_sparse_to_sparse_R(SEXP XCspR, SEXP jR) { /* column in jR is 1-based! */
+  int  j = INTEGER(jR)[0];
+  int* XCsp_dim;
+  int* XCsp_i;
+  int* XCsp_p;
+  double* XCsp_x;
+  int     nnz_j;
+  double* x;
+  int     nr;
+  SEXP    ordR, rstR, ansR;
+  int*    ord;
+  int*    rst;
+  int*    ord2;
+  int*    allord;
+  int     allord_i;
+
+  PROTECT(XCspR);
+  XCsp_dim = INTEGER(GET_SLOT(XCspR, Matrix_DimSym));
+  nr = XCsp_dim[0]; /* number of rows */
+  XCsp_i = INTEGER(GET_SLOT(XCspR, Matrix_iSym));
+  XCsp_p = INTEGER(GET_SLOT(XCspR, Matrix_pSym));
+  XCsp_x = REAL(GET_SLOT(XCspR, Matrix_xSym));
+
+  /* put the nonzero values of the sparse column into a smaller dense vector */
+  nnz_j = XCsp_p[j] - XCsp_p[j-1];
+  x = Calloc(nnz_j, double);
+  for (int i=XCsp_p[j-1]; i < XCsp_p[j]; i++) {
+    int k = i - XCsp_p[j-1];
+    x[k] = XCsp_x[i];
+  }
+
+  allord = Calloc(nr, int);
+  for (int i=0; i < nr; i++)
+    allord[i] = i + 1;
+
+  PROTECT(ordR = allocVector(INTSXP, nr));
+  PROTECT(rstR = allocVector(INTSXP, nr));
+
+  ord2 = Calloc(nnz_j, int);
+  ord = INTEGER(ordR);
+  rst = INTEGER(rstR);
+
+  for (int i=0; i < nnz_j; i++)
+    ord2[i] = i+1; /* indirect_dbl_cmp_dec() assumes 1-based! */
+
+  global_dbl_p = x;
+  qsort(ord2, nnz_j, sizeof(int), indirect_dbl_cmp_dec);
+
+  for (int i=0; i < nnz_j; i++) {
+    ord[i] = XCsp_i[ord2[i] - 1 + XCsp_p[j-1]] + 1; /* should return 1-based ! */
+    allord[ord[i]-1] = -1;
+  }
+
+  allord_i = nnz_j;
+  for (int i=0; i < nr; i++) /* place zeroes at the end of the ranking */
+    if (allord[i] > 0) {
+      ord[allord_i] = allord[i];
+      allord_i++;
+    }
+
+  for (int i=0; i < nr; i++)
+    rst[i] = (int) (nnz_j / 2) + 1; /* zero entries get the same symmtric rank */
+
+  for (int i=0; i < nnz_j; i++)
+    rst[ord[i]-1] = abs(nnz_j - i - ((int) (nnz_j / 2)));
+
+  Free(ord2);
+  Free(allord);
+  Free(x);
+
+  PROTECT(ansR = allocVector(VECSXP, 2));
+
+  SET_VECTOR_ELT(ansR, 0, ordR);
+  SET_VECTOR_ELT(ansR, 1, rstR);
+
+  UNPROTECT(4); /* XCspR ordR rstR ansR */
+
+  return(ansR);
+}
