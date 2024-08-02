@@ -103,3 +103,124 @@ ks_matrix_R(SEXP XR, SEXP sidxsR, SEXP n_genesR, SEXP geneset_idxsR,
   return(resR);
 }
 
+void
+gsva_rnd_walk(int* gsetidx, int k, int* generanking, int* rankstat, int n,
+              double* walkstat, double* walkstatpos, double* walkstatneg) {
+  int*    stepcdfingeneset;
+  int*    stepcdfoutgeneset;
+
+  stepcdfingeneset = Calloc(n, int);  /* assuming zeroes are set */
+  stepcdfoutgeneset = Calloc(n, int);
+  for (int i=0; i < n; i++)
+    stepcdfoutgeneset[i] = 1;
+
+  for (int i=0; i < k; i++) {
+    /* convert 1-based gene indices to 0-based ! */
+    stepcdfingeneset[gsetidx[i]-1] = rankstat[generanking[gsetidx[i]-1]-1];
+    stepcdfoutgeneset[gsetidx[i]-1] = 0;
+  }
+
+  for (int i=1; i < n; i++) {
+    stepcdfingeneset[i] = stepcdfingeneset[i-1] + stepcdfingeneset[i];
+    stepcdfoutgeneset[i] = stepcdfoutgeneset[i-1] + stepcdfoutgeneset[i];
+  }
+
+  *walkstatpos = *walkstatneg = 0;
+  for (int i=0; i < n; i++) {
+    double wlkstat = 0;
+
+    if (walkstat != NULL)
+      wlkstat = walkstat[i] = ((double) stepcdfingeneset[i]) / ((double) stepcdfingeneset[n-1]) -
+                              ((double) stepcdfoutgeneset[i]) / ((double) stepcdfoutgeneset[n-1]);
+    else {
+      wlkstat = ((double) stepcdfingeneset[i]) / ((double) stepcdfingeneset[n-1]) -
+                ((double) stepcdfoutgeneset[i]) / ((double) stepcdfoutgeneset[n-1]);
+    }
+
+    if (wlkstat > *walkstatpos)
+      *walkstatpos = wlkstat;
+    if (wlkstat < *walkstatneg)
+      *walkstatneg = wlkstat;
+  }
+
+  Free(stepcdfoutgeneset);
+  Free(stepcdfingeneset);
+}
+
+SEXP
+gsva_rnd_walk_R(SEXP gsetidxR, SEXP generankingR, SEXP rankstatR) {
+  int     n = length(generankingR);
+  int     k = length(gsetidxR);
+  int*    gsetidx;
+  int*    generanking;
+  int*    rankstat;
+  SEXP    walkstatR;
+  double* walkstat;
+  double  walkstatpos, walkstatneg;
+
+  PROTECT(gsetidxR);
+  PROTECT(generankingR);
+  PROTECT(rankstatR);
+  PROTECT(walkstatR = allocVector(REALSXP, n));
+
+  gsetidx = INTEGER(gsetidxR);
+  generanking = INTEGER(generankingR);
+  rankstat = INTEGER(rankstatR);
+  walkstat = REAL(walkstatR);
+
+  gsva_rnd_walk(gsetidx, k, generanking, rankstat, n,
+                walkstat, &walkstatpos, &walkstatneg);
+
+  UNPROTECT(4); /* gsetidxR generankingR rankstatR walkstatR */
+
+  return(walkstatR);
+}
+
+SEXP
+gsva_score_genesets_R(SEXP genesetsrankidxR, SEXP generankingR, SEXP rankstatR,
+                      SEXP maxdiffR, SEXP absrnkR, SEXP tauR) {
+  int      m = length(genesetsrankidxR);
+  int      n = length(generankingR);
+  Rboolean maxdiff=asLogical(maxdiffR);
+  Rboolean absrnk=asLogical(absrnkR);
+  double   tau=REAL(tauR)[0];
+  int*     generanking;
+  int*     rankstat;
+  SEXP     esR;
+  double*  es;
+
+  PROTECT(genesetsrankidxR);
+  PROTECT(generankingR);
+  PROTECT(rankstatR);
+  PROTECT(esR = allocVector(REALSXP, m));
+
+  generanking = INTEGER(generankingR);
+  rankstat = INTEGER(rankstatR);
+  es = REAL(esR);
+
+  for (int i=0; i < m; i++) {
+     SEXP    gsetidxR=VECTOR_ELT(genesetsrankidxR, i);
+     int*    gsetidx;
+     int     k = length(gsetidxR);
+     double  walkstatpos, walkstatneg;
+
+     gsetidx = INTEGER(gsetidxR);
+     if (tau == 1) /* treated separately to reduce memory consumption */
+       gsva_rnd_walk(gsetidx, k, generanking, rankstat, n, NULL,
+                     &walkstatpos, &walkstatneg);
+     else          /* not implemented yet */
+       walkstatpos = walkstatneg = NA_REAL;
+
+	   if (maxdiff) {
+		   es[i] = walkstatpos + walkstatneg;
+       if (absrnk)
+         es[i] = walkstatpos - walkstatneg;
+	   } else {
+		     es[i] = (walkstatpos > fabs(walkstatneg)) ? walkstatpos : walkstatneg;
+	   }
+  }
+
+  UNPROTECT(4); /* genesetsrankidxR generankingR rankstatR esR */
+
+  return(esR);
+}

@@ -60,6 +60,13 @@
 #' `absRanking=TRUE` the original Kuiper statistic that sums the largest
 #' positive and negative random walk deviations is used.
 #' 
+#' @param sparse Logical vector of length 1 used only when the input expression
+#' data in `exprData` is stored in a sparse matrix (e.g., a `dgCMatrix` or a
+#' `singleCellExperiment` object storing the expression data in a `dgCMatrix`).
+#' In such a case, when `sparse=TRUE`, a sparse version of the GSVA algorithm
+#' will be applied. Otherwise, when `sparse=FALSE`, the classical version of
+#' the GSVA algorithm will be used.
+#'
 #' @return A new [`gsvaParam-class`] object.
 #'
 #' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
@@ -89,7 +96,7 @@ gsvaParam <- function(exprData, geneSets,
                       assay=NA_character_, annotation=NA_character_,
                       minSize=1,maxSize=Inf,
                       kcdf=c("Gaussian", "Poisson", "none"),
-                      tau=1, maxDiff=TRUE, absRanking=FALSE) {
+                      tau=1, maxDiff=TRUE, absRanking=FALSE, sparse=FALSE) {
     kcdf <- match.arg(kcdf)
 
     an <- gsvaAssayNames(exprData)
@@ -103,7 +110,8 @@ gsvaParam <- function(exprData, geneSets,
         exprData=exprData, geneSets=geneSets,
         assay=assay, annotation=annotation,
         minSize=minSize, maxSize=maxSize,
-        kcdf=kcdf, tau=tau, maxDiff=maxDiff, absRanking=absRanking)
+        kcdf=kcdf, tau=tau, maxDiff=maxDiff,
+        absRanking=absRanking, sparse=sparse)
 }
 
 
@@ -164,6 +172,12 @@ setValidity("gsvaParam", function(object) {
     if(is.na(object@absRanking)) {
         inv <- c(inv, "@absRanking should not be NA")
     }
+    if(length(object@sparse) != 1) {
+        inv <- c(inv, "@sparse should be of length 1")
+    }
+    if(is.na(object@sparse)) {
+        inv <- c(inv, "@sparse should not be NA")
+    }
     return(if(length(inv) == 0) TRUE else inv)
 })
 
@@ -194,6 +208,12 @@ get_absRanking <- function(object) {
   return(object@absRanking)
 }
 
+#' @noRd
+get_sparse <- function(object) {
+  stopifnot(inherits(object, "gsvaParam"))
+  return(object@sparse)
+}
+
 
 ## ----- show -----
 
@@ -205,5 +225,6 @@ setMethod("show",
                   "tau: ", get_tau(object), "\n",
                   "maxDiff: ", get_maxDiff(object), "\n",
                   "absRanking: ", get_absRanking(object), "\n",
+                  "sparse: ", get_sparse(object), "\n",
                   sep="")
           })
