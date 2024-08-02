@@ -529,22 +529,51 @@ deduplicateGmtLines <- function(geneSets,
 #' format file, offering a choice of ways to handle duplicated gene set names.
 #' 
 #' @param con A connection object or character string containing e.g.
-#' a file name or URL.  This is directly passed to [`readLines`] and hence may
-#' contain anything that `readLines()` can handle.
+#' the file name or URL of a GTM file.  This is directly passed to [`readLines`]
+#' and hence may contain anything that `readLines()` can handle.
 #'
-#' @param deduplUse With the exception of the special method `custom`, all
-#' handling of duplicated gene set names is delegated to function
-#' [`deduplicateGeneSets`] and this argument is directly passed on.
-#' Please see `?deduplicateGeneSets`.
-#' Using `deduplUse=custom` allows import of the GMT file for manual inspection
-#' and its content and remedy is the user's responsibility.  However, `gsva()`
-#' will *not* accept the result for further use unless it is modified to have
-#' duplicated gene set names removed.
+#' @param sep The character string separating members of each gene set in the
+#' GMT file.
 #'
-#' @return A named list of gene sets that represented as character vectors of
-#' gene IDs.
+#' @param geneIdType Only used when `valueType == "GeneSetCollection"`.  See
+#' [`getGmt`] for more information.
+#'
+#' @param collectionType Only used when `valueType == "GeneSetCollection"`. See
+#' [`getGmt`] for more information.
+#'
+#' @param valueType A character vector of length 1 specifying the desired type
+#' of return value.  It must be one of:
+#' * `GeneSetCollection` (the default): a [`GeneSetCollection`] object as defined
+#' and described by package [`GSEABase`].
+#' * `list`: a named list of gene sets represented as character vectors of gene IDs.
+#' This format is much simpler and cannot store the metadata required for automatic
+#' mapping of gene IDs.
+#'
+#' @param deduplUse A character vector of length 1 specifying one of several
+#' methods to handle duplicated gene set names.
+#' Duplicated gene set names are explicitly forbidden by the
+#' [GMT file format specification](https://software.broadinstitute.org/cancer/software/gsea/wiki/index.php/Data_formats)
+#' but can nevertheless be encountered in the wild.
+#' The available choices are:
+#' * `first` (the default): drops all gene sets whose names are [`duplicated`]
+#' according to the base R function and retains only the first occurence of a
+#' gene set name.
+#' * `drop`:  removes *all* gene sets that have a duplicated name, including its
+#' first occurrence.
+#' * `union`: replaces gene sets with duplicated names by a single gene set
+#' containing the union of all their gene IDs.
+#' * `smallest`: drops gene sets with duplicated names and retains only the
+#' smallest of them, i.e. the one with the fewest gene IDs.  If there are
+#' several smallest gene sets, the first will be selected.
+#' * `largest`: drops gene sets with duplicated names and retains only the
+#' largest of them, i.e. the one with the most gene IDs.  If there are
+#' several largest gene sets, the first will be selected.
+#'
+#' @return The gene sets imported from the GMT file, with duplicate gene sets
+#' resolved according to argument `deduplUse` and in the format determined by
+#' argument `valueType`.
 #' 
-#' @seealso [`readLines`], [`deduplicateGeneSets`]
+#' @seealso [`readLines`][`GeneSetCollection`][`getGmt`]
 #'
 #' @aliases readGMT
 #' @name readGMT
@@ -552,17 +581,20 @@ deduplicateGmtLines <- function(geneSets,
 #' @export
 #' 
 readGMT <- function (con,
+                     sep = "\t",
                      geneIdType = NullIdentifier(),
                      collectionType = NullCollection(), 
-                     sep = "\t",
+                     valueType = c("GeneSetCollection", "list"),
                      deduplUse = c("first", "drop", "union", "smallest", "largest"),
                      ...) {
+    valueType <- match.arg(valueType)
+    
     ## from GSEABase::getGmt()
     lines <- strsplit(readLines(con, ...), sep)
     if (any(sapply(lines, length) < 2)) {
         txt <- paste("all records in the GMT file must have >= 2 fields", 
                      "\n  first invalid line:  %s\n", collpase = "")
-        GSEABase:::.stopf(txt, lines[sapply(lines, length) < 2][[1]])
+        .stopf(txt, lines[sapply(lines, length) < 2][[1]])
     }
     dups <- new.env(parent = emptyenv())
     lines <- lapply(lines, function(elt, dups) {
@@ -573,43 +605,27 @@ readGMT <- function (con,
         elt
     }, dups)
     if (length(dups)) 
-        GSEABase:::.warningf("%d record(s) contain duplicate ids: %s", length(dups), 
-                             paste(selectSome(sort(ls(dups))), collapse = ", "))
+        .warningf("%d record(s) contain duplicate ids: %s", length(dups), 
+                  paste(selectSome(sort(ls(dups))), collapse = ", "))
 
     ## our small addition to tolerate duplicate gene set names
     lines <- deduplicateGmtLines(lines, deduplUse)
 
-    ## from GSEABase::getGmt()
-    template <- GeneSet(geneIdType = geneIdType, collectionType = collectionType)
-    GeneSetCollection(lapply(lines, function(line) {
-        initialize(template, geneIds = unlist(line[-(1:2)]), 
-                   setName = line[[1]], shortDescription = line[[2]], 
-                   setIdentifier = GSEABase:::.uniqueIdentifier())
-    }))
+    ## on second thoughts, another small addition: let the user choose the return type
+    if(valueType == "GeneSetCollection") {
+        ## from GSEABase::getGmt()
+        template <- GeneSet(geneIdType = geneIdType, collectionType = collectionType)
+        return(GeneSetCollection(lapply(lines, function(line) {
+            initialize(template, geneIds = unlist(line[-(1:2)]), 
+                       setName = line[[1]], shortDescription = line[[2]], 
+                       setIdentifier = .uniqueIdentifier())
+        })))
+    } else if(valueType == "list") {
+        gs <- lapply(lines, tail, -2)
+        names(gs) <- sapply(lines, head, 1)
+        return(gs)
+    }
 }
-
-## readGMT <- function(con,
-##                     deduplUse = c("first", "drop", "union",
-##                                   "smallest", "largest", "custom")) {
-##     ddUse <- match.arg(deduplUse)
-##     gmtLines <- strsplit(readLines(con=con), split="\t", fixed=TRUE)
-##     gmt <- lapply(gmtLines, tail, -2)
-##     names(gmt) <- sapply(gmtLines, head, 1)
-
-##     if(anyDuplicated(names(gmt)) > 0) {
-##         warning("GMT contains duplicated gene set names; deduplicated",
-##                 " using method: ", ddUse)
-        
-##         if(ddUse != "custom") {
-##             gmt <- deduplicateGeneSets(geneSets=gmt, deduplUse=ddUse)
-##         } else {
-##             warning("Method 'custom' requires YOU to remedy duplicate ",
-##                     "gene set names as gsva() will not accept them")
-##         }
-##     }
-    
-##     return(gmt)
-## }
 
 
 ### ----- methods for data pre-/post-processing -----
