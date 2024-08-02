@@ -36,7 +36,7 @@ several largest gene sets, the first will be selected.
 }}
 }
 \value{
-A named list of gene sets that represented as character vectors of
+A named list of gene sets represented as character vectors of
 gene IDs.
 }
 \description{

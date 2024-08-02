@@ -6,31 +6,69 @@
 \usage{
 readGMT(
   con,
-  deduplUse = c("first", "drop", "union", "smallest", "largest", "custom")
+  sep = "\\t",
+  geneIdType = NullIdentifier(),
+  collectionType = NullCollection(),
+  valueType = c("GeneSetCollection", "list"),
+  deduplUse = c("first", "drop", "union", "smallest", "largest"),
+  ...
 )
 }
 \arguments{
 \item{con}{A connection object or character string containing e.g.
-a file name or URL.  This is directly passed to \code{\link{readLines}} and hence may
-contain anything that \code{readLines()} can handle.}
+the file name or URL of a GTM file.  This is directly passed to \code{\link{readLines}}
+and hence may contain anything that \code{readLines()} can handle.}
 
-\item{deduplUse}{With the exception of the special method \code{custom}, all
-handling of duplicated gene set names is delegated to function
-\code{\link{deduplicateGeneSets}} and this argument is directly passed on.
-Please see \code{?deduplicateGeneSets}.
-Using \code{deduplUse=custom} allows import of the GMT file for manual inspection
-and its content and remedy is the user's responsibility.  However, \code{gsva()}
-will \emph{not} accept the result for further use unless it is modified to have
-duplicated gene set names removed.}
+\item{sep}{The character string separating members of each gene set in the
+GMT file.}
+
+\item{geneIdType}{Only used when \code{valueType == "GeneSetCollection"}.  See
+\code{\link{getGmt}} for more information.}
+
+\item{collectionType}{Only used when \code{valueType == "GeneSetCollection"}. See
+\code{\link{getGmt}} for more information.}
+
+\item{valueType}{A character vector of length 1 specifying the desired type
+of return value.  It must be one of:
+\itemize{
+\item \code{GeneSetCollection} (the default): a \code{\link{GeneSetCollection}} object as defined
+and described by package \code{\link{GSEABase}}.
+\item \code{list}: a named list of gene sets represented as character vectors of gene IDs.
+This format is much simpler and cannot store the metadata required for automatic
+mapping of gene IDs.
+}}
+
+\item{deduplUse}{A character vector of length 1 specifying one of several
+methods to handle duplicated gene set names.
+Duplicated gene set names are explicitly forbidden by the
+\href{https://software.broadinstitute.org/cancer/software/gsea/wiki/index.php/Data_formats}{GMT file format specification}
+but can nevertheless be encountered in the wild.
+The available choices are:
+\itemize{
+\item \code{first} (the default): drops all gene sets whose names are \code{\link{duplicated}}
+according to the base R function and retains only the first occurence of a
+gene set name.
+\item \code{drop}:  removes \emph{all} gene sets that have a duplicated name, including its
+first occurrence.
+\item \code{union}: replaces gene sets with duplicated names by a single gene set
+containing the union of all their gene IDs.
+\item \code{smallest}: drops gene sets with duplicated names and retains only the
+smallest of them, i.e. the one with the fewest gene IDs.  If there are
+several smallest gene sets, the first will be selected.
+\item \code{largest}: drops gene sets with duplicated names and retains only the
+largest of them, i.e. the one with the most gene IDs.  If there are
+several largest gene sets, the first will be selected.
+}}
 }
 \value{
-A named list of gene sets that represented as character vectors of
-gene IDs.
+The gene sets imported from the GMT file, with duplicate gene sets
+resolved according to argument \code{deduplUse} and in the format determined by
+argument \code{valueType}.
 }
 \description{
 Imports a list of gene sets from a GMT (Gene Matrix Transposed)
 format file, offering a choice of ways to handle duplicated gene set names.
 }
 \seealso{
-\code{\link{readLines}}, \code{\link{deduplicateGeneSets}}
+[\code{readLines}][\code{GeneSetCollection}][\code{getGmt}]
 }

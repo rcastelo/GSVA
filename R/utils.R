@@ -250,3 +250,39 @@
 .matrix2dgCMatrix <- function(m) {
     return(as(as(as(m, "dMatrix"), "generalMatrix"), "CsparseMatrix"))
 }
+
+
+### 2024-08-02  axel: the following three functions have been copied from
+### GSEABase/R/utilities.R (v. 1.66.0) as our implementation of readGMT()
+### is mostly based on (a copy of) GSEABase::getGmt() which is making use
+### of these utility functions.  Since we decided that GSVA::readGMT() may
+### return a list of gene sets as well as a GeneSetCollection, it should work
+### if a user doesn't have GSEABase installed at all.
+
+## Placeholder 'till something appropriate decided
+.uniqueIdentifier <- local({
+    node <- NULL
+    pid <- NULL
+    uid <- 0L
+    function() {
+        if (is.null(node)) {
+            node <<- Sys.info()['nodename']
+            pid <<- Sys.getpid()
+        }
+        uid <<- uid + 1L
+        base::paste(node, pid, date(), uid, sep=":")
+    }
+})
+
+.stopf <- function(...) {
+    call <- match.call(call=sys.call(sys.parent(1)))
+    msg <- paste(sprintf(...), collapse="\n")
+    stop(simpleError(msg, call=call))
+}
+
+.warningf <- function(...) {
+    call <- match.call(call=sys.call(sys.parent(1)))
+    msg <- paste(sprintf(...), collapse="\n")
+    warning(simpleWarning(msg, call=call))
+}
+### end of copy from GSEABase/R/utilities.R
