@@ -569,11 +569,13 @@ deduplicateGmtLines <- function(geneSets,
 #' largest of them, i.e. the one with the most gene IDs.  If there are
 #' several largest gene sets, the first will be selected.
 #'
+#' @param ... Further arguments passed on to `readLines()`
+#' 
 #' @return The gene sets imported from the GMT file, with duplicate gene sets
 #' resolved according to argument `deduplUse` and in the format determined by
 #' argument `valueType`.
 #' 
-#' @seealso [`readLines`][`GeneSetCollection`][`getGmt`]
+#' @seealso [`readLines`], [`GeneSetCollection`], [`getGmt`]
 #'
 #' @aliases readGMT
 #' @name readGMT

@@ -9,7 +9,7 @@
 #' @importMethodsFrom IRanges match
 #' @importMethodsFrom SummarizedExperiment assays assayNames colData rowData
 #' @importMethodsFrom SpatialExperiment imgData spatialCoords
-#' @importMethodsFrom GSEABase geneIds incidence
+#' @importMethodsFrom GSEABase geneIds incidence GeneSetCollection GeneSet
 #' @importMethodsFrom BiocParallel bpiterate "bpworkers<-" bplapply "bpprogressbar<-"
 #'
 #' @importFrom graphics plot
@@ -17,9 +17,10 @@
 #' @importFrom utils installed.packages setTxtProgressBar txtProgressBar head tail
 #' read.csv write.csv capture.output
 #' @importFrom Matrix nnzero
+#' @importFrom Biobase selectSome
 #' @importFrom S4Vectors SimpleList DataFrame
 #' @importFrom IRanges CharacterList
-#' @importFrom  GSEABase AnnoOrEntrezIdentifier mapIdentifiers getGmt
+#' @importFrom GSEABase AnnoOrEntrezIdentifier mapIdentifiers NullIdentifier NullCollection
 #' @importFrom SummarizedExperiment SummarizedExperiment
 #' @importFrom parallel splitIndices
 #' @importFrom BiocParallel SerialParam MulticoreParam multicoreWorkers bpnworkers
