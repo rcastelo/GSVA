@@ -59,6 +59,8 @@ several smallest gene sets, the first will be selected.
 largest of them, i.e. the one with the most gene IDs.  If there are
 several largest gene sets, the first will be selected.
 }}
+
+\item{...}{Further arguments passed on to \code{readLines()}}
 }
 \value{
 The gene sets imported from the GMT file, with duplicate gene sets
@@ -70,5 +72,5 @@ Imports a list of gene sets from a GMT (Gene Matrix Transposed)
 format file, offering a choice of ways to handle duplicated gene set names.
 }
 \seealso{
-[\code{readLines}][\code{GeneSetCollection}][\code{getGmt}]
+\code{\link{readLines}}, \code{\link{GeneSetCollection}}, \code{\link{getGmt}}
 }

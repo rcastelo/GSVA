@@ -46,7 +46,7 @@ setClassUnion("GsvaExprData",
 #' [`list`], 
 #' [`GeneSetCollection`]
 #'
-#' @importClassesFrom GSEABase GeneSetCollection
+#' @importClassesFrom GSEABase GeneSetCollection GeneSet
 #'
 #' @name GsvaGeneSets-class
 #' @rdname GsvaGeneSets-class
