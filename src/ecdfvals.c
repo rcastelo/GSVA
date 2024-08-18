@@ -52,11 +52,12 @@ dbl_cmp(const void* a, const void* b) {
 }
 
 /* src/main/unique.c */
+/*
 SEXP match5(SEXP itable, SEXP ix, int nmatch, SEXP incomp, SEXP env);
+*/
 
 SEXP
 match_int(SEXP x, SEXP table) {
-  /*
   SEXP s, t, ansR;
 
   PROTECT(t = s = allocList(3));
@@ -67,8 +68,11 @@ match_int(SEXP x, SEXP table) {
   SETCAR(t, table);
   SET_TAG(t, install("table"));
   ansR = eval(s, R_GlobalEnv);
-  */
+
+  /*
   SEXP ansR = match5(table, x, NA_INTEGER, NULL, R_GlobalEnv);
+  */
+  UNPROTECT(1); /* t s */
 
   return(ansR);
 }
