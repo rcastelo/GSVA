@@ -4,6 +4,7 @@
 [![Bioconductor Downloads](https://bioconductor.org/shields/downloads/release/GSVA.svg)](https://bioconductor.org/packages/stats/bioc/GSVA/ "Ranking by number of downloads. A lower number means the package is downloaded more frequently. Determined within a package type (software, experiment, annotation, workflow) and uses the number of distinct IPs for the last 12 months.")
 [![Support posts](https://bioconductor.org/shields/posts/GSVA.svg)](https://support.bioconductor.org/t/GSVA/ "Support site activity on GSVA, last 6 months: answered posts/total posts.")
 [![R-CMD-check-bioc](https://github.com/rcastelo/GSVA/workflows/R-CMD-check-bioc/badge.svg)](https://github.com/rcastelo/GSVA/actions?query=workflow%3AR-CMD-check-bioc)
+[![CZI's Essential Open Source Software for Science](https://chanzuckerberg.github.io/open-science/badges/CZI-EOSS.svg)](https://czi.co/EOSS)
 [![codecov.io](https://codecov.io/github/rcastelo/GSVA/coverage.svg?branch=devel)](https://app.codecov.io/github/rcastelo/GSVA?branch=devel)
 <img align="right" src="https://raw.githubusercontent.com/Bioconductor/BiocStickers/master/GSVA/GSVA.png" height="200"/>
 
@@ -55,3 +56,12 @@ If you want to contribute to the development of GSVA please open an
 [issue](https://github.com/rcastelo/GSVA/issues) to start discussing your suggestion or, in case of a
 bugfix or a straightforward feature, directly a
 [pull request](https://github.com/rcastelo/GSVA/pulls).
+
+## Funding
+
+This software project was supported in part by the
+[Essential Open Source Software for Science (EOSS)](https://czi.co/EOSS)
+program at
+[Chan Zuckerberg Initiative](https://chanzuckerberg.com), and
+the Spanish
+[Ministry of Science, Innovation and Universities](https://www.ciencia.gob.es).
