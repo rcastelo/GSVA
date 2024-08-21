@@ -55,9 +55,7 @@ test_inputdatacontainers <- function() {
     ## estimate GSVA enrichment scores with input as a dgCMatrix object
     yMat <- Matrix::Matrix(y, sparse=TRUE)
 
-    ## as of 1.51.x, this will actually return a dgCMatrix instead of a matrix
     es.dgCMat <- gsva(gsvaParam(yMat, geneSets), verbose=FALSE)
-    esAsMatrix <- as(es.dgCMat, "matrix")
 
-    checkTrue(identical(es.mat, esAsMatrix))
+    checkTrue(identical(es.mat, es.dgCMat))
 }

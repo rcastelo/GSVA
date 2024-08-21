@@ -70,9 +70,9 @@ compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE, spars
     if (kernel) {
         if (is(expr, "dgCMatrix")) {
             if (sparse)
-                gene.cdf <- .kcdfvals_sparse_to_sparse(expr[, sample.idxs, drop=FALSE])
+                gene.cdf <- .kcdfvals_sparse_to_sparse(expr[, sample.idxs, drop=FALSE], !rnaseq)
             else
-                gene.cdf <- .kcdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE])
+                gene.cdf <- .kcdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE], !rnaseq)
         } else if (is.matrix(expr)) {
             A = .Call("matrix_density_R",
                       as.double(t(expr[ ,sample.idxs, drop=FALSE])),
