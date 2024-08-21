@@ -17,6 +17,37 @@ extern SEXP Matrix_DimNamesSym,
  */
 double* global_dbl_p;
 
+double
+sd(double* x, int n);
+
+/* calculates standard deviation, largely borrowed from C code in R's src/main/cov.c */
+double
+sd(double* x, int n) {
+  int         i, n1;
+  double      mean, sd;
+  long double sum = 0.0;
+  long double tmp;
+
+  for (i=0; i < n; i++)
+    sum += x[i];
+  tmp = sum / n;
+  if (R_FINITE((double) tmp)) {
+    sum = 0.0;
+    for (i=0; i < n; i++)
+      sum += x[i] - tmp;
+    tmp = tmp + sum / n;
+  }
+  mean = tmp;
+  n1 = n - 1;
+
+  sum = 0.0;
+  for (i=0; i < n; i++)
+    sum += (x[i] - mean) * (x[i] - mean);
+  sd = sqrt((double) (sum / ((long double) n1)));
+
+  return(sd);
+}
+
 int
 indirect_dbl_cmp_dec(const void* a, const void* b) {
   const int *ai = (int *) a;
@@ -29,6 +60,35 @@ indirect_dbl_cmp_dec(const void* a, const void* b) {
     return -1;
 
   return 0;
+}
+
+/* src/main/unique.c */
+/*
+SEXP match5(SEXP itable, SEXP ix, int nmatch, SEXP incomp, SEXP env);
+*/
+
+SEXP
+match_int(SEXP x, SEXP table);
+
+SEXP
+match_int(SEXP x, SEXP table) {
+  SEXP s, t, ansR;
+
+  PROTECT(t = s = allocList(3));
+  SET_TYPEOF(s, LANGSXP);
+  SETCAR(t, install("match")); t=CDR(t);
+  SETCAR(t, x);
+  SET_TAG(t, install("x")); t=CDR(t);
+  SETCAR(t, table);
+  SET_TAG(t, install("table"));
+  ansR = eval(s, R_GlobalEnv);
+
+  /*
+  SEXP ansR = match5(table, x, NA_INTEGER, NULL, R_GlobalEnv);
+  */
+  UNPROTECT(1); /* t s */
+
+  return(ansR);
 }
 
 SEXP

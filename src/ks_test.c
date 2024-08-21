@@ -176,6 +176,51 @@ gsva_rnd_walk_R(SEXP gsetidxR, SEXP generankingR, SEXP rankstatR) {
   return(walkstatR);
 }
 
+void
+gsva_rnd_walk_nonunittau(int* gsetidx, int k, int* generanking, int* rankstat,
+                         int n, double tau,
+                         double* walkstat, double* walkstatpos, double* walkstatneg) {
+  double* stepcdfingeneset;
+  double* stepcdfoutgeneset;
+
+  stepcdfingeneset = Calloc(n, double);  /* assuming zeroes are set */
+  stepcdfoutgeneset = Calloc(n, double);
+  for (int i=0; i < n; i++)
+    stepcdfoutgeneset[i] = 1.0;
+
+  for (int i=0; i < k; i++) {
+    /* convert 1-based gene indices to 0-based ! */
+    stepcdfingeneset[gsetidx[i]-1] = pow(rankstat[generanking[gsetidx[i]-1]-1], tau);
+    stepcdfoutgeneset[gsetidx[i]-1] = 0;
+  }
+
+  for (int i=1; i < n; i++) {
+    stepcdfingeneset[i] = stepcdfingeneset[i-1] + stepcdfingeneset[i];
+    stepcdfoutgeneset[i] = stepcdfoutgeneset[i-1] + stepcdfoutgeneset[i];
+  }
+
+  *walkstatpos = *walkstatneg = 0;
+  for (int i=0; i < n; i++) {
+    double wlkstat = 0;
+
+    if (walkstat != NULL)
+      wlkstat = walkstat[i] = ((double) stepcdfingeneset[i]) / ((double) stepcdfingeneset[n-1]) -
+                              ((double) stepcdfoutgeneset[i]) / ((double) stepcdfoutgeneset[n-1]);
+    else {
+      wlkstat = ((double) stepcdfingeneset[i]) / ((double) stepcdfingeneset[n-1]) -
+                ((double) stepcdfoutgeneset[i]) / ((double) stepcdfoutgeneset[n-1]);
+    }
+
+    if (wlkstat > *walkstatpos)
+      *walkstatpos = wlkstat;
+    if (wlkstat < *walkstatneg)
+      *walkstatneg = wlkstat;
+  }
+
+  Free(stepcdfoutgeneset);
+  Free(stepcdfingeneset);
+}
+
 SEXP
 gsva_score_genesets_R(SEXP genesetsrankidxR, SEXP generankingR, SEXP rankstatR,
                       SEXP maxdiffR, SEXP absrnkR, SEXP tauR) {
@@ -206,10 +251,11 @@ gsva_score_genesets_R(SEXP genesetsrankidxR, SEXP generankingR, SEXP rankstatR,
 
      gsetidx = INTEGER(gsetidxR);
      if (tau == 1) /* treated separately to reduce memory consumption */
-       gsva_rnd_walk(gsetidx, k, generanking, rankstat, n, NULL,
-                     &walkstatpos, &walkstatneg);
-     else          /* not implemented yet */
-       walkstatpos = walkstatneg = NA_REAL;
+       gsva_rnd_walk(gsetidx, k, generanking, rankstat, n,
+                     NULL, &walkstatpos, &walkstatneg);
+     else
+       gsva_rnd_walk_nonunittau(gsetidx, k, generanking, rankstat, n, tau,
+                     NULL, &walkstatpos, &walkstatneg);
 
 	   if (maxdiff) {
 		   es[i] = walkstatpos + walkstatneg;
