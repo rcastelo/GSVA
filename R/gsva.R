@@ -68,15 +68,22 @@ compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE, spars
     
     gene.cdf <- NA
     if (kernel) {
-        A = .Call("matrix_density_R",
-                  as.double(t(expr[ ,sample.idxs, drop=FALSE])),
-                  as.double(t(expr)),
-                  n.density.samples,
-                  n.test.samples,
-                  n.genes,
-                  as.integer(rnaseq))
-	
-        gene.cdf <- t(matrix(A, n.test.samples, n.genes))
+        if (is(expr, "dgCMatrix")) {
+            if (sparse)
+                gene.cdf <- .kcdfvals_sparse_to_sparse(expr[, sample.idxs, drop=FALSE])
+            else
+                gene.cdf <- .kcdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE])
+        } else if (is.matrix(expr)) {
+            A = .Call("matrix_density_R",
+                      as.double(t(expr[ ,sample.idxs, drop=FALSE])),
+                      as.double(t(expr)),
+                      n.density.samples,
+                      n.test.samples,
+                      n.genes,
+                      as.integer(rnaseq))
+            gene.cdf <- t(matrix(A, n.test.samples, n.genes))
+        } else
+            stop(sprintf("matrix class %s cannot be handled yet.", class(expr)))
     } else {
         if (is(expr, "dgCMatrix")) {
             if (sparse)

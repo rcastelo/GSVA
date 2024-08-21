@@ -15,6 +15,18 @@
   .Call("ecdfvals_dense_to_dense_R", X)
 }
 
+.kcdfvals_sparse_to_sparse <- function(X, Gaussk) {
+  stopifnot(is(X, "CsparseMatrix")) ## QC
+  Xrsp <- as(X, "RsparseMatrix")
+  .Call("kcdfvals_sparse_to_sparse_R", X, Xrsp, Gaussk)
+}
+
+.kcdfvals_sparse_to_dense <- function(X, Gaussk) {
+  stopifnot(is(X, "CsparseMatrix")) ## QC
+  Xrsp <- as(X, "RsparseMatrix")
+  .Call("kcdfvals_sparse_to_dense_R", X, Xrsp, Gaussk)
+}
+
 .order_rankstat <- function(x) {
   stopifnot(is.numeric(x)) ## QC
   .Call("order_rankstat_R", x)
