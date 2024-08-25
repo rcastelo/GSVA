@@ -29,7 +29,7 @@ setGeneric("wrapData",
            function(container, dataMatrix, geneSets) standardGeneric("wrapData"))
 
 setGeneric("mapGeneSetsToAnno",
-           function(geneSets, ...) standardGeneric("mapGeneSetsToAnno"))
+           function(geneSets, anno, ...) standardGeneric("mapGeneSetsToAnno"))
 
 setGeneric("get_exprData", function(object) standardGeneric("get_exprData"))
 
