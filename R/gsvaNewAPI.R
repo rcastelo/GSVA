@@ -479,7 +479,8 @@ deduplicateGeneSets <- function(geneSets,
 
 
 deduplicateGmtLines <- function(geneSets,
-                                deduplUse = c("first", "drop", "union", "smallest", "largest")) {
+                                deduplUse = c("first", "drop", "union",
+                                              "smallest", "largest")) {
     ddUse <- match.arg(deduplUse)
     gsName <- sapply(geneSets, head, 1)
     isNameDuplicated <- which(duplicated(gsName))
@@ -774,18 +775,36 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 
 ## mapGeneSetsToAnno: translate feature IDs used in gene sets to specified
 ##                    annotation type (if any, and if possible)
-setMethod("mapGeneSetsToAnno", signature("list"),
+setMethod("mapGeneSetsToAnno", signature(geneSets="list", anno="NULL"),
           function(geneSets, anno) {
               return(geneSets)
           })
 
-setMethod("mapGeneSetsToAnno", signature("GeneSetCollection"),
+setMethod("mapGeneSetsToAnno", signature(geneSets="list", anno="character"),
+          function(geneSets, anno) {
+              return(geneSets)
+          })
+
+setMethod("mapGeneSetsToAnno",
+          signature(geneSets="list", anno="GeneIdentifierType"),
+          function(geneSets, anno) {
+              return(geneSets)
+          })
+
+setMethod("mapGeneSetsToAnno",
+          signature(geneSets="GeneSetCollection", anno="NULL"),
+          function(geneSets, anno) {
+              return(geneSets)
+          })
+
+setMethod("mapGeneSetsToAnno",
+          signature(geneSets="GeneSetCollection", anno="character"),
           function(geneSets, anno) {
               if(.isAnnoPkgValid(anno)) {
                   if(!.isAnnoPkgInstalled(anno))
                       stop(sprintf("Please install the annotation package %s. If %s does not seem to exist as a package, please try to append the suffix .db to its name.", anno, anno))
                   ## TODO: provide a check for verbosity
-                  cat("Mapping identifiers between gene sets and feature names\n")
+                  cat("Mapping identifiers between gene sets and feature names.\n")
 
                   ## map gene identifiers of the gene sets to the features in the chip
                   mappedGeneSets <- mapIdentifiers(geneSets,
@@ -796,6 +815,35 @@ setMethod("mapGeneSetsToAnno", signature("GeneSetCollection"),
                   ## TODO: provide a check for verbosity
                   cat("No annotation package name available in the input data object.",
                       "Attempting to directly match identifiers in data to gene sets.", sep="\n")
+
+                  rval <- geneIds(geneSets)
+              }
+
+              return(rval)
+          })
+
+setMethod("mapGeneSetsToAnno",
+          signature(geneSets="GeneSetCollection",
+                    anno="GeneIdentifierType"),
+          function(geneSets, anno) {
+              annoDb <- annotation(anno)
+
+              if(.isAnnoPkgValid(annoDb)) {
+                  if(!.isAnnoPkgInstalled(annoDb))
+                      stop(sprintf("Please install the annotation package %s. If %s does not seem to exist as a package, please try to append the suffix .db to its name.",
+                                   annoDb, annoDb))
+                  ## TODO: provide a check for verbosity
+                  cat("Mapping identifiers between gene sets and feature names.\n")
+
+                  ## map gene identifiers of the gene sets to the features in the chip
+                  mappedGeneSets <- mapIdentifiers(geneSets, anno)
+                  rval <- geneIds(mappedGeneSets)
+
+              } else {
+                  ## TODO: provide a check for verbosity
+                  cat("No annotation package name available in the input data object.",
+                      "Attempting to directly match identifiers in data to gene sets.",
+                      sep="\n")
 
                   rval <- geneIds(geneSets)
               }
