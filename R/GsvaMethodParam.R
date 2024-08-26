@@ -122,25 +122,33 @@ setMethod("gsvaShow",
 setMethod("gsvaAnnotation",
           signature=signature(object="GsvaExprData"),
           function(object) {
-              return(NA_character_)
+              ## in general
+              return(NULL)
           })
 
 setMethod("gsvaAnnotation",
           signature=signature(object="ExpressionSet"),
           function(object) {
+              ## always a character giving the db pkg, potentially empty ("")
               return(annotation(object))
           })
 
 setMethod("gsvaAnnotation", signature("SummarizedExperiment"),
           function(object) {
-              a <- metadata(object)$annotation
-              return(if(.isCharLength1(a)) a else NA_character_)
+              ## NULL if unset; otherwise anything but we *expect* and handle
+              ## a GSEABase::GeneIdentifierType with or without annotation(),
+              ## i.e., db pkg, available.  Same for subclasses below.
+              return(metadata(object)$annotation)
           })
 
 setMethod("gsvaAnnotation", signature("SingleCellExperiment"),
           function(object) {
-              a <- metadata(object)$annotation
-              return(if(.isCharLength1(a)) a else NA_character_)
+              return(metadata(object)$annotation)
+          })
+
+setMethod("gsvaAnnotation", signature("SpatialExperiment"),
+          function(object) {
+              return(metadata(object)$annotation)
           })
 
 
