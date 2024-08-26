@@ -3,7 +3,7 @@ test_sparseMethods <- function(){
     
     set.seed(123)
     
-    m <- matrix(sample.int(10, 25, T), 10, 10)
+    m <- matrix(runif(100), 10, 10)
     colnames(m) <- paste0("cell_", 1:10)
     rownames(m) <- paste0("gene_", 1:10)
     
@@ -13,7 +13,7 @@ test_sparseMethods <- function(){
     M <- as(as(as(m, "dMatrix"), "generalMatrix"), "CsparseMatrix")
 
     mg <- gsva(gsvaParam(m, gene.sets), verbose=FALSE)
-    Mg <- gsva(gsvaParam(M, gene.sets), verbose=FALSE)
+    Mg <- gsva(gsvaParam(M, gene.sets, sparse=FALSE), verbose=FALSE)
     checkEqualsNumeric(mg, Mg)
     
     mp <- gsva(plageParam(m, gene.sets), verbose=FALSE)

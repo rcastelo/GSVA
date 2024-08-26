@@ -30,13 +30,22 @@
 #' mapping. By default, the maximum size is `Inf`.
 #' 
 #' @param kcdf Character vector of length 1 denoting the kernel to use during
-#' the non-parametric estimation of the cumulative distribution function of
-#' expression levels across samples.  By default, `kcdf="Gaussian"` which is
-#' suitable when input expression values are continuous, such as microarray
-#' fluorescent units in logarithmic scale, RNA-seq log-CPMs, log-RPKMs or
-#' log-TPMs.  When input expression values are integer counts, such as those
-#' derived from RNA-seq experiments, then this argument should be set to
-#' `kcdf="Poisson"`.
+#' the non-parametric estimation of the empirical cumulative distribution
+#' function (ECDF) of expression levels across samples. By default,
+#' `kcdf="auto"`, which will make GSVA to decide automatically any of the other
+#' possible values. The value `kcdf="Gaussian"` is suitable when input
+#' expression values are continuous, such as microarray fluorescent units in
+#' logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input
+#' expression values are integer counts, such as those derived from RNA-seq
+#' experiments, then this argument should be set to `kcdf="Poisson"`. When we
+#' do not want to use a kernel approach for the estimation of the ECDF, then
+#' we should set `kcdf="none"`.
+#'
+#' @param kcdfNoneMinSampleSize Integer vector of length 1. When `kcdf="auto"`,
+#' this parameter decides at what minimum sample size `kcdf="none"`, i.e., the
+#' estimation of the empirical cumulative distribution function (ECDF) of
+#' expression levels across samples is performed directly without using a
+#' kernel; see the `kcdf` slot.
 #'
 #' @param tau Numeric vector of length 1.  The exponent defining the weight of
 #' the tail in the random walk performed by the `GSVA` (Hänzelmann et al.,
@@ -62,7 +71,7 @@
 #' 
 #' @param sparse Logical vector of length 1 used only when the input expression
 #' data in `exprData` is stored in a sparse matrix (e.g., a `dgCMatrix` or a
-#' `singleCellExperiment` object storing the expression data in a `dgCMatrix`).
+#' `SingleCellExperiment` object storing the expression data in a `dgCMatrix`).
 #' In such a case, when `sparse=TRUE`, a sparse version of the GSVA algorithm
 #' will be applied. Otherwise, when `sparse=FALSE`, the classical version of
 #' the GSVA algorithm will be used.
@@ -95,9 +104,11 @@
 gsvaParam <- function(exprData, geneSets,
                       assay=NA_character_, annotation=NA_character_,
                       minSize=1,maxSize=Inf,
-                      kcdf=c("Gaussian", "Poisson", "none"),
-                      tau=1, maxDiff=TRUE, absRanking=FALSE, sparse=FALSE) {
+                      kcdf=c("auto", "Gaussian", "Poisson", "none"),
+                      kcdfNoneMinSampleSize=50, tau=1, maxDiff=TRUE,
+                      absRanking=FALSE, sparse=FALSE) {
     kcdf <- match.arg(kcdf)
+    kcdfNoneMinSampleSize=as.integer(kcdfNoneMinSampleSize)
 
     an <- gsvaAssayNames(exprData)
     if((!is.na(assay)) && (!.isCharNonEmpty(an)))
@@ -110,8 +121,8 @@ gsvaParam <- function(exprData, geneSets,
         exprData=exprData, geneSets=geneSets,
         assay=assay, annotation=annotation,
         minSize=minSize, maxSize=maxSize,
-        kcdf=kcdf, tau=tau, maxDiff=maxDiff,
-        absRanking=absRanking, sparse=sparse)
+        kcdf=kcdf, kcdfNoneMinSampleSize=kcdfNoneMinSampleSize,
+        tau=tau, maxDiff=maxDiff, absRanking=absRanking, sparse=sparse)
 }
 
 
@@ -154,6 +165,15 @@ setValidity("gsvaParam", function(object) {
     if(object@maxSize < object@minSize) {
         inv <- c(inv, "@maxSize should be at least @minSize or greater")
     }
+    if(length(object@kcdfNoneMinSampleSize) != 1) {
+        inv <- c(inv, "@kcdfNoneMinSampleSize should be of length 1")
+    }
+    if(object@kcdfNoneMinSampleSize < 0) {
+        inv <- c(inv, "@kcdfNoneMinSampleSize should be a non-negative integer")
+    }
+    if(is.na(object@kcdfNoneMinSampleSize)) {
+        inv <- c(inv, "@kcdfNoneMinSampleSize should not be NA")
+    }
     if(length(object@tau) != 1) {
         inv <- c(inv, "@tau should be of length 1")
     }
@@ -191,6 +211,12 @@ get_kcdf <- function(object) {
 }
 
 #' @noRd
+get_kcdfNoneMinSampleSize <- function(object) {
+  stopifnot(inherits(object, "gsvaParam"))
+  return(object@kcdfNoneMinSampleSize)
+}
+
+#' @noRd
 get_tau <- function(object) {
   stopifnot(inherits(object, "gsvaParam"))
   return(object@tau)
@@ -222,6 +248,7 @@ setMethod("show",
           function(object) {
               callNextMethod(object)
               cat("kcdf: ", get_kcdf(object), "\n",
+                  "kcdfNoneMinSampleSize: ", get_kcdfNoneMinSampleSize(object), "\n",
                   "tau: ", get_tau(object), "\n",
                   "maxDiff: ", get_maxDiff(object), "\n",
                   "absRanking: ", get_absRanking(object), "\n",

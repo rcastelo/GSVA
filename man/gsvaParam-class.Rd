@@ -13,7 +13,8 @@ gsvaParam(
   annotation = NA_character_,
   minSize = 1,
   maxSize = Inf,
-  kcdf = c("Gaussian", "Poisson", "none"),
+  kcdf = c("auto", "Gaussian", "Poisson", "none"),
+  kcdfNoneMinSampleSize = 50,
   tau = 1,
   maxDiff = TRUE,
   absRanking = FALSE,
@@ -44,13 +45,22 @@ mapping. By default, the minimum size is 1.}
 mapping. By default, the maximum size is \code{Inf}.}
 
 \item{kcdf}{Character vector of length 1 denoting the kernel to use during
-the non-parametric estimation of the cumulative distribution function of
-expression levels across samples.  By default, \code{kcdf="Gaussian"} which is
-suitable when input expression values are continuous, such as microarray
-fluorescent units in logarithmic scale, RNA-seq log-CPMs, log-RPKMs or
-log-TPMs.  When input expression values are integer counts, such as those
-derived from RNA-seq experiments, then this argument should be set to
-\code{kcdf="Poisson"}.}
+the non-parametric estimation of the empirical cumulative distribution
+function (ECDF) of expression levels across samples. By default,
+\code{kcdf="auto"}, which will make GSVA to decide automatically any of the other
+possible values. The value \code{kcdf="Gaussian"} is suitable when input
+expression values are continuous, such as microarray fluorescent units in
+logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input
+expression values are integer counts, such as those derived from RNA-seq
+experiments, then this argument should be set to \code{kcdf="Poisson"}. When we
+do not want to use a kernel approach for the estimation of the ECDF, then
+we should set \code{kcdf="none"}.}
+
+\item{kcdfNoneMinSampleSize}{Integer vector of length 1. When \code{kcdf="auto"},
+this parameter decides at what minimum sample size \code{kcdf="none"}, i.e., the
+estimation of the empirical cumulative distribution function (ECDF) of
+expression levels across samples is performed directly without using a
+kernel; see the \code{kcdf} slot.}
 
 \item{tau}{Numeric vector of length 1.  The exponent defining the weight of
 the tail in the random walk performed by the \code{GSVA} (Hänzelmann et al.,
@@ -104,12 +114,22 @@ gene sets, \code{GSVA} takes four method-specific parameters as described below.
 
 \describe{
 \item{\code{kcdf}}{Character vector of length 1 denoting the kernel to use during
-the non-parametric estimation of the cumulative distribution function of
-expression levels across samples. \code{kcdf="Gaussian"} is suitable when input
-expression values are continuous, such as microarray fluorescent units in
-logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input
-expression values are integer counts, such as those derived from RNA-seq
-experiments, then this argument should be set to \code{kcdf="Poisson"}.}
+the non-parametric estimation of the empirical cumulative distribution
+function (ECDF) of expression levels across samples. The value \code{kcdf="auto"}
+will make GSVA to decide automatically any of the other possible values. The
+value \code{kcdf="Gaussian"} is suitable when input expression values are
+continuous, such as microarray fluorescent units in logarithmic scale,
+RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input expression values are
+integer counts, such as those derived from RNA-seq experiments, then this
+argument should be set to \code{kcdf="Poisson"}. When we do not want to use a
+kernel approach for the estimation of the ECDF, then we should set
+\code{kcdf="none"}.}
+
+\item{\code{kcdfNoneMinSampleSize}}{Integer vector of length 1. When \code{kcdf="auto"},
+this parameter decides at what minimum sample size \code{kcdf="none"}, i.e., the
+estimation of the empirical cumulative distribution function (ECDF) of
+expression levels across samples is performed directly without using a
+kernel; see the \code{kcdf} slot.}
 
 \item{\code{tau}}{Numeric vector of length 1.  The exponent defining the weight of
 the tail in the random walk performed by the GSVA (Hänzelmann et al., 2013)

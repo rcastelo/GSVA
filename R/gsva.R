@@ -130,12 +130,49 @@ zorder_rankstat <- function(z, p) {
     walkStat
 }
 
+#' @importFrom Matrix nnzero
+.sufficient_ssize <- function(expr, kcdf.min.ssize) {
+  ## in the sparse case stored in a 'dgCMatrix', by now,
+  ## use the average nonzero values per row
+  if (is(expr, "dgCMatrix"))
+    return((nnzero(expr) / nrow(expr)) >= kcdf.min.ssize)
+
+  ## in every other case, including the dense case, by now,
+  ## just look at the number of columns
+  return(ncol(expr) >= kcdf.min.ssize)
+}
+
 #' @importFrom IRanges IntegerList match
-compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, rnaseq=FALSE,
-                               abs.ranking, parallel.sz=1L, 
-                               mx.diff=TRUE, tau=1, kernel=TRUE, sparse=FALSE,
+compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
+                               kcdf.min.ssize, abs.ranking, parallel.sz=1L,
+                               mx.diff=TRUE, tau=1, sparse=FALSE,
                                verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose)) {
     num_genes <- nrow(expr)
+
+    kernel <- rnaseq <- FALSE
+    if (kcdf == "auto") {
+        if (verbose)
+            cat("Figuring out automatically how to estimate ECDFs\n")
+        if (!.sufficient_ssize(expr, kcdf.min.ssize)) {
+            kernel <- TRUE
+            if (is(expr, "dgCMatrix")) { ## dgCMatrix does not store integers
+                                         ## so we check them with x == floor(x)
+                sam <- sample(expr@x, size=min(1000, length(expr@x)),
+                              replace=FALSE)
+                rnaseq <- all(sam == floor(sam))
+            } else if (is.integer(expr[1, 1]))
+                rnaseq <- TRUE
+        }
+    } else {
+        if (kcdf == "Gaussian") {
+            kernel <- TRUE
+            rnaseq <- FALSE
+        } else if (kcdf == "Poisson") {
+            kernel <- TRUE
+            rnaseq <- TRUE
+        } else
+            kernel <- FALSE
+    }
     if (verbose) {
         if (kernel) {
             if (rnaseq)

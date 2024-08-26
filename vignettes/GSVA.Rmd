@@ -235,19 +235,29 @@ corresponding to the methods briefly described in the introduction; see also
 their corresponding help pages.
 
 When using `gsvaParam()`, the user can additionally tune the following
-parameters:
+parameters, whose default values cover most of the use cases:
 
 * `kcdf`: The first step of the GSVA algorithm brings gene expression
   profiles to a common scale by calculating an expression statistic through
-  a non-parametric estimation of the CDF across samples. Such a non-parametric
-  estimation employs a _kernel function_ and the `kcdf` parameter allows the
-  user to specify three possible values for that function: (1) `"Gaussian"`,
-  the default value, which is suitable for continuous expression data, such as
-  microarray fluorescent units in logarithmic scale and RNA-seq log-CPMs,
-  log-RPKMs or log-TPMs units of expression; (2) `"Poisson"`, which is
-  suitable for integer counts, such as those derived from RNA-seq alignments; (3)
-  `"none"`, which will enforce a direct estimation of the CDF without a kernel
+  the estimation of the CDF across samples. The way in which such an estimation
+  is performed by GSVA is controlled by the `kcdf` parameter, which accepts the
+  following four possible values: (1) `"auto"`, the default value, lets GSVA
+  automatically decide the estimation method; (2) `"Gaussian"`, use a Gaussian
+  kernel, suitable for continuous expression data, such as microarray
+  fluorescent units in logarithmic scale and RNA-seq log-CPMs, log-RPKMs or
+  log-TPMs units of expression; (2) `"Poisson"`, use a Poisson kernel, suitable
+  for integer counts, such as those derived from RNA-seq alignments; (3)
+  `"none"`, which will perform a direct estimation of the CDF without a kernel
   function.
+
+* `kcdfNoneMinSampleSize`: When `kcdf="auto"`, this parameter decides at what
+  minimum sample size `kcdf="none"`, i.e., the estimation of the empirical
+  cumulative distribution function (ECDF) of expression levels across samples
+  is performed directly without using a kernel; see the previous `kcdf`
+  parameter.
+
+* `tau`: Exponent defining the weight of the tail in the random
+  walk. By default `tau=1`.
 
 * `maxDiff`: The last step of the GSVA algorithm calculates the gene set
   enrichment score from two Kolmogorov-Smirnov random walk statistics. This
@@ -265,9 +275,6 @@ parameters:
   negative random walk deviations are added together. In this case, gene sets
   with genes enriched on either extreme (high or low) will be regarded as
   highly activated.
-
-* `tau`: Exponent defining the weight of the tail in the random
-  walk. By default `tau=1`.
 
 In general, the default values for the previous parameters are suitable for
 most analysis settings, which usually consist of some kind of normalized

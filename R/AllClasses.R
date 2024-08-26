@@ -226,12 +226,22 @@ setClass("ssgseaParam",
 #' parameters of the GSVA method described below.
 #'
 #' @slot kcdf Character vector of length 1 denoting the kernel to use during
-#' the non-parametric estimation of the cumulative distribution function of
-#' expression levels across samples. `kcdf="Gaussian"` is suitable when input
-#' expression values are continuous, such as microarray fluorescent units in
-#' logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input
-#' expression values are integer counts, such as those derived from RNA-seq
-#' experiments, then this argument should be set to `kcdf="Poisson"`.
+#' the non-parametric estimation of the empirical cumulative distribution
+#' function (ECDF) of expression levels across samples. The value `kcdf="auto"`
+#' will make GSVA to decide automatically any of the other possible values. The
+#' value `kcdf="Gaussian"` is suitable when input expression values are
+#' continuous, such as microarray fluorescent units in logarithmic scale,
+#' RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input expression values are
+#' integer counts, such as those derived from RNA-seq experiments, then this
+#' argument should be set to `kcdf="Poisson"`. When we do not want to use a
+#' kernel approach for the estimation of the ECDF, then we should set
+#' `kcdf="none"`.
+#'
+#' @slot kcdfNoneMinSampleSize Integer vector of length 1. When `kcdf="auto"`,
+#' this parameter decides at what minimum sample size `kcdf="none"`, i.e., the
+#' estimation of the empirical cumulative distribution function (ECDF) of
+#' expression levels across samples is performed directly without using a
+#' kernel; see the `kcdf` slot.
 #'
 #' @slot tau Numeric vector of length 1.  The exponent defining the weight of
 #' the tail in the random walk performed by the GSVA (Hänzelmann et al., 2013)
@@ -272,6 +282,7 @@ setClass("ssgseaParam",
 #' @exportClass gsvaParam
 setClass("gsvaParam",
          slots=c(kcdf="character",
+                 kcdfNoneMinSampleSize="integer",
                  tau="numeric", 
                  maxDiff="logical",
                  absRanking="logical",
@@ -284,6 +295,7 @@ setClass("gsvaParam",
                         minSize=NA_integer_,
                         maxSize=NA_integer_,
                         kcdf=NA_character_,
+                        kcdfNoneMinSampleSize=NA_integer_,
                         tau=NA_real_,
                         maxDiff=NA,
                         absRanking=NA,
