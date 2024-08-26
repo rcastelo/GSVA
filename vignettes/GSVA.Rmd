@@ -276,6 +276,13 @@ parameters, whose default values cover most of the use cases:
   with genes enriched on either extreme (high or low) will be regarded as
   highly activated.
 
+* `sparse`: Logical flag used only when the input expression data is stored
+  in a sparse matrix (e.g., a `dgCMatrix` or a `SingleCellExperiment` object
+  storing the expression data in a `dgCMatrix`). In such as case, when
+  `sparse=TRUE` (default), a sparse version of the GSVA algorithm will be
+  applied. Otherwise, when `sparse=FALSE`, the classical version of the GSVA
+  algorithm will be used.
+
 In general, the default values for the previous parameters are suitable for
 most analysis settings, which usually consist of some kind of normalized
 continuous expression values.

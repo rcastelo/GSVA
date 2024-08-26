@@ -18,7 +18,7 @@ gsvaParam(
   tau = 1,
   maxDiff = TRUE,
   absRanking = FALSE,
-  sparse = FALSE
+  sparse = TRUE
 )
 }
 \arguments{
@@ -88,10 +88,10 @@ positive and negative random walk deviations is used.}
 
 \item{sparse}{Logical vector of length 1 used only when the input expression
 data in \code{exprData} is stored in a sparse matrix (e.g., a \code{dgCMatrix} or a
-\code{singleCellExperiment} object storing the expression data in a \code{dgCMatrix}).
-In such a case, when \code{sparse=TRUE}, a sparse version of the GSVA algorithm
-will be applied. Otherwise, when \code{sparse=FALSE}, the classical version of
-the GSVA algorithm will be used.}
+\code{SingleCellExperiment} object storing the expression data in a \code{dgCMatrix}).
+In such a case, when \code{sparse=TRUE} (default), a sparse version of the GSVA
+algorithm will be applied. Otherwise, when \code{sparse=FALSE}, the classical
+version of the GSVA algorithm will be used.}
 }
 \value{
 A new \code{\linkS4class{gsvaParam}} object.
