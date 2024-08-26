@@ -260,29 +260,15 @@ setMethod("gsva", signature(param="gsvaParam"),
                       length(filteredMappedGeneSets),
                       "gene sets.\n")
               
-              nSamples <- ncol(filteredDataMatrix)
-              ## nGenes <- nrow(filteredDataMatrix)
-              nGeneSets <- length(filteredMappedGeneSets)
-
-              rnaseq <- FALSE
-              if (get_kcdf(param) == "Gaussian") {
-                  rnaseq <- FALSE
-                  kernel <- TRUE
-              } else if (get_kcdf(param) == "Poisson") {
-                  rnaseq <- TRUE
-                  kernel <- TRUE
-              } else
-                  kernel <- FALSE
-              
               gsvaScores <- compute.geneset.es(expr=filteredDataMatrix,
                                                gset.idx.list=filteredMappedGeneSets,
-                                               sample.idxs=seq.int(nSamples),
-                                               rnaseq=rnaseq,
+                                               sample.idxs=seq.int(ncol(filteredDataMatrix)),
+                                               kcdf=get_kcdf(param),
+                                               kcdf.min.ssize=get_kcdfNoneMinSampleSize(param),
                                                abs.ranking=get_absRanking(param),
                                                parallel.sz=if(inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM),
                                                mx.diff=get_maxDiff(param),
                                                tau=get_tau(param),
-                                               kernel=kernel,
                                                sparse=get_sparse(param),
                                                verbose=verbose,
                                                BPPARAM=BPPARAM)
