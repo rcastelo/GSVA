@@ -264,17 +264,20 @@ parameters, whose default values cover most of the use cases:
   parameter is a logical flag that allows the user to specify two possible ways
   to do such calculation: (1) `TRUE`, the default value, where the enrichment
   score is calculated as the magnitude difference between the largest positive
-  and negative random walk deviations; (2) `FALSE`, where the enrichment score
-  is calculated as the maximum distance of the random walk from zero.
+  and negative random walk deviations. This default value gives larger
+  enrichment scores to gene sets whose genes are concordantly activated in
+  one direction only; (2) `FALSE`, where the enrichment score is calculated as
+  the maximum distance of the random walk from zero. This approach produces a
+  distribution of enrichment scores that is bimodal, but it can be give large
+  enrichment scores to gene sets whose genes are not concordantly activated in
+  one direction only.
 
 * `absRanking`: Logical flag used only when `maxDiff=TRUE`. By default,
   `absRanking=FALSE` and it implies that a modified Kuiper statistic is used
   to calculate enrichment scores, taking the magnitude difference between the
   largest positive and negative random walk deviations. When `absRanking=TRUE`
   the original Kuiper statistic is used, by which the largest positive and
-  negative random walk deviations are added together. In this case, gene sets
-  with genes enriched on either extreme (high or low) will be regarded as
-  highly activated.
+  negative random walk deviations are added together.
 
 * `sparse`: Logical flag used only when the input expression data is stored
   in a sparse matrix (e.g., a `dgCMatrix` or a `SingleCellExperiment` object
