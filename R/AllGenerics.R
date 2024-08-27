@@ -19,6 +19,14 @@ setGeneric("geneSets",
 setGeneric("geneSetSizes",
            function(obj, ...) standardGeneric("geneSetSizes"))
 
+#' @export
+setGeneric("gsvaAnnotation",
+           function(object) standardGeneric("gsvaAnnotation"))
+
+#' @export
+setGeneric("gsvaAnnotation<-",
+           function(object, value) standardGeneric("gsvaAnnotation<-"))
+
 
 ## for now, these should be private methods
 
@@ -44,8 +52,6 @@ setGeneric("get_minSize", function(object) standardGeneric("get_minSize"))
 setGeneric("get_maxSize", function(object) standardGeneric("get_maxSize"))
 
 setGeneric("gsvaShow", function(object) standardGeneric("gsvaShow"))
-
-setGeneric("gsvaAnnotation", function(object) standardGeneric("gsvaAnnotation"))
 
 setGeneric("gsvaAssayNames", function(object) standardGeneric("gsvaAssayNames"))
 

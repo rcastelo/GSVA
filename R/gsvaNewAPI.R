@@ -285,6 +285,152 @@ setMethod("gsva", signature(param="gsvaParam"),
           })
 
 
+### ----- methods for retrieving and setting annotation metadata -----
+
+#' @title Store and Retrieve Annotation Metadata
+#' 
+#' @description Methods for storing and retrieving annotation metadata in
+#' expression data objects that support it.  If gene sets and expression data
+#' are using different but known gene identifier types and an appropriate
+#' annotation database is available, gene set identifiers can be mapped to
+#' expression data identifiers without manual user intervention, e.g. from
+#' an MSigDb gene set using ENTREZ IDs or gene symbols to an expression data
+#' set using ENSEMBL IDs.
+#' 
+#' @param object An expression data object of one of the classes described in
+#' [`GsvaExprData-class`].  Simple `matrix` and `dgCMatrix` objects are not
+#' capable of storing annotation metadata and will return `NULL`.
+#'
+#' @param value For the replacement methods, the annotation metadata to be
+#' stored in the object.  For [`ExpressionSet-class`] objects, this must be a
+#' character of length 1 specifying the name of the annotation database to be
+#' used.  For [`SummarizedExperiment-class`] and its subclasses, this must be
+#' a [`GeneIdentifierType`] created by one of the constructors from package
+#' `GSEABase` where the `annotation` argument is typically the name of an
+#' organism or annotation database, e.g. `org.Hs.eg.db`.  Simple `matrix` and
+#' `dgCMatrix` objects are not capable of storing annotation metadata and the
+#' attempt to do so will result in an error.
+#'
+#' @return For the retrieval methods, the annotation metadata stored in the
+#' object of `NULL`.  For the replacement methods, the updated object.
+#'
+#' @aliases gsvaAnnotation gsvaAnnotation<-
+#' @name gsvaAnnotation
+#' @rdname gsvaAnnotation
+#' 
+NULL
+
+
+#' @aliases gsvaAnnotation,GsvaExprData-method
+#' @rdname gsvaAnnotation
+#' @exportMethod gsvaAnnotation
+setMethod("gsvaAnnotation",
+          signature=signature(object="GsvaExprData"),
+          function(object) {
+              ## in general
+              return(NULL)
+          })
+
+#' @aliases gsvaAnnotation<-,GsvaExprData,ANY-method
+#' @rdname gsvaAnnotation
+#' @exportMethod gsvaAnnotation
+setReplaceMethod("gsvaAnnotation",
+                 signature=signature(
+                     object="GsvaExprData",
+                     value="ANY"),
+          function(object, value) {
+              ## in general
+              stop("Object of class '", class(object), "' cannot store ",
+                   "annotation metadata of class '", class(value), "'.")
+          })
+
+#' @aliases gsvaAnnotation,ExpressionSet-method
+#' @rdname gsvaAnnotation
+#' @exportMethod gsvaAnnotation
+setMethod("gsvaAnnotation",
+          signature=signature(object="ExpressionSet"),
+          function(object) {
+              ## always a character giving the db pkg, potentially empty ("")
+              return(annotation(object))
+          })
+
+#' @aliases gsvaAnnotation<-,ExpressionSet,character-method
+#' @rdname gsvaAnnotation
+#' @exportMethod gsvaAnnotation
+setReplaceMethod("gsvaAnnotation",
+                 signature=signature(
+                   object="ExpressionSet",
+                   value="character"),
+                 function(object, value) {
+                     annotation(object) <- value
+                     object
+                 })
+
+#' @aliases gsvaAnnotation,SummarizedExperiment-method
+#' @rdname gsvaAnnotation
+#' @exportMethod gsvaAnnotation
+setMethod("gsvaAnnotation", signature("SummarizedExperiment"),
+          function(object) {
+              ## NULL if unset; otherwise anything but we *expect* and handle
+              ## a GSEABase::GeneIdentifierType with or without annotation(),
+              ## i.e., db pkg, available.  Same for subclasses below.
+              return(metadata(object)$annotation)
+          })
+
+#' @aliases gsvaAnnotation<-,SummarizedExperiment,GeneIdentifierType-method
+#' @rdname gsvaAnnotation
+#' @exportMethod gsvaAnnotation
+setReplaceMethod("gsvaAnnotation",
+                 signature=signature(
+                   object="SummarizedExperiment",
+                   value="GeneIdentifierType"),
+                 function(object, value) {
+                     metadata(object)$annotation <- value
+                     object
+                 })
+
+#' @aliases gsvaAnnotation,SingleCellExperiment-method
+#' @rdname gsvaAnnotation
+#' @exportMethod gsvaAnnotation
+setMethod("gsvaAnnotation", signature("SingleCellExperiment"),
+          function(object) {
+              return(metadata(object)$annotation)
+          })
+
+#' @aliases gsvaAnnotation<-,SingleCellExperiment,GeneIdentifierType-method
+#' @rdname gsvaAnnotation
+#' @exportMethod gsvaAnnotation
+setReplaceMethod("gsvaAnnotation",
+                 signature=signature(
+                   object="SingleCellExperiment",
+                   value="GeneIdentifierType"),
+                 function(object, value) {
+                     metadata(object)$annotation <- value
+                     object
+                 })
+
+#' @aliases gsvaAnnotation,SpatialExperiment-method
+#' @rdname gsvaAnnotation
+#' @exportMethod gsvaAnnotation
+setMethod("gsvaAnnotation", signature("SpatialExperiment"),
+          function(object) {
+              return(metadata(object)$annotation)
+          })
+
+#' @aliases gsvaAnnotation<-,SpatialExperiment,GeneIdentifierType-method
+#' @rdname gsvaAnnotation
+#' @exportMethod gsvaAnnotation
+setReplaceMethod("gsvaAnnotation",
+                 signature=signature(
+                   object="SpatialExperiment",
+                   value="GeneIdentifierType"),
+                 function(object, value) {
+                     metadata(object)$annotation <- value
+                     object
+                 })
+
+
+
 ### ----- methods for retrieving gene sets -----
 
 #' @title Retrieve or Determine Gene Sets

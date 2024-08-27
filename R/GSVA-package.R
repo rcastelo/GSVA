@@ -4,7 +4,8 @@
 #'
 #' @import methods
 #'
-#' @importMethodsFrom Biobase featureNames phenoData experimentData exprs annotation
+#' @importMethodsFrom Biobase featureNames phenoData experimentData exprs
+#' annotation "annotation<-"
 #' @importMethodsFrom S4Vectors metadata "metadata<-"
 #' @importMethodsFrom IRanges match
 #' @importMethodsFrom SummarizedExperiment assays assayNames colData rowData
