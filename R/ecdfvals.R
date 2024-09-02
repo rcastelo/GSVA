@@ -1,7 +1,8 @@
-.ecdfvals_sparse_to_sparse <- function(X) {
+.ecdfvals_sparse_to_sparse <- function(X, verbose) {
   stopifnot(is(X, "CsparseMatrix")) ## QC
   Xrsp <- as(X, "RsparseMatrix")
-  .Call("ecdfvals_sparse_to_sparse_R", X, Xrsp)
+  stopifnot(is.logical(verbose)) ## QC
+  .Call("ecdfvals_sparse_to_sparse_R", X, Xrsp, verbose)
 }
 
 .ecdfvals_sparse_to_dense <- function(X) {

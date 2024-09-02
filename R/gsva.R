@@ -61,7 +61,8 @@ setMethod("gsva", signature(param="SingleCellExperiment"), function(param, ...) 
 })
 
 
-compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE, sparse=FALSE){
+compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE,
+                             sparse=FALSE, verbose=TRUE) {
     n.test.samples <- ncol(expr)
     n.genes <- nrow(expr)
     n.density.samples <- length(sample.idxs)
@@ -80,21 +81,22 @@ compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE, spars
                       n.density.samples,
                       n.test.samples,
                       n.genes,
-                      as.integer(rnaseq))
+                      as.integer(rnaseq),
+                      verbose)
             gene.cdf <- t(matrix(A, n.test.samples, n.genes))
         } else
             stop(sprintf("matrix class %s cannot be handled yet.", class(expr)))
     } else {
         if (is(expr, "dgCMatrix")) {
             if (sparse)
-              gene.cdf <- .ecdfvals_sparse_to_sparse(expr[, sample.idxs, drop=FALSE])
+                gene.cdf <- .ecdfvals_sparse_to_sparse(expr[, sample.idxs, drop=FALSE],
+                                                       verbose)
             else
-              gene.cdf <- .ecdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE])
+                gene.cdf <- .ecdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE])
         } else if (is.matrix(expr))
             gene.cdf <- .ecdfvals_dense_to_dense(expr[, sample.idxs, drop=FALSE])
         else
             stop(sprintf("matrix class %s cannot be handled yet.", class(expr)))
-        ## gene.cdf <- log(gene.cdf / (1-gene.cdf))
     }
 
     return(gene.cdf)	
@@ -142,7 +144,10 @@ zorder_rankstat <- function(z, p) {
   return(ncol(expr) >= kcdf.min.ssize)
 }
 
+#' @importFrom parallel splitIndices
 #' @importFrom IRanges IntegerList match
+#' @importFrom cli cli_alert_info cli_progress_bar
+#' @importFrom cli cli_progress_update cli_progress_done
 compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
                                kcdf.min.ssize, abs.ranking, parallel.sz=1L,
                                mx.diff=TRUE, tau=1, sparse=FALSE,
@@ -152,7 +157,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
     kernel <- rnaseq <- FALSE
     if (kcdf == "auto") {
         if (verbose)
-            cat("Figuring out automatically how to estimate ECDFs\n")
+            cli_alert_info("kcdf='auto' (default)")
         if (!.sufficient_ssize(expr, kcdf.min.ssize)) {
             kernel <- TRUE
             if (is(expr, "dgCMatrix")) { ## dgCMatrix does not store integers
@@ -176,54 +181,86 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
     if (verbose) {
         if (kernel) {
             if (rnaseq)
-                cat("Estimating ECDFs with Poisson kernels\n")
+                cli_alert_info("Row-wise ECDF estimation with Poisson kernels")
             else
-                cat("Estimating ECDFs with Gaussian kernels\n")
+                cli_alert_info("Row-wise ECDF estimation with Gaussian kernels")
         } else
-            cat("Estimating ECDFs directly\n")
+            cli_alert_info("Direct row-wise ECDFs estimation")
     }
 
     ## open parallelism only if ECDFs have to be estimated for
     ## more than 100 genes on more than 100 samples
     if (parallel.sz > 1 && length(sample.idxs) > 100 && nrow(expr) > 100) {
-        if (verbose)
-            cat(sprintf("Estimating ECDFs in parallel on %d cores\n", as.integer(parallel.sz)))
-        iter <- function(Y, n_chunks=BiocParallel::multicoreWorkers()) {
+        iter <- function(Y, idpb, n_chunks=BiocParallel::multicoreWorkers()) {
             idx <- splitIndices(nrow(Y), min(nrow(Y), n_chunks))
             i <- 0L
             function() {
                 if (i == length(idx))
                     return(NULL)
                 i <<- i + 1L
+                if (!is.null(idpb))
+                    cli_progress_update(id=idpb, set=i)
                 Y[idx[[i]], , drop=FALSE]
             }
         }
-        gene.density <- bpiterate(iter(expr, 100),
+        if (verbose) {
+            msg <- sprintf("Estimating ECDFs with %d cores",
+                           as.integer(parallel.sz))
+            idpb <- cli_progress_bar(msg, total=100)
+        }
+        gene.density <- bpiterate(iter(expr, idpb, 100),
                                   compute.gene.cdf,
                                   sample.idxs=sample.idxs,
-                                  rnaseq=rnaseq, kernel=kernel, sparse=sparse,
+                                  rnaseq=rnaseq, kernel=kernel,
+                                  sparse=sparse, verbose=FALSE,
                                   REDUCE=rbind, reduce.in.order=TRUE,
                                   BPPARAM=BPPARAM)
-    } else 
-        gene.density <- compute.gene.cdf(expr, sample.idxs, rnaseq, kernel, sparse)
+        if (verbose)
+            cli_progress_done(idpb)
+    } else
+        gene.density <- compute.gene.cdf(expr, sample.idxs, rnaseq, kernel,
+                                         sparse, verbose)
     
     gset.idx.list <- IntegerList(gset.idx.list)
     n <- ncol(expr)
-    es <- bplapply(as.list(1:n), function(j, Z) {
+    es <- NULL
+    if (n > 10 && bpnworkers(BPPARAM) > 1) {
+        es <- bplapply(as.list(1:n), function(j, Z) {
+            gene_ord_rnkstat <- list()
+            if (is(Z, "dgCMatrix"))
+                gene_ord_rnkstat <- .order_rankstat_sparse_to_sparse(Z, j)
+            else
+                gene_ord_rnkstat <- .order_rankstat(Z[, j])
+            geneRanking <- gene_ord_rnkstat[[1]]
+            rankStat <- gene_ord_rnkstat[[2]]
 
-      gene_ord_rnkstat <- list()
-      if (is(Z, "dgCMatrix"))
-        gene_ord_rnkstat <- .order_rankstat_sparse_to_sparse(Z, j)
-      else
-        gene_ord_rnkstat <- .order_rankstat(Z[, j])
-      geneRanking <- gene_ord_rnkstat[[1]]
-      rankStat <- gene_ord_rnkstat[[2]]
+            geneSetsRankIdx <- match(gset.idx.list, geneRanking)
+            .gsva_score_genesets(as.list(geneSetsRankIdx), geneRanking, rankStat,
+                                 mx.diff, abs.ranking, tau)
+        }, Z=gene.density, BPPARAM=BPPARAM)
+    } else {
+        idpb <- NULL
+        if (verbose)
+            idpb <- cli_progress_bar("Calculating GSVA scores", total=n)
+        es <- lapply(as.list(1:n), function(j, Z) {
+            gene_ord_rnkstat <- list()
+            if (is(Z, "dgCMatrix"))
+                gene_ord_rnkstat <- .order_rankstat_sparse_to_sparse(Z, j)
+            else
+                gene_ord_rnkstat <- .order_rankstat(Z[, j])
+            geneRanking <- gene_ord_rnkstat[[1]]
+            rankStat <- gene_ord_rnkstat[[2]]
 
-      geneSetsRankIdx <- match(gset.idx.list, geneRanking)
-      .gsva_score_genesets(as.list(geneSetsRankIdx), geneRanking, rankStat,
-                           mx.diff, abs.ranking, tau)
-
-    }, Z=gene.density, BPPARAM=BPPARAM)
+            geneSetsRankIdx <- match(gset.idx.list, geneRanking)
+            sco <- .gsva_score_genesets(as.list(geneSetsRankIdx), geneRanking, rankStat,
+                                        mx.diff, abs.ranking, tau)
+            if (verbose)
+                cli_progress_update(id=idpb)
+            sco
+        }, Z=gene.density)
+        if (verbose)
+            cli_progress_done(idpb)
+    }
     es <- do.call("cbind", es)
 
     return(es)

@@ -81,7 +81,8 @@
 
 .filterAndMapGenesAndGeneSets <- function(param,
                                           removeConstant=TRUE,
-                                          removeNzConstant=TRUE) {
+                                          removeNzConstant=TRUE,
+                                          verbose=FALSE) {
     exprData <- get_exprData(param)
     dataMatrix <- unwrapData(exprData, get_assay(param))
     
@@ -94,7 +95,8 @@
     ## note that the method for 'GeneSetCollection' calls geneIds(), i.e., 
     ## whatever the input, from here on we have a list of character vectors
     geneSets <- mapGeneSetsToAnno(geneSets=get_geneSets(param),
-                                  anno=gsvaAnnotation(exprData))
+                                  anno=gsvaAnnotation(exprData),
+                                  verbose=verbose)
     
     ## map to the actual features for which expression data is available
     ## note that the result is a list of integer vectors (indices to rownames)

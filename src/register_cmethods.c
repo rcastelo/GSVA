@@ -6,15 +6,15 @@
 /* prototypes of functions to be registered */
 
 SEXP
-matrix_density_R(double* X, double* Y, int* n_density_samples,
-                 int* n_test_samples, int* n_genes, int* rnaseq);
+matrix_density_R(SEXP density_dataR, SEXP test_dataR, SEXP n_density_samplesR,
+                 SEXP n_test_samplesR, SEXP n_genesR, SEXP rnaseqR, SEXP verboseR);
 
 SEXP
 ks_matrix_R(SEXP XR, SEXP sidxsR, SEXP n_genesR, SEXP geneset_idxsR,
             SEXP n_genesetR, SEXP tauR, SEXP n_samplesR, SEXP mx_diffR, SEXP abs_rnkR);
 
 SEXP
-ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR);
+ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP idpbR);
 
 SEXP
 ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR);
@@ -42,8 +42,8 @@ order_rankstat_sparse_to_sparse_R(SEXP XCspR, SEXP jR);
 
 static R_CallMethodDef callMethods[] = {
   {"ks_matrix_R", (DL_FUNC) &ks_matrix_R, 9},
-  {"matrix_density_R", (DL_FUNC) &matrix_density_R, 6},
-  {"ecdfvals_sparse_to_sparse_R", (DL_FUNC) &ecdfvals_sparse_to_sparse_R, 2},
+  {"matrix_density_R", (DL_FUNC) &matrix_density_R, 7},
+  {"ecdfvals_sparse_to_sparse_R", (DL_FUNC) &ecdfvals_sparse_to_sparse_R, 3},
   {"ecdfvals_sparse_to_dense_R", (DL_FUNC) &ecdfvals_sparse_to_dense_R, 2},
   {"ecdfvals_dense_to_dense_R", (DL_FUNC) &ecdfvals_dense_to_dense_R, 1},
   {"gsva_rnd_walk_R", (DL_FUNC) &gsva_rnd_walk_R, 3},

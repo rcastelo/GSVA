@@ -9,10 +9,11 @@
 #include <Rinternals.h>
 #include <Rmath.h>
 #include <R_ext/Rdynload.h>
+#include <cli/progress.h>
 
 SEXP
-matrix_density_R(SEXP X, SEXP Y, SEXP n_density_samples, SEXP n_test_samples,
-                 SEXP n_genes, SEXP rnaseq);
+matrix_density_R(SEXP density_dataR, SEXP test_dataR, SEXP n_density_samplesR,
+                 SEXP n_test_samplesR, SEXP n_genesR, SEXP rnaseqR, SEXP verboseR);
 
 void initCdfs(void);
 double precomputedCdf(double x, double sigma);
@@ -69,30 +70,50 @@ void row_d_nologodds(double* x, double* y, double* r, int size_density_n, int si
 }
 
 
-void matrix_d(double* X, double* Y, double* R, int n_density_samples, int n_test_samples, int n_genes, int rnaseq){
+void
+matrix_d(double* X, double* Y, double* R, int n_density_samples,
+         int n_test_samples, int n_genes, int rnaseq, Rboolean verbose){
+  SEXP pb = R_NilValue;
+
+  if (verbose) {
+    pb = PROTECT(cli_progress_bar(n_genes, NULL));
+    cli_progress_set_name(pb, "Estimating ECDFs");
+  }
+    
 	for(int j = 0; j < n_genes; ++j){
 		int offset_density = j * n_density_samples;
 		int offset_test = j * n_test_samples;
 		row_d(&X[offset_density], &Y[offset_test], &R[offset_test], n_density_samples, n_test_samples, rnaseq);
+    if (verbose) { /* show progress */
+      if (j % 100 == 0 && CLI_SHOULD_TICK)
+        cli_progress_set(pb, j);
+    }
 	}
+
+  if (verbose) {
+    cli_progress_done(pb);
+    UNPROTECT(1); /* pb */
+  }
 }
 
 SEXP
 matrix_density_R(SEXP density_dataR, SEXP test_dataR, SEXP n_density_samplesR,
-                 SEXP n_test_samplesR, SEXP n_genesR, SEXP rnaseqR) {
+                 SEXP n_test_samplesR, SEXP n_genesR, SEXP rnaseqR, SEXP verboseR) {
   double* density_data=REAL(density_dataR);
   double* test_data=REAL(test_dataR);
   int     n_density_samples=INTEGER(n_density_samplesR)[0];
   int     n_test_samples=INTEGER(n_test_samplesR)[0];
   int     n_genes=INTEGER(n_genesR)[0];
   int     rnaseq=INTEGER(rnaseqR)[0];
+  Rboolean verbose=asLogical(verboseR);
   SEXP    resR;
   double* res;
 
   PROTECT(resR = allocVector(REALSXP, n_test_samples * n_genes));
   res = REAL(resR);
 
-	matrix_d(density_data, test_data, res, n_density_samples, n_test_samples, n_genes, rnaseq);
+  matrix_d(density_data, test_data, res, n_density_samples, n_test_samples,
+           n_genes, rnaseq, verbose);
 
   UNPROTECT(1); /* resR */
 

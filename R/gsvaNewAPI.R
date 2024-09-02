@@ -128,7 +128,10 @@ setMethod("gsva", signature(param="plageParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              famGaGS <- .filterAndMapGenesAndGeneSets(param)
+              famGaGS <- .filterAndMapGenesAndGeneSets(param,
+                                                       removeConstant=TRUE,
+                                                       removeNzConstant=TRUE,
+                                                       verbose)
               filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
               filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
@@ -141,7 +144,7 @@ setMethod("gsva", signature(param="plageParam"),
               ##     stop("rnaseq=TRUE does not work with method='plage'.")
 
               if(verbose)
-                  cat("Estimating PLAGE scores for",
+                  cat("Calculating PLAGE scores for",
                       length(filteredMappedGeneSets), "gene sets.\n")
 
               plageScores <- plage(X=filteredDataMatrix,
@@ -166,7 +169,10 @@ setMethod("gsva", signature(param="zscoreParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              famGaGS <- .filterAndMapGenesAndGeneSets(param)
+              famGaGS <- .filterAndMapGenesAndGeneSets(param,
+                                                       removeConstant=TRUE,
+                                                       removeNzConstant=TRUE,
+                                                       verbose)
               filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
               filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
@@ -179,7 +185,7 @@ setMethod("gsva", signature(param="zscoreParam"),
               ##     stop("rnaseq=TRUE does not work with method='zscore'.")
 
               if(verbose)
-                  cat("Estimating combined z-scores for",
+                  cat("Calculating combined z-scores for",
                       length(filteredMappedGeneSets), "gene sets.\n")
 
               zScores <- zscore(X=filteredDataMatrix,
@@ -206,7 +212,8 @@ setMethod("gsva", signature(param="ssgseaParam"),
           {
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=FALSE,
-                                                       removeNzConstant=FALSE)
+                                                       removeNzConstant=FALSE,
+                                                       verbose)
               filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
               filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
@@ -216,7 +223,7 @@ setMethod("gsva", signature(param="ssgseaParam"),
                               class(BPPARAM), bpnworkers(BPPARAM)))
 
               if(verbose)
-                  cat("Estimating ssGSEA scores for",
+                  cat("Calculating ssGSEA scores for",
                       length(filteredMappedGeneSets), "gene sets.\n")
 
               ssgseaScores <- ssgsea(X=filteredDataMatrix,
@@ -239,6 +246,7 @@ setMethod("gsva", signature(param="ssgseaParam"),
 
 
 #' @aliases gsva,gsvaParam-method
+#' @importFrom cli cli_alert_info cli_alert_success
 #' @rdname gsva
 #' @exportMethod gsva
 setMethod("gsva", signature(param="gsvaParam"),
@@ -246,19 +254,22 @@ setMethod("gsva", signature(param="gsvaParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              famGaGS <- .filterAndMapGenesAndGeneSets(param)
+              famGaGS <- .filterAndMapGenesAndGeneSets(param,
+                                                       removeConstant=TRUE,
+                                                       removeNzConstant=TRUE,
+                                                       verbose)
               filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
               filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
-              if (!inherits(BPPARAM, "SerialParam") && verbose)
-                  cat(sprintf(paste("Setting parallel calculations through a %s back-end",
-                                    "with workers=%d and tasks=100.\n", collapse="\n"),
-                              class(BPPARAM), bpnworkers(BPPARAM)))
+              if (!inherits(BPPARAM, "SerialParam") && verbose) {
+                  msg <- sprintf("Using a %s parallel back-end with %d workers",
+                                 class(BPPARAM), bpnworkers(BPPARAM))
+                  cli_alert_info(msg)
+              }
 
               if(verbose)
-                  cat("Estimating GSVA scores for",
-                      length(filteredMappedGeneSets),
-                      "gene sets.\n")
+                  cli_alert_info(sprintf("Calculating GSVA scores for %d gene sets",
+                                         length(filteredMappedGeneSets)))
               
               gsvaScores <- compute.geneset.es(expr=filteredDataMatrix,
                                                gset.idx.list=filteredMappedGeneSets,
@@ -280,6 +291,9 @@ setMethod("gsva", signature(param="gsvaParam"),
                   indices=filteredMappedGeneSets,
                   names=rownames(filteredDataMatrix))
               rval <- wrapData(get_exprData(param), gsvaScores, gs)
+
+              if (verbose)
+                  cli_alert_success("Calculations finished")
               
               return(rval)
           })
@@ -908,45 +922,53 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## mapGeneSetsToAnno: translate feature IDs used in gene sets to specified
 ##                    annotation type (if any, and if possible)
 setMethod("mapGeneSetsToAnno", signature(geneSets="list", anno="NULL"),
-          function(geneSets, anno) {
+          function(geneSets, anno, verbose=FALSE) {
               return(geneSets)
           })
 
 setMethod("mapGeneSetsToAnno", signature(geneSets="list", anno="character"),
-          function(geneSets, anno) {
+          function(geneSets, anno, verbose=FALSE) {
               return(geneSets)
           })
 
 setMethod("mapGeneSetsToAnno",
           signature(geneSets="list", anno="GeneIdentifierType"),
-          function(geneSets, anno) {
+          function(geneSets, anno, verbose=FALSE) {
               return(geneSets)
           })
 
 setMethod("mapGeneSetsToAnno",
           signature(geneSets="GeneSetCollection", anno="NULL"),
-          function(geneSets, anno) {
+          function(geneSets, anno, verbose=FALSE) {
               return(geneSets)
           })
 
+#' @importFrom cli cli_alert_info cli_alert_warning
 setMethod("mapGeneSetsToAnno",
           signature(geneSets="GeneSetCollection", anno="character"),
-          function(geneSets, anno) {
+          function(geneSets, anno, verbose=FALSE) {
               if(.isAnnoPkgValid(anno)) {
-                  if(!.isAnnoPkgInstalled(anno))
-                      stop(sprintf("Please install the annotation package %s. If %s does not seem to exist as a package, please try to append the suffix .db to its name.", anno, anno))
-                  ## TODO: provide a check for verbosity
-                  cat("Mapping identifiers between gene sets and feature names.\n")
+                  if(!.isAnnoPkgInstalled(anno)) {
+                      msg <- "Please install the annotation package %s"
+                      stop(sprintf(msg, anno))
+                  }
 
-                  ## map gene identifiers of the gene sets to the features in the chip
+                  if (verbose)
+                      cli_alert_info("Mapping identifiers")
+
                   mappedGeneSets <- mapIdentifiers(geneSets,
                                                    AnnoOrEntrezIdentifier(anno))
                   rval <- geneIds(mappedGeneSets)
 
               } else {
-                  ## TODO: provide a check for verbosity
-                  cat("No annotation package name available in the input data object.",
-                      "Attempting to directly match identifiers in data to gene sets.", sep="\n")
+                  if (verbose) {
+                      msg <- paste("No annotation metadata available in the",
+                                   "input expression data object")
+                      cli_alert_warning(msg)
+                      msg <- paste("Attempting to directly match identifiers",
+                                   "in expression data to gene sets")
+                      cli_alert_warning(msg)
+                  }
 
                   rval <- geneIds(geneSets)
               }
@@ -954,32 +976,37 @@ setMethod("mapGeneSetsToAnno",
               return(rval)
           })
 
+#' @importFrom cli cli_alert_info cli_alert_warning
 setMethod("mapGeneSetsToAnno",
           signature(geneSets="GeneSetCollection",
                     anno="GeneIdentifierType"),
-          function(geneSets, anno) {
+          function(geneSets, anno, verbose=FALSE) {
               annoDb <- annotation(anno)
 
               if(.isAnnoPkgValid(annoDb)) {
-                  if(!.isAnnoPkgInstalled(annoDb))
-                      stop(sprintf("Please install the annotation package %s. If %s does not seem to exist as a package, please try to append the suffix .db to its name.",
-                                   annoDb, annoDb))
-                  ## TODO: provide a check for verbosity
-                  cat("Mapping identifiers between gene sets and feature names.\n")
+                  if(!.isAnnoPkgInstalled(annoDb)) {
+                      msg <- "Please install the annotation package %s"
+                      stop(sprintf(msg, annoDb))
+                  }
 
-                  ## map gene identifiers of the gene sets to the features in the chip
+                  if (verbose)
+                      cli_alert_info("Mapping identifiers")
+
                   mappedGeneSets <- mapIdentifiers(geneSets, anno)
                   rval <- geneIds(mappedGeneSets)
 
               } else {
-                  ## TODO: provide a check for verbosity
-                  cat("No annotation package name available in the input data object.",
-                      "Attempting to directly match identifiers in data to gene sets.",
-                      sep="\n")
+                  if (verbose) {
+                      msg <- paste("No annotation metadata available in the",
+                                   "input expression data object")
+                      cli_alert_warning(msg)
+                      msg <- paste("Attempting to directly match identifiers",
+                                   "in expression data to gene sets")
+                      cli_alert_warning(msg)
+                  }
 
                   rval <- geneIds(geneSets)
               }
 
               return(rval)
           })
-
