@@ -3,6 +3,7 @@
 #include <Rinternals.h>
 #include <Rmath.h>
 #include <R_ext/Rdynload.h>
+#include <cli/progress.h>
 
 /* global variables */
 extern SEXP Matrix_DimNamesSym,

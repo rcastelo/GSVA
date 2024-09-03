@@ -3,6 +3,7 @@
 #include <Rinternals.h>
 #include <Rmath.h>
 #include <R_ext/Rdynload.h>
+#include <cli/progress.h>
 
 /* from Mutils.h */
 static R_INLINE
@@ -23,7 +24,7 @@ extern SEXP Matrix_DimNamesSym,
             Matrix_pSym;
 
 SEXP
-ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR);
+ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP idpb);
 
 SEXP
 ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR);
@@ -59,7 +60,7 @@ dbl_cmp(const void* a, const void* b) {
  * the returned value is a sparse (CSC) matrix.
  */
 SEXP
-ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR) {
+ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
   SEXP ecdfRobj;
   int* XCsp_dim;
   int* XCsp_i;
@@ -69,14 +70,17 @@ ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR) {
   int* XRsp_p;
   double* XRsp_x;
   int  nnz = length(GET_SLOT(XCspR, Matrix_xSym));
+  Rboolean verbose=asLogical(verboseR);
   int* ecdfRobj_dim;
   int* ecdfRobj_i;
   int* ecdfRobj_p;
   double* ecdfRobj_x;
   int  nr, nc;
+  SEXP pb = R_NilValue;
+  int  nunprotect=0;
 
-  PROTECT(XCspR);
-  PROTECT(XRspR);
+  PROTECT(XCspR); nunprotect++;
+  PROTECT(XRspR); nunprotect++;
 
   XCsp_dim = INTEGER(GET_SLOT(XCspR, Matrix_DimSym));
   nr = XCsp_dim[0]; /* number of rows */
@@ -92,7 +96,7 @@ ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR) {
   /* create a new dgCMatrix object (CSC) to store the result,
    * copying the i and p slots from the input CsparseMatrix,
    * and allocating memory for the x slot */
-  ecdfRobj = PROTECT(NEW_OBJECT(MAKE_CLASS("dgCMatrix")));
+  ecdfRobj = PROTECT(NEW_OBJECT(MAKE_CLASS("dgCMatrix"))); nunprotect++;
   ecdfRobj_dim = INTEGER(ALLOC_SLOT(ecdfRobj, Matrix_DimSym, INTSXP, 2));
   ecdfRobj_dim[0] = nr;
   ecdfRobj_dim[1] = nc;
@@ -102,6 +106,12 @@ ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR) {
   Memcpy(ecdfRobj_i, XCsp_i, (size_t) nnz);
   Memcpy(ecdfRobj_p, XCsp_p, (size_t) (nc+1));
   Memcpy(ecdfRobj_x, XCsp_x, (size_t) nnz);
+
+  if (verbose) {
+    pb = PROTECT(cli_progress_bar(nr, NULL));
+    cli_progress_set_name(pb, "Estimating ECDFs");
+    nunprotect++;
+  }
 
   for (int i=0; i < nr; i++) {
     SEXP          xR, uniqvR;
@@ -114,6 +124,11 @@ ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR) {
     const double* e2_p;
     int*          mt;
     int*          tab;
+
+    if (verbose) { /* show progress */
+      if (i % 100 == 0 && CLI_SHOULD_TICK)
+        cli_progress_set(pb, i);
+    }
 
     /* number of nonzero values in the i-th row */
     nv = XRsp_p[i+1]-XRsp_p[i];
@@ -186,7 +201,10 @@ ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR) {
     UNPROTECT(2); /* xR uniqvR */
   }
 
-  UNPROTECT(3); /* XCspR XRspR ecdfRobj */
+  if (verbose)
+    cli_progress_done(pb);
+
+  UNPROTECT(nunprotect); /* XCspR XRspR ecdfRobj pb */
 
   return(ecdfRobj);
 }
