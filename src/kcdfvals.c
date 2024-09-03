@@ -3,6 +3,7 @@
 #include <Rinternals.h>
 #include <Rmath.h>
 #include <R_ext/Rdynload.h>
+#include <cli/progress.h>
 
 /* from Mutils.h */
 static R_INLINE
@@ -29,14 +30,15 @@ void
 outerselfsubtr(double* x, int n, double *out); 
 
 void
-row_d_nologodds(double* x, double* y, double* r, int size_density_n, int size_test_n, int rnaseq);
+row_d_nologodds(double* x, double* y, double* r, int size_density_n,
+                int size_test_n, int rnaseq);
 
 
 SEXP
-kcdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP GausskR);
+kcdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP GausskR, SEXP verboseR);
 
 SEXP
-kcdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP GausskR);
+kcdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP GausskR, SEXP verboseR);
 
 /*
 SEXP
@@ -73,7 +75,7 @@ outerselfsubtr(double* x, int n, double *out) {
  * the returned value is a sparse (CSC) matrix.
  */
 SEXP
-kcdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP GausskR) {
+kcdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP GausskR, SEXP verboseR) {
   SEXP kcdfRobj;
   int* XCsp_dim;
   int* XCsp_i;
@@ -84,14 +86,17 @@ kcdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP GausskR) {
   double* XRsp_x;
   int  nnz = length(GET_SLOT(XCspR, Matrix_xSym));
   Rboolean Gaussk=asLogical(GausskR);
+  Rboolean verbose=asLogical(verboseR);
   int* kcdfRobj_dim;
   int* kcdfRobj_i;
   int* kcdfRobj_p;
   double* kcdfRobj_x;
   int  nr, nc;
+  SEXP pb = R_NilValue;
+  int  nunprotect=0;
 
-  PROTECT(XCspR);
-  PROTECT(XRspR);
+  PROTECT(XCspR); nunprotect++;
+  PROTECT(XRspR); nunprotect++;
 
   XCsp_dim = INTEGER(GET_SLOT(XCspR, Matrix_DimSym));
   nr = XCsp_dim[0]; /* number of rows */
@@ -107,7 +112,7 @@ kcdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP GausskR) {
   /* create a new dgCMatrix object (CSC) to store the result,
    * copying the i and p slots from the input CsparseMatrix,
    * and allocating memory for the x slot */
-  kcdfRobj = PROTECT(NEW_OBJECT(MAKE_CLASS("dgCMatrix")));
+  kcdfRobj = PROTECT(NEW_OBJECT(MAKE_CLASS("dgCMatrix"))); nunprotect++;
   kcdfRobj_dim = INTEGER(ALLOC_SLOT(kcdfRobj, Matrix_DimSym, INTSXP, 2));
   kcdfRobj_dim[0] = nr;
   kcdfRobj_dim[1] = nc;
@@ -118,8 +123,19 @@ kcdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP GausskR) {
   Memcpy(kcdfRobj_p, XCsp_p, (size_t) (nc+1));
   Memcpy(kcdfRobj_x, XCsp_x, (size_t) nnz);
 
+  if (verbose) {
+    pb = PROTECT(cli_progress_bar(nr, NULL));
+    cli_progress_set_name(pb, "Estimating ECDFs");
+    nunprotect++;
+  }
+
   for (int i=0; i < nr; i++) {
     int nv;
+
+    if (verbose) { /* show progress */
+      if (i % 100 == 0 && CLI_SHOULD_TICK)
+        cli_progress_set(pb, i);
+    }
 
     /* number of nonzero values in the i-th row */
     nv = XRsp_p[i+1]-XRsp_p[i];
@@ -159,7 +175,10 @@ kcdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP GausskR) {
 
   }
 
-  UNPROTECT(3); /* XCspR XRspR kcdfRobj */
+  if (verbose)
+    cli_progress_done(pb);
+
+  UNPROTECT(nunprotect++); /* XCspR XRspR kcdfRobj pb */
 
   return(kcdfRobj);
 }
@@ -174,7 +193,7 @@ kcdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP GausskR) {
  * the returned value is a dense matrix.
  */
 SEXP
-kcdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP GausskR) {
+kcdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP GausskR, SEXP verboseR) {
   SEXP kcdfRobj;
   double* kcdf_vals;
   int* XCsp_dim;
@@ -182,10 +201,13 @@ kcdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP GausskR) {
   int* XRsp_p;
   double* XRsp_x;
   Rboolean Gaussk=asLogical(GausskR);
+  Rboolean verbose=asLogical(verboseR);
   int  nr, nc;
+  SEXP pb = R_NilValue;
+  int  nunprotect=0;
 
-  PROTECT(XCspR);
-  PROTECT(XRspR);
+  PROTECT(XCspR); nunprotect++;
+  PROTECT(XRspR); nunprotect++;
 
   XCsp_dim = INTEGER(GET_SLOT(XCspR, Matrix_DimSym));
   nr = XCsp_dim[0]; /* number of rows */
@@ -198,12 +220,23 @@ kcdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP GausskR) {
   /* create a new dense matrix object to store the result,
    * if nr * nc > INT_MAX and LONG_VECTOR_SUPPORT is not
    * available, the function allocMatrix() will prompt an error */
-  kcdfRobj  = PROTECT(allocMatrix(REALSXP, nr, nc));
+  kcdfRobj  = PROTECT(allocMatrix(REALSXP, nr, nc)); nunprotect++;
   kcdf_vals = REAL(kcdfRobj);
+
+  if (verbose) {
+    pb = PROTECT(cli_progress_bar(nr, NULL));
+    cli_progress_set_name(pb, "Estimating ECDFs");
+    nunprotect++;
+  }
 
   for (int i=0; i < nr; i++) {
     double*       x = Calloc(nc, double); /* assuming zeroes are set */
     double*       r = Calloc(nc, double); /* assuming zeroes are set */
+
+    if (verbose) { /* show progress */
+      if (i % 100 == 0 && CLI_SHOULD_TICK)
+        cli_progress_set(pb, i);
+    }
 
     /* convert sparse row into a dense vector */
     for (int j=XRsp_p[i]; j < XRsp_p[i+1]; j++)
@@ -227,7 +260,10 @@ kcdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP GausskR) {
     Free(x);
   }
 
-  UNPROTECT(3); /* XCspR XRspR kcdfRobj */
+  if (verbose)
+    cli_progress_done(pb);
+
+  UNPROTECT(nunprotect); /* XCspR XRspR kcdfRobj pb */
 
   return(kcdfRobj);
 }

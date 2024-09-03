@@ -120,6 +120,7 @@
 #' topTable(fit, coef="sampleGroup2vs1")
 NULL
 
+#' @importFrom cli cli_alert_info
 #' @aliases gsva,plageParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -128,6 +129,9 @@ setMethod("gsva", signature(param="plageParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
+              cli_alert_info(sprintf("GSVA version %s",
+                                     packageDescription("GSVA")[["Version"]]))
+
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=TRUE,
                                                        removeNzConstant=TRUE,
@@ -161,6 +165,7 @@ setMethod("gsva", signature(param="plageParam"),
           })
 
 
+#' @importFrom cli cli_alert_info
 #' @aliases gsva,zscoreParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -169,6 +174,9 @@ setMethod("gsva", signature(param="zscoreParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
+              cli_alert_info(sprintf("GSVA version %s",
+                                     packageDescription("GSVA")[["Version"]]))
+
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=TRUE,
                                                        removeNzConstant=TRUE,
@@ -201,7 +209,7 @@ setMethod("gsva", signature(param="zscoreParam"),
               return(rval)
           })
 
-
+#' @importFrom cli cli_alert_info
 #' @aliases gsva,ssgseaParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -210,6 +218,9 @@ setMethod("gsva", signature(param="ssgseaParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
+              cli_alert_info(sprintf("GSVA version %s",
+                                     packageDescription("GSVA")[["Version"]]))
+
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=FALSE,
                                                        removeNzConstant=FALSE,
@@ -233,7 +244,6 @@ setMethod("gsva", signature(param="ssgseaParam"),
                                      any_na=anyNA(param),
                                      na_use=na_use(param),
                                      minSize=get_minSize(param),
-                                     verbose=verbose,
                                      BPPARAM=BPPARAM)
 
               gs <- .geneSetsIndices2Names(
@@ -254,6 +264,9 @@ setMethod("gsva", signature(param="gsvaParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
+              cli_alert_info(sprintf("GSVA version %s",
+                                     packageDescription("GSVA")[["Version"]]))
+
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=TRUE,
                                                        removeNzConstant=TRUE,

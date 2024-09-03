@@ -79,6 +79,7 @@
 }
 
 
+#' @importFrom cli cli_alert_warning
 .filterAndMapGenesAndGeneSets <- function(param,
                                           removeConstant=TRUE,
                                           removeNzConstant=TRUE,
@@ -109,15 +110,17 @@
                                              minSize=get_minSize(param),
                                              maxSize=get_maxSize(param))
 
-    if(length(filteredMappedGeneSets) == 0)
+    if (length(filteredMappedGeneSets) == 0)
         stop("The gene set list is empty! Filter may be too stringent.")
 
     ## this should NEVER happen -- just to make sure it doesn't...
-    if(anyDuplicated(names(filteredMappedGeneSets)) > 0)
+    if (anyDuplicated(names(filteredMappedGeneSets)) > 0)
         stop("The gene set list contains duplicated gene set names.")
 
-    if(any(lengths(filteredMappedGeneSets) == 1))
-        warning("Some gene sets have size one. Consider setting 'minSize' to a value > 1.")
+    if (any(lengths(filteredMappedGeneSets) == 1)) {
+        msg <- "Some gene sets have size one. Consider setting minSize > 1"
+        cli_alert_warning(msg)
+    }
 
     return(list(filteredDataMatrix=filteredDataMatrix,
                 filteredMappedGeneSets=filteredMappedGeneSets))

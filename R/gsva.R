@@ -71,9 +71,11 @@ compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE,
     if (kernel) {
         if (is(expr, "dgCMatrix")) {
             if (sparse)
-                gene.cdf <- .kcdfvals_sparse_to_sparse(expr[, sample.idxs, drop=FALSE], !rnaseq)
+                gene.cdf <- .kcdfvals_sparse_to_sparse(expr[, sample.idxs, drop=FALSE],
+                                                       !rnaseq, verbose)
             else
-                gene.cdf <- .kcdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE], !rnaseq)
+                gene.cdf <- .kcdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE],
+                                                      !rnaseq, verbose)
         } else if (is.matrix(expr)) {
             A = .Call("matrix_density_R",
                       as.double(t(expr[ ,sample.idxs, drop=FALSE])),
@@ -85,18 +87,20 @@ compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE,
                       verbose)
             gene.cdf <- t(matrix(A, n.test.samples, n.genes))
         } else
-            stop(sprintf("matrix class %s cannot be handled yet.", class(expr)))
+            stop(sprintf("Matrix class %s cannot be handled yet.", class(expr)))
     } else {
         if (is(expr, "dgCMatrix")) {
             if (sparse)
                 gene.cdf <- .ecdfvals_sparse_to_sparse(expr[, sample.idxs, drop=FALSE],
                                                        verbose)
             else
-                gene.cdf <- .ecdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE])
+                gene.cdf <- .ecdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE],
+                                                      verbose)
         } else if (is.matrix(expr))
-            gene.cdf <- .ecdfvals_dense_to_dense(expr[, sample.idxs, drop=FALSE])
+            gene.cdf <- .ecdfvals_dense_to_dense(expr[, sample.idxs, drop=FALSE],
+                                                 verbose)
         else
-            stop(sprintf("matrix class %s cannot be handled yet.", class(expr)))
+            stop(sprintf("Matrix class %s cannot be handled yet.", class(expr)))
     }
 
     return(gene.cdf)	

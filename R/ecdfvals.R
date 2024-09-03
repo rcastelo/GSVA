@@ -5,27 +5,31 @@
   .Call("ecdfvals_sparse_to_sparse_R", X, Xrsp, verbose)
 }
 
-.ecdfvals_sparse_to_dense <- function(X) {
+.ecdfvals_sparse_to_dense <- function(X, verbose) {
   stopifnot(is(X, "CsparseMatrix")) ## QC
   Xrsp <- as(X, "RsparseMatrix")
-  .Call("ecdfvals_sparse_to_dense_R", X, Xrsp)
+  stopifnot(is.logical(verbose)) ## QC
+  .Call("ecdfvals_sparse_to_dense_R", X, Xrsp, verbose)
 }
 
-.ecdfvals_dense_to_dense <- function(X) {
+.ecdfvals_dense_to_dense <- function(X, verbose) {
   stopifnot(is.matrix(X)) ## QC
-  .Call("ecdfvals_dense_to_dense_R", X)
+  stopifnot(is.logical(verbose)) ## QC
+  .Call("ecdfvals_dense_to_dense_R", X, verbose)
 }
 
-.kcdfvals_sparse_to_sparse <- function(X, Gaussk) {
+.kcdfvals_sparse_to_sparse <- function(X, Gaussk, verbose) {
   stopifnot(is(X, "CsparseMatrix")) ## QC
   Xrsp <- as(X, "RsparseMatrix")
-  .Call("kcdfvals_sparse_to_sparse_R", X, Xrsp, Gaussk)
+  stopifnot(is.logical(verbose)) ## QC
+  .Call("kcdfvals_sparse_to_sparse_R", X, Xrsp, Gaussk, verbose)
 }
 
-.kcdfvals_sparse_to_dense <- function(X, Gaussk) {
+.kcdfvals_sparse_to_dense <- function(X, Gaussk, verbose) {
   stopifnot(is(X, "CsparseMatrix")) ## QC
   Xrsp <- as(X, "RsparseMatrix")
-  .Call("kcdfvals_sparse_to_dense_R", X, Xrsp, Gaussk)
+  stopifnot(is.logical(verbose)) ## QC
+  .Call("kcdfvals_sparse_to_dense_R", X, Xrsp, Gaussk, verbose)
 }
 
 .order_rankstat <- function(x) {

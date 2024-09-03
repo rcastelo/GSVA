@@ -24,16 +24,19 @@ extern SEXP Matrix_DimNamesSym,
             Matrix_pSym;
 
 SEXP
-ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP idpb);
+ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP verboseR);
 
 SEXP
-ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR);
+ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP verboseR);
 
 SEXP
-ecdfvals_dense_to_dense_R(SEXP XR);
+ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR);
 
 SEXP
 match_int(SEXP x, SEXP table);
+
+int
+pending_interrupt(void);
 
 SEXP
 allocMatrix(SEXPTYPE mode, int nrow, int ncol);
@@ -218,17 +221,20 @@ ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
  * the returned value is a dense matrix.
  */
 SEXP
-ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR) {
+ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
   SEXP ecdfRobj;
   double* ecdf_vals;
   int* XCsp_dim;
   int* XRsp_j;
   int* XRsp_p;
+  Rboolean verbose=asLogical(verboseR);
   double* XRsp_x;
   int  nr, nc;
+  SEXP pb = R_NilValue;
+  int  nunprotect=0;
 
-  PROTECT(XCspR);
-  PROTECT(XRspR);
+  PROTECT(XCspR); nunprotect++;
+  PROTECT(XRspR); nunprotect++;
 
   XCsp_dim = INTEGER(GET_SLOT(XCspR, Matrix_DimSym));
   nr = XCsp_dim[0]; /* number of rows */
@@ -241,7 +247,13 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR) {
   /* create a new dense matrix object to store the result,
    * if nr * nc > INT_MAX and LONG_VECTOR_SUPPORT is not
    * available, the function allocMatrix() will prompt an error */
-  ecdfRobj = PROTECT(allocMatrix(REALSXP, nr, nc));
+  ecdfRobj = PROTECT(allocMatrix(REALSXP, nr, nc)); nunprotect++;
+
+  if (verbose) {
+    pb = PROTECT(cli_progress_bar(nr, NULL));
+    cli_progress_set_name(pb, "Estimating ECDFs");
+    nunprotect++;
+  }
 
   for (int i=0; i < nr; i++) {
     SEXP          xR, uniqvR;
@@ -256,6 +268,11 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR) {
     int*          tab;
     Rboolean      zeroes=FALSE;
     int           whz, icz;
+
+    if (verbose) { /* show progress */
+      if (i % 100 == 0 && CLI_SHOULD_TICK)
+        cli_progress_set(pb, i);
+    }
 
     /* number of nonzero values in the i-th row */
     nv = XRsp_p[i+1]-XRsp_p[i];
@@ -367,7 +384,10 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR) {
     UNPROTECT(2); /* xR uniqvR */
   }
 
-  UNPROTECT(3); /* XCspR XRspR ecdfRobj */
+  if (verbose)
+    cli_progress_done(pb);
+
+  UNPROTECT(nunprotect); /* XCspR XRspR ecdfRobj pb */
 
   return(ecdfRobj);
 }
@@ -378,13 +398,16 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR) {
  * the returned value is a dense matrix.
  */
 SEXP
-ecdfvals_dense_to_dense_R(SEXP XR) {
+ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR) {
   double* X;
+  Rboolean verbose=asLogical(verboseR);
   int     nr, nc;
   SEXP    ecdfRobj;
   double* ecdf_vals;
+  SEXP pb = R_NilValue;
+  int  nunprotect=0;
 
-  PROTECT(XR);
+  PROTECT(XR); nunprotect++;
 
   nr = INTEGER(getAttrib(XR, R_DimSymbol))[0]; /* number of rows */
   nc = INTEGER(getAttrib(XR, R_DimSymbol))[1]; /* number of columns */
@@ -393,7 +416,13 @@ ecdfvals_dense_to_dense_R(SEXP XR) {
   /* create a new dense matrix object to store the result,
    * if nr * nc > INT_MAX and LONG_VECTOR_SUPPORT is not
    * available, the function allocMatrix() will prompt an error */
-  ecdfRobj = PROTECT(allocMatrix(REALSXP, nr, nc));
+  ecdfRobj = PROTECT(allocMatrix(REALSXP, nr, nc)); nunprotect++;
+
+  if (verbose) {
+    pb = PROTECT(cli_progress_bar(nr, NULL));
+    cli_progress_set_name(pb, "Estimating ECDFs");
+    nunprotect++;
+  }
 
   for (int i=0; i < nr; i++) {
     SEXP          xR, uniqvR;
@@ -406,6 +435,11 @@ ecdfvals_dense_to_dense_R(SEXP XR) {
     const double* e2_p;
     int*          mt;
     int*          tab;
+
+    if (verbose) { /* show progress */
+      if (i % 100 == 0 && CLI_SHOULD_TICK)
+        cli_progress_set(pb, i);
+    }
 
     /* remove consecutive repeated elements */
     PROTECT(uniqvR = allocVector(REALSXP, nc));
@@ -472,7 +506,10 @@ ecdfvals_dense_to_dense_R(SEXP XR) {
     UNPROTECT(2); /* xR uniqvR */
   }
 
-  UNPROTECT(2); /* XR ecdfRobj */
+  if (verbose)
+    cli_progress_done(pb);
+
+  UNPROTECT(nunprotect); /* XR ecdfRobj pb */
 
   return(ecdfRobj);
 }
