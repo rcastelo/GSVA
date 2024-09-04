@@ -121,6 +121,7 @@
 NULL
 
 #' @importFrom cli cli_alert_info
+#' @importFrom utils packageDescription
 #' @aliases gsva,plageParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -166,6 +167,7 @@ setMethod("gsva", signature(param="plageParam"),
 
 
 #' @importFrom cli cli_alert_info
+#' @importFrom utils packageDescription
 #' @aliases gsva,zscoreParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -210,6 +212,7 @@ setMethod("gsva", signature(param="zscoreParam"),
           })
 
 #' @importFrom cli cli_alert_info
+#' @importFrom utils packageDescription
 #' @aliases gsva,ssgseaParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -257,6 +260,7 @@ setMethod("gsva", signature(param="ssgseaParam"),
 
 #' @aliases gsva,gsvaParam-method
 #' @importFrom cli cli_alert_info cli_alert_success
+#' @importFrom utils packageDescription
 #' @rdname gsva
 #' @exportMethod gsva
 setMethod("gsva", signature(param="gsvaParam"),

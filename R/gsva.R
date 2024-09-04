@@ -182,7 +182,12 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
         } else
             kernel <- FALSE
     }
+
     if (verbose) {
+        if (sparse)
+            cli_alert_info("GSVA sparse algorithm")
+        else
+            cli_alert_info("GSVA dense (classical) algorithm")
         if (kernel) {
             if (rnaseq)
                 cli_alert_info("Row-wise ECDF estimation with Poisson kernels")
