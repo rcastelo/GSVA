@@ -184,7 +184,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
     }
 
     if (verbose) {
-        if (sparse)
+        if (is(expr, "dgCMatrix") && sparse)
             cli_alert_info("GSVA sparse algorithm")
         else
             cli_alert_info("GSVA dense (classical) algorithm")
