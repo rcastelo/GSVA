@@ -208,6 +208,22 @@
 }
 
 
+## from https://stat.ethz.ch/pipermail/r-help/2005-September/078974.html
+## function: isPackageLoaded
+## purpose: to check whether the package specified by the name given in
+##          the input argument is loaded. this function is borrowed from
+##          the discussion on the R-help list found in this url:
+##          https://stat.ethz.ch/pipermail/r-help/2005-September/078974.html
+## parameters: name - package name
+## return: TRUE if the package is loaded, FALSE otherwise
+
+.isPackageLoaded <- function(name) {
+  ## Purpose: is package 'name' loaded?
+  ## --------------------------------------------------
+  (paste("package:", name, sep="") %in% search()) ||
+  (name %in% loadedNamespaces())
+}
+
 .objPkgClass <- function(obj) {
     oc <- class(obj)
     pkg <- attr(oc, "package", exact=TRUE)
