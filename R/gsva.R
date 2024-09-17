@@ -61,7 +61,7 @@ setMethod("gsva", signature(param="SingleCellExperiment"), function(param, ...) 
 })
 
 
-compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE,
+compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
                              sparse=FALSE, verbose=TRUE) {
     n.test.samples <- ncol(expr)
     n.genes <- nrow(expr)
@@ -72,10 +72,10 @@ compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE,
         if (is(expr, "dgCMatrix")) {
             if (sparse)
                 gene.cdf <- .kcdfvals_sparse_to_sparse(expr[, sample.idxs, drop=FALSE],
-                                                       !rnaseq, verbose)
+                                                       Gaussk, verbose)
             else
                 gene.cdf <- .kcdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE],
-                                                      !rnaseq, verbose)
+                                                      Gaussk, verbose)
         } else if (is.matrix(expr)) {
             A = .Call("matrix_density_R",
                       as.double(t(expr[ ,sample.idxs, drop=FALSE])),
@@ -83,7 +83,7 @@ compute.gene.cdf <- function(expr, sample.idxs, rnaseq=FALSE, kernel=TRUE,
                       n.density.samples,
                       n.test.samples,
                       n.genes,
-                      as.integer(rnaseq),
+                      as.integer(Gaussk),
                       verbose)
             gene.cdf <- t(matrix(A, n.test.samples, n.genes))
         } else
@@ -159,7 +159,8 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
                                verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose)) {
     num_genes <- nrow(expr)
 
-    kernel <- rnaseq <- FALSE
+    kernel <- FALSE
+    Gaussk <- TRUE  ## default (TRUE) is a Gaussian kernel, Poisson otherwise (FALSE)
     if (kcdf == "auto") {
         if (verbose)
             cli_alert_info("kcdf='auto' (default)")
@@ -169,17 +170,17 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
                                          ## so we check them with x == floor(x)
                 sam <- sample(expr@x, size=min(1000, length(expr@x)),
                               replace=FALSE)
-                rnaseq <- all((sam >= 0) & (sam == floor(sam)))
+                Gaussk <- any((sam < 0) | (sam != floor(sam)))
             } else if (is.integer(expr[1, 1]))
-                rnaseq <- TRUE
+                Gaussk <- FALSE
         }
     } else {
         if (kcdf == "Gaussian") {
             kernel <- TRUE
-            rnaseq <- FALSE
+            Gaussk <- TRUE
         } else if (kcdf == "Poisson") {
             kernel <- TRUE
-            rnaseq <- TRUE
+            Gaussk <- FALSE
         } else
             kernel <- FALSE
     }
@@ -190,10 +191,10 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
         else
             cli_alert_info("GSVA dense (classical) algorithm")
         if (kernel) {
-            if (rnaseq)
-                cli_alert_info("Row-wise ECDF estimation with Poisson kernels")
-            else
+            if (Gaussk)
                 cli_alert_info("Row-wise ECDF estimation with Gaussian kernels")
+            else
+                cli_alert_info("Row-wise ECDF estimation with Poisson kernels")
         } else
             cli_alert_info("Direct row-wise ECDFs estimation")
     }
@@ -221,14 +222,14 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
         gene.density <- bpiterate(iter(expr, idpb, 100),
                                   compute.gene.cdf,
                                   sample.idxs=sample.idxs,
-                                  rnaseq=rnaseq, kernel=kernel,
+                                  Gaussk=Gaussk, kernel=kernel,
                                   sparse=sparse, verbose=FALSE,
                                   REDUCE=rbind, reduce.in.order=TRUE,
                                   BPPARAM=BPPARAM)
         if (verbose)
             cli_progress_done(idpb)
     } else
-        gene.density <- compute.gene.cdf(expr, sample.idxs, rnaseq, kernel,
+        gene.density <- compute.gene.cdf(expr, sample.idxs, Gaussk, kernel,
                                          sparse, verbose)
     
     gset.idx.list <- IntegerList(gset.idx.list)

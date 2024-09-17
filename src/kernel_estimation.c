@@ -13,7 +13,7 @@
 
 SEXP
 matrix_density_R(SEXP density_dataR, SEXP test_dataR, SEXP n_density_samplesR,
-                 SEXP n_test_samplesR, SEXP n_genesR, SEXP rnaseqR, SEXP verboseR);
+                 SEXP n_test_samplesR, SEXP n_genesR, SEXP GausskR, SEXP verboseR);
 
 void initCdfs(void);
 double precomputedCdf(double x, double sigma);
@@ -27,14 +27,14 @@ int is_precomputed = 0;
 
 double sd(double* x, int n);
 
-/**
- * for resampling, x are the resampled points and y are the
- */
-void row_d(double* x, double* y, double* r, int size_density_n, int size_test_n, int rnaseq){
+/* including expression log-odds */
+void
+row_d(double* x, double* y, double* r, int size_density_n,
+      int size_test_n, int Gaussk) {
 
-  double bw = rnaseq ? 0.5 : (sd(x, size_density_n) / SIGMA_FACTOR);
+  double bw = Gaussk ? (sd(x, size_density_n) / SIGMA_FACTOR) : 0.5;
 
-  if (!rnaseq && is_precomputed == 0) {
+  if (Gaussk && is_precomputed == 0) {
     initCdfs();
     is_precomputed = 1;
   }
@@ -43,18 +43,24 @@ void row_d(double* x, double* y, double* r, int size_density_n, int size_test_n,
 		double left_tail = 0.0;
 
 		for(int i = 0; i < size_density_n; ++i){
-			left_tail += rnaseq ? ppois(y[j], x[i]+bw, TRUE, FALSE) : precomputedCdf(y[j]-x[i], bw);
+			left_tail += Gaussk ? precomputedCdf(y[j]-x[i], bw) : ppois(y[j], x[i]+bw, TRUE, FALSE);
 		}
 		left_tail = left_tail / size_density_n;
 		r[j] = -1.0 * log((1.0-left_tail)/left_tail);
 	}
 }
-void row_d_nologodds(double* x, double* y, double* r, int size_density_n, int size_test_n, int rnaseq);
-void row_d_nologodds(double* x, double* y, double* r, int size_density_n, int size_test_n, int rnaseq){
 
-  double bw = rnaseq ? 0.5 : (sd(x, size_density_n) / SIGMA_FACTOR);
+/* without expression log-odds */
+void
+row_d_nologodds(double* x, double* y, double* r, int size_density_n,
+                int size_test_n, int Gaussk);
+void
+row_d_nologodds(double* x, double* y, double* r, int size_density_n,
+                int size_test_n, int Gaussk) {
 
-  if (!rnaseq && is_precomputed == 0) {
+  double bw = Gaussk ? (sd(x, size_density_n) / SIGMA_FACTOR) : 0.5;
+
+  if (Gaussk && is_precomputed == 0) {
     initCdfs();
     is_precomputed = 1;
   }
@@ -63,7 +69,7 @@ void row_d_nologodds(double* x, double* y, double* r, int size_density_n, int si
 		double left_tail = 0.0;
 
 		for(int i = 0; i < size_density_n; ++i){
-			left_tail += rnaseq ? ppois(y[j], x[i]+bw, TRUE, FALSE) : precomputedCdf(y[j]-x[i], bw);
+			left_tail += Gaussk ? precomputedCdf(y[j]-x[i], bw) : ppois(y[j], x[i]+bw, TRUE, FALSE);
 		}
 		r[j] = left_tail / size_density_n;
 	}
@@ -72,7 +78,7 @@ void row_d_nologodds(double* x, double* y, double* r, int size_density_n, int si
 
 void
 matrix_d(double* X, double* Y, double* R, int n_density_samples,
-         int n_test_samples, int n_genes, int rnaseq, Rboolean verbose){
+         int n_test_samples, int n_genes, int Gaussk, Rboolean verbose){
   SEXP pb = R_NilValue;
 
   if (verbose) {
@@ -83,7 +89,7 @@ matrix_d(double* X, double* Y, double* R, int n_density_samples,
 	for(int j = 0; j < n_genes; ++j){
 		int offset_density = j * n_density_samples;
 		int offset_test = j * n_test_samples;
-		row_d(&X[offset_density], &Y[offset_test], &R[offset_test], n_density_samples, n_test_samples, rnaseq);
+		row_d(&X[offset_density], &Y[offset_test], &R[offset_test], n_density_samples, n_test_samples, Gaussk);
     if (verbose) { /* show progress */
       if (j % 100 == 0 && CLI_SHOULD_TICK)
         cli_progress_set(pb, j);
@@ -98,13 +104,13 @@ matrix_d(double* X, double* Y, double* R, int n_density_samples,
 
 SEXP
 matrix_density_R(SEXP density_dataR, SEXP test_dataR, SEXP n_density_samplesR,
-                 SEXP n_test_samplesR, SEXP n_genesR, SEXP rnaseqR, SEXP verboseR) {
+                 SEXP n_test_samplesR, SEXP n_genesR, SEXP GausskR, SEXP verboseR) {
   double* density_data=REAL(density_dataR);
   double* test_data=REAL(test_dataR);
   int     n_density_samples=INTEGER(n_density_samplesR)[0];
   int     n_test_samples=INTEGER(n_test_samplesR)[0];
   int     n_genes=INTEGER(n_genesR)[0];
-  int     rnaseq=INTEGER(rnaseqR)[0];
+  int     Gaussk=INTEGER(GausskR)[0];
   Rboolean verbose=asLogical(verboseR);
   SEXP    resR;
   double* res;
@@ -113,7 +119,7 @@ matrix_density_R(SEXP density_dataR, SEXP test_dataR, SEXP n_density_samplesR,
   res = REAL(resR);
 
   matrix_d(density_data, test_data, res, n_density_samples, n_test_samples,
-           n_genes, rnaseq, verbose);
+           n_genes, Gaussk, verbose);
 
   UNPROTECT(1); /* resR */
 

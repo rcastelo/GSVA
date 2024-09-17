@@ -7,7 +7,7 @@
 
 SEXP
 matrix_density_R(SEXP density_dataR, SEXP test_dataR, SEXP n_density_samplesR,
-                 SEXP n_test_samplesR, SEXP n_genesR, SEXP rnaseqR, SEXP verboseR);
+                 SEXP n_test_samplesR, SEXP n_genesR, SEXP GausskR, SEXP verboseR);
 
 SEXP
 ks_matrix_R(SEXP XR, SEXP sidxsR, SEXP n_genesR, SEXP geneset_idxsR,
