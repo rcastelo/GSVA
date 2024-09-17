@@ -19,41 +19,44 @@
 ##  values of genes: genes that are constant in their non-zero values will have
 ##  an SD of 0 and therefore scaling them will result in division by 0.
 
+#' @importFrom cli cli_alert_warning
 .filterGenes <- function(expr, removeConstant=TRUE, removeNzConstant=TRUE) {
     geneRanges <- rowRanges(expr, na.rm=TRUE, useNames=FALSE)
     constantGenes <- (geneRanges[, 1] == geneRanges[, 2])
 
-    if(any(constantGenes) || anyNA(constantGenes)) {
+    if (any(constantGenes) || anyNA(constantGenes)) {
         invalidGenes <- (constantGenes | is.na(constantGenes))
-        warning(sum(invalidGenes),
-                " genes with constant values throughout the samples.")
-        if(removeConstant) {
-            warning("Genes with constant values are discarded.")
+        msg <- sprintf("%d genes with constant values throughout the samples",
+                       sum(invalidGenes))
+        cli_alert_warning(msg)
+        if (removeConstant) {
+            cli_alert_warning("Genes with constant values are discarded")
             expr <- expr[!invalidGenes, ]
         }
     }
 
-    if(is(expr, "dgCMatrix")) {
+    if (is(expr, "dgCMatrix")) {
         nzGeneList <- .sparse2columnList(t(expr))
         nzGeneRanges <- vapply(nzGeneList, FUN=range, FUN.VALUE=double(2))
         constantNzGenes <- (nzGeneRanges[1,] == nzGeneRanges[2,])
 
-        if(any(constantNzGenes) || anyNA(constantNzGenes)) {
+        if (any(constantNzGenes) || anyNA(constantNzGenes)) {
             invalidNzGenes <- (constantNzGenes | is.na(constantNzGenes))
-            warning(sum(invalidNzGenes),
-                    " genes with constant non-zero values throughout the sample.")
-            if(removeNzConstant) {
-                warning("Genes with constant non-zero values are discarded.")
+            msg <- sprintf("%d genes with constant non-zero values throughout the samples",
+                           sum(invalidNzGenes))
+            cli_alert_warning(msg)
+            if (removeNzConstant) {
+                cli_alert_warning("Genes with constant non-zero values are discarded")
                 expr <- expr[!invalidNzGenes, ]
             }
         }
     }
 
-    if(nrow(expr) < 2)
+    if (nrow(expr) < 2)
         stop("Less than two genes in the input assay object\n")
     
     ## CHECK: is this the right place to check this?
-    if(is.null(rownames(expr)))
+    if (is.null(rownames(expr)))
         stop("The input assay object doesn't have rownames\n")
     
     return(expr)
@@ -138,7 +141,7 @@
 .geneSets <- function(obj) {
     gs <- attr(obj, "geneSets", exact=TRUE)
 
-    if(is.null(gs))
+    if (is.null(gs))
         stop("The object does not contain information about gene sets.")
 
     return(gs)
@@ -161,14 +164,6 @@
     x <- lapply(.sparse2columnList(m), FUN=FUN)
     m@x <- unlist(x, use.names=FALSE)
     return(m)
-}
-
-.sparseScaleMessage <- function() {
-    message("Please bear in mind that this method first scales the values of ",
-            "the gene expression data. In order to take advantage of the ",
-            "sparse Matrix type, the scaling will only be applied to the ",
-            "non-zero values of the data. This is a provisional solution in ",
-            "order to give support to the dgCMatrix format.")
 }
 
 ## transforms a dgCMatrix into a list of its

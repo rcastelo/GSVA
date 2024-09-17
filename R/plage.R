@@ -2,31 +2,53 @@
 ## methods for the PLAGE method from Tomfohr et al. (2005)
 ##
 
-rightsingularsvdvectorgset <- function(gSetIdx, Z) {
+#' @importFrom cli cli_progress_update
+rightsingularsvdvectorgset <- function(gSetIdx, Z, verbose, idpb) {
   if(is(Z, "dgCMatrix")){
     s <- BiocSingular::runExactSVD(Z[gSetIdx, ])
   } else {
     s <- svd(Z[gSetIdx, ])
   }
+  if (verbose)
+      cli_progress_update(id=idpb)
   s$v[, 1]
 }
 
+#' @importFrom cli cli_alert_info
+#' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
+#' @importFrom BiocParallel bpnworkers
 plage <- function(X, geneSets, verbose=TRUE,
                   BPPARAM=SerialParam(progressbar=verbose)) {
-    if(is(X, "dgCMatrix")){
-        .sparseScaleMessage()
+    if (is(X, "dgCMatrix")){
+        if (verbose)
+            cli_alert_info("Centering and scaling non-zero values")
+
         Z <- t(.sparseColumnApplyAndReplace(t(X), FUN=scale))
 
         es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
-                       BPPARAM=BPPARAM)
+                       verbose=FALSE, idpb=character(0), BPPARAM=BPPARAM)
         
         es <- do.call(rbind, es)
-    } else {
+    } else if (is.matrix(X)) {
         
+        if (verbose)
+            cli_alert_info("Centering and scaling values")
+
         Z <- t(scale(t(X)))
         
-        es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
-                       BPPARAM=BPPARAM)
+        if (bpnworkers(BPPARAM) > 1)
+            es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
+                           BPPARAM=BPPARAM)
+        else {
+            idpb <- NULL
+            if (verbose)
+                idpb <- cli_progress_bar("Calculating PLAGE scores",
+                                         total=length(geneSets))
+            es <- lapply(geneSets, rightsingularsvdvectorgset, Z,
+                         verbose, idpb)
+            if (verbose)
+                cli_progress_done(idpb)
+        }
         
         es <- do.call(rbind, es)
         
@@ -40,7 +62,8 @@ plage <- function(X, geneSets, verbose=TRUE,
         
         rownames(es) <- names(geneSets)
         colnames(es) <- colnames(X)
-    }
+    } else
+        stop(sprintf("Matrix class %s cannot be handled yet.", class(X)))
     
     es
 }
