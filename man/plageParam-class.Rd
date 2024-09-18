@@ -10,7 +10,7 @@ plageParam(
   exprData,
   geneSets,
   assay = NA_character_,
-  annotation = NA_character_,
+  annotation = NULL,
   minSize = 1,
   maxSize = Inf
 )

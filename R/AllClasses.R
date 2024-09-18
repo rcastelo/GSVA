@@ -46,7 +46,7 @@ setClassUnion("GsvaExprData",
 #' [`list`], 
 #' [`GeneSetCollection`]
 #'
-#' @importClassesFrom GSEABase GeneSetCollection GeneSet
+#' @importClassesFrom GSEABase GeneSetCollection GeneSet GeneIdentifierType
 #'
 #' @name GsvaGeneSets-class
 #' @rdname GsvaGeneSets-class
@@ -79,7 +79,7 @@ setClass("GsvaMethodParam",
          slots=c(exprData="GsvaExprData",
                  geneSets="GsvaGeneSets",
                  assay="character",
-                 annotation="character",
+                 annotation="GeneIdentifierType",
                  minSize="numeric",
                  maxSize="numeric"),
          contains="VIRTUAL")
@@ -111,7 +111,7 @@ setClass("plageParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
                         assay=NA_character_,
-                        annotation=NA_character_,
+                        annotation=NULL,
                         minSize=NA_integer_,
                         maxSize=NA_integer_))
 
@@ -142,7 +142,7 @@ setClass("zscoreParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
                         assay=NA_character_,
-                        annotation=NA_character_,
+                        annotation=NULL,
                         minSize=NA_integer_,
                         maxSize=NA_integer_))
 
@@ -204,7 +204,7 @@ setClass("ssgseaParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
                         assay=NA_character_,
-                        annotation=NA_character_,
+                        annotation=NULL,
                         minSize=NA_integer_,
                         maxSize=NA_integer_,
                         alpha=NA_real_,
@@ -291,7 +291,7 @@ setClass("gsvaParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
                         assay=NA_character_,
-                        annotation=NA_character_,
+                        annotation=NULL,
                         minSize=NA_integer_,
                         maxSize=NA_integer_,
                         kcdf=NA_character_,

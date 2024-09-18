@@ -102,21 +102,39 @@
 #' 
 #' @export
 gsvaParam <- function(exprData, geneSets,
-                      assay=NA_character_, annotation=NA_character_,
-                      minSize=1,maxSize=Inf,
+                      assay=NA_character_, annotation=NULL,
+                      minSize=1, maxSize=Inf,
                       kcdf=c("auto", "Gaussian", "Poisson", "none"),
                       kcdfNoneMinSampleSize=50, tau=1, maxDiff=TRUE,
                       absRanking=FALSE, sparse=TRUE) {
     kcdf <- match.arg(kcdf)
-    kcdfNoneMinSampleSize=as.integer(kcdfNoneMinSampleSize)
+    kcdfNoneMinSampleSize <- as.integer(kcdfNoneMinSampleSize)
 
     an <- gsvaAssayNames(exprData)
-    if((!is.na(assay)) && (!.isCharNonEmpty(an)))
-        warning("argument assay='", assay,
-                "' ignored since exprData has no assayNames()")
+    if((!is.na(assay)) && (!.isCharNonEmpty(an))) {
+        msg <- sprintf(paste0("argument assay='%s' ignored since exprData has ",
+                              "no assayNames()"), assay)
+        cli_alert_info(msg)
+    }
     if(is.na(assay) && .isCharNonEmpty(an))
         assay <- na.omit(an)[1]
-    
+
+    xa <- gsvaAnnotation(exprData)
+    if(is.null(xa)) {
+        if(is.null(annotation)) {
+            annotation <- NullIdentifier()
+        }
+    } else {
+        if(is.null(annotation)) {
+            annotation <- xa
+        } else {
+            msg <- sprintf(paste0("using argument annotation='%s' and ",
+                                  "ignoring exprData annotation ('%s')"),
+                           capture.output(annotation), capture.output(xa))
+            cli_alert_info(msg)
+        }
+    }
+
     new("gsvaParam",
         exprData=exprData, geneSets=geneSets,
         assay=assay, annotation=annotation,
@@ -145,58 +163,61 @@ setValidity("gsvaParam", function(object) {
         inv <- c(inv, "@geneSets has length 0")
     }
     if(length(oa) != 1) {
-        inv <- c(inv, "@assay should be of length 1")
+        inv <- c(inv, "@assay must be of length 1")
     }
     if(.isCharLength1(oa) && .isCharNonEmpty(an) && (!(oa %in% an))) {
-        inv <- c(inv, "@assay should be one of assayNames(@exprData)")
+        inv <- c(inv, "@assay must be one of assayNames(@exprData)")
     }
     if(length(object@annotation) != 1) {
-        inv <- c(inv, "@annotation should be of length 1")
+        inv <- c(inv, "@annotation must be of length 1")
+    }
+    if(!inherits(object@annotation, "GeneIdentifierType")) {
+        inv <- c(inv, "@annotation must be a subclass of 'GeneIdentifierType'")
     }
     if(length(object@minSize) != 1) {
-        inv <- c(inv, "@minSize should be of length 1")
+        inv <- c(inv, "@minSize must be of length 1")
     }
     if(object@minSize < 1) {
-        inv <- c(inv, "@minSize should be at least 1 or greater")
+        inv <- c(inv, "@minSize must be at least 1 or greater")
     }
     if(length(object@maxSize) != 1) {
-        inv <- c(inv, "@maxSize should be of length 1")
+        inv <- c(inv, "@maxSize must be of length 1")
     }
     if(object@maxSize < object@minSize) {
-        inv <- c(inv, "@maxSize should be at least @minSize or greater")
+        inv <- c(inv, "@maxSize must be at least @minSize or greater")
     }
     if(length(object@kcdfNoneMinSampleSize) != 1) {
-        inv <- c(inv, "@kcdfNoneMinSampleSize should be of length 1")
+        inv <- c(inv, "@kcdfNoneMinSampleSize must be of length 1")
     }
     if(object@kcdfNoneMinSampleSize < 0) {
-        inv <- c(inv, "@kcdfNoneMinSampleSize should be a non-negative integer")
+        inv <- c(inv, "@kcdfNoneMinSampleSize must be a non-negative integer")
     }
     if(is.na(object@kcdfNoneMinSampleSize)) {
-        inv <- c(inv, "@kcdfNoneMinSampleSize should not be NA")
+        inv <- c(inv, "@kcdfNoneMinSampleSize must not be NA")
     }
     if(length(object@tau) != 1) {
-        inv <- c(inv, "@tau should be of length 1")
+        inv <- c(inv, "@tau must be of length 1")
     }
     if(is.na(object@tau)) {
-        inv <- c(inv, "@tau should not be NA")
+        inv <- c(inv, "@tau must not be NA")
     }
     if(length(object@maxDiff) != 1) {
-        inv <- c(inv, "@maxDiff should be of length 1")
+        inv <- c(inv, "@maxDiff must be of length 1")
     }
     if(is.na(object@maxDiff)) {
-        inv <- c(inv, "@maxDiff should not be NA")
+        inv <- c(inv, "@maxDiff must not be NA")
     }
     if(length(object@absRanking) != 1) {
-        inv <- c(inv, "@absRanking should be of length 1")
+        inv <- c(inv, "@absRanking must be of length 1")
     }
     if(is.na(object@absRanking)) {
-        inv <- c(inv, "@absRanking should not be NA")
+        inv <- c(inv, "@absRanking must not be NA")
     }
     if(length(object@sparse) != 1) {
-        inv <- c(inv, "@sparse should be of length 1")
+        inv <- c(inv, "@sparse must be of length 1")
     }
     if(is.na(object@sparse)) {
-        inv <- c(inv, "@sparse should not be NA")
+        inv <- c(inv, "@sparse must not be NA")
     }
     return(if(length(inv) == 0) TRUE else inv)
 })

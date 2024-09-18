@@ -382,7 +382,13 @@ setMethod("gsvaAnnotation",
           signature=signature(object="ExpressionSet"),
           function(object) {
               ## always a character giving the db pkg, potentially empty ("")
-              return(annotation(object))
+              ## unfortunately, as it turns out, even character(0) sometimes
+              ao <- annotation(object)
+              if(.isCharLength1(ao)) {
+                  return(AnnoOrEntrezIdentifier(ao))
+              } else {
+                  return(NULL)
+              }
           })
 
 #' @aliases gsvaAnnotation<-,ExpressionSet,character-method

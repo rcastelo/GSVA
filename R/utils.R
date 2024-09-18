@@ -241,7 +241,11 @@
 }
 
 .catObj <- function(x, prefix = "  ") {
-    cat(paste0(prefix, capture.output(gsvaShow(x))), sep="\n")
+    if(is.null(x)) {
+        cat(paste0(prefix, "none."))
+    } else {
+        cat(paste0(prefix, capture.output(gsvaShow(x))), sep="\n")
+    }
 }
 
 .isCharNonEmpty <- function(x) {

@@ -87,7 +87,7 @@
 #' 
 #' @export
 ssgseaParam <- function(exprData, geneSets,
-                        assay=NA_character_, annotation=NA_character_,
+                        assay=NA_character_, annotation=NULL,
                         minSize=1,maxSize=Inf,
                         alpha=0.25, normalize=TRUE,
                         checkNA=c("auto", "yes", "no"),
@@ -95,12 +95,30 @@ ssgseaParam <- function(exprData, geneSets,
     checkNA <- match.arg(checkNA)
     use <- match.arg(use)
     an <- gsvaAssayNames(exprData)
-    if((!is.na(assay)) && (!.isCharNonEmpty(an)))
-        warning("argument assay='", assay,
-                "' ignored since exprData has no assayNames()")
+    if((!is.na(assay)) && (!.isCharNonEmpty(an))) {
+        msg <- sprintf(paste0("argument assay='%s' ignored since exprData has ",
+                              "no assayNames()"), assay)
+        cli_alert_info(msg)
+    }
     if(is.na(assay) && .isCharNonEmpty(an))
         assay <- na.omit(an)[1]
-    
+
+    xa <- gsvaAnnotation(exprData)
+    if(is.null(xa)) {
+        if(is.null(annotation)) {
+            annotation <- NullIdentifier()
+        }
+    } else {
+        if(is.null(annotation)) {
+            annotation <- xa
+        } else {
+            msg <- sprintf(paste0("using argument annotation='%s' and ",
+                                  "ignoring exprData annotation ('%s')"),
+                           capture.output(annotation), capture.output(xa))
+            cli_alert_info(msg)
+        }
+    }
+
     autonaclasseswocheck <- c("matrix", "ExpressionSet",
                               "SummarizedExperiment")
     mask <- class(exprData) %in% autonaclasseswocheck
@@ -160,6 +178,9 @@ setValidity("ssgseaParam", function(object) {
     }
     if(length(object@annotation) != 1) {
         inv <- c(inv, "@annotation should be of length 1")
+    }
+    if(!inherits(object@annotation, "GeneIdentifierType")) {
+        inv <- c(inv, "@annotation must be a subclass of 'GeneIdentifierType'")
     }
     if(length(object@minSize) != 1) {
         inv <- c(inv, "@minSize should be of length 1")
