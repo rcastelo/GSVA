@@ -150,6 +150,7 @@ zorder_rankstat <- function(z, p) {
 
 #' @importFrom parallel splitIndices
 #' @importFrom IRanges IntegerList match
+#' @importFrom BiocParallel bpnworkers
 #' @importFrom cli cli_alert_info cli_progress_bar
 #' @importFrom cli cli_progress_update cli_progress_done
 compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
@@ -168,7 +169,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
                                          ## so we check them with x == floor(x)
                 sam <- sample(expr@x, size=min(1000, length(expr@x)),
                               replace=FALSE)
-                rnaseq <- all(sam == floor(sam))
+                rnaseq <- all((sam >= 0) & (sam == floor(sam)))
             } else if (is.integer(expr[1, 1]))
                 rnaseq <- TRUE
         }

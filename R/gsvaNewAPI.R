@@ -120,8 +120,9 @@
 #' topTable(fit, coef="sampleGroup2vs1")
 NULL
 
-#' @importFrom cli cli_alert_info
+#' @importFrom cli cli_alert_info cli_alert_success
 #' @importFrom utils packageDescription
+#' @importFrom BiocParallel bpnworkers
 #' @aliases gsva,plageParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -130,8 +131,9 @@ setMethod("gsva", signature(param="plageParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              cli_alert_info(sprintf("GSVA version %s",
-                                     packageDescription("GSVA")[["Version"]]))
+              if (verbose)
+                  cli_alert_info(sprintf("GSVA version %s",
+                                         packageDescription("GSVA")[["Version"]]))
 
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=TRUE,
@@ -140,17 +142,15 @@ setMethod("gsva", signature(param="plageParam"),
               filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
               filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
-              if (!inherits(BPPARAM, "SerialParam") && verbose)
-                  cat(sprintf("Setting parallel calculations through a %s back-end\n",
-                              "with workers=%d and tasks=100.\n",
-                              class(BPPARAM), bpnworkers(BPPARAM)))
-
-              ## if(rnaseq)
-              ##     stop("rnaseq=TRUE does not work with method='plage'.")
+              if (!inherits(BPPARAM, "SerialParam") && verbose) {
+                  msg <- sprintf("Using a %s parallel back-end with %d workers",
+                                 class(BPPARAM), bpnworkers(BPPARAM))
+                  cli_alert_info(msg)
+              }
 
               if(verbose)
-                  cat("Calculating PLAGE scores for",
-                      length(filteredMappedGeneSets), "gene sets.\n")
+                  cli_alert_info(sprintf("Calculating PLAGE scores for %d gene sets",
+                                         length(filteredMappedGeneSets)))
 
               plageScores <- plage(X=filteredDataMatrix,
                                    geneSets=filteredMappedGeneSets,
@@ -162,12 +162,16 @@ setMethod("gsva", signature(param="plageParam"),
                   names=rownames(filteredDataMatrix))
               rval <- wrapData(get_exprData(param), plageScores, gs)
 
+              if (verbose)
+                  cli_alert_success("Calculations finished")
+              
               return(rval)
           })
 
 
-#' @importFrom cli cli_alert_info
+#' @importFrom cli cli_alert_info cli_alert_success
 #' @importFrom utils packageDescription
+#' @importFrom BiocParallel bpnworkers
 #' @aliases gsva,zscoreParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -176,8 +180,9 @@ setMethod("gsva", signature(param="zscoreParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              cli_alert_info(sprintf("GSVA version %s",
-                                     packageDescription("GSVA")[["Version"]]))
+              if (verbose)
+                  cli_alert_info(sprintf("GSVA version %s",
+                                         packageDescription("GSVA")[["Version"]]))
 
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=TRUE,
@@ -186,17 +191,18 @@ setMethod("gsva", signature(param="zscoreParam"),
               filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
               filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
-              if (!inherits(BPPARAM, "SerialParam") && verbose)
-                  cat(sprintf("Setting parallel calculations through a %s back-end\n",
-                              "with workers=%d and tasks=100.\n",
-                              class(BPPARAM), bpnworkers(BPPARAM)))
+              if (!inherits(BPPARAM, "SerialParam") && verbose) {
+                  msg <- sprintf("Using a %s parallel back-end with %d workers",
+                                 class(BPPARAM), bpnworkers(BPPARAM))
+                  cli_alert_info(msg)
+              }
 
               ## if (rnaseq)
               ##     stop("rnaseq=TRUE does not work with method='zscore'.")
 
               if(verbose)
-                  cat("Calculating combined z-scores for",
-                      length(filteredMappedGeneSets), "gene sets.\n")
+                  cli_alert_info(sprintf("Calculating Z-scores for %d gene sets",
+                                         length(filteredMappedGeneSets)))
 
               zScores <- zscore(X=filteredDataMatrix,
                                 geneSets=filteredMappedGeneSets,
@@ -208,11 +214,15 @@ setMethod("gsva", signature(param="zscoreParam"),
                   names=rownames(filteredDataMatrix))
               rval <- wrapData(get_exprData(param), zScores, gs)
               
+              if (verbose)
+                  cli_alert_success("Calculations finished")
+              
               return(rval)
           })
 
-#' @importFrom cli cli_alert_info
+#' @importFrom cli cli_alert_info cli_alert_success
 #' @importFrom utils packageDescription
+#' @importFrom BiocParallel bpnworkers
 #' @aliases gsva,ssgseaParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -221,8 +231,9 @@ setMethod("gsva", signature(param="ssgseaParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              cli_alert_info(sprintf("GSVA version %s",
-                                     packageDescription("GSVA")[["Version"]]))
+              if (verbose)
+                  cli_alert_info(sprintf("GSVA version %s",
+                                         packageDescription("GSVA")[["Version"]]))
 
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=FALSE,
@@ -231,14 +242,15 @@ setMethod("gsva", signature(param="ssgseaParam"),
               filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
               filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
-              if (!inherits(BPPARAM, "SerialParam") && verbose)
-                  cat(sprintf("Setting parallel calculations through a %s\n",
-                              "back-end with workers=%d and tasks=100.\n",
-                              class(BPPARAM), bpnworkers(BPPARAM)))
+              if (!inherits(BPPARAM, "SerialParam") && verbose) {
+                  msg <- sprintf("Using a %s parallel back-end with %d workers",
+                                 class(BPPARAM), bpnworkers(BPPARAM))
+                  cli_alert_info(msg)
+              }
 
               if(verbose)
-                  cat("Calculating ssGSEA scores for",
-                      length(filteredMappedGeneSets), "gene sets.\n")
+                  cli_alert_info(sprintf("Calculating  ssGSEA scores for %d gene sets",
+                                         length(filteredMappedGeneSets)))
 
               ssgseaScores <- ssgsea(X=filteredDataMatrix,
                                      geneSets=filteredMappedGeneSets,
@@ -254,12 +266,16 @@ setMethod("gsva", signature(param="ssgseaParam"),
                   names=rownames(filteredDataMatrix))
               rval <- wrapData(get_exprData(param), ssgseaScores, gs)
               
+              if (verbose)
+                  cli_alert_success("Calculations finished")
+              
               return(rval)
           })
 
 
 #' @aliases gsva,gsvaParam-method
 #' @importFrom cli cli_alert_info cli_alert_success
+#' @importFrom BiocParallel bpnworkers
 #' @importFrom utils packageDescription
 #' @rdname gsva
 #' @exportMethod gsva
@@ -268,8 +284,9 @@ setMethod("gsva", signature(param="gsvaParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              cli_alert_info(sprintf("GSVA version %s",
-                                     packageDescription("GSVA")[["Version"]]))
+              if (verbose)
+                  cli_alert_info(sprintf("GSVA version %s",
+                                         packageDescription("GSVA")[["Version"]]))
 
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=TRUE,

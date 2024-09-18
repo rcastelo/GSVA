@@ -61,6 +61,9 @@
 }
 
 #' @importFrom IRanges IntegerList match
+#' @importFrom BiocParallel bpnworkers
+#' @importFrom cli cli_alert_info cli_alert_warning
+#' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
 ssgsea <- function(X, geneSets, alpha=0.25,
                    normalization=TRUE,
                    check_na=FALSE,
@@ -70,48 +73,75 @@ ssgsea <- function(X, geneSets, alpha=0.25,
                    BPPARAM=SerialParam(progressbar=verbose)) {
   na_use <- match.arg(na_use)
 
-  n <- ncol(X)
-  
   if (verbose)
-    print("Calculating ranks...")
+    cli_alert_info("Calculating ranks")
   
   R <- t(sparseMatrixStats::colRanks(X, ties.method="average"))
   mode(R) <- "integer"
 
   if (verbose)
-    print("Calculating absolute values from ranks...")
+    cli_alert_info("Calculating rank weights")
   
   Ra <- abs(R)^alpha
   
   wna_env <- new.env()
   assign("w", FALSE, envir=wna_env)
   geneSets <- IntegerList(geneSets)
-  es <- bplapply(as.list(1:n), function(j) {
-    if (any_na && na_use == "na.rm") {
-      geneRanking <- order(R[, j], decreasing=TRUE, na.last=NA)
-      geneSetsRankIdx <- match(geneSets, geneRanking)
-      es_sample <- sapply(geneSetsRankIdx, .fastRndWalkNArm,
-                          geneRanking, j, Ra, any_na, na_use,
-                          minSize, wna_env, USE.NAMES=FALSE)
-    } else {
-      geneRanking <- order(R[, j], decreasing=TRUE)
-      geneSetsRankIdx <- match(geneSets, geneRanking)
-      es_sample <- sapply(geneSetsRankIdx, .fastRndWalk,
-                          geneRanking, j, Ra)
-    }
-    es_sample
-  }, BPPARAM=BPPARAM)
+  n <- ncol(X)
+  es <- NULL
+  if (n > 10 && bpnworkers(BPPARAM) > 1) {
+  
+    es <- bplapply(as.list(1:n), function(j) {
+      if (any_na && na_use == "na.rm") {
+        geneRanking <- order(R[, j], decreasing=TRUE, na.last=NA)
+        geneSetsRankIdx <- match(geneSets, geneRanking)
+        es_sample <- sapply(geneSetsRankIdx, .fastRndWalkNArm,
+                            geneRanking, j, Ra, any_na, na_use,
+                            minSize, wna_env, USE.NAMES=FALSE)
+      } else {
+        geneRanking <- order(R[, j], decreasing=TRUE)
+        geneSetsRankIdx <- match(geneSets, geneRanking)
+        es_sample <- sapply(geneSetsRankIdx, .fastRndWalk,
+                            geneRanking, j, Ra)
+      }
+      es_sample
+    }, BPPARAM=BPPARAM)
+  } else {
+    idpb <- NULL
+    if (verbose)
+      idpb <- cli_progress_bar("Calculating ssGSEA scores", total=n)
+    es <- lapply(as.list(1:n), function(j) {
+      if (any_na && na_use == "na.rm") {
+        geneRanking <- order(R[, j], decreasing=TRUE, na.last=NA)
+        geneSetsRankIdx <- match(geneSets, geneRanking)
+        es_sample <- sapply(geneSetsRankIdx, .fastRndWalkNArm,
+                            geneRanking, j, Ra, any_na, na_use,
+                            minSize, wna_env, USE.NAMES=FALSE)
+      } else {
+        geneRanking <- order(R[, j], decreasing=TRUE)
+        geneSetsRankIdx <- match(geneSets, geneRanking)
+        es_sample <- sapply(geneSetsRankIdx, .fastRndWalk,
+                            geneRanking, j, Ra)
+      }
+      if (verbose)
+        cli_progress_update(id=idpb)
+      es_sample
+    })
+    if (verbose)
+      cli_progress_done(idpb)
+  }
   es <- do.call("cbind", es)
   
   if (any_na && na_use =="na.rm")
-    if (get("w", envir=wna_env))
-      warning(sprintf(paste("one or more gene sets had less than %d genes after",
-                            "after removing NA values, the corresponding",
-                            "enrichment scores have been set to NA."), minSize))
+    if (get("w", envir=wna_env)) {
+      msg <- sprintf(paste("NA enrichment scores in gene sets with less than",
+                           "%d genes after removing missing values", minSize))
+      cli_alert_warning(msg)
+    }
   
   if (normalization) {
     if (verbose)
-      cat("Normalizing...\n")
+      cli_alert_info("Normalizing ssGSEA scores")
     ## normalize enrichment scores by using the entire data set, as indicated
     ## by Barbie et al., 2009, online methods, pg. 2
 
