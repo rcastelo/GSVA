@@ -148,17 +148,7 @@ zorder_rankstat <- function(z, p) {
   return(ncol(expr) >= kcdf.min.ssize)
 }
 
-#' @importFrom parallel splitIndices
-#' @importFrom IRanges IntegerList match
-#' @importFrom BiocParallel bpnworkers
-#' @importFrom cli cli_alert_info cli_progress_bar
-#' @importFrom cli cli_progress_update cli_progress_done
-compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
-                               kcdf.min.ssize, abs.ranking, parallel.sz=1L,
-                               mx.diff=TRUE, tau=1, sparse=FALSE,
-                               verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose)) {
-    num_genes <- nrow(expr)
-
+.parse_kcdf_param <- function(expr, kcdf, kcdf.min.ssize, verbose) {
     kernel <- FALSE
     Gaussk <- TRUE  ## default (TRUE) is a Gaussian kernel, Poisson otherwise (FALSE)
     if (kcdf == "auto") {
@@ -199,10 +189,27 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
             cli_alert_info("Direct row-wise ECDFs estimation")
     }
 
+    list(kernel=kernel, Gaussk=Gaussk)
+}
+
+#' @importFrom parallel splitIndices
+#' @importFrom IRanges IntegerList match
+#' @importFrom BiocParallel bpnworkers
+#' @importFrom cli cli_alert_info cli_progress_bar
+#' @importFrom cli cli_progress_update cli_progress_done
+compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
+                               kcdf.min.ssize, abs.ranking, parallel.sz=1L,
+                               mx.diff=TRUE, tau=1, sparse=FALSE,
+                               verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose)) {
+
+    kcdfparam <- .parse_kcdf_param(expr, kcdf, kcdf.min.ssize, verbose)
+    kernel <- kcdfparam$kernel
+    Gaussk <- kcdfparam$Gaussk
+
     ## open parallelism only if ECDFs have to be estimated for
     ## more than 100 genes on more than 100 samples
     if (parallel.sz > 1 && length(sample.idxs) > 100 && nrow(expr) > 100) {
-        iter <- function(Y, idpb, n_chunks=BiocParallel::multicoreWorkers()) {
+        iter <- function(Y, idpb, n_chunks=bpnworkers(BPPARAM)) {
             idx <- splitIndices(nrow(Y), min(nrow(Y), n_chunks))
             i <- 0L
             function() {
