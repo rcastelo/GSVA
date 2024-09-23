@@ -158,7 +158,7 @@ setClass("plageParam",
 #' 
 #' Since the combined z-scores method does not take any method-specific
 #' parameters, this class does not add any slots to the common slots inherited
-#' from#' [`GsvaMethodParam-class`].
+#' from [`GsvaMethodParam-class`].
 #'
 #' @seealso
 #' [`GsvaExprData-class`],
