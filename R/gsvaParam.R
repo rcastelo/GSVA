@@ -4,42 +4,52 @@
 #' @description Objects of class `gsvaParam` contain the parameters for running
 #' the `GSVA` method.
 #'
-#' @details In addition to an expression data set and a collection of
-#' gene sets, `GSVA` takes four method-specific parameters as described below.
+#' @details In addition to a number of parameters shared with all methods
+#' implemented by package GSVA, `GSVA` takes six method-specific parameters.
+#' All of these parameters are described in detail below.
 #'
-#' @param exprData The expression data.  Must be one of the classes
-#' supported by [`GsvaExprData-class`]. Type `help(GsvaExprData)` to consult
-#' the available classes.
+#' @param exprData The expression data set.  Must be one of the classes
+#' supported by [`GsvaExprData-class`].  For a list of these classes, see its
+#' help page using `help(GsvaExprData)`.
 #'
 #' @param geneSets The gene sets.  Must be one of the classes supported by
-#' [`GsvaGeneSets-class`].
-#'
-#' @param assay The name of the assay to use in case `exprData` is a multi-assay
-#' container, otherwise ignored.  By default, the first assay is used.
+#' [`GsvaGeneSets-class`].  For a list of these classes, see its help page using
+#' `help(GsvaGeneSets)`.
 #' 
-#' @param annotation The name of a Bioconductor annotation package for the gene
-#' identifiers occurring in the row names of the expression data matrix.  This
-#' can be used to map gene identifiers occurring in the gene sets if those are
-#' provided in a [`GeneSetCollection`].  By default gene identifiers used in
-#' expression data matrix and gene sets are matched directly.
+#' @param assay Character vector of length 1.  The name of the assay to use in
+#' case `exprData` is a multi-assay container, otherwise ignored.  By default,
+#' the first assay is used.
 #' 
-#' @param minSize Minimum size of the resulting gene sets after gene identifier
-#' mapping. By default, the minimum size is 1.
+#' @param annotation An object of class [`GeneIdentifierType-class`] from
+#' package `GSEABase` describing the gene identifiers used as the row names of
+#' the expression data set.  See [`GeneIdentifierType`] for help on available
+#' gene identifier types and how to construct them.  This
+#' information can be used to map gene identifiers occurring in the gene sets.
 #' 
-#' @param maxSize Maximum size of the resulting gene sets after gene identifier
-#' mapping. By default, the maximum size is `Inf`.
+#' If the default value `NULL` is provided, an attempt will be made to extract
+#' the gene identifier type from the expression data set provided as `exprData`
+#' (by calling [`gsvaAnnotation`] on it).  If still not successful, the
+#' `NullIdentifier()` will be used as the gene identifier type, gene identifier
+#' mapping will be disabled and gene identifiers used in expression data set and
+#' gene sets can only be matched directly.
+#' 
+#' @param minSize Numeric vector of length 1.  Minimum size of the resulting gene
+#' sets after gene identifier mapping. By default, the minimum size is 1.
+#' 
+#' @param maxSize Numeric vector of length 1.  Maximum size of the resulting gene
+#' sets after gene identifier mapping. By default, the maximum size is `Inf`.
 #' 
 #' @param kcdf Character vector of length 1 denoting the kernel to use during
 #' the non-parametric estimation of the empirical cumulative distribution
-#' function (ECDF) of expression levels across samples. By default,
-#' `kcdf="auto"`, which will make GSVA to decide automatically any of the other
-#' possible values. The value `kcdf="Gaussian"` is suitable when input
-#' expression values are continuous, such as microarray fluorescent units in
-#' logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input
-#' expression values are integer counts, such as those derived from RNA-seq
-#' experiments, then this argument should be set to `kcdf="Poisson"`. When we
-#' do not want to use a kernel approach for the estimation of the ECDF, then
-#' we should set `kcdf="none"`.
+#' function (ECDF) of expression levels across samples. The value `kcdf="auto"`
+#' will allow GSVA to automatically choose one of the possible values. The
+#' value `kcdf="Gaussian"` is suitable when input expression values are
+#' continuous, such as microarray fluorescent units in logarithmic scale,
+#' RNA-seq log-CPMs, log-RPKMs, or log-TPMs. When input expression values are
+#' integer counts, such as those derived from RNA-seq experiments, then this
+#' argument should be set to `kcdf="Poisson"`. When we do not want to use a
+#' kernel approach for the estimation of the ECDF, then we should set
+#' `kcdf="none"`.
 #'
 #' @param kcdfNoneMinSampleSize Integer vector of length 1. When `kcdf="auto"`,
 #' this parameter decides at what minimum sample size `kcdf="none"`, i.e., the

@@ -23,27 +23,36 @@ ssgseaParam(
 \S4method{anyNA}{ssgseaParam}(x, recursive = FALSE)
 }
 \arguments{
-\item{exprData}{The expression data.  Must be one of the classes
-supported by \code{\linkS4class{GsvaExprData}}. Type \code{help(GsvaExprData)} to consult
-the available classes.}
+\item{exprData}{The expression data set.  Must be one of the classes
+supported by \code{\linkS4class{GsvaExprData}}.  For a list of these classes, see its
+help page using \code{help(GsvaExprData)}.}
 
 \item{geneSets}{The gene sets.  Must be one of the classes supported by
-\code{\linkS4class{GsvaGeneSets}}.}
+\code{\linkS4class{GsvaGeneSets}}.  For a list of these classes, see its help page using
+\code{help(GsvaGeneSets)}.}
 
-\item{assay}{The name of the assay to use in case \code{exprData} is a multi-assay
-container, otherwise ignored.  By default, the first assay is used.}
+\item{assay}{Character vector of length 1.  The name of the assay to use in
+case \code{exprData} is a multi-assay container, otherwise ignored.  By default,
+the first assay is used.}
 
-\item{annotation}{The name of a Bioconductor annotation package for the gene
-identifiers occurring in the row names of the expression data matrix.  This
-can be used to map gene identifiers occurring in the gene sets if those are
-provided in a \code{\link{GeneSetCollection}}.  By default gene identifiers used in
-expression data matrix and gene sets are matched directly.}
+\item{annotation}{An object of class \code{\linkS4class{GeneIdentifierType}} from
+package \code{GSEABase} describing the gene identifiers used as the row names of
+the expression data set.  See \code{\link{GeneIdentifierType}} for help on available
+gene identifier types and how to construct them.  This
+information can be used to map gene identifiers occurring in the gene sets.
 
-\item{minSize}{Minimum size of the resulting gene sets after gene identifier
-mapping. By default, the minimum size is 1.}
+If the default value \code{NULL} is provided, an attempt will be made to extract
+the gene identifier type from the expression data set provided as \code{exprData}
+(by calling \code{\link{gsvaAnnotation}} on it).  If still not successful, the
+\code{NullIdentifier()} will be used as the gene identifier type, gene identifier
+mapping will be disabled and gene identifiers used in expression data set and
+gene sets can only be matched directly.}
 
-\item{maxSize}{Maximum size of the resulting gene sets after gene identifier
-mapping. By default, the maximum size is \code{Inf}.}
+\item{minSize}{Numeric vector of length 1.  Minimum size of the resulting gene
+sets after gene identifier mapping. By default, the minimum size is 1.}
+
+\item{maxSize}{Numeric vector of length 1.  Maximum size of the resulting gene
+sets after gene identifier mapping. By default, the maximum size is \code{Inf}.}
 
 \item{alpha}{Numeric vector of length 1.  The exponent defining the
 weight of the tail in the random walk performed by the \code{ssGSEA} (Barbie et
@@ -52,10 +61,11 @@ al., 2009) method.  The default value is 0.25 as described in the paper.}
 \item{normalize}{Logical vector of length 1; if \code{TRUE} runs the \code{ssGSEA}
 method from Barbie et al. (2009) normalizing the scores by the absolute
 difference between the minimum and the maximum, as described in their paper.
-Otherwise this last normalization step is skipped.}
+Otherwise this final normalization step is skipped.}
 
-\item{checkNA}{Character string specifying whether the input expression data
-should be checked for the presence of missing (\code{NA}) values. This must be
+\item{checkNA}{Character vector of length 1 specifying whether the input
+expression data should be checked for the presence of missing (\code{NA}) values.
+This must be
 one of the strings \code{"auto"} (default), \code{"yes"}, or \code{"no"}. The default value
 \code{"auto"} means that the software will perform that check only when the input
 expression data is provided as a base \code{\link{matrix}}, an \code{\link{ExpressionSet}} or a
@@ -65,18 +75,19 @@ If \code{checkNA="yes"}, then the input expression data will be checked for
 missing values irrespective of the object class of the data container, and
 if \code{checkNA="no"}, then that check will not be performed.}
 
-\item{use}{Character string specifying a policy for dealing with missing
-values (\code{NA}s) in the input expression data argument \code{exprData}. It only
-applies when either \code{checkNA="yes"}, or \code{checkNA="auto"} (see the \code{checkNA}
-parameter. The argument value must be one of the strings \code{"everything"}
-(default), \code{"all.obs"}, or \code{"na.rm"}. The policy of the default value
-\code{"everything"} consists of propagating \code{NA}s so that the resulting enrichment
-scores will be \code{NA}, whenever one or more of its contributing values is \code{NA},
-giving a warning when that happens. When \code{use="all.obs"}, the presence of
-\code{NA}s in the input expression data will produce an error. Finally, when
-\code{use="na.rm"}, \code{NA} values in the input expression data will be removed from
-calculations, giving a warning when that happens, and giving an error if no
-values are left after removing the \code{NA} values.}
+\item{use}{Character vector of length 1 specifying a policy for dealing with
+missing values (\code{NA}s) in the input expression data argument \code{exprData}. It
+only applies when either \code{checkNA="yes"}, or \code{checkNA="auto"} (see the
+\code{checkNA} parameter. The argument value must be one of the strings
+\code{"everything"} (default), \code{"all.obs"}, or \code{"na.rm"}. The policy of the
+default value \code{"everything"} consists of propagating \code{NA}s so that the
+resulting enrichment score will be \code{NA}, whenever one or more of its
+contributing values is \code{NA}, giving a warning when that happens. When
+\code{use="all.obs"}, the presence of \code{NA}s in the input expression data will
+produce an error. Finally, when \code{use="na.rm"}, \code{NA} values in the input
+expression data will be removed from calculations, giving a warning when that
+happens, and giving an error if no values are left after removing the \code{NA}
+values.}
 
 \item{x}{An object of class \code{\link{ssgseaParam}}.}
 
@@ -86,18 +97,21 @@ values are left after removing the \code{NA} values.}
 A new \code{\linkS4class{ssgseaParam}} object.
 }
 \description{
-Method-specific parameters for the ssGSEA method.
+S4 class for ssGSEA method parameter objects.
 
-Objects of class \code{ssgseaParam} contain the parameters for running
-the \code{ssGSEA} method.
+Objects of class \code{ssgseaParam} contain the parameters for
+running the \code{ssGSEA} method.
 }
 \details{
-In addition to the two common parameter slots inherited from
+In addition to the common parameter slots inherited from
 \verb{[GsvaMethodParam]}, this class has slots for the two method-specific
-parameters of the \code{ssGSEA} method described below.
+parameters of the \code{ssGSEA} method described below as well as four more slots
+for implementing a missing value policy.
 
-In addition to an expression data set and a collection of
-gene sets, \code{ssGSEA} takes two method-specific parameters as described below.
+In addition to a number of parameters shared with all methods
+implemented by package GSVA, \code{ssGSEA} takes two method-specific parameters as
+well as two more parameters for implementing a missing value policy.  All of
+these parameters are described in detail below.
 }
 \section{Slots}{
 
@@ -109,11 +123,11 @@ al., 2009) method.}
 \item{\code{normalize}}{Logical vector of length 1.  If \code{TRUE} runs the ssGSEA
 method from Barbie et al. (2009) normalizing the scores by the absolute
 difference between the minimum and the maximum, as described in their paper.
-Otherwise this last normalization step is skipped.}
+Otherwise this final normalization step is skipped.}
 
-\item{\code{checkNA}}{Character string. One of the strings \code{"auto"} (default),
-\code{"yes"}, or \code{"no"}, which refer to whether the input expression data should
-be checked for the presence of missing (\code{NA}) values.}
+\item{\code{checkNA}}{Character vector of length 1. One of the strings \code{"auto"}
+(default), \code{"yes"}, or \code{"no"}, which refer to whether the input expression
+data should be checked for the presence of missing (\code{NA}) values.}
 
 \item{\code{didCheckNA}}{Logical vector of length 1, indicating whether the input
 expression data was checked for the presence of missing (\code{NA}) values.}
@@ -121,9 +135,9 @@ expression data was checked for the presence of missing (\code{NA}) values.}
 \item{\code{anyNA}}{Logical vector of length 1, indicating whether the input
 expression data contains missing (\code{NA}) values.}
 
-\item{\code{use}}{Character string. One of the strings \code{"everything"} (default),
-\code{"all.obs"}, or \code{"na.rm"}, which refer to three different policies to apply
-in the presence of missing values in the input expression data; see
+\item{\code{use}}{Character vector of length 1. One of the strings \code{"everything"}
+(default), \code{"all.obs"}, or \code{"na.rm"}, which refer to three different policies
+to apply in the presence of missing values in the input expression data; see
 \code{\link{ssgseaParam}}.}
 }}
 

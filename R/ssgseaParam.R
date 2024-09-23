@@ -1,33 +1,44 @@
 
 #' @title The `ssgseaParam` class
 #'
-#' @description Objects of class `ssgseaParam` contain the parameters for running
-#' the `ssGSEA` method.
+#' @description Objects of class `ssgseaParam` contain the parameters for
+#' running the `ssGSEA` method.
 #'
-#' @details In addition to an expression data set and a collection of
-#' gene sets, `ssGSEA` takes two method-specific parameters as described below.
+#' @details In addition to a number of parameters shared with all methods
+#' implemented by package GSVA, `ssGSEA` takes two method-specific parameters as
+#' well as two more parameters for implementing a missing value policy.  All of
+#' these parameters are described in detail below.
 #'
-#' @param exprData The expression data.  Must be one of the classes
-#' supported by [`GsvaExprData-class`]. Type `help(GsvaExprData)` to consult
-#' the available classes.
+#' @param exprData The expression data set.  Must be one of the classes
+#' supported by [`GsvaExprData-class`].  For a list of these classes, see its
+#' help page using `help(GsvaExprData)`.
 #'
 #' @param geneSets The gene sets.  Must be one of the classes supported by
-#' [`GsvaGeneSets-class`].
+#' [`GsvaGeneSets-class`].  For a list of these classes, see its help page using
+#' `help(GsvaGeneSets)`.
 #' 
-#' @param assay The name of the assay to use in case `exprData` is a multi-assay
-#' container, otherwise ignored.  By default, the first assay is used.
+#' @param assay Character vector of length 1.  The name of the assay to use in
+#' case `exprData` is a multi-assay container, otherwise ignored.  By default,
+#' the first assay is used.
 #' 
-#' @param annotation The name of a Bioconductor annotation package for the gene
-#' identifiers occurring in the row names of the expression data matrix.  This
-#' can be used to map gene identifiers occurring in the gene sets if those are
-#' provided in a [`GeneSetCollection`].  By default gene identifiers used in
-#' expression data matrix and gene sets are matched directly.
+#' @param annotation An object of class [`GeneIdentifierType-class`] from
+#' package `GSEABase` describing the gene identifiers used as the row names of
+#' the expression data set.  See [`GeneIdentifierType`] for help on available
+#' gene identifier types and how to construct them.  This
+#' information can be used to map gene identifiers occurring in the gene sets.
 #' 
-#' @param minSize Minimum size of the resulting gene sets after gene identifier
-#' mapping. By default, the minimum size is 1.
+#' If the default value `NULL` is provided, an attempt will be made to extract
+#' the gene identifier type from the expression data set provided as `exprData`
+#' (by calling [`gsvaAnnotation`] on it).  If still not successful, the
+#' `NullIdentifier()` will be used as the gene identifier type, gene identifier
+#' mapping will be disabled and gene identifiers used in expression data set and
+#' gene sets can only be matched directly.
 #' 
-#' @param maxSize Maximum size of the resulting gene sets after gene identifier
-#' mapping. By default, the maximum size is `Inf`.
+#' @param minSize Numeric vector of length 1.  Minimum size of the resulting gene
+#' sets after gene identifier mapping. By default, the minimum size is 1.
+#' 
+#' @param maxSize Numeric vector of length 1.  Maximum size of the resulting gene
+#' sets after gene identifier mapping. By default, the maximum size is `Inf`.
 #' 
 #' @param alpha Numeric vector of length 1.  The exponent defining the
 #' weight of the tail in the random walk performed by the `ssGSEA` (Barbie et
@@ -36,10 +47,11 @@
 #' @param normalize Logical vector of length 1; if `TRUE` runs the `ssGSEA`
 #' method from Barbie et al. (2009) normalizing the scores by the absolute
 #' difference between the minimum and the maximum, as described in their paper.
-#' Otherwise this last normalization step is skipped.
+#' Otherwise this final normalization step is skipped.
 #' 
-#' @param checkNA Character string specifying whether the input expression data
-#' should be checked for the presence of missing (`NA`) values. This must be
+#' @param checkNA Character vector of length 1 specifying whether the input
+#' expression data should be checked for the presence of missing (`NA`) values.
+#' This must be
 #' one of the strings `"auto"` (default), `"yes"`, or `"no"`. The default value
 #' `"auto"` means that the software will perform that check only when the input
 #' expression data is provided as a base [`matrix`], an [`ExpressionSet`] or a
@@ -49,18 +61,19 @@
 #' missing values irrespective of the object class of the data container, and
 #' if `checkNA="no"`, then that check will not be performed.
 #'
-#' @param use Character string specifying a policy for dealing with missing
-#' values (`NA`s) in the input expression data argument `exprData`. It only
-#' applies when either `checkNA="yes"`, or `checkNA="auto"` (see the `checkNA`
-#' parameter. The argument value must be one of the strings `"everything"`
-#' (default), `"all.obs"`, or `"na.rm"`. The policy of the default value
-#' `"everything"` consists of propagating `NA`s so that the resulting enrichment
-#' scores will be `NA`, whenever one or more of its contributing values is `NA`,
-#' giving a warning when that happens. When `use="all.obs"`, the presence of
-#' `NA`s in the input expression data will produce an error. Finally, when
-#' `use="na.rm"`, `NA` values in the input expression data will be removed from
-#' calculations, giving a warning when that happens, and giving an error if no
-#' values are left after removing the `NA` values.
+#' @param use Character vector of length 1 specifying a policy for dealing with
+#' missing values (`NA`s) in the input expression data argument `exprData`. It
+#' only applies when either `checkNA="yes"`, or `checkNA="auto"` (see the
+#' `checkNA` parameter. The argument value must be one of the strings
+#' `"everything"` (default), `"all.obs"`, or `"na.rm"`. The policy of the
+#' default value `"everything"` consists of propagating `NA`s so that the
+#' resulting enrichment score will be `NA`, whenever one or more of its
+#' contributing values is `NA`, giving a warning when that happens. When
+#' `use="all.obs"`, the presence of `NA`s in the input expression data will
+#' produce an error. Finally, when `use="na.rm"`, `NA` values in the input
+#' expression data will be removed from calculations, giving a warning when that
+#' happens, and giving an error if no values are left after removing the `NA`
+#' values.
 #'
 #' @return A new [`ssgseaParam-class`] object.
 #'
@@ -171,58 +184,58 @@ setValidity("ssgseaParam", function(object) {
         inv <- c(inv, "@geneSets has length 0")
     }
     if(length(oa) != 1) {
-        inv <- c(inv, "@assay should be of length 1")
+        inv <- c(inv, "@assay must be of length 1")
     }
     if(.isCharLength1(oa) && .isCharNonEmpty(an) && (!(oa %in% an))) {
-        inv <- c(inv, "@assay should be one of assayNames(@exprData)")
+        inv <- c(inv, "@assay must be one of assayNames(@exprData)")
     }
     if(length(object@annotation) != 1) {
-        inv <- c(inv, "@annotation should be of length 1")
+        inv <- c(inv, "@annotation must be of length 1")
     }
     if(!inherits(object@annotation, "GeneIdentifierType")) {
         inv <- c(inv, "@annotation must be a subclass of 'GeneIdentifierType'")
     }
     if(length(object@minSize) != 1) {
-        inv <- c(inv, "@minSize should be of length 1")
+        inv <- c(inv, "@minSize must be of length 1")
     }
     if(object@minSize < 1) {
-        inv <- c(inv, "@minSize should be at least 1 or greater")
+        inv <- c(inv, "@minSize must be at least 1 or greater")
     }
     if(length(object@maxSize) != 1) {
-        inv <- c(inv, "@maxSize should be of length 1")
+        inv <- c(inv, "@maxSize must be of length 1")
     }
     if(object@maxSize < object@minSize) {
-        inv <- c(inv, "@maxSize should be at least @minSize or greater")
+        inv <- c(inv, "@maxSize must be at least @minSize or greater")
     }
     if(length(object@alpha) != 1) {
-        inv <- c(inv, "@alpha should be of length 1")
+        inv <- c(inv, "@alpha must be of length 1")
     }
     if(is.na(object@alpha)) {
-        inv <- c(inv, "@alpha should not be NA")
+        inv <- c(inv, "@alpha must not be NA")
     }
     if(length(object@normalize) != 1) {
-        inv <- c(inv, "@normalize should be of length 1")
+        inv <- c(inv, "@normalize must be of length 1")
     }
     if(is.na(object@normalize)) {
-        inv <- c(inv, "@normalize should not be NA")
+        inv <- c(inv, "@normalize must not be NA")
     }
     if(!.isCharLength1(object@checkNA)) {
-        inv <- c(inv, "@use should be a single character string")
+        inv <- c(inv, "@use must be a single character string")
     }
     if(length(object@didCheckNA) != 1) {
-        inv <- c(inv, "@didCheckNA should be of length 1")
+        inv <- c(inv, "@didCheckNA must be of length 1")
     }
     if(is.na(object@didCheckNA)) {
-        inv <- c(inv, "@didCheckNA should not be NA")
+        inv <- c(inv, "@didCheckNA must not be NA")
     }
     if(length(object@anyNA) != 1) {
-        inv <- c(inv, "@anyNA should be of length 1")
+        inv <- c(inv, "@anyNA must be of length 1")
     }
     if(is.na(object@anyNA)) {
-        inv <- c(inv, "@anyNA should not be NA")
+        inv <- c(inv, "@anyNA must not be NA")
     }
     if(!.isCharLength1(object@use)) {
-        inv <- c(inv, "@use should be a single character string")
+        inv <- c(inv, "@use must be a single character string")
     }
     return(if(length(inv) == 0) TRUE else inv)
 })

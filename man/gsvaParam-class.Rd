@@ -22,39 +22,48 @@ gsvaParam(
 )
 }
 \arguments{
-\item{exprData}{The expression data.  Must be one of the classes
-supported by \code{\linkS4class{GsvaExprData}}. Type \code{help(GsvaExprData)} to consult
-the available classes.}
+\item{exprData}{The expression data set.  Must be one of the classes
+supported by \code{\linkS4class{GsvaExprData}}.  For a list of these classes, see its
+help page using \code{help(GsvaExprData)}.}
 
 \item{geneSets}{The gene sets.  Must be one of the classes supported by
-\code{\linkS4class{GsvaGeneSets}}.}
+\code{\linkS4class{GsvaGeneSets}}.  For a list of these classes, see its help page using
+\code{help(GsvaGeneSets)}.}
 
-\item{assay}{The name of the assay to use in case \code{exprData} is a multi-assay
-container, otherwise ignored.  By default, the first assay is used.}
+\item{assay}{Character vector of length 1.  The name of the assay to use in
+case \code{exprData} is a multi-assay container, otherwise ignored.  By default,
+the first assay is used.}
 
-\item{annotation}{The name of a Bioconductor annotation package for the gene
-identifiers occurring in the row names of the expression data matrix.  This
-can be used to map gene identifiers occurring in the gene sets if those are
-provided in a \code{\link{GeneSetCollection}}.  By default gene identifiers used in
-expression data matrix and gene sets are matched directly.}
+\item{annotation}{An object of class \code{\linkS4class{GeneIdentifierType}} from
+package \code{GSEABase} describing the gene identifiers used as the row names of
+the expression data set.  See \code{\link{GeneIdentifierType}} for help on available
+gene identifier types and how to construct them.  This
+information can be used to map gene identifiers occurring in the gene sets.
 
-\item{minSize}{Minimum size of the resulting gene sets after gene identifier
-mapping. By default, the minimum size is 1.}
+If the default value \code{NULL} is provided, an attempt will be made to extract
+the gene identifier type from the expression data set provided as \code{exprData}
+(by calling \code{\link{gsvaAnnotation}} on it).  If still not successful, the
+\code{NullIdentifier()} will be used as the gene identifier type, gene identifier
+mapping will be disabled and gene identifiers used in expression data set and
+gene sets can only be matched directly.}
 
-\item{maxSize}{Maximum size of the resulting gene sets after gene identifier
-mapping. By default, the maximum size is \code{Inf}.}
+\item{minSize}{Numeric vector of length 1.  Minimum size of the resulting gene
+sets after gene identifier mapping. By default, the minimum size is 1.}
+
+\item{maxSize}{Numeric vector of length 1.  Maximum size of the resulting gene
+sets after gene identifier mapping. By default, the maximum size is \code{Inf}.}
 
 \item{kcdf}{Character vector of length 1 denoting the kernel to use during
 the non-parametric estimation of the empirical cumulative distribution
-function (ECDF) of expression levels across samples. By default,
-\code{kcdf="auto"}, which will make GSVA to decide automatically any of the other
-possible values. The value \code{kcdf="Gaussian"} is suitable when input
-expression values are continuous, such as microarray fluorescent units in
-logarithmic scale, RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input
-expression values are integer counts, such as those derived from RNA-seq
-experiments, then this argument should be set to \code{kcdf="Poisson"}. When we
-do not want to use a kernel approach for the estimation of the ECDF, then
-we should set \code{kcdf="none"}.}
+function (ECDF) of expression levels across samples. The value \code{kcdf="auto"}
+will allow GSVA to automatically choose one of the possible values. The
+value \code{kcdf="Gaussian"} is suitable when input expression values are
+continuous, such as microarray fluorescent units in logarithmic scale,
+RNA-seq log-CPMs, log-RPKMs, or log-TPMs. When input expression values are
+integer counts, such as those derived from RNA-seq experiments, then this
+argument should be set to \code{kcdf="Poisson"}. When we do not want to use a
+kernel approach for the estimation of the ECDF, then we should set
+\code{kcdf="none"}.}
 
 \item{kcdfNoneMinSampleSize}{Integer vector of length 1. When \code{kcdf="auto"},
 this parameter decides at what minimum sample size \code{kcdf="none"}, i.e., the
@@ -97,18 +106,19 @@ version of the GSVA algorithm will be used.}
 A new \code{\linkS4class{gsvaParam}} object.
 }
 \description{
-Method-specific parameters for the GSVA method.
+S4 class for GSVA method parameter objects.
 
 Objects of class \code{gsvaParam} contain the parameters for running
 the \code{GSVA} method.
 }
 \details{
-In addition to the two common parameter slots inherited from
-\verb{[GsvaMethodParam]}, this class has slots for the two method-specific
-parameters of the GSVA method described below.
+In addition to the common parameter slots inherited from \verb{[GsvaMethodParam]},
+this class has slots for the six method-specific parameters of the GSVA
+method described below.
 
-In addition to an expression data set and a collection of
-gene sets, \code{GSVA} takes four method-specific parameters as described below.
+In addition to a number of parameters shared with all methods
+implemented by package GSVA, \code{GSVA} takes six method-specific parameters.
+All of these parameters are described in detail below.
 }
 \section{Slots}{
 
@@ -116,10 +126,10 @@ gene sets, \code{GSVA} takes four method-specific parameters as described below.
 \item{\code{kcdf}}{Character vector of length 1 denoting the kernel to use during
 the non-parametric estimation of the empirical cumulative distribution
 function (ECDF) of expression levels across samples. The value \code{kcdf="auto"}
-will make GSVA to decide automatically any of the other possible values. The
+will allow GSVA to automatically choose one of the possible values. The
 value \code{kcdf="Gaussian"} is suitable when input expression values are
 continuous, such as microarray fluorescent units in logarithmic scale,
-RNA-seq log-CPMs, log-RPKMs or log-TPMs. When input expression values are
+RNA-seq log-CPMs, log-RPKMs, or log-TPMs. When input expression values are
 integer counts, such as those derived from RNA-seq experiments, then this
 argument should be set to \code{kcdf="Poisson"}. When we do not want to use a
 kernel approach for the estimation of the ECDF, then we should set
@@ -143,10 +153,10 @@ calculate the enrichment statistic (ES) from the KS random walk statistic.
 the largest positive and negative random walk deviations.
 }}
 
-\item{\code{absRanking}}{Logical vector of length 1 used only when \code{mx.diff=TRUE}.
-When \code{abs.ranking=FALSE} a modified Kuiper statistic is used to calculate
+\item{\code{absRanking}}{Logical vector of length 1 used only when \code{maxDiff=TRUE}.
+When \code{absRanking=FALSE} a modified Kuiper statistic is used to calculate
 enrichment scores, taking the magnitude difference between the largest
-positive and negative random walk deviations. When \code{abs.ranking=TRUE} the
+positive and negative random walk deviations. When \code{absRanking=TRUE} the
 original Kuiper statistic that sums the largest positive and negative
 random walk deviations, is used. In this latter case, gene sets with genes
 enriched on either extreme (high or low) will be regarded as ’highly’
@@ -154,7 +164,8 @@ activated.}
 
 \item{\code{sparse}}{Logical vector of length 1 used only when the input expression
 data in \code{exprData} is stored in a sparse matrix (e.g., a \code{dgCMatrix} or a
-\code{singleCellExperiment} object storing the expression data in a \code{dgCMatrix}).
+container object, such as a \code{SingleCellExperiment}, storing the expression
+data in a \code{dgCMatrix}).
 In such a case, when \code{sparse=TRUE}, a sparse version of the GSVA algorithm
 will be applied. Otherwise, when \code{sparse=FALSE}, the classical version of
 the GSVA algorithm will be used.}

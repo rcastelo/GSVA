@@ -16,45 +16,55 @@ zscoreParam(
 )
 }
 \arguments{
-\item{exprData}{The expression data.  Must be one of the classes
-supported by \code{\linkS4class{GsvaExprData}}.  Type \code{help(GsvaExprData)} to consult
-the available classes.}
+\item{exprData}{The expression data set.  Must be one of the classes
+supported by \code{\linkS4class{GsvaExprData}}.  For a list of these classes, see its
+help page using \code{help(GsvaExprData)}.}
 
 \item{geneSets}{The gene sets.  Must be one of the classes supported by
-\code{\linkS4class{GsvaGeneSets}}.}
+\code{\linkS4class{GsvaGeneSets}}.  For a list of these classes, see its help page using
+\code{help(GsvaGeneSets)}.}
 
-\item{assay}{The name of the assay to use in case \code{exprData} is a multi-assay
-container, otherwise ignored.  By default, the first assay is used.}
+\item{assay}{Character vector of length 1.  The name of the assay to use in
+case \code{exprData} is a multi-assay container, otherwise ignored.  By default,
+the first assay is used.}
 
-\item{annotation}{The name of a Bioconductor annotation package for the gene
-identifiers occurring in the row names of the expression data matrix.  This
-can be used to map gene identifiers occurring in the gene sets if those are
-provided in a \code{\link{GeneSetCollection}}.  By default gene identifiers used in
-expression data matrix and gene sets are matched directly.}
+\item{annotation}{An object of class \code{\linkS4class{GeneIdentifierType}} from
+package \code{GSEABase} describing the gene identifiers used as the row names of
+the expression data set.  See \code{\link{GeneIdentifierType}} for help on available
+gene identifier types and how to construct them.  This
+information can be used to map gene identifiers occurring in the gene sets.
 
-\item{minSize}{Minimum size of the resulting gene sets after gene identifier
-mapping. By default, the minimum size is 1.}
+If the default value \code{NULL} is provided, an attempt will be made to extract
+the gene identifier type from the expression data set provided as \code{exprData}
+(by calling \code{\link{gsvaAnnotation}} on it).  If still not successful, the
+\code{NullIdentifier()} will be used as the gene identifier type, gene identifier
+mapping will be disabled and gene identifiers used in expression data set and
+gene sets can only be matched directly.}
 
-\item{maxSize}{Maximum size of the resulting gene sets after gene identifier
-mapping. By default, the maximum size is \code{Inf}.}
+\item{minSize}{Numeric vector of length 1.  Minimum size of the resulting gene
+sets after gene identifier mapping. By default, the minimum size is 1.}
+
+\item{maxSize}{Numeric vector of length 1.  Maximum size of the resulting gene
+sets after gene identifier mapping. By default, the maximum size is \code{Inf}.}
 }
 \value{
 A new \code{\linkS4class{zscoreParam}} object.
 }
 \description{
-Method-specific parameters for the combined z-scores method.
+S4 class for combined z-scores method parameter objects.
 
-Objects of class \code{zscoreParam} contain the parameters for running
-the combined z-scores method.
+Objects of class \code{zscoreParam} contain the parameters for
+running the combined z-scores method.
 }
 \details{
-Since this method does not take any method-specific parameters, the parameter
-class does not add any slots to the common slots inherited from
-\code{\linkS4class{GsvaMethodParam}}.
+Since the combined z-scores method does not take any method-specific
+parameters, this class does not add any slots to the common slots inherited
+from#' \code{\linkS4class{GsvaMethodParam}}.
 
-The combined z-scores method does not take any method-specific
-parameters in addition to an expression data set and a collection of gene
-sets.
+The combined z-scores method takes a number of parameters shared
+with all methods implemented by package GSVA but does not take any
+method-specific parameters.
+These parameters are described in detail below.
 }
 \examples{
 library(GSVA)

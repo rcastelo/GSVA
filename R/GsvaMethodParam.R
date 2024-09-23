@@ -26,7 +26,6 @@ setMethod("show",
               .catObj(get_exprData(object))
               oa <- if(is.na(get_assay(object))) "none" else get_assay(object)
               cat("using assay: ", oa, "\n", sep="")
-              ## oan <- if(is.na(get_annotation(object))) "none" else get_annotation(object)
               cat("using annotation:\n")
               .catObj(get_annotation(object))
               cat("gene sets:\n")
