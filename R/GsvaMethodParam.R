@@ -26,8 +26,8 @@ setMethod("show",
               .catObj(get_exprData(object))
               oa <- if(is.na(get_assay(object))) "none" else get_assay(object)
               cat("using assay: ", oa, "\n", sep="")
-              oan <- if(is.na(get_annotation(object))) "none" else get_annotation(object)
-              cat("using annotation: ", oan, "\n", sep="")
+              cat("using annotation:\n")
+              .catObj(get_annotation(object))
               cat("gene sets:\n")
               .catObj(get_geneSets(object))
               cat("gene set size: [", get_minSize(object), ", ",
@@ -112,6 +112,12 @@ setMethod("gsvaShow",
 ## and list is 'older' and hence wins when dispatching gsvaShow() :-|
 setMethod("gsvaShow",
           signature=signature(object="GeneSetCollection"),
+          function(object) {
+              show(object)
+          })
+
+setMethod("gsvaShow",
+          signature=signature(object="GeneIdentifierType"),
           function(object) {
               show(object)
           })
