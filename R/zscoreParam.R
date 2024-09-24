@@ -1,34 +1,44 @@
 
 #' @title The `zscoreParam` class
 #'
-#' @description Objects of class `zscoreParam` contain the parameters for running
-#' the combined z-scores method.
+#' @description Objects of class `zscoreParam` contain the parameters for
+#' running the combined z-scores method.
 #'
-#' @details The combined z-scores method does not take any method-specific
-#' parameters in addition to an expression data set and a collection of gene
-#' sets.
+#' @details The combined z-scores method takes a number of parameters shared
+#' with all methods implemented by package GSVA but does not take any
+#' method-specific parameters.
+#' These parameters are described in detail below.
 #'
-#' @param exprData The expression data.  Must be one of the classes
-#' supported by [`GsvaExprData-class`].  Type `help(GsvaExprData)` to consult
-#' the available classes.
+#' @param exprData The expression data set.  Must be one of the classes
+#' supported by [`GsvaExprData-class`].  For a list of these classes, see its
+#' help page using `help(GsvaExprData)`.
 #'
 #' @param geneSets The gene sets.  Must be one of the classes supported by
-#' [`GsvaGeneSets-class`].
+#' [`GsvaGeneSets-class`].  For a list of these classes, see its help page using
+#' `help(GsvaGeneSets)`.
 #' 
-#' @param assay The name of the assay to use in case `exprData` is a multi-assay
-#' container, otherwise ignored.  By default, the first assay is used.
+#' @param assay Character vector of length 1.  The name of the assay to use in
+#' case `exprData` is a multi-assay container, otherwise ignored.  By default,
+#' the first assay is used.
 #' 
-#' @param annotation The name of a Bioconductor annotation package for the gene
-#' identifiers occurring in the row names of the expression data matrix.  This
-#' can be used to map gene identifiers occurring in the gene sets if those are
-#' provided in a [`GeneSetCollection`].  By default gene identifiers used in
-#' expression data matrix and gene sets are matched directly.
+#' @param annotation An object of class [`GeneIdentifierType-class`] from
+#' package `GSEABase` describing the gene identifiers used as the row names of
+#' the expression data set.  See [`GeneIdentifierType`] for help on available
+#' gene identifier types and how to construct them.  This
+#' information can be used to map gene identifiers occurring in the gene sets.
 #' 
-#' @param minSize Minimum size of the resulting gene sets after gene identifier
-#' mapping. By default, the minimum size is 1.
+#' If the default value `NULL` is provided, an attempt will be made to extract
+#' the gene identifier type from the expression data set provided as `exprData`
+#' (by calling [`gsvaAnnotation`] on it).  If still not successful, the
+#' `NullIdentifier()` will be used as the gene identifier type, gene identifier
+#' mapping will be disabled and gene identifiers used in expression data set and
+#' gene sets can only be matched directly.
 #' 
-#' @param maxSize Maximum size of the resulting gene sets after gene identifier
-#' mapping. By default, the maximum size is `Inf`.
+#' @param minSize Numeric vector of length 1.  Minimum size of the resulting gene
+#' sets after gene identifier mapping. By default, the minimum size is 1.
+#' 
+#' @param maxSize Numeric vector of length 1.  Maximum size of the resulting gene
+#' sets after gene identifier mapping. By default, the maximum size is `Inf`.
 #' 
 #' @return A new [`zscoreParam-class`] object.
 #'
@@ -56,15 +66,33 @@
 #' 
 #' @export
 zscoreParam <- function(exprData, geneSets,
-                        assay=NA_character_, annotation=NA_character_,
+                        assay=NA_character_, annotation=NULL,
                         minSize=1,maxSize=Inf) {
     an <- gsvaAssayNames(exprData)
-    if((!is.na(assay)) && (!.isCharNonEmpty(an)))
-        warning("argument assay='", assay,
-                "' ignored since exprData has no assayNames()")
+    if((!is.na(assay)) && (!.isCharNonEmpty(an))) {
+        msg <- sprintf(paste0("argument assay='%s' ignored since exprData has ",
+                              "no assayNames()"), assay)
+        cli_alert_info(msg)
+    }
     if(is.na(assay) && .isCharNonEmpty(an))
         assay <- na.omit(an)[1]
-    
+
+    xa <- gsvaAnnotation(exprData)
+    if(is.null(xa)) {
+        if(is.null(annotation)) {
+            annotation <- NullIdentifier()
+        }
+    } else {
+        if(is.null(annotation)) {
+            annotation <- xa
+        } else {
+            msg <- sprintf(paste0("using argument annotation='%s' and ",
+                                  "ignoring exprData annotation ('%s')"),
+                           capture.output(annotation), capture.output(xa))
+            cli_alert_info(msg)
+        }
+    }
+
     new("zscoreParam", exprData=exprData, geneSets=geneSets,
         assay=assay, annotation=annotation,
         minSize=minSize, maxSize=maxSize)
@@ -90,25 +118,28 @@ setValidity("zscoreParam", function(object) {
         inv <- c(inv, "@geneSets has length 0")
     }
     if(length(oa) != 1) {
-        inv <- c(inv, "@assay should be of length 1")
+        inv <- c(inv, "@assay must be of length 1")
     }
     if(.isCharLength1(oa) && .isCharNonEmpty(an) && (!(oa %in% an))) {
-        inv <- c(inv, "@assay should be one of assayNames(@exprData)")
+        inv <- c(inv, "@assay must be one of assayNames(@exprData)")
     }
     if(length(object@annotation) != 1) {
-        inv <- c(inv, "@annotation should be of length 1")
+        inv <- c(inv, "@annotation must be of length 1")
+    }
+    if(!inherits(object@annotation, "GeneIdentifierType")) {
+        inv <- c(inv, "@annotation must be a subclass of 'GeneIdentifierType'")
     }
     if(length(object@minSize) != 1) {
-        inv <- c(inv, "@minSize should be of length 1")
+        inv <- c(inv, "@minSize must be of length 1")
     }
     if(object@minSize < 1) {
-        inv <- c(inv, "@minSize should be at least 1 or greater")
+        inv <- c(inv, "@minSize must be at least 1 or greater")
     }
     if(length(object@maxSize) != 1) {
-        inv <- c(inv, "@maxSize should be of length 1")
+        inv <- c(inv, "@maxSize must be of length 1")
     }
     if(object@maxSize < object@minSize) {
-        inv <- c(inv, "@maxSize should be at least @minSize or greater")
+        inv <- c(inv, "@maxSize must be at least @minSize or greater")
     }
     return(if(length(inv) == 0) TRUE else inv)
 })

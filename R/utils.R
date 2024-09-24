@@ -99,7 +99,7 @@
     ## note that the method for 'GeneSetCollection' calls geneIds(), i.e., 
     ## whatever the input, from here on we have a list of character vectors
     geneSets <- mapGeneSetsToAnno(geneSets=get_geneSets(param),
-                                  anno=gsvaAnnotation(exprData),
+                                  anno=get_annotation(param),
                                   verbose=verbose)
     
     ## map to the actual features for which expression data is available
@@ -236,7 +236,11 @@
 }
 
 .catObj <- function(x, prefix = "  ") {
-    cat(paste0(prefix, capture.output(gsvaShow(x))), sep="\n")
+    if(is.null(x)) {
+        cat(paste0(prefix, "none."))
+    } else {
+        cat(paste0(prefix, capture.output(gsvaShow(x))), sep="\n")
+    }
 }
 
 .isCharNonEmpty <- function(x) {
