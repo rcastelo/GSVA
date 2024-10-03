@@ -141,12 +141,12 @@ kcdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP GausskR, SEXP verboseR)
     nv = XRsp_p[i+1]-XRsp_p[i];
     if (nv > 0) {
       double* x = XRsp_x + XRsp_p[i];
-      double* r = Calloc(nv, double);
+      double* r = R_Calloc(nv, double);
       /*
       double  h;
 
       h = Gaussk ? sd(x, nv) : 0.5;
-      ossx = Calloc(nv, double);
+      ossx = R_Calloc(nv, double);
       outerselfsubtr(x, nv, ossx);
 
         kx = Gaussk ? pnorm(ossx[j], 0.0, 1.0, TRUE, FALSE) :
@@ -170,7 +170,7 @@ kcdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP GausskR, SEXP verboseR)
         kcdfRobj_x[XCsp_idx] = r[k];
       }
 
-      Free(r);
+      R_Free(r);
     }
 
   }
@@ -230,8 +230,8 @@ kcdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP GausskR, SEXP verboseR) 
   }
 
   for (int i=0; i < nr; i++) {
-    double*       x = Calloc(nc, double); /* assuming zeroes are set */
-    double*       r = Calloc(nc, double); /* assuming zeroes are set */
+    double*       x = R_Calloc(nc, double); /* assuming zeroes are set */
+    double*       r = R_Calloc(nc, double); /* assuming zeroes are set */
 
     if (verbose) { /* show progress */
       if (i % 100 == 0 && CLI_SHOULD_TICK)
@@ -256,8 +256,8 @@ kcdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP GausskR, SEXP verboseR) 
       kcdf_vals[idx] = r[j];
     }
 
-    Free(r);
-    Free(x);
+    R_Free(r);
+    R_Free(x);
   }
 
   if (verbose)

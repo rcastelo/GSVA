@@ -166,7 +166,7 @@ ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
 
     /* tabulate matches */
     /* consider adding LONG_VECTOR_SUPPORT */
-    tab = Calloc(nuniqv, int); /* assuming zeroes are set */
+    tab = R_Calloc(nuniqv, int); /* assuming zeroes are set */
     for (int j=XRsp_p[i]; j < XRsp_p[i+1]; j++) {
       int k = j - XRsp_p[i];
       if (mt[k] > 0 && mt[k] <= nuniqv)
@@ -175,7 +175,7 @@ ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
 
     /* cumulative sum to calculate ecdf values */
     /* consider adding LONG_VECTOR_SUPPORT */
-    ecdfuniqv = Calloc(nuniqv, double); /* assuming zeroes are set */
+    ecdfuniqv = R_Calloc(nuniqv, double); /* assuming zeroes are set */
     sum = 0;
     for (int j=0; j < nuniqv; j++) {
       sum = sum + tab[j];
@@ -198,8 +198,8 @@ ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
       ecdfRobj_x[XCsp_idx] = ecdfuniqv[mt[k]-1];
     }
 
-    Free(ecdfuniqv);
-    Free(tab);
+    R_Free(ecdfuniqv);
+    R_Free(tab);
 
     UNPROTECT(2); /* xR uniqvR */
   }
@@ -319,7 +319,7 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
 
     /* tabulate matches */
     /* consider adding LONG_VECTOR_SUPPORT */
-    tab = Calloc(nuniqv, int); /* assuming zeroes are set */
+    tab = R_Calloc(nuniqv, int); /* assuming zeroes are set */
     for (int j=XRsp_p[i]; j < XRsp_p[i+1]; j++) {
       int k = j - XRsp_p[i];
       if (mt[k] > 0 && mt[k] <= nuniqv)
@@ -338,7 +338,7 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
 
     /* cumulative sum to calculate ecdf values */
     /* consider adding LONG_VECTOR_SUPPORT */
-    ecdfuniqv = Calloc(nuniqv, double); /* assuming zeroes are set */
+    ecdfuniqv = R_Calloc(nuniqv, double); /* assuming zeroes are set */
     sum = 0;
     for (int j=0; j < nuniqv; j++) {
       sum = sum + tab[j];
@@ -378,8 +378,8 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
         ecdf_vals[idxz] = ecdfuniqv[whz];
     }
 
-    Free(ecdfuniqv);
-    Free(tab);
+    R_Free(ecdfuniqv);
+    R_Free(tab);
 
     UNPROTECT(2); /* xR uniqvR */
   }
@@ -473,14 +473,14 @@ ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR) {
 
     /* tabulate matches */
     /* consider adding LONG_VECTOR_SUPPORT */
-    tab = Calloc(nuniqv, int); /* assuming zeroes are set */
+    tab = R_Calloc(nuniqv, int); /* assuming zeroes are set */
     for (int j=0; j < nc; j++)
       if (mt[j] > 0 && mt[j] <= nuniqv)
         tab[mt[j] - 1]++;
 
     /* cumulative sum to calculate ecdf values */
     /* consider adding LONG_VECTOR_SUPPORT */
-    ecdfuniqv = Calloc(nuniqv, double); /* assuming zeroes are set */
+    ecdfuniqv = R_Calloc(nuniqv, double); /* assuming zeroes are set */
     sum = 0;
     for (int j=0; j < nuniqv; j++) {
       sum = sum + tab[j];
@@ -500,8 +500,8 @@ ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR) {
       ecdf_vals[idx] = ecdfuniqv[mt[j]-1];
     }
 
-    Free(ecdfuniqv);
-    Free(tab);
+    R_Free(ecdfuniqv);
+    R_Free(tab);
 
     UNPROTECT(2); /* xR uniqvR */
   }
