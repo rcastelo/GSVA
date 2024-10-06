@@ -75,8 +75,7 @@ SEXP
 match_int(SEXP x, SEXP table) {
   SEXP s, t, ansR;
 
-  PROTECT(t = s = allocList(3));
-  SET_TYPEOF(s, LANGSXP);
+  PROTECT(t = s = LCONS(R_NilValue, Rf_allocList(3)));
   SETCAR(t, install("match")); t=CDR(t);
   SETCAR(t, x);
   SET_TAG(t, install("x")); t=CDR(t);
@@ -157,7 +156,7 @@ order_rankstat_sparse_to_dense_R(SEXP XCspR, SEXP jR) { /* column in jR is 1-bas
   XCsp_x = REAL(GET_SLOT(XCspR, Matrix_xSym));
 
   /* put the sparse column into a dense vector */
-  x = Calloc(nr, double);
+  x = R_Calloc(nr, double);
   for (int i=XCsp_p[j-1]; i < XCsp_p[j]; i++)
     x[XCsp_i[i]] = XCsp_x[i];
 
@@ -169,7 +168,7 @@ order_rankstat_sparse_to_dense_R(SEXP XCspR, SEXP jR) { /* column in jR is 1-bas
 
   order_rankstat(x, nr, ord, rst);
 
-  Free(x);
+  R_Free(x);
 
   PROTECT(ansR = allocVector(VECSXP, 2));
 
@@ -210,20 +209,20 @@ order_rankstat_sparse_to_sparse_R(SEXP XCspR, SEXP jR) { /* column in jR is 1-ba
 
   /* put the nonzero values of the sparse column into a smaller dense vector */
   nnz_j = XCsp_p[j] - XCsp_p[j-1];
-  x = Calloc(nnz_j, double);
+  x = R_Calloc(nnz_j, double);
   for (int i=XCsp_p[j-1]; i < XCsp_p[j]; i++) {
     int k = i - XCsp_p[j-1];
     x[k] = XCsp_x[i];
   }
 
-  allord = Calloc(nr, int);
+  allord = R_Calloc(nr, int);
   for (int i=0; i < nr; i++)
     allord[i] = i + 1;
 
   PROTECT(ordR = allocVector(INTSXP, nr));
   PROTECT(rstR = allocVector(INTSXP, nr));
 
-  ord2 = Calloc(nnz_j, int);
+  ord2 = R_Calloc(nnz_j, int);
   ord = INTEGER(ordR);
   rst = INTEGER(rstR);
 
@@ -251,9 +250,9 @@ order_rankstat_sparse_to_sparse_R(SEXP XCspR, SEXP jR) { /* column in jR is 1-ba
   for (int i=0; i < nnz_j; i++)
     rst[ord[i]-1] = abs(nnz_j - i - ((int) (nnz_j / 2)));
 
-  Free(ord2);
-  Free(allord);
-  Free(x);
+  R_Free(ord2);
+  R_Free(allord);
+  R_Free(x);
 
   PROTECT(ansR = allocVector(VECSXP, 2));
 

@@ -109,8 +109,8 @@ gsva_rnd_walk(int* gsetidx, int k, int* generanking, int* rankstat, int n,
   int*    stepcdfingeneset;
   int*    stepcdfoutgeneset;
 
-  stepcdfingeneset = Calloc(n, int);  /* assuming zeroes are set */
-  stepcdfoutgeneset = Calloc(n, int);
+  stepcdfingeneset = R_Calloc(n, int);  /* assuming zeroes are set */
+  stepcdfoutgeneset = R_Calloc(n, int);
   for (int i=0; i < n; i++)
     stepcdfoutgeneset[i] = 1;
 
@@ -143,8 +143,8 @@ gsva_rnd_walk(int* gsetidx, int k, int* generanking, int* rankstat, int n,
       *walkstatneg = wlkstat;
   }
 
-  Free(stepcdfoutgeneset);
-  Free(stepcdfingeneset);
+  R_Free(stepcdfoutgeneset);
+  R_Free(stepcdfingeneset);
 }
 
 SEXP
@@ -183,8 +183,8 @@ gsva_rnd_walk_nonunittau(int* gsetidx, int k, int* generanking, int* rankstat,
   double* stepcdfingeneset;
   double* stepcdfoutgeneset;
 
-  stepcdfingeneset = Calloc(n, double);  /* assuming zeroes are set */
-  stepcdfoutgeneset = Calloc(n, double);
+  stepcdfingeneset = R_Calloc(n, double);  /* assuming zeroes are set */
+  stepcdfoutgeneset = R_Calloc(n, double);
   for (int i=0; i < n; i++)
     stepcdfoutgeneset[i] = 1.0;
 
@@ -217,8 +217,8 @@ gsva_rnd_walk_nonunittau(int* gsetidx, int k, int* generanking, int* rankstat,
       *walkstatneg = wlkstat;
   }
 
-  Free(stepcdfoutgeneset);
-  Free(stepcdfingeneset);
+  R_Free(stepcdfoutgeneset);
+  R_Free(stepcdfingeneset);
 }
 
 SEXP
