@@ -59,7 +59,7 @@ running the combined z-scores method.
 \details{
 Since the combined z-scores method does not take any method-specific
 parameters, this class does not add any slots to the common slots inherited
-from#' \code{\linkS4class{GsvaMethodParam}}.
+from \code{\linkS4class{GsvaMethodParam}}.
 
 The combined z-scores method takes a number of parameters shared
 with all methods implemented by package GSVA but does not take any

@@ -375,21 +375,19 @@ NULL
 setMethod("gsvaAnnotation",
           signature=signature(object="GsvaExprData"),
           function(object) {
-              ## in general
-              return(NULL)
+              return(attr(object, which="geneIdType", exact=TRUE))
           })
 
-#' @aliases gsvaAnnotation<-,GsvaExprData,ANY-method
+#' @aliases gsvaAnnotation<-,GsvaExprData,GeneIdentifierType-method
 #' @rdname gsvaAnnotation
 #' @exportMethod gsvaAnnotation
 setReplaceMethod("gsvaAnnotation",
                  signature=signature(
                      object="GsvaExprData",
-                     value="ANY"),
+                     value="GeneIdentifierType"),
           function(object, value) {
-              ## in general
-              stop("Object of class '", class(object), "' cannot store ",
-                   "annotation metadata of class '", class(value), "'.")
+              attr(object, which="geneIdType") <- value
+              object
           })
 
 #' @aliases gsvaAnnotation,ExpressionSet-method
@@ -417,6 +415,18 @@ setReplaceMethod("gsvaAnnotation",
                    value="character"),
                  function(object, value) {
                      annotation(object) <- value
+                     object
+                 })
+
+#' @aliases gsvaAnnotation<-,ExpressionSet,GeneIdentifierType-method
+#' @rdname gsvaAnnotation
+#' @exportMethod gsvaAnnotation
+setReplaceMethod("gsvaAnnotation",
+                 signature=signature(
+                   object="ExpressionSet",
+                   value="GeneIdentifierType"),
+                 function(object, value) {
+                     gsvaAnnotation(object) <- annotation(value)
                      object
                  })
 
@@ -483,6 +493,37 @@ setReplaceMethod("gsvaAnnotation",
                      object
                  })
 
+
+#' @aliases gsvaAnnotation,list-method
+#' @rdname gsvaAnnotation
+#' @exportMethod gsvaAnnotation
+setMethod("gsvaAnnotation",
+          signature=signature(object="list"),
+          function(object) {
+              return(attr(object, which="geneIdType", exact=TRUE))
+          })
+
+#' @aliases gsvaAnnotation<-,list,GeneIdentifierType-method
+#' @rdname gsvaAnnotation
+#' @exportMethod gsvaAnnotation
+setReplaceMethod("gsvaAnnotation",
+                 signature=signature(
+                     object="list",
+                     value="GeneIdentifierType"),
+          function(object, value) {
+              attr(object, which="geneIdType") <- value
+              object
+          })
+
+#' @aliases gsvaAnnotation,GeneSetCollection-method
+#' @rdname gsvaAnnotation
+#' @exportMethod gsvaAnnotation
+setMethod("gsvaAnnotation",
+          signature=signature(object="GeneSetCollection"),
+          function(object) {
+              lgit <- unique(lapply(object, geneIdType))
+              return(if(length(lgit) == 1) lgit[[1]] else NULL)
+          })
 
 
 ### ----- methods for retrieving gene sets -----
@@ -710,6 +751,107 @@ deduplicateGmtLines <- function(geneSets,
 }
 
 
+#' @title Guess the gene identifier type from a list of character vectors
+#' 
+#' @description This function tries to derive the type of gene IDs used in a
+#' named list of `character` vectors provided as input.
+#' 
+#' @param geneIdsList A named list of character vectors like the ones returned
+#' by `geneIds()`.
+#'
+#' @return An object of a subclass of [`GeneIdentifierType`] derived from the
+#' input.
+#'
+#' @details In order to make this function useful and keep it as simple as
+#' possible, we limit ourselves to the most common types of gene identifiers:
+#' "Gene IDs" consisting of digits only are considered ENTREZ IDs, anything
+#' starting with 'ENS' an ENSEMBL identifier and anything else a HuGO gene
+#' symbol.
+#' 
+#' @seealso [`GeneIdentifierType`]
+#'
+#' @aliases guessGeneIdType
+#' @name guessGeneIdType
+#' @rdname guessGeneIdType
+#' @export
+#' 
+guessGeneIdType <- function(geneIdsList) {
+    allIds <- unlist(geneIdsList)
+    
+    if(all(grepl("^[[:digit:]]+$", allIds))) {
+        retVal <- EntrezIdentifier()
+    } else if(all(grepl("^ENS", allIds))) {
+        retVal <- ENSEMBLIdentifier()
+    } else {
+        retVal <- SymbolIdentifier()
+    }
+
+    return(retVal)
+}
+
+
+#' @title Construct a GeneSetCollection object from a list of character vectors
+#' 
+#' @description This function is essentially the reverse of
+#' `GSEABase::geneIds()`, i.e., it takes as input a named list of `character`
+#' vectors representing gene sets and returns the corresponding
+#' GeneSetCollection object.
+#' 
+#' @param geneIdsList A named list of character vectors like the ones returned
+#' by `geneIds()`.  Names must be unique; otherwise see `deduplicateGeneSets()`
+#' for a number of strategies to resolve this issue.  
+#'
+#' @param geneIdType By default a character vector of length 1 with the special
+#' value `"auto"` or an object of a subclass of [`GeneIdentifierType`].  If set
+#' to `"auto"`, the function will try to derive the gene ID type from argument
+#' `geneIdsList` using [`guessGeneIdType`].
+#' The gene ID type of all `GeneSet` objects in the resulting
+#' `GeneSetCollection` will be set to this value.
+#' 
+#' @param collectionType An object of class [`CollectionType`].  The collection
+#' type of all `GeneSet` objects in the resulting `GeneSetCollection` will be
+#' set to this value but can afterwards be modified for individual `GeneSet`s
+#' if necessary.
+#'
+#' @return An object of class [`GeneSetCollection`] with all its [`GeneSet`]
+#' objects using the gene ID and collection types specified by the corresponding
+#' arguments.  Applying function `geneIds()` to this object should return a list
+#' identical to the `geneIdsList` argument.
+#' 
+#' @seealso [`GeneSetCollection`], [`geneIds`], [`deduplicateGeneSets`],
+#' [`guessGeneIdType`], [`GeneSet`]
+#'
+#' @aliases geneIdsToGeneSetCollection
+#' @name geneIdsToGeneSetCollection
+#' @rdname geneIdsToGeneSetCollection
+#' @export
+#' 
+geneIdsToGeneSetCollection <- function(geneIdsList,
+                                       geneIdType="auto",
+                                       collectionType=NullCollection()) {
+    if(geneIdType == "auto") {
+        if(is.null(git <- gsvaAnnotation(geneIdsList))) {
+            git <- guessGeneIdType(geneIdsList)
+        }
+    } else {
+        git <- geneIdType
+    }
+    
+    return(GeneSetCollection(mapply(function(gn, gs) {
+        if(anyDuplicated(gs) > 0) {
+            gs <- unique(gs)
+            msg <- sprintf("Duplicated gene IDs removed from gene set %s", gn)
+            cli_alert_warning(msg)
+        }
+        
+        GeneSet(gs,
+                geneIdType=git,
+                collectionType=collectionType,
+                setName=gn)
+    }, gn=names(geneIdsList), gs=geneIdsList)))
+}
+
+
 #' @title Import Gene Sets from a GMT File
 #' 
 #' @description Imports a list of gene sets from a GMT (Gene Matrix Transposed)
@@ -722,9 +864,14 @@ deduplicateGmtLines <- function(geneSets,
 #' @param sep The character string separating members of each gene set in the
 #' GMT file.
 #'
-#' @param geneIdType Only used when `valueType == "GeneSetCollection"`.  See
-#' [`getGmt`] for more information.
-#'
+#' @param geneIdType By default a character vector of length 1 with the special
+#' value `"auto"` or an object of a subclass of [`GeneIdentifierType`].  If set
+#' to `"auto"`, the function will try to derive the gene ID type from argument
+#' `geneIdsList` using [`guessGeneIdType`].
+#' Depending on the value of argument `valueType`, the gene ID type of the
+#' resulting list or of all `GeneSet` objects in the resulting
+#' `GeneSetCollection` will be set to this value.
+#' 
 #' @param collectionType Only used when `valueType == "GeneSetCollection"`. See
 #' [`getGmt`] for more information.
 #'
@@ -771,7 +918,7 @@ deduplicateGmtLines <- function(geneSets,
 #' 
 readGMT <- function (con,
                      sep = "\t",
-                     geneIdType = NullIdentifier(),
+                     geneIdType = "auto",
                      collectionType = NullCollection(), 
                      valueType = c("GeneSetCollection", "list"),
                      deduplUse = c("first", "drop", "union", "smallest", "largest"),
@@ -782,7 +929,7 @@ readGMT <- function (con,
     lines <- strsplit(readLines(con, ...), sep)
     if (any(sapply(lines, length) < 2)) {
         txt <- paste("all records in the GMT file must have >= 2 fields", 
-                     "\n  first invalid line:  %s\n", collpase = "")
+                     "\n  first invalid line:  %s\n", collapse = "")
         .stopf(txt, lines[sapply(lines, length) < 2][[1]])
     }
     dups <- new.env(parent = emptyenv())
@@ -800,6 +947,10 @@ readGMT <- function (con,
     ## our small addition to tolerate duplicate gene set names
     lines <- deduplicateGmtLines(lines, deduplUse)
 
+    if(geneIdType == "auto") {
+        geneIdType <- guessGeneIdType(lapply(lines, tail, -2))
+    }
+
     ## on second thoughts, another small addition: let the user choose the return type
     if(valueType == "GeneSetCollection") {
         ## from GSEABase::getGmt()
@@ -812,6 +963,12 @@ readGMT <- function (con,
     } else if(valueType == "list") {
         gs <- lapply(lines, tail, -2)
         names(gs) <- sapply(lines, head, 1)
+
+        ## even more thoughts, now that we make use of gene ID metadata in lists
+        if(!is.null(geneIdType)) {
+            gsvaAnnotation(gs) <- geneIdType
+        }
+        
         return(gs)
     }
 }
@@ -968,13 +1125,15 @@ setMethod("mapGeneSetsToAnno", signature(geneSets="list", anno="NULL"),
 
 setMethod("mapGeneSetsToAnno", signature(geneSets="list", anno="character"),
           function(geneSets, anno, verbose=FALSE) {
-              return(geneSets)
+              gsc <- geneIdsToGeneSetCollection(geneIdsList=geneSets)
+              return(mapGeneSetsToAnno(gsc, anno))
           })
 
 setMethod("mapGeneSetsToAnno",
           signature(geneSets="list", anno="GeneIdentifierType"),
           function(geneSets, anno, verbose=FALSE) {
-              return(geneSets)
+              gsc <- geneIdsToGeneSetCollection(geneIdsList=geneSets)
+              return(mapGeneSetsToAnno(gsc, anno))
           })
 
 setMethod("mapGeneSetsToAnno",

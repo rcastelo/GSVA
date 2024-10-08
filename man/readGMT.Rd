@@ -7,7 +7,7 @@
 readGMT(
   con,
   sep = "\\t",
-  geneIdType = NullIdentifier(),
+  geneIdType = "auto",
   collectionType = NullCollection(),
   valueType = c("GeneSetCollection", "list"),
   deduplUse = c("first", "drop", "union", "smallest", "largest"),
@@ -22,8 +22,13 @@ and hence may contain anything that \code{readLines()} can handle.}
 \item{sep}{The character string separating members of each gene set in the
 GMT file.}
 
-\item{geneIdType}{Only used when \code{valueType == "GeneSetCollection"}.  See
-\code{\link{getGmt}} for more information.}
+\item{geneIdType}{By default a character vector of length 1 with the special
+value \code{"auto"} or an object of a subclass of \code{\link{GeneIdentifierType}}.  If set
+to \code{"auto"}, the function will try to derive the gene ID type from argument
+\code{geneIdsList} using \code{\link{guessGeneIdType}}.
+Depending on the value of argument \code{valueType}, the gene ID type of the
+resulting list or of all \code{GeneSet} objects in the resulting
+\code{GeneSetCollection} will be set to this value.}
 
 \item{collectionType}{Only used when \code{valueType == "GeneSetCollection"}. See
 \code{\link{getGmt}} for more information.}

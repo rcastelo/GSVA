@@ -4,24 +4,30 @@
 \alias{gsvaAnnotation}
 \alias{gsvaAnnotation<-}
 \alias{gsvaAnnotation,GsvaExprData-method}
-\alias{gsvaAnnotation<-,GsvaExprData,ANY-method}
+\alias{gsvaAnnotation<-,GsvaExprData,GeneIdentifierType-method}
 \alias{gsvaAnnotation,ExpressionSet-method}
 \alias{gsvaAnnotation<-,ExpressionSet,character-method}
+\alias{gsvaAnnotation<-,ExpressionSet,GeneIdentifierType-method}
 \alias{gsvaAnnotation,SummarizedExperiment-method}
 \alias{gsvaAnnotation<-,SummarizedExperiment,GeneIdentifierType-method}
 \alias{gsvaAnnotation,SingleCellExperiment-method}
 \alias{gsvaAnnotation<-,SingleCellExperiment,GeneIdentifierType-method}
 \alias{gsvaAnnotation,SpatialExperiment-method}
 \alias{gsvaAnnotation<-,SpatialExperiment,GeneIdentifierType-method}
+\alias{gsvaAnnotation,list-method}
+\alias{gsvaAnnotation<-,list,GeneIdentifierType-method}
+\alias{gsvaAnnotation,GeneSetCollection-method}
 \title{Store and Retrieve Annotation Metadata}
 \usage{
 \S4method{gsvaAnnotation}{GsvaExprData}(object)
 
-\S4method{gsvaAnnotation}{GsvaExprData,ANY}(object) <- value
+\S4method{gsvaAnnotation}{GsvaExprData,GeneIdentifierType}(object) <- value
 
 \S4method{gsvaAnnotation}{ExpressionSet}(object)
 
 \S4method{gsvaAnnotation}{ExpressionSet,character}(object) <- value
+
+\S4method{gsvaAnnotation}{ExpressionSet,GeneIdentifierType}(object) <- value
 
 \S4method{gsvaAnnotation}{SummarizedExperiment}(object)
 
@@ -34,6 +40,12 @@
 \S4method{gsvaAnnotation}{SpatialExperiment}(object)
 
 \S4method{gsvaAnnotation}{SpatialExperiment,GeneIdentifierType}(object) <- value
+
+\S4method{gsvaAnnotation}{list}(object)
+
+\S4method{gsvaAnnotation}{list,GeneIdentifierType}(object) <- value
+
+\S4method{gsvaAnnotation}{GeneSetCollection}(object)
 }
 \arguments{
 \item{object}{An expression data object of one of the classes described in
