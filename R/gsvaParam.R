@@ -55,7 +55,7 @@
 #' this parameter decides at what minimum sample size `kcdf="none"`, i.e., the
 #' estimation of the empirical cumulative distribution function (ECDF) of
 #' expression levels across samples is performed directly without using a
-#' kernel; see the `kcdf` slot.
+#' kernel. By default, this value is set to 200; see the `kcdf` slot.
 #'
 #' @param tau Numeric vector of length 1.  The exponent defining the weight of
 #' the tail in the random walk performed by the `GSVA` (Hänzelmann et al.,
@@ -115,7 +115,7 @@ gsvaParam <- function(exprData, geneSets,
                       assay=NA_character_, annotation=NULL,
                       minSize=1, maxSize=Inf,
                       kcdf=c("auto", "Gaussian", "Poisson", "none"),
-                      kcdfNoneMinSampleSize=50, tau=1, maxDiff=TRUE,
+                      kcdfNoneMinSampleSize=200, tau=1, maxDiff=TRUE,
                       absRanking=FALSE, sparse=TRUE) {
     kcdf <- match.arg(kcdf)
     kcdfNoneMinSampleSize <- as.integer(kcdfNoneMinSampleSize)

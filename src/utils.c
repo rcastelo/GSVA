@@ -95,7 +95,7 @@ SEXP
 order_rankstat_R(SEXP xR);
 
 void
-order_rankstat(double* x, int n, int* ord, int* rst) {
+order_rankstat(double* x, int n, int* ord, double* rst) {
   for (int i=0; i < n; i++)
     ord[i] = i + 1; /* 1-based to comply with R upstream */
 
@@ -103,7 +103,7 @@ order_rankstat(double* x, int n, int* ord, int* rst) {
   qsort(ord, n, sizeof(int), indirect_dbl_cmp_dec);
 
   for (int i=0; i < n; i++)
-    rst[ord[i]-1] = abs(n - i - ((int) (n / 2)));
+    rst[ord[i]-1] = fabs(((double) n) - ((double) i) - (((double ) n) / 2.0));
 }
 
 SEXP
@@ -112,16 +112,16 @@ order_rankstat_R(SEXP xR) {
   double* x;
   SEXP ordR, rstR, ansR;
   int* ord;
-  int* rst;
+  double* rst;
 
   PROTECT(xR);
   x = REAL(xR);
 
   PROTECT(ordR = allocVector(INTSXP, n));
-  PROTECT(rstR = allocVector(INTSXP, n));
+  PROTECT(rstR = allocVector(REALSXP, n));
 
   ord = INTEGER(ordR);
-  rst = INTEGER(rstR);
+  rst = REAL(rstR);
 
   order_rankstat(x, n, ord, rst);
 
@@ -146,7 +146,7 @@ order_rankstat_sparse_to_dense_R(SEXP XCspR, SEXP jR) { /* column in jR is 1-bas
   int     nr;
   SEXP    ordR, rstR, ansR;
   int*    ord;
-  int*    rst;
+  double* rst;
 
   PROTECT(XCspR);
   XCsp_dim = INTEGER(GET_SLOT(XCspR, Matrix_DimSym));
@@ -161,10 +161,10 @@ order_rankstat_sparse_to_dense_R(SEXP XCspR, SEXP jR) { /* column in jR is 1-bas
     x[XCsp_i[i]] = XCsp_x[i];
 
   PROTECT(ordR = allocVector(INTSXP, nr));
-  PROTECT(rstR = allocVector(INTSXP, nr));
+  PROTECT(rstR = allocVector(REALSXP, nr));
 
   ord = INTEGER(ordR);
-  rst = INTEGER(rstR);
+  rst = REAL(rstR);
 
   order_rankstat(x, nr, ord, rst);
 
@@ -195,7 +195,7 @@ order_rankstat_sparse_to_sparse_R(SEXP XCspR, SEXP jR) { /* column in jR is 1-ba
   int     nr;
   SEXP    ordR, rstR, ansR;
   int*    ord;
-  int*    rst;
+  double* rst;
   int*    ord2;
   int*    allord;
   int     allord_i;
@@ -220,11 +220,11 @@ order_rankstat_sparse_to_sparse_R(SEXP XCspR, SEXP jR) { /* column in jR is 1-ba
     allord[i] = i + 1;
 
   PROTECT(ordR = allocVector(INTSXP, nr));
-  PROTECT(rstR = allocVector(INTSXP, nr));
+  PROTECT(rstR = allocVector(REALSXP, nr));
 
   ord2 = R_Calloc(nnz_j, int);
   ord = INTEGER(ordR);
-  rst = INTEGER(rstR);
+  rst = REAL(rstR);
 
   for (int i=0; i < nnz_j; i++)
     ord2[i] = i+1; /* indirect_dbl_cmp_dec() assumes 1-based! */
@@ -245,10 +245,10 @@ order_rankstat_sparse_to_sparse_R(SEXP XCspR, SEXP jR) { /* column in jR is 1-ba
     }
 
   for (int i=0; i < nr; i++)
-    rst[i] = (int) (nnz_j / 2) + 1; /* zero entries get the same symmtric rank */
+    rst[i] = (nnz_j / 2.0) + 1.0; /* zero entries get the same symmetric rank */
 
   for (int i=0; i < nnz_j; i++)
-    rst[ord[i]-1] = abs(nnz_j - i - ((int) (nnz_j / 2)));
+    rst[ord[i]-1] = fabs(((double) nnz_j) - ((double) i) - (((double) nnz_j) / 2.0));
 
   R_Free(ord2);
   R_Free(allord);
