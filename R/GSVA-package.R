@@ -21,7 +21,8 @@
 #' @importFrom Biobase selectSome
 #' @importFrom S4Vectors SimpleList DataFrame
 #' @importFrom IRanges CharacterList
-#' @importFrom GSEABase AnnoOrEntrezIdentifier mapIdentifiers NullIdentifier NullCollection
+#' @importFrom GSEABase AnnoOrEntrezIdentifier mapIdentifiers NullIdentifier
+#' NullCollection geneIdType SymbolIdentifier ENSEMBLIdentifier EntrezIdentifier
 #' @importFrom SummarizedExperiment SummarizedExperiment
 #' @importFrom parallel splitIndices
 #' @importFrom BiocParallel SerialParam MulticoreParam multicoreWorkers bpnworkers

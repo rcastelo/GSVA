@@ -6,12 +6,13 @@
 test_newAPI <- function() {
     message("Running unit tests for the new API.")
     
-    p <- 10; n <- 30; ngs <- 5 # number of genes, samples, gene sets
+    p <- 100; n <- 30; ngs <- 5 # number of genes, samples, gene sets
     xf <- matrix(rnorm(n * p), nrow=p, ncol=n,
                  dimnames=list(paste0("g", seq.int(p)),
                                paste0("s", seq.int(n))))
     xi <- round(abs(xf * 1e6))
-    gs <- replicate(ngs, sample(rownames(xf), 25, replace=TRUE), simplify=FALSE)
+    gs <- replicate(ngs, sample(rownames(xf), 25, replace=FALSE), simplify=FALSE)
+    names(gs) <- paste0("gs", seq_len(ngs))
 
     ## library("Biobase")
     ## es1 <- ExpressionSet(xf)
