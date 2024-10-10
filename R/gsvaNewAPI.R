@@ -805,6 +805,8 @@ guessGeneIdType <- function(geneIdsList) {
 #' value `"auto"` or an object of a subclass of [`GeneIdentifierType`].  If set
 #' to `"auto"`, the function will try to derive the gene ID type from argument
 #' `geneIdsList` using [`guessGeneIdType`].
+#' Other values, including `NULL`, will be ignored with a warning and
+#' `geneIdType=NullIdentifier()` will be used instead.
 #' The gene ID type of all `GeneSet` objects in the resulting
 #' `GeneSetCollection` will be set to this value.
 #' 
@@ -829,12 +831,16 @@ guessGeneIdType <- function(geneIdsList) {
 geneIdsToGeneSetCollection <- function(geneIdsList,
                                        geneIdType="auto",
                                        collectionType=NullCollection()) {
-    if(geneIdType == "auto") {
+    if(inherits(geneIdType, "character") && (geneIdType == "auto")) {
         if(is.null(git <- gsvaAnnotation(geneIdsList))) {
             git <- guessGeneIdType(geneIdsList)
         }
-    } else {
+    } else if(inherits(geneIdType, "GeneIdentifierType")) {
         git <- geneIdType
+    } else {
+        git <- NullIdentifier()
+        cli_alert_warning(paste0("Invalid value of argument `geneIdType` ",
+                                 "ignored, using `NullIdentifier()` instead."))
     }
     
     return(GeneSetCollection(mapply(function(gn, gs) {
@@ -868,6 +874,8 @@ geneIdsToGeneSetCollection <- function(geneIdsList,
 #' value `"auto"` or an object of a subclass of [`GeneIdentifierType`].  If set
 #' to `"auto"`, the function will try to derive the gene ID type from argument
 #' `geneIdsList` using [`guessGeneIdType`].
+#' Other values, including `NULL`, will be ignored with a warning and
+#' `geneIdType=NullIdentifier()` will be used instead.
 #' Depending on the value of argument `valueType`, the gene ID type of the
 #' resulting list or of all `GeneSet` objects in the resulting
 #' `GeneSetCollection` will be set to this value.
@@ -947,10 +955,14 @@ readGMT <- function (con,
     ## our small addition to tolerate duplicate gene set names
     lines <- deduplicateGmtLines(lines, deduplUse)
 
-    if(geneIdType == "auto") {
+    if(inherits(geneIdType, "character") && (geneIdType == "auto")) {
         geneIdType <- guessGeneIdType(lapply(lines, tail, -2))
-    }
-
+    } else if(!inherits(geneIdType, "GeneIdentifierType")) {
+        geneIdType <- NullIdentifier()
+        cli_alert_warning(paste0("Invalid value of argument `geneIdType` ",
+                                 "ignored, using `NullIdentifier()` instead."))
+    } ## else: fine, no?
+    
     ## on second thoughts, another small addition: let the user choose the return type
     if(valueType == "GeneSetCollection") {
         ## from GSEABase::getGmt()

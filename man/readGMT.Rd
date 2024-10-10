@@ -26,6 +26,8 @@ GMT file.}
 value \code{"auto"} or an object of a subclass of \code{\link{GeneIdentifierType}}.  If set
 to \code{"auto"}, the function will try to derive the gene ID type from argument
 \code{geneIdsList} using \code{\link{guessGeneIdType}}.
+Other values, including \code{NULL}, will be ignored with a warning and
+\code{geneIdType=NullIdentifier()} will be used instead.
 Depending on the value of argument \code{valueType}, the gene ID type of the
 resulting list or of all \code{GeneSet} objects in the resulting
 \code{GeneSetCollection} will be set to this value.}
