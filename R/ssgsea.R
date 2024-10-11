@@ -62,6 +62,7 @@
 
 #' @importFrom IRanges IntegerList match
 #' @importFrom BiocParallel bpnworkers
+#' @importFrom sparseMatrixStats colRanks
 #' @importFrom cli cli_alert_info cli_alert_warning
 #' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
 ssgsea <- function(X, geneSets, alpha=0.25,
@@ -76,7 +77,7 @@ ssgsea <- function(X, geneSets, alpha=0.25,
   if (verbose)
     cli_alert_info("Calculating ranks")
   
-  R <- t(sparseMatrixStats::colRanks(X, ties.method="average"))
+  R <- t(colRanks(X, ties.method="average"))
   mode(R) <- "integer"
 
   if (verbose)

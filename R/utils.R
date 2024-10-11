@@ -19,6 +19,7 @@
 ##  values of genes: genes that are constant in their non-zero values will have
 ##  an SD of 0 and therefore scaling them will result in division by 0.
 
+#' @importFrom sparseMatrixStats rowRanges
 #' @importFrom cli cli_alert_warning
 .filterGenes <- function(expr, removeConstant=TRUE, removeNzConstant=TRUE) {
     geneRanges <- rowRanges(expr, na.rm=TRUE, useNames=FALSE)
@@ -160,9 +161,13 @@
 }
 
 ## actually, it's not just an apply() but also in-place modification
-.sparseColumnApplyAndReplace <- function(m, FUN) {
-    x <- lapply(.sparse2columnList(m), FUN=FUN)
+## ellipsis added for cases such as when FUN=rank where we may need
+## to set the parameter 'ties.method' of the 'rank()' function
+.sparseColumnApplyAndReplace <- function(m, FUN, ...) {
+    x <- lapply(.sparse2columnList(m), FUN=FUN, ...)
     m@x <- unlist(x, use.names=FALSE)
+    if (is.integer(m@x)) ## rank(ties.method="first") returns integers
+        mode(m@x) <- "numeric" ## dgCMatrix holds only doubles and logicals
     return(m)
 }
 
