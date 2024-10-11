@@ -14,7 +14,7 @@ gsvaParam(
   minSize = 1,
   maxSize = Inf,
   kcdf = c("auto", "Gaussian", "Poisson", "none"),
-  kcdfNoneMinSampleSize = 50,
+  kcdfNoneMinSampleSize = 200,
   tau = 1,
   maxDiff = TRUE,
   absRanking = FALSE,
@@ -69,7 +69,7 @@ kernel approach for the estimation of the ECDF, then we should set
 this parameter decides at what minimum sample size \code{kcdf="none"}, i.e., the
 estimation of the empirical cumulative distribution function (ECDF) of
 expression levels across samples is performed directly without using a
-kernel; see the \code{kcdf} slot.}
+kernel. By default, this value is set to 200; see the \code{kcdf} slot.}
 
 \item{tau}{Numeric vector of length 1.  The exponent defining the weight of
 the tail in the random walk performed by the \code{GSVA} (Hänzelmann et al.,
