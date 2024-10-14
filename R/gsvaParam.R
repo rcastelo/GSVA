@@ -283,6 +283,7 @@ setMethod("show",
                   "tau: ", get_tau(object), "\n",
                   "maxDiff: ", get_maxDiff(object), "\n",
                   "absRanking: ", get_absRanking(object), "\n",
-                  "sparse: ", get_sparse(object), "\n",
                   sep="")
+              if ("dgCMatrix" %in% class(unwrapData(get_exprData(object), get_assay(object))))
+                  cat("sparse: ", get_sparse(object), "\n")
           })

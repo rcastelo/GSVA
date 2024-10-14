@@ -82,6 +82,50 @@
   mapdgenesets
 }
 
+## it assumes that all arguments have been already checked for correctness
+.filterAndMapGeneSets <- function(param, geneSets, minSize, maxSize,
+                                  filteredDataMatrix, verbose) {
+
+    ## if geneSets, minSize and maxSize are non-NA values, then they
+    ## override those coming from 'param' (b/c are provided by gsvaScores())
+    if (any(is.na(geneSets)))
+        geneSets <- get_geneSets(param)
+    if (is.na(minSize))
+        minSize <- get_minSize(param)
+    if (is.na(maxSize))
+        maxSize <- get_maxSize(param)
+
+    ## note that the method for 'GeneSetCollection' calls geneIds(), i.e., 
+    ## whatever the input, from here on we have a list of character vectors
+    geneSets <- mapGeneSetsToAnno(geneSets=geneSets,
+                                  anno=get_annotation(param),
+                                  verbose=verbose)
+    
+    ## map to the actual features for which expression data is available
+    ## note that the result is a list of integer vectors (indices to rownames)
+    ## and not a list of character vector any longer
+    mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(filteredDataMatrix))
+    
+    ## remove gene sets from the analysis for which no features are available
+    ## and meet the minimum and maximum gene-set size specified by the user
+    filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
+                                             minSize=minSize,
+                                             maxSize=maxSize)
+    
+    if (length(filteredMappedGeneSets) == 0)
+        stop("The gene set list is empty! Filter may be too stringent.")
+
+    ## this should NEVER happen -- just to make sure it doesn't...
+    if (anyDuplicated(names(filteredMappedGeneSets)) > 0)
+        stop("The gene set list contains duplicated gene set names.")
+
+    if (any(lengths(filteredMappedGeneSets) == 1)) {
+        msg <- "Some gene sets have size one. Consider setting minSize > 1"
+        cli_alert_warning(msg)
+    }
+
+    return(filteredMappedGeneSets)
+}
 
 #' @importFrom cli cli_alert_warning
 .filterAndMapGenesAndGeneSets <- function(param,
@@ -97,34 +141,9 @@
                                        removeConstant=removeConstant,
                                        removeNzConstant=removeNzConstant)
 
-    ## note that the method for 'GeneSetCollection' calls geneIds(), i.e., 
-    ## whatever the input, from here on we have a list of character vectors
-    geneSets <- mapGeneSetsToAnno(geneSets=get_geneSets(param),
-                                  anno=get_annotation(param),
-                                  verbose=verbose)
-    
-    ## map to the actual features for which expression data is available
-    ## note that the result is a list of integer vectors (indices to rownames)
-    ## and not a list of character vector any longer
-    mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(filteredDataMatrix))
-    
-    ## remove gene sets from the analysis for which no features are available
-    ## and meet the minimum and maximum gene-set size specified by the user
-    filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
-                                             minSize=get_minSize(param),
-                                             maxSize=get_maxSize(param))
-
-    if (length(filteredMappedGeneSets) == 0)
-        stop("The gene set list is empty! Filter may be too stringent.")
-
-    ## this should NEVER happen -- just to make sure it doesn't...
-    if (anyDuplicated(names(filteredMappedGeneSets)) > 0)
-        stop("The gene set list contains duplicated gene set names.")
-
-    if (any(lengths(filteredMappedGeneSets) == 1)) {
-        msg <- "Some gene sets have size one. Consider setting minSize > 1"
-        cli_alert_warning(msg)
-    }
+    filteredMappedGeneSets <- .filterAndMapGeneSets(param, NA, NA, NA,
+                                                    filteredDataMatrix,
+                                                    verbose)
 
     return(list(filteredDataMatrix=filteredDataMatrix,
                 filteredMappedGeneSets=filteredMappedGeneSets))

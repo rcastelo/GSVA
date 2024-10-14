@@ -3,9 +3,24 @@
 \name{gsvaRanks}
 \alias{gsvaRanks}
 \alias{gsvaRanks,gsvaParam-method}
-\title{GSVA ranks}
+\alias{gsvaScores}
+\alias{gsvaScores,gsvaParam,GsvaExprData-method}
+\title{GSVA ranks and scores}
 \usage{
 \S4method{gsvaRanks}{gsvaParam}(param, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
+
+\S4method{gsvaScores}{gsvaParam,GsvaExprData}(
+  param,
+  ranks,
+  geneSets = NA,
+  minSize = NA,
+  maxSize = NA,
+  tau = NA,
+  maxDiff = NA,
+  absRanking = NA,
+  verbose = TRUE,
+  BPPARAM = SerialParam(progressbar = verbose)
+)
 }
 \arguments{
 \item{param}{A \code{\link{gsvaParam}} object built using the constructor function
@@ -16,13 +31,64 @@
 \item{BPPARAM}{An object of class \code{\link{BiocParallelParam}} specifying parameters
 related to the parallel execution of some of the tasks and calculations
 within this function.}
+
+\item{ranks}{A matrix-like object storing GSVA ranks calculated with the
+method \code{\link{gsvaRanks}}.}
+
+\item{geneSets}{A collection of gene sets. Must be one of the classes
+supported by \code{\linkS4class{GsvaGeneSets}}. For a list of these classes, see its
+help page using \code{help(GsvaGeneSets)}. By default, this parameter is set to
+the \code{NA} missing value, which means that GSVA scores will be calculated
+using the gene sets specified in the \code{param} argument. If this parameter is
+set to a non-missing value corresponding to an object of the classes
+supported by \code{\linkS4class{GsvaGeneSets}}, then GSVA scores will be calculated
+using the gene sets in this argument, instead of the ones specified in the
+\code{param} argument.}
+
+\item{minSize}{Numeric vector of length 1.  Minimum size of the resulting gene
+sets after gene identifier mapping. Its default value is \code{NA}, indicating that
+this minimum value will be taken from the input \code{param} argument, otherwise,
+non-\code{NA} values override those from the input \code{param} argument.}
+
+\item{maxSize}{Numeric vector of length 1.  Minimum size of the resulting gene
+sets after gene identifier mapping. Its default value is \code{NA}, indicating that
+this minimum value will be taken from the input \code{param} argument, otherwise,
+non-\code{NA} values override those from the input \code{param} argument.}
+
+\item{tau}{Numeric vector of length 1.  The exponent defining the weight of
+the tail in the random walk performed by the \code{GSVA} (Hänzelmann et al.,
+2013) method.  The default value is 1 as described in the paper.}
+
+\item{maxDiff}{Logical vector of length 1 which offers two approaches to
+calculate the enrichment statistic (ES) from the KS random walk statistic.
+\itemize{
+\item \code{FALSE}: ES is calculated as the maximum distance of the random walk
+from 0. This approach produces a distribution of enrichment scores that is
+bimodal, but it can give large enrichment scores to gene sets whose genes
+are not concordantly activated in one direction only.
+\item \code{TRUE} (the default): ES is calculated as the magnitude difference between
+the largest positive and negative random walk deviations. This default value
+gives larger enrichment scores to gene sets whose genes are concordantly
+activated in one direction only.
+}}
+
+\item{absRanking}{Logical vector of length 1 used only when \code{maxDiff=TRUE}.
+When \code{absRanking=FALSE} (default) a modified Kuiper statistic is used to
+calculate enrichment scores, taking the magnitude difference between the
+largest positive and negative random walk deviations. When
+\code{absRanking=TRUE} the original Kuiper statistic that sums the largest
+positive and negative random walk deviations is used.}
 }
 \value{
-A matrix of GSVA rank values per column.
+In the case of the \code{gsvaRanks()} method, a matrix of GSVA rank
+values per column.
+
+In the case of the \code{gsvaScores()} method, a gene-set by sample matrix
+of GSVA enrichment scores stored in a ocntainer object of the same type as
+the input expression data container in the \code{param} argument.
 }
 \description{
-Calculates GSVA ranks. This functions allows one to
-split the calculations of the GSVA method in two steps: (1) calculate
+Calculate GSVA scores in two steps: (1) calculate GSVA
 ranks; and (2) calculate GSVA scores using the previously calculated
 ranks.
 }
@@ -35,19 +101,36 @@ nGrp1 <- 15 ## number of samples in group 1
 nGrp2 <- n - nGrp1 ## number of samples in group 2
 
 ## consider three disjoint gene sets
-geneSets <- list(set1=paste("g", 1:3, sep=""),
-                 set2=paste("g", 4:6, sep=""),
-                 set3=paste("g", 7:10, sep=""))
+geneSets <- list(gset1=paste0("g", 1:3),
+                 gset2=paste0("g", 4:6),
+                 gset3=paste0("g", 7:10))
 
 ## sample data from a normal distribution with mean 0 and st.dev. 1
 y <- matrix(rnorm(n*p), nrow=p, ncol=n,
             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+
 ## build GSVA parameter object
 gsvapar <- gsvaParam(y, geneSets)
 
 ## calculate GSVA ranks
 gsva_ranks <- gsvaRanks(gsvapar)
 gsva_ranks
+## calculate GSVA scores
+gsva_es <- gsvaScores(gsvapar, gsva_ranks)
+gsva_es
+
+## calculate now GSVA scores in a single step
+gsva_es1 <- gsva(gsvapar)
+
+## both approaches give the same result with the same input gene sets
+all.equal(gsva_es1, gsva_es)
+
+## however, results will be (obviously) different with different gene sets
+geneSets2 <- list(gset1=paste0("g", 3:6),
+                  gset2=paste0("g", c(1, 2, 7, 8)))
+
+## note that there is no need to calculate the GSVA ranks again
+gsvaScores(gsvapar, gsva_ranks, geneSets2)
 
 }
 \references{

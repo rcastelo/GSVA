@@ -295,10 +295,9 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
 
 ## BEGIN exported methods (to be moved to 'gsvaNewAPI.R')
 
-#' @title GSVA ranks
+#' @title GSVA ranks and scores
 #'
-#' @description Calculates GSVA ranks. This functions allows one to
-#' split the calculations of the GSVA method in two steps: (1) calculate
+#' @description Calculate GSVA scores in two steps: (1) calculate GSVA
 #' ranks; and (2) calculate GSVA scores using the previously calculated
 #' ranks.
 #'
@@ -311,7 +310,8 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
 #'   related to the parallel execution of some of the tasks and calculations
 #'   within this function.
 #'
-#' @return A matrix of GSVA rank values per column.
+#' @return In the case of the `gsvaRanks()` method, a matrix of GSVA rank
+#' values per column.
 #'
 #' @seealso [`gsvaParam`], [`gsva`]
 #'
@@ -333,19 +333,36 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
 #' nGrp2 <- n - nGrp1 ## number of samples in group 2
 #'
 #' ## consider three disjoint gene sets
-#' geneSets <- list(set1=paste("g", 1:3, sep=""),
-#'                  set2=paste("g", 4:6, sep=""),
-#'                  set3=paste("g", 7:10, sep=""))
+#' geneSets <- list(gset1=paste0("g", 1:3),
+#'                  gset2=paste0("g", 4:6),
+#'                  gset3=paste0("g", 7:10))
 #'
 #' ## sample data from a normal distribution with mean 0 and st.dev. 1
 #' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
 #'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+#'
 #' ## build GSVA parameter object
 #' gsvapar <- gsvaParam(y, geneSets)
 #'
 #' ## calculate GSVA ranks
 #' gsva_ranks <- gsvaRanks(gsvapar)
 #' gsva_ranks
+#' ## calculate GSVA scores
+#' gsva_es <- gsvaScores(gsvapar, gsva_ranks)
+#' gsva_es
+#'
+#' ## calculate now GSVA scores in a single step
+#' gsva_es1 <- gsva(gsvapar)
+#'
+#' ## both approaches give the same result with the same input gene sets
+#' all.equal(gsva_es1, gsva_es)
+#'
+#' ## however, results will be (obviously) different with different gene sets
+#' geneSets2 <- list(gset1=paste0("g", 3:6),
+#'                   gset2=paste0("g", c(1, 2, 7, 8)))
+#'
+#' ## note that there is no need to calculate the GSVA ranks again
+#' gsvaScores(gsvapar, gsva_ranks, geneSets2)
 #'
 #' @importFrom cli cli_alert_info cli_alert_success
 #' @importFrom BiocParallel bpnworkers
@@ -360,12 +377,10 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                   cli_alert_info(sprintf("GSVA version %s",
                                          packageDescription("GSVA")[["Version"]]))
 
-              famGaGS <- .filterAndMapGenesAndGeneSets(param,
-                                                       removeConstant=TRUE,
-                                                       removeNzConstant=TRUE,
-                                                       verbose)
-              filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
-              filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
+              exprData <- get_exprData(param)
+              dataMatrix <- unwrapData(exprData, get_assay(param))
+              filteredDataMatrix <- .filterGenes(dataMatrix, removeConstant=TRUE,
+                                                 removeNzConstant=TRUE)
 
               if (!inherits(BPPARAM, "SerialParam") && verbose) {
                   msg <- sprintf("Using a %s parallel back-end with %d workers",
@@ -376,19 +391,218 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
               if (verbose)
                   cli_alert_info(sprintf("Calculating GSVA ranks"))
 
-              gsvaRanks <- .compute_gsva_ranks(expr=filteredDataMatrix,
-                                               kcdf=get_kcdf(param),
-                                               kcdf.min.ssize=get_kcdfNoneMinSampleSize(param),
-                                               parallel.sz=if (inherits(BPPARAM, "SerialParam"))
-                                                               1L else bpnworkers(BPPARAM),
-                                               sparse=get_sparse(param),
-                                               verbose=verbose,
-                                               BPPARAM=BPPARAM)
+              psz <- if(inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM)
 
-              rownames(gsvaRanks) <- rownames(filteredDataMatrix)
-              colnames(gsvaRanks) <- colnames(filteredDataMatrix)
+              gsva_rnk <- .compute_gsva_ranks(expr=filteredDataMatrix,
+                                              kcdf=get_kcdf(param),
+                                              kcdf.min.ssize=get_kcdfNoneMinSampleSize(param),
+                                              sparse=get_sparse(param),
+                                              verbose=verbose,
+                                              BPPARAM=BPPARAM)
 
-              return(gsvaRanks)
+              rownames(gsva_rnk) <- rownames(filteredDataMatrix)
+              colnames(gsva_rnk) <- colnames(filteredDataMatrix)
+
+              if (verbose)
+                  cli_alert_success("Calculations finished")
+
+              return(gsva_rnk)
+          })
+
+.check_geneSets_minSize_maxSize_tau <- function(geneSets, minSize, maxSize, tau) {
+  if (all(!is.na(geneSets))) {
+      if (!is.list(geneSets) && !is(geneSets, "GeneSetCollection"))
+          cli_abort(c("x"="'geneSets' must be either a list or a 'GeneSetCollection' object"))
+
+      if (length(geneSets) == 0)
+          cli_abort(c("x"="'geneSets' has length 0"))
+  }
+
+  if (length(minSize) != 1)
+      cli_abort(c("x"="'minSize' must be of length 1"))
+  if (length(maxSize) != 1)
+      cli_abort(c("x"="'maxSize' must be of length 1"))
+
+  if ((is.na(minSize) && !is.na(maxSize)) || ## here assuming length 'minSize' and 'maxSize'
+      (!is.na(minSize) && is.na(maxSize)))   ## is 1, otherwise 'is.na()' would return > 1 value
+      cli_abort(c("x"="'minSize' and 'maxSize' should be either both NA or both non-NA"))
+
+  if (!is.na(minSize) && !is.na(maxSize)) {
+      if (!is.integer(minSize) && !is.numeric(minSize))
+          cli_abort(c("x"="'minSize' must be a positive integer value"))
+      if (!is.integer(maxSize) && !is.numeric(maxSize))
+          cli_abort(c("x"="'maxSize' must be a positive integer value"))
+      if (minSize < 1)
+          cli_abort(c("x"="'minSize' must be a positive integer value"))
+      if (maxSize < 1)
+          cli_abort(c("x"="'maxSize' must be a positive integer value"))
+      if (maxSize < minSize)
+          cli_abort(c("x"="'maxSize' must be at least 'minSize' or greater"))
+  }
+
+  if (length(tau) != 1)
+      cli_abort(c("x"="'tau' must be of length 1"))
+  if (!is.na(tau)) {
+    if (!is.integer(tau) && !is.numeric(tau))
+          cli_abort(c("x"="'tau' must be a numeric value"))
+  }
+}
+
+.check_maxDiff_absRanking_sparse <- function(maxDiff, absRanking, sparse) {
+  if (length(maxDiff) != 1)
+      cli_abort(c("x"="'maxDiff' must be of length 1"))
+
+  if (!is.na(maxDiff)) {
+    if (!is.logical(maxDiff))
+          cli_abort(c("x"="'maxDiff' must be a logical value"))
+  }
+
+  if (length(absRanking) != 1)
+      cli_abort(c("x"="'absRanking' must be of length 1"))
+
+  if (!is.na(absRanking)) {
+    if (!is.logical(absRanking))
+          cli_abort(c("x"="'absRanking' must be a logical value"))
+  }
+
+  if (length(sparse) != 1)
+      cli_abort(c("x"="'sparse' must be of length 1"))
+
+  if (!is.na(sparse)) {
+    if (!is.logical(sparse))
+          cli_abort(c("x"="'sparse' must be a logical value"))
+  }
+}
+
+
+#' @param ranks A matrix-like object storing GSVA ranks calculated with the
+#' method [`gsvaRanks`].
+#'
+#' @param geneSets A collection of gene sets. Must be one of the classes
+#' supported by [`GsvaGeneSets-class`]. For a list of these classes, see its
+#' help page using `help(GsvaGeneSets)`. By default, this parameter is set to
+#' the `NA` missing value, which means that GSVA scores will be calculated
+#' using the gene sets specified in the `param` argument. If this parameter is
+#' set to a non-missing value corresponding to an object of the classes
+#' supported by [`GsvaGeneSets-class`], then GSVA scores will be calculated
+#' using the gene sets in this argument, instead of the ones specified in the
+#' `param` argument.
+#'
+#' @param minSize Numeric vector of length 1.  Minimum size of the resulting gene
+#' sets after gene identifier mapping. Its default value is `NA`, indicating that
+#' this minimum value will be taken from the input `param` argument, otherwise,
+#' non-`NA` values override those from the input `param` argument.
+#'
+#' @param maxSize Numeric vector of length 1.  Minimum size of the resulting gene
+#' sets after gene identifier mapping. Its default value is `NA`, indicating that
+#' this minimum value will be taken from the input `param` argument, otherwise,
+#' non-`NA` values override those from the input `param` argument.
+#'
+#' @param tau Numeric vector of length 1.  The exponent defining the weight of
+#' the tail in the random walk performed by the `GSVA` (Hänzelmann et al.,
+#' 2013) method.  The default value is 1 as described in the paper.
+#'
+#' @param maxDiff Logical vector of length 1 which offers two approaches to
+#' calculate the enrichment statistic (ES) from the KS random walk statistic.
+#' * `FALSE`: ES is calculated as the maximum distance of the random walk
+#' from 0. This approach produces a distribution of enrichment scores that is
+#' bimodal, but it can give large enrichment scores to gene sets whose genes
+#' are not concordantly activated in one direction only.
+#' * `TRUE` (the default): ES is calculated as the magnitude difference between
+#' the largest positive and negative random walk deviations. This default value
+#' gives larger enrichment scores to gene sets whose genes are concordantly
+#' activated in one direction only.
+#'
+#' @param absRanking Logical vector of length 1 used only when `maxDiff=TRUE`.
+#' When `absRanking=FALSE` (default) a modified Kuiper statistic is used to
+#' calculate enrichment scores, taking the magnitude difference between the
+#' largest positive and negative random walk deviations. When
+#' `absRanking=TRUE` the original Kuiper statistic that sums the largest
+#' positive and negative random walk deviations is used.
+#'
+#' @param sparse Logical vector of length 1 used only when the input expression
+#' data in `exprData` is stored in a sparse matrix (e.g., a `dgCMatrix` or a
+#' `SingleCellExperiment` object storing the expression data in a `dgCMatrix`).
+#' In such a case, when `sparse=TRUE` (default), a sparse version of the GSVA
+#' algorithm will be applied. Otherwise, when `sparse=FALSE`, the classical
+#' (dense) version of the GSVA algorithm will be used.
+#'
+#' @return In the case of the `gsvaScores()` method, a gene-set by sample matrix
+#' of GSVA enrichment scores stored in a ocntainer object of the same type as
+#' the input expression data container in the `param` argument.
+#'
+#' @aliases gsvaScores,gsvaParam,GsvaExprData-method
+#' @name gsvaScores
+#' @rdname gsvaRanks
+#'
+#' @importFrom cli cli_alert_info cli_abort cli_alert_success
+#' @importFrom BiocParallel bpnworkers
+#' @importFrom utils packageDescription
+#' @exportMethod gsvaScores
+setMethod("gsvaScores", signature(param="gsvaParam", ranks="GsvaExprData"),
+          function(param, ranks, geneSets=NA, minSize=NA, maxSize=NA,
+                   tau=NA, maxDiff=NA, absRanking=NA, sparse=NA,
+                   verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose))
+          {
+              if (verbose)
+                  cli_alert_info(sprintf("GSVA version %s",
+                                         packageDescription("GSVA")[["Version"]]))
+
+              .check_geneSets_minSize_maxSize_tau(geneSets, minSize, maxSize, tau)
+
+              .check_maxDiff_absRanking_sparse(maxDiff, absRanking, sparse)
+
+              tau <- ifelse(is.na(tau), get_tau(param), tau)
+              maxDiff <- ifelse(is.na(maxDiff), get_maxDiff(param), maxDiff)
+              absRanking <- ifelse(is.na(absRanking), get_absRanking(param),
+                                   absRanking)
+              sparse <- ifelse(is.na(sparse), get_sparse(param), sparse)
+
+              exprData <- get_exprData(param)
+              dataMatrix <- unwrapData(exprData, get_assay(param))
+              filteredDataMatrix <- .filterGenes(dataMatrix,
+                                                 removeConstant=TRUE,
+                                                 removeNzConstant=TRUE)
+
+              if (!identical(rownames(filteredDataMatrix),
+                             rownames(unwrapData(ranks)))) {
+                  msg <- paste("Rownames in ranks don't match those from the",
+                               "input expression data in 'param'")
+                  cli_abort(c("x"=msg))
+              }
+
+              filteredMappedGeneSets <- .filterAndMapGeneSets(param, geneSets,
+                                                              minSize, maxSize,
+                                                              filteredDataMatrix,
+                                                              verbose)
+
+              if (!inherits(BPPARAM, "SerialParam") && verbose) {
+                  msg <- sprintf("Using a %s parallel back-end with %d workers",
+                                 class(BPPARAM), bpnworkers(BPPARAM))
+                  cli_alert_info(msg)
+              }
+
+              if (verbose)
+                  cli_alert_info(sprintf("Calculating GSVA scores"))
+
+              gsva_es <- .compute_gsva_scores(R=unwrapData(ranks),
+                                              geneSetsIdx=filteredMappedGeneSets,
+                                              tau=tau, maxDiff=maxDiff,
+                                              absRanking=absRanking,
+                                              sparse=sparse, verbose=verbose,
+                                              BPPARAM=BPPARAM)
+
+              rownames(gsva_es) <- names(filteredMappedGeneSets)
+              colnames(gsva_es) <- colnames(filteredDataMatrix)
+
+              gs <- .geneSetsIndices2Names(indices=filteredMappedGeneSets,
+                                           names=rownames(filteredDataMatrix))
+              rval <- wrapData(get_exprData(param), gsva_es, gs)
+
+              if (verbose)
+                  cli_alert_success("Calculations finished")
+
+              return(rval)
           })
 
 
@@ -430,7 +644,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 #' @importFrom cli cli_alert_info cli_progress_bar
 #' @importFrom cli cli_progress_done
 #' @importFrom sparseMatrixStats colRanks
-.compute_gsva_ranks <- function(expr, kcdf, kcdf.min.ssize, parallel.sz=1L,
+.compute_gsva_ranks <- function(expr, kcdf, kcdf.min.ssize,
                                 sparse=FALSE, verbose=TRUE,
                                 BPPARAM=SerialParam(progressbar=verbose)) {
 
@@ -441,12 +655,11 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 
     ## open parallelism only if ECDFs have to be estimated for
     ## more than 100 genes on more than 100 samples
-    if (parallel.sz > 1 && nrow(expr) > 100 && ncol(expr) > 100 &&
-        bpnworkers(BPPARAM) > 1) {
+    if (bpnworkers(BPPARAM) > 1 && nrow(expr) > 100 && ncol(expr) > 100) {
         n_chunks <- 10 ## 10 chunks of (nrow(expr) / 10) rows
         if (verbose) {
             msg <- sprintf("Estimating row ECDFs with %d cores",
-                           as.integer(parallel.sz))
+                           as.integer(bpnworkers(BPPARAM)))
             idpb <- cli_progress_bar(msg, total=n_chunks)
         }
         Z <- bpiterate(.row_iter(expr, idpb, n_chunks),
@@ -472,7 +685,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
     } else {
         ## open parallelism only if ranks have to be calculated for
         ## more than 10000 genes on more than 1000 samples
-        if (parallel.sz > 1 && nrow(Z) > 10000 && ncol(Z) > 1000) {
+        if (bpnworkers(BPPARAM) > 1 && nrow(Z) > 10000 && ncol(Z) > 1000) {
             n_chunks <- 100 ## 100 chunks of (ncol(expr) / 100) columns
             if (verbose)
                 idpb <- cli_progress_bar("Calculating GSVA column ranks")
@@ -492,16 +705,18 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
     return(R)
 }
 
-## assumes all ranks are different
-.gsvaRndWalk2 <- function(gSetIdx, R_j) {
-    stopifnot(all(!duplicated(R_j))) ## QC
-    n <- length(R_j)
+.gsvaRndWalk2 <- function(gSetIdx, decOrderStat, symRnkStat, tau) {
+    n <- length(decOrderStat)
     k <- length(gSetIdx)
-    rnkStat <- abs(n/2-R_j)             ## symmetric rank statistic
-    gSetRnk <- n-R_j[gSetIdx]+1         ## decreasing order statistic
+    gSetRnk <- decOrderStat[gSetIdx]
 
     stepCDFinGeneSet <- integer(n)
-    stepCDFinGeneSet[gSetRnk] <- rnkStat[gSetIdx]
+    if (tau == 1)
+      stepCDFinGeneSet[gSetRnk] <- symRnkStat[gSetIdx]
+    else {
+      stepCDFinGeneSet <- numeric(n)
+      stepCDFinGeneSet[gSetRnk] <- symRnkStat[gSetIdx]^tau
+    }
     stepCDFinGeneSet <- cumsum(stepCDFinGeneSet)
     stepCDFinGeneSet <- stepCDFinGeneSet / stepCDFinGeneSet[n]
 
@@ -515,39 +730,57 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
     walkStat
 }
 
-.ranks_sparse_to_dense <- function(r) {
+## convert ranks into decreasing order statistics and symmetric rank statistics
+.ranks2stats <- function(r, sparse) {
     mask <- r == 0
-    if (any(mask)) {
-        nzeros <- sum(mask)
-        r[!mask] <- r[!mask] + nzeros ## shift ranks of nonzero values
-        r[mask] <- 1:nzeros           ## zeros get increasing ranks
+    p <- length(r)
+    r_dense <- r
+
+    if (any(mask)) {                  ## sparse ranks into dense ranks
+        nzs <- sum(mask)
+        r_dense[!mask] <- r_dense[!mask] + nzs ## shift ranks of nonzero values
+        r_dense[mask] <- seq.int(nzs)          ## zeros get increasing ranks
     }
-    r
+
+    dos <- p - r_dense + 1            ## dense ranks into decreasing order stats
+    srs <- numeric(p)
+
+    if (any(mask) && sparse) {
+        r[!mask] <- r[!mask] + 1      ## shift ranks of nonzero values by one
+        r[mask] <- 1                  ## all zeros get the same first rank
+        srs <- abs(max(r)/2 - r)
+    } else
+        srs <- abs(p/2 - r_dense)
+
+    list(dos=dos, srs=srs)
 }
 
-.compute_gsva_scores <- function(R, gset.idx.list, abs.ranking, parallel.sz=1L,
-                                 mx.diff=TRUE, tau=1, sparse=FALSE, verbose=TRUE,
+#' @importFrom BiocParallel bpnworkers
+.compute_gsva_scores <- function(R, geneSetsIdx, tau=1, maxDiff=TRUE,
+                                 absRanking=FALSE, sparse=TRUE, verbose=TRUE,
                                  BPPARAM=SerialParam(progressbar=verbose)) {
-    stopifnot(tau==1) ## MOMENTARILY!!!
     n <- ncol(R)
     es <- NULL
+    if (!is(R, "dgCMatrix"))
+        sparse <- FALSE
+
     if (n > 10 && bpnworkers(BPPARAM) > 1) {
         if (verbose) {
             msg <- sprintf("Calculating GSVA scores with %d cores",
-                           as.integer(parallel.sz))
+                           as.integer(bpnworkers(BPPARAM)))
             idpb <- cli_progress_bar(msg, total=n)
         }
         es <- bplapply(as.list(1:n), function(j, R) {
-            md <- lapply(gset.idx.list, function(gSetIdx, R, j) {
-              R_j <- .ranks_sparse_to_dense(R[, j])
-              walkStat <- .gsvaRndWalk2(gSetIdx, R_j)
+            rnkstats <- .ranks2stats(R[, j], sparse)
+            md <- lapply(geneSetsIdx, function(gSetIdx, decOrdStat, symRnkStat) {
+              walkStat <- .gsvaRndWalk2(gSetIdx, decOrdStat, symRnkStat, tau)
               maxDev <- c(max(c(0, max(walkStat))), min(c(0, min(walkStat))))
               maxDev
-            }, R, j)
-            if (mx.diff && abs.ranking)
+            }, rnkstats$dos, rnkstats$srs)
+            if (maxDiff && absRanking)
                 md[, 2] <- -1 * md[, 2]
             sco <- rowSums(md)
-            if (!mx.diff)
+            if (!maxDiff)
                 sco <- md[cbind(1:length(sco), ifelse(sco > 0, 1, 2))]
             sco
         }, R=R, BPPARAM=BPPARAM)
@@ -557,17 +790,17 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
         if (verbose)
           idpb <- cli_progress_bar("Calculating GSVA scores", total=n)
         es <- lapply(as.list(1:n), function(j, R, idpb) {
-            md <- lapply(gset.idx.list, function(gSetIdx, R, j) {
-              R_j <- .ranks_sparse_to_dense(R[, j])
-              walkStat <- .gsvaRndWalk2(gSetIdx, R_j)
+            rnkstats <- .ranks2stats(R[, j], sparse)
+            md <- lapply(geneSetsIdx, function(gSetIdx, decOrdStat, symRnkStat) {
+              walkStat <- .gsvaRndWalk2(gSetIdx, decOrdStat, symRnkStat, tau)
               maxDev <- c(max(c(0, max(walkStat))), min(c(0, min(walkStat))))
               maxDev
-            }, R, j)
+            }, rnkstats$dos, rnkstats$srs)
             md <- do.call("rbind", md)
-            if (mx.diff && abs.ranking)
+            if (maxDiff && absRanking)
                 md[, 2] <- -1 * md[, 2]
             sco <- rowSums(md)
-            if (!mx.diff)
+            if (!maxDiff)
                 sco <- md[cbind(1:length(sco), ifelse(sco > 0, 1, 2))]
             if (verbose)
                 cli_progress_update(id=idpb)

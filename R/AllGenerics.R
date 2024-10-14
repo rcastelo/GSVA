@@ -8,6 +8,10 @@ setGeneric("gsvaRanks",
            function(param, ...) standardGeneric("gsvaRanks"))
 
 #' @export 
+setGeneric("gsvaScores",
+           function(param, ranks, ...) standardGeneric("gsvaScores"))
+
+#' @export 
 setGeneric("filterGeneSets",
            function(gSets, ...) standardGeneric("filterGeneSets"))
 

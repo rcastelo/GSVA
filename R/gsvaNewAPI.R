@@ -305,14 +305,15 @@ setMethod("gsva", signature(param="gsvaParam"),
                   cli_alert_info(sprintf("Calculating GSVA scores for %d gene sets",
                                          length(filteredMappedGeneSets)))
               
+              psz <- if (inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM)
+
               gsvaScores <- compute.geneset.es(expr=filteredDataMatrix,
                                                gset.idx.list=filteredMappedGeneSets,
                                                sample.idxs=seq.int(ncol(filteredDataMatrix)),
                                                kcdf=get_kcdf(param),
                                                kcdf.min.ssize=get_kcdfNoneMinSampleSize(param),
                                                abs.ranking=get_absRanking(param),
-                                               parallel.sz=if(inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM),
-                                               mx.diff=get_maxDiff(param),
+                                               parallel.sz=psz, mx.diff=get_maxDiff(param),
                                                tau=get_tau(param),
                                                sparse=get_sparse(param),
                                                verbose=verbose,
