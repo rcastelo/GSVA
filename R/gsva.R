@@ -448,7 +448,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
   }
 }
 
-.check_maxDiff_absRanking_sparse <- function(maxDiff, absRanking, sparse) {
+.check_maxDiff_absRanking <- function(maxDiff, absRanking) {
   if (length(maxDiff) != 1)
       cli_abort(c("x"="'maxDiff' must be of length 1"))
 
@@ -463,14 +463,6 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
   if (!is.na(absRanking)) {
     if (!is.logical(absRanking))
           cli_abort(c("x"="'absRanking' must be a logical value"))
-  }
-
-  if (length(sparse) != 1)
-      cli_abort(c("x"="'sparse' must be of length 1"))
-
-  if (!is.na(sparse)) {
-    if (!is.logical(sparse))
-          cli_abort(c("x"="'sparse' must be a logical value"))
   }
 }
 
@@ -520,13 +512,6 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 #' `absRanking=TRUE` the original Kuiper statistic that sums the largest
 #' positive and negative random walk deviations is used.
 #'
-#' @param sparse Logical vector of length 1 used only when the input expression
-#' data in `exprData` is stored in a sparse matrix (e.g., a `dgCMatrix` or a
-#' `SingleCellExperiment` object storing the expression data in a `dgCMatrix`).
-#' In such a case, when `sparse=TRUE` (default), a sparse version of the GSVA
-#' algorithm will be applied. Otherwise, when `sparse=FALSE`, the classical
-#' (dense) version of the GSVA algorithm will be used.
-#'
 #' @return In the case of the `gsvaScores()` method, a gene-set by sample matrix
 #' of GSVA enrichment scores stored in a ocntainer object of the same type as
 #' the input expression data container in the `param` argument.
@@ -541,7 +526,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 #' @exportMethod gsvaScores
 setMethod("gsvaScores", signature(param="gsvaParam", ranks="GsvaExprData"),
           function(param, ranks, geneSets=NA, minSize=NA, maxSize=NA,
-                   tau=NA, maxDiff=NA, absRanking=NA, sparse=NA,
+                   tau=NA, maxDiff=NA, absRanking=NA,
                    verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose))
           {
               if (verbose)
@@ -550,13 +535,13 @@ setMethod("gsvaScores", signature(param="gsvaParam", ranks="GsvaExprData"),
 
               .check_geneSets_minSize_maxSize_tau(geneSets, minSize, maxSize, tau)
 
-              .check_maxDiff_absRanking_sparse(maxDiff, absRanking, sparse)
+              .check_maxDiff_absRanking(maxDiff, absRanking)
 
               tau <- ifelse(is.na(tau), get_tau(param), tau)
               maxDiff <- ifelse(is.na(maxDiff), get_maxDiff(param), maxDiff)
               absRanking <- ifelse(is.na(absRanking), get_absRanking(param),
                                    absRanking)
-              sparse <- ifelse(is.na(sparse), get_sparse(param), sparse)
+              sparse <- get_sparse(param) ## sparse regime from parameter obj
 
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
