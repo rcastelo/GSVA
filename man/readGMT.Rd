@@ -15,9 +15,8 @@ readGMT(
 )
 }
 \arguments{
-\item{con}{A connection object or character string containing e.g.
-the file name or URL of a GTM file.  This is directly passed to \code{\link{readLines}}
-and hence may contain anything that \code{readLines()} can handle.}
+\item{con}{A connection object or a non-empty character string of length 1
+containing e.g. the filename or URL of a (possibly compressed) GMT file.}
 
 \item{sep}{The character string separating members of each gene set in the
 GMT file.}
@@ -77,6 +76,29 @@ argument \code{valueType}.
 \description{
 Imports a list of gene sets from a GMT (Gene Matrix Transposed)
 format file, offering a choice of ways to handle duplicated gene set names.
+}
+\examples{
+library(GSVA)
+library(GSVAdata)
+
+fname <- system.file("extdata", "c7.immunesigdb.v2024.1.Hs.symbols.gmt.gz",
+                     package="GSVAdata")
+
+## by default, guess geneIdType from content and return a GeneSetCollection
+genesets <- readGMT(fname)
+genesets
+
+## how to manually override the geneIdType
+genesets <- readGMT(fname, geneIdType=NullIdentifier())
+genesets
+
+## return a simple list instead of a GeneSetCollection
+genesets <- readGMT(fname, valueType="list")
+head(genesets, 2)
+
+## the list has a geneIdType, too
+gsvaAnnotation(genesets)
+
 }
 \seealso{
 \code{\link{readLines}}, \code{\link{GeneSetCollection}}, \code{\link{getGmt}}
