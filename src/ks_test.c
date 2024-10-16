@@ -104,12 +104,12 @@ ks_matrix_R(SEXP XR, SEXP sidxsR, SEXP n_genesR, SEXP geneset_idxsR,
 }
 
 void
-gsva_rnd_walk(int* gsetidx, int k, int* generanking, int* rankstat, int n,
+gsva_rnd_walk(int* gsetidx, int k, int* generanking, double* rankstat, int n,
               double* walkstat, double* walkstatpos, double* walkstatneg) {
-  int*    stepcdfingeneset;
+  double* stepcdfingeneset;
   int*    stepcdfoutgeneset;
 
-  stepcdfingeneset = R_Calloc(n, int);  /* assuming zeroes are set */
+  stepcdfingeneset = R_Calloc(n, double);  /* assuming zeroes are set */
   stepcdfoutgeneset = R_Calloc(n, int);
   for (int i=0; i < n; i++)
     stepcdfoutgeneset[i] = 1;
@@ -153,7 +153,7 @@ gsva_rnd_walk_R(SEXP gsetidxR, SEXP generankingR, SEXP rankstatR) {
   int     k = length(gsetidxR);
   int*    gsetidx;
   int*    generanking;
-  int*    rankstat;
+  double* rankstat;
   SEXP    walkstatR;
   double* walkstat;
   double  walkstatpos, walkstatneg;
@@ -165,7 +165,7 @@ gsva_rnd_walk_R(SEXP gsetidxR, SEXP generankingR, SEXP rankstatR) {
 
   gsetidx = INTEGER(gsetidxR);
   generanking = INTEGER(generankingR);
-  rankstat = INTEGER(rankstatR);
+  rankstat = REAL(rankstatR);
   walkstat = REAL(walkstatR);
 
   gsva_rnd_walk(gsetidx, k, generanking, rankstat, n,
@@ -177,16 +177,16 @@ gsva_rnd_walk_R(SEXP gsetidxR, SEXP generankingR, SEXP rankstatR) {
 }
 
 void
-gsva_rnd_walk_nonunittau(int* gsetidx, int k, int* generanking, int* rankstat,
+gsva_rnd_walk_nonunittau(int* gsetidx, int k, int* generanking, double* rankstat,
                          int n, double tau,
                          double* walkstat, double* walkstatpos, double* walkstatneg) {
   double* stepcdfingeneset;
-  double* stepcdfoutgeneset;
+  int* stepcdfoutgeneset;
 
   stepcdfingeneset = R_Calloc(n, double);  /* assuming zeroes are set */
-  stepcdfoutgeneset = R_Calloc(n, double);
+  stepcdfoutgeneset = R_Calloc(n, int);
   for (int i=0; i < n; i++)
-    stepcdfoutgeneset[i] = 1.0;
+    stepcdfoutgeneset[i] = 1;
 
   for (int i=0; i < k; i++) {
     /* convert 1-based gene indices to 0-based ! */
@@ -230,7 +230,7 @@ gsva_score_genesets_R(SEXP genesetsrankidxR, SEXP generankingR, SEXP rankstatR,
   Rboolean absrnk=asLogical(absrnkR);
   double   tau=REAL(tauR)[0];
   int*     generanking;
-  int*     rankstat;
+  double*  rankstat;
   SEXP     esR;
   double*  es;
 
@@ -240,7 +240,7 @@ gsva_score_genesets_R(SEXP genesetsrankidxR, SEXP generankingR, SEXP rankstatR,
   PROTECT(esR = allocVector(REALSXP, m));
 
   generanking = INTEGER(generankingR);
-  rankstat = INTEGER(rankstatR);
+  rankstat = REAL(rankstatR);
   es = REAL(esR);
 
   for (int i=0; i < m; i++) {

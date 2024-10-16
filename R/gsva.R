@@ -322,7 +322,8 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
 .gsva_rnd_walk <- function(gsetIdx, geneRanking, rankStat) {
   stopifnot(is.integer(gsetIdx)) ## QC
   stopifnot(is.integer(geneRanking)) ## QC
-  stopifnot(is.integer(rankStat)) ## QC
+  ## stopifnot(is.integer(rankStat)) ## QC
+  stopifnot(is.numeric(rankStat)) ## QC
   .Call("gsva_rnd_walk_R", gsetIdx, geneRanking, rankStat)
 }
 
@@ -332,7 +333,8 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
   stopifnot(length(geneSetsRankIdx) > 0) ## QC
   stopifnot(is.integer(geneSetsRankIdx[[1]])) ## QC
   stopifnot(is.integer(geneRanking)) ## QC
-  stopifnot(is.integer(rankStat)) ## QC
+  ## stopifnot(is.integer(rankStat)) ## QC
+  stopifnot(is.numeric(rankStat)) ## QC
   stopifnot(is.logical(maxDiff)) ## QC
   stopifnot(is.logical(absRnk)) ## QC
   stopifnot(is.numeric(tau)) ## QC
