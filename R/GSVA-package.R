@@ -32,4 +32,5 @@
 #' currentBlockId read_block gridReduce write_block close t colSums
 #' @importFrom HDF5Array HDF5RealizationSink writeHDF5Array
 #' @importFrom BiocSingular runRandomSVD
+#' @importFrom cli cli_abort cli_alert_info cli_alert_warning cli_alert_success
 NULL
