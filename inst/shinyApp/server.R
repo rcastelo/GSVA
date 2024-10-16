@@ -77,7 +77,9 @@ function(input, output, session) {
                           minSize=isolate(argInp[["varMinsz"]]()),
                           maxSize=isolate(argInp[["varMaxsz"]]()),
                           alpha=isolate(argInp[["selectedTau"]]()),
-                          normalize=isolate(argInp[["ssgseaNorm"]]())),
+                          normalize=isolate(argInp[["ssgseaNorm"]]()),
+                          checkNA=isolate(argInp[["checkNA"]]()),
+                          use=isolate(argInp[["use"]]())),
                       gsvaParam(
                           exprData=isolate(matrix()),
                           geneSets=isolate(genesets()),
