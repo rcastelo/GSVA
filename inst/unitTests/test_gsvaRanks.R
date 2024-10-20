@@ -25,10 +25,10 @@ test_gsvaRanks <- function() {
 
     ## calculate GSVA scores in two steps
     ## first calculate GSVA ranks
-    gsva_ranks <- gsvaRanks(gsvapar, verbose=FALSE)
+    gsvarankspar <- gsvaRanks(gsvapar, verbose=FALSE)
 
     ## second calculate GSVA scores using GSVA ranks
-    gsva_es2 <- gsvaScores(gsvapar, gsva_ranks, verbose=FALSE)
+    gsva_es2 <- gsvaScores(gsvarankspar, verbose=FALSE)
 
     ## both approaches to calculate GSVA scores must give
     ## the same result with the same input gene sets

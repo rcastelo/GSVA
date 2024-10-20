@@ -68,32 +68,35 @@
 ## is a 'list' object with character string vectors as elements,
 ## and 'features' is a character string vector object. it assumes
 ## features in both input objects follow the same nomenclature,
+
+#' @importFrom cli cli_abort
 .mapGeneSetsToFeatures <- function(gsets, features) {
 
-  ## Aaron Lun's suggestion at
-  ## https://github.com/rcastelo/GSVA/issues/39#issuecomment-765549620
-  gsets2 <- CharacterList(gsets)
-  mt <- match(gsets2, features)
-  mapdgenesets <- as.list(mt[!is.na(mt)])
+    ## Aaron Lun's suggestion at
+    ## https://github.com/rcastelo/GSVA/issues/39#issuecomment-765549620
+    gsets2 <- CharacterList(gsets)
+    mt <- match(gsets2, features)
+    mapdgenesets <- as.list(mt[!is.na(mt)])
 
-  if (length(unlist(mapdgenesets, use.names=FALSE)) == 0)
-    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+    if (length(unlist(mapdgenesets, use.names=FALSE)) == 0) {
+      msg <- paste("No identifiers in the gene sets could be matched to the",
+                   "identifiers in the expression data.")
+      cli_abort("x"=msg)
+    }
 
-  mapdgenesets
+    mapdgenesets
 }
 
 ## it assumes that all arguments have been already checked for correctness
-.filterAndMapGeneSets <- function(param, geneSets, minSize, maxSize,
-                                  filteredDataMatrix, verbose) {
+#' @importFrom cli cli_abort
+.filterAndMapGeneSets <- function(param, wgset=NA, filteredDataMatrix, verbose) {
 
-    ## if geneSets, minSize and maxSize are non-NA values, then they
-    ## override those coming from 'param' (b/c are provided by gsvaScores())
-    if (any(is.na(geneSets)))
-        geneSets <- get_geneSets(param)
-    if (is.na(minSize))
-        minSize <- get_minSize(param)
-    if (is.na(maxSize))
-        maxSize <- get_maxSize(param)
+    geneSets <- get_geneSets(param)
+    if (!is.na(wgset))
+        geneSets <- geneSets[wgset]
+
+    minSize <- get_minSize(param)
+    maxSize <- get_maxSize(param)
 
     ## note that the method for 'GeneSetCollection' calls geneIds(), i.e., 
     ## whatever the input, from here on we have a list of character vectors
@@ -113,11 +116,11 @@
                                              maxSize=maxSize)
     
     if (length(filteredMappedGeneSets) == 0)
-        stop("The gene set list is empty! Filter may be too stringent.")
+        cli_abort("x"="The gene set list is empty! Filter may be too stringent.")
 
     ## this should NEVER happen -- just to make sure it doesn't...
     if (anyDuplicated(names(filteredMappedGeneSets)) > 0)
-        stop("The gene set list contains duplicated gene set names.")
+        cli_abort("x"="The gene set list contains duplicated gene set names.")
 
     if (any(lengths(filteredMappedGeneSets) == 1)) {
         msg <- "Some gene sets have size one. Consider setting minSize > 1"
@@ -141,9 +144,9 @@
                                        removeConstant=removeConstant,
                                        removeNzConstant=removeNzConstant)
 
-    filteredMappedGeneSets <- .filterAndMapGeneSets(param, NA, NA, NA,
-                                                    filteredDataMatrix,
-                                                    verbose)
+    filteredMappedGeneSets <- .filterAndMapGeneSets(param=param,
+                                                    filteredDataMatrix=filteredDataMatrix,
+                                                    verbose=verbose)
 
     return(list(filteredDataMatrix=filteredDataMatrix,
                 filteredMappedGeneSets=filteredMappedGeneSets))

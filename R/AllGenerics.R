@@ -9,7 +9,11 @@ setGeneric("gsvaRanks",
 
 #' @export 
 setGeneric("gsvaScores",
-           function(param, ranks, ...) standardGeneric("gsvaScores"))
+           function(param, ...) standardGeneric("gsvaScores"))
+
+#' @export 
+setGeneric("gsvaEnrichment",
+           function(param, ranks, ...) standardGeneric("gsvaEnrichment"))
 
 #' @export 
 setGeneric("filterGeneSets",
@@ -22,6 +26,10 @@ setGeneric("computeGeneSetsOverlap",
 #' @export
 setGeneric("geneSets",
            function(obj, ...) standardGeneric("geneSets"))
+
+#' @export
+setGeneric("geneSets<-",
+           function(object, value) standardGeneric("geneSets<-"))
 
 #' @export
 setGeneric("geneSetSizes",

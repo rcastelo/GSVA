@@ -301,8 +301,8 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
 #' ranks; and (2) calculate GSVA scores using the previously calculated
 #' ranks.
 #'
-#' @param param A [`gsvaParam`] object built using the constructor function
-#' [`gsvaParam`].
+#' @param param A [`gsvaParam-class`] object built using the constructor
+#' function [`gsvaParam`].
 #'
 #' @param verbose Gives information about each calculation step. Default: `TRUE`.
 #'
@@ -310,10 +310,10 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
 #'   related to the parallel execution of some of the tasks and calculations
 #'   within this function.
 #'
-#' @return In the case of the `gsvaRanks()` method, a matrix of GSVA rank
-#' values per column.
+#' @return In the case of the `gsvaRanks()` method, an object of class
+#' [`gsvaRanksParam-class`].
 #'
-#' @seealso [`gsvaParam`], [`gsva`]
+#' @seealso [`gsvaParam-class`], [`gsvaRanksParam-class`], [`gsva`]
 #'
 #' @aliases gsvaRanks,gsvaParam-method
 #' @name gsvaRanks
@@ -341,14 +341,17 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
 #' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
 #'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
 #'
+#' ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
+#' y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
+#'
 #' ## build GSVA parameter object
 #' gsvapar <- gsvaParam(y, geneSets)
 #'
 #' ## calculate GSVA ranks
-#' gsva_ranks <- gsvaRanks(gsvapar)
-#' gsva_ranks
+#' gsvarankspar <- gsvaRanks(gsvapar)
+#' gsvarankspar
 #' ## calculate GSVA scores
-#' gsva_es <- gsvaScores(gsvapar, gsva_ranks)
+#' gsva_es <- gsvaScores(gsvarankspar)
 #' gsva_es
 #'
 #' ## calculate now GSVA scores in a single step
@@ -362,7 +365,8 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
 #'                   gset2=paste0("g", c(1, 2, 7, 8)))
 #'
 #' ## note that there is no need to calculate the GSVA ranks again
-#' gsvaScores(gsvapar, gsva_ranks, geneSets2)
+#' geneSets(gsvarankspar) <- geneSets2
+#' gsvaScores(gsvarankspar)
 #'
 #' @importFrom cli cli_alert_info cli_alert_success
 #' @importFrom BiocParallel bpnworkers
@@ -393,20 +397,30 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 
               psz <- if(inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM)
 
-              gsva_rnk <- .compute_gsva_ranks(expr=filteredDataMatrix,
+              gsvarnks <- .compute_gsva_ranks(expr=filteredDataMatrix,
                                               kcdf=get_kcdf(param),
                                               kcdf.min.ssize=get_kcdfNoneMinSampleSize(param),
                                               sparse=get_sparse(param),
                                               verbose=verbose,
                                               BPPARAM=BPPARAM)
 
-              rownames(gsva_rnk) <- rownames(filteredDataMatrix)
-              colnames(gsva_rnk) <- colnames(filteredDataMatrix)
+              rownames(gsvarnks) <- rownames(filteredDataMatrix)
+              colnames(gsvarnks) <- colnames(filteredDataMatrix)
+
+              rnkcontainer <- wrapData(get_exprData(param), gsvarnks)
+              rval <- new("gsvaRanksParam",
+                          exprData=rnkcontainer, geneSets=get_geneSets(param),
+                          assay="gsvaranks", annotation=get_annotation(param),
+                          minSize=get_minSize(param), maxSize=get_maxSize(param),
+                          kcdf=get_kcdf(param),
+                          kcdfNoneMinSampleSize=get_kcdfNoneMinSampleSize(param),
+                          tau=get_tau(param), maxDiff=get_maxDiff(param),
+                          absRanking=get_absRanking(param), sparse=get_sparse(param))
 
               if (verbose)
                   cli_alert_success("Calculations finished")
 
-              return(gsva_rnk)
+              return(rval)
           })
 
 .check_geneSets_minSize_maxSize_tau <- function(geneSets, minSize, maxSize, tau) {
@@ -467,56 +481,24 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 }
 
 
-#' @param ranks A matrix-like object storing GSVA ranks calculated with the
-#' method [`gsvaRanks`].
-#'
-#' @param geneSets A collection of gene sets. Must be one of the classes
-#' supported by [`GsvaGeneSets-class`]. For a list of these classes, see its
-#' help page using `help(GsvaGeneSets)`. By default, this parameter is set to
-#' the `NA` missing value, which means that GSVA scores will be calculated
-#' using the gene sets specified in the `param` argument. If this parameter is
-#' set to a non-missing value corresponding to an object of the classes
-#' supported by [`GsvaGeneSets-class`], then GSVA scores will be calculated
-#' using the gene sets in this argument, instead of the ones specified in the
-#' `param` argument.
-#'
-#' @param minSize Numeric vector of length 1.  Minimum size of the resulting gene
-#' sets after gene identifier mapping. Its default value is `NA`, indicating that
-#' this minimum value will be taken from the input `param` argument, otherwise,
-#' non-`NA` values override those from the input `param` argument.
-#'
-#' @param maxSize Numeric vector of length 1.  Minimum size of the resulting gene
-#' sets after gene identifier mapping. Its default value is `NA`, indicating that
-#' this minimum value will be taken from the input `param` argument, otherwise,
-#' non-`NA` values override those from the input `param` argument.
-#'
-#' @param tau Numeric vector of length 1.  The exponent defining the weight of
-#' the tail in the random walk performed by the `GSVA` (Hänzelmann et al.,
-#' 2013) method.  The default value is 1 as described in the paper.
-#'
-#' @param maxDiff Logical vector of length 1 which offers two approaches to
-#' calculate the enrichment statistic (ES) from the KS random walk statistic.
-#' * `FALSE`: ES is calculated as the maximum distance of the random walk
-#' from 0. This approach produces a distribution of enrichment scores that is
-#' bimodal, but it can give large enrichment scores to gene sets whose genes
-#' are not concordantly activated in one direction only.
-#' * `TRUE` (the default): ES is calculated as the magnitude difference between
-#' the largest positive and negative random walk deviations. This default value
-#' gives larger enrichment scores to gene sets whose genes are concordantly
-#' activated in one direction only.
-#'
-#' @param absRanking Logical vector of length 1 used only when `maxDiff=TRUE`.
-#' When `absRanking=FALSE` (default) a modified Kuiper statistic is used to
-#' calculate enrichment scores, taking the magnitude difference between the
-#' largest positive and negative random walk deviations. When
-#' `absRanking=TRUE` the original Kuiper statistic that sums the largest
-#' positive and negative random walk deviations is used.
+#' @param param A parameter object of the [`gsvaRanksParam-class`] class.
 #'
 #' @return In the case of the `gsvaScores()` method, a gene-set by sample matrix
-#' of GSVA enrichment scores stored in a ocntainer object of the same type as
-#' the input expression data container in the `param` argument.
+#' of GSVA enrichment scores stored in a container object of the same type as
+#' the input ranks data container. If
+#' the input was a base matrix or a [`dgCMatrix-class`] object, then the output will
+#' be a base matrix object with the gene sets employed in the calculations
+#' stored in an attribute called `geneSets`. If the input was an
+#' [`ExpressionSet`] object, then the output will be also an [`ExpressionSet`]
+#' object with the gene sets employed in the calculations stored in an
+#' attributed called `geneSets`. If the input was an object of one of the
+#' classes described in [`GsvaExprData`], such as a [`SingleCellExperiment`],
+#' then the output will be of the same class, where enrichment scores will be
+#' stored in an assay called `es` and the gene sets employed in the
+#' calculations will be stored in the `rowData` slot of the object under the
+#' column name `gs`.
 #'
-#' @aliases gsvaScores,gsvaParam,GsvaExprData-method
+#' @aliases gsvaScores,gsvaRanksParam-method
 #' @name gsvaScores
 #' @rdname gsvaRanks
 #'
@@ -524,42 +506,20 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 #' @importFrom BiocParallel bpnworkers
 #' @importFrom utils packageDescription
 #' @exportMethod gsvaScores
-setMethod("gsvaScores", signature(param="gsvaParam", ranks="GsvaExprData"),
-          function(param, ranks, geneSets=NA, minSize=NA, maxSize=NA,
-                   tau=NA, maxDiff=NA, absRanking=NA,
-                   verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose))
+setMethod("gsvaScores", signature(param="gsvaRanksParam"),
+          function(param, verbose=TRUE,
+                   BPPARAM=SerialParam(progressbar=verbose))
           {
               if (verbose)
                   cli_alert_info(sprintf("GSVA version %s",
                                          packageDescription("GSVA")[["Version"]]))
 
-              .check_geneSets_minSize_maxSize_tau(geneSets, minSize, maxSize, tau)
-
-              .check_maxDiff_absRanking(maxDiff, absRanking)
-
-              tau <- ifelse(is.na(tau), get_tau(param), tau)
-              maxDiff <- ifelse(is.na(maxDiff), get_maxDiff(param), maxDiff)
-              absRanking <- ifelse(is.na(absRanking), get_absRanking(param),
-                                   absRanking)
-              sparse <- get_sparse(param) ## sparse regime from parameter obj
-
+              ## assuming rows in the rank data have been already filtered
               exprData <- get_exprData(param)
-              dataMatrix <- unwrapData(exprData, get_assay(param))
-              filteredDataMatrix <- .filterGenes(dataMatrix,
-                                                 removeConstant=TRUE,
-                                                 removeNzConstant=TRUE)
-
-              if (!identical(rownames(filteredDataMatrix),
-                             rownames(unwrapData(ranks)))) {
-                  msg <- paste("Rownames in ranks don't match those from the",
-                               "input expression data in 'param'")
-                  cli_abort(c("x"=msg))
-              }
-
-              filteredMappedGeneSets <- .filterAndMapGeneSets(param, geneSets,
-                                                              minSize, maxSize,
-                                                              filteredDataMatrix,
-                                                              verbose)
+              filteredDataMatrix <- unwrapData(exprData, get_assay(param))
+              filteredMappedGeneSets <- .filterAndMapGeneSets(param=param,
+                                                              filteredDataMatrix=filteredDataMatrix,
+                                                              verbose=verbose)
 
               if (!inherits(BPPARAM, "SerialParam") && verbose) {
                   msg <- sprintf("Using a %s parallel back-end with %d workers",
@@ -570,12 +530,13 @@ setMethod("gsvaScores", signature(param="gsvaParam", ranks="GsvaExprData"),
               if (verbose)
                   cli_alert_info(sprintf("Calculating GSVA scores"))
 
-              gsva_es <- .compute_gsva_scores(R=unwrapData(ranks),
+              gsva_es <- .compute_gsva_scores(R=filteredDataMatrix,
                                               geneSetsIdx=filteredMappedGeneSets,
-                                              tau=tau, maxDiff=maxDiff,
-                                              absRanking=absRanking,
-                                              sparse=sparse, verbose=verbose,
-                                              BPPARAM=BPPARAM)
+                                              tau=get_tau(param),
+                                              maxDiff=get_maxDiff(param),
+                                              absRanking=get_absRanking(param),
+                                              sparse=get_sparse(param),
+                                              verbose=verbose, BPPARAM=BPPARAM)
 
               rownames(gsva_es) <- names(filteredMappedGeneSets)
               colnames(gsva_es) <- colnames(filteredDataMatrix)
@@ -590,9 +551,144 @@ setMethod("gsvaScores", signature(param="gsvaParam", ranks="GsvaExprData"),
               return(rval)
           })
 
+#' @title GSVA enrichment data and visualization
+#'
+#' @description Extract and plot enrichment data from GSVA scores.
+#'
+#' @param param A [`gsvaRanksParam-class`] object obtained with the method
+#' [`gsvaRanks`].
+#'
+#' @param column The column for which we want to retrieve the enrichment data.
+#' This parameter is only available in the `gsvaEnrichment()` method.
+#'
+#' @param geneSet Either a positive integer number between 1 and the number of
+#' available gene sets in `param`, or a character string with the name of
+#' one of the gene sets available in `param`.
+#'
+#' @param plot A character string indicating whether an enrichment plot should
+#' be produced using either base R graphics (`plot="base"`) or the ggplot2 package
+#' (`plot="ggplot"`), or not (`plot="no"`). In the latter case, the enrichment
+#' data will be returned. By default `plot="auto"`, which implies that if this
+#' method is called from an interactive session, a plot using base R graphics
+#' will be produced and, otherwise, the enrichment data is returned.
+#'
+#' @param ... Further arguments passed to the `plot()` function when the
+#' previous parameter `plot="base"`.
+#'
+#' @return When `plot="no"`, this method returns the enrichment data. When
+#' `plot="ggplot"`, this method returns a `ggplot` object. When `plot="base"`
+#' no value is returned.
+#'
+#' @aliases gsvaEnrichment,gsvaRanksParam-method
+#' @name gsvaEnrichment
+#' @rdname gsvaEnrichment
+#'
+#' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
+#' variation analysis for microarray and RNA-Seq data.
+#' *BMC Bioinformatics*, 14:7, 2013.
+#' [DOI](https://doi.org/10.1186/1471-2105-14-7)
+#'
+#' @examples
+#' library(GSVA)
+#'
+#' p <- 10 ## number of genes
+#' n <- 30 ## number of samples
+#' nGrp1 <- 15 ## number of samples in group 1
+#' nGrp2 <- n - nGrp1 ## number of samples in group 2
+#'
+#' ## consider three disjoint gene sets
+#' geneSets <- list(gset1=paste0("g", 1:3),
+#'                  gset2=paste0("g", 4:6),
+#'                  gset3=paste0("g", 7:10))
+#'
+#' ## sample data from a normal distribution with mean 0 and st.dev. 1
+#' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+#'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+#'
+#' ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
+#' y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
+#'
+#' ## build GSVA parameter object
+#' gsvapar <- gsvaParam(y, geneSets)
+#'
+#' ## calculate GSVA ranks
+#' gsvarankspar <- gsvaRanks(gsvapar)
+#' gsvarankspar
+#'
+#' ## by default the enrichment data for the first column and the first
+#' ## gene set are retrieved
+#' gsvaEnrichment(gsvarankspar)
+#'
+#' @importFrom cli cli_alert_info cli_abort cli_alert_danger
+#' @exportMethod gsvaScores
+setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
+          function(param, column=1, geneSet=1,
+                   plot=c("auto", "base", "ggplot", "no"), ...)
+          {
+              plot <- match.arg(plot)
+
+              geneSets <- get_geneSets(param)
+              if (length(geneSet) > 1) {
+                  msg <- paste("Please provide only the name or position of a",
+                               "single gene set.")
+                  cli_abort("x"=msg)
+              }
+              if (is.character(geneSet)) {
+                  if (!geneSet %in% names(geneSets)) {
+                      msg <- paste("Gene set %s is missing from the input",
+                                   "parameter object")
+                      cli_abort("x"=sprintf(msg, geneSet))
+                  }
+              } else if (is.integer(geneSet) || is.numeric(geneSet)) {
+                  if (geneSet < 1 || geneSet > length(geneSets)) {
+                       msg <- paste("When 'geneSet' is numeric, it should be a",
+                                    "number between 1 and the number of gene",
+                                    "sets (%d).")
+                       cli_abort("x"=sprintf(msg, length(geneSets)))
+                  }
+              } else {
+                  msg <- paste("'geneSet' should be either numeric or",
+                               "character.")
+                  cli_abort("x"=msg)
+              }
+
+              tau <- get_tau(param)
+              maxDiff <- get_maxDiff(param)
+              absRanking <- get_absRanking(param)
+              sparse <- get_sparse(param)
+
+              exprData <- get_exprData(param)
+              filteredDataMatrix <- unwrapData(exprData, get_assay(param))
+
+              ## no need for verbosity when mapping a single gene set
+              filteredMappedGeneSets <- .filterAndMapGeneSets(param, wgset=geneSet,
+                                                              filteredDataMatrix,
+                                                              verbose=FALSE)
+
+              geneSetIdx <- filteredMappedGeneSets[[1]]
+              edata <- .gsva_enrichment_data(R=filteredDataMatrix,
+                                             column=column,
+                                             geneSetIdx=geneSetIdx,
+                                             tau=tau, maxDiff=maxDiff,
+                                             absRanking=absRanking,
+                                             sparse=sparse)
+
+              if (plot == "no" || (plot == "auto" && !interactive()))
+                  return(edata)
+
+              if (plot == "auto" || plot == "base")
+                  .plot_enrichment_base(edata, ...) 
+              else { ## plot == "ggplot"
+                  instpkgs <- installed.packages(noCache=TRUE)[, "Package"]
+                  if (!"ggplot2" %in% instpkgs)
+                      cli_alert_danger("Please install the ggplot2 package")
+                  else
+                      .plot_enrichment_ggplot(edata)
+              }
+          })
+
 
 ## END exported methods (to be moved to 'gsvaNewAPI.R')
-
 
 #' @importFrom cli cli_progress_update
 #' @importFrom parallel splitIndices
@@ -797,6 +893,125 @@ setMethod("gsvaScores", signature(param="gsvaParam", ranks="GsvaExprData"),
     es <- do.call("cbind", es)
 
     return(es)
+}
+
+.gsva_enrichment_data <- function(R, column, geneSetIdx, tau=1, maxDiff=TRUE,
+                                  absRanking=FALSE, sparse=TRUE) {
+    n <- ncol(R)
+    es <- NULL
+    if (!is(R, "dgCMatrix"))
+        sparse <- FALSE
+
+    rnkstats <- .ranks2stats(R[, column], sparse)
+    walkStat <- .gsvaRndWalk2(geneSetIdx, rnkstats$dos, rnkstats$srs, tau)
+    maxDev <- c(max(c(0, max(walkStat))), min(c(0, min(walkStat))))
+    whMaxDev <- c(which.max(walkStat), which.min(walkStat))
+    whMaxDev[maxDev == 0] <- NA
+    
+    if (maxDiff && absRanking)
+        maxDev[2] <- -1 * maxDev[2]
+    sco <- sum(maxDev)
+    if (!maxDiff) {
+        sco <- maxDev[1]
+        if (abs(maxDev[2]) > maxDev[1])
+            sco <- maxDev[2]
+    }
+
+    edat <- data.frame(rank=seq.int(nrow(R)),
+                       stat=walkStat)
+    rownames(edat)[rnkstats$dos] <- rownames(R)
+
+    gsetrnk <- rnkstats$dos[geneSetIdx]
+    lepos <- leneg <- NA
+    if (!is.na(whMaxDev[1]))
+        lepos <- geneSetIdx[gsetrnk <= whMaxDev[1]]
+    if (!is.na(whMaxDev[2])) {
+        if (!is.na(whMaxDev[1]) && whMaxDev[2] < whMaxDev[1]) {
+            mask <- gsetrnk >= whMaxDev[2] & gsetrnk <= whMaxDev[1]
+            lepos <- leneg <- geneSetIdx[mask]
+        } else
+            leneg <- geneSetIdx[gsetrnk >= whMaxDev[2]]
+    }
+    res <- list(stats=edat,
+                gsetrnk=gsetrnk,
+                maxPos=maxDev[1],
+                whichMaxPos=whMaxDev[1],
+                maxNeg=maxDev[2],
+                whichMaxNeg=whMaxDev[2],
+                leadingEdgePos=lepos,
+                leadingEdgeNeg=leneg,
+                score=sco,
+                tau=tau,
+                maxDiff=maxDiff,
+                absRanking=absRanking,
+                sparse=sparse)
+
+    return(res)
+}
+
+#' @importFrom graphics abline grid lines segments
+.plot_enrichment_base <- function(edata, ...) {
+    ylim <- range(edata$stats$stat)
+    hgsetticks <- (ylim[2] - ylim[1]) * 0.1
+    plot(edata$stats, type="l", lwd=2, las=1, panel.first=grid(),
+         xlab="Gene Ranking", ylab="Random Walk Statistic", col="green", ...)
+    abline(h=0, lwd=2, lty=2, col="grey")
+    lines(edata$stats, lwd=2, col="green")
+    segments(edata$gsetrnk, -hgsetticks/2, edata$gsetrnk, hgsetticks/2, lwd=2)
+    if (!is.na(edata$whichMaxPos) &&
+        (edata$maxDiff || edata$maxPos >= abs(edata$maxNeg)))
+        segments(edata$whichMaxPos, 0, edata$whichMaxPos, edata$maxPos,
+                 lwd=2, lty=2, col="darkred")
+    if (!is.na(edata$whichMaxNeg) &&
+        (edata$maxDiff || edata$maxPos < abs(edata$maxNeg)))
+        segments(edata$whichMaxNeg, 0, edata$whichMaxNeg, edata$maxNeg,
+                 lwd=2, lty=2, col="darkred")
+}
+
+#' @importFrom cli cli_abort
+#' @importFrom utils globalVariables
+.plot_enrichment_ggplot <- function(edata, ...) {
+    if (!.isPackageLoaded("ggplot2")) {
+        loaded <- suppressPackageStartupMessages(requireNamespace("ggplot2"))
+        if (!loaded)
+            cli_abort("x"="ggplot2 could not be loaded")
+    }
+
+    ylim <- range(edata$stats$stat)
+    hgsetticks <- (ylim[2] - ylim[1]) * 0.1
+    gsetticks <- data.frame(gsetrnk=edata$gsetrnk)
+    ## from https://stackoverflow.com/a/39877048
+    fintticks <- function(x) unique(floor(pretty(seq(min(x),
+                                    (max(x) + 1) * 1.1))))
+    ggplot2::ggplot(data=edata$stats) +
+        ggplot2::scale_x_continuous(breaks=fintticks) +
+        ggplot2::geom_line(ggplot2::aes_string(x="rank", y="stat"), color="green") +
+        ggplot2::geom_segment(data=gsetticks,
+                     mapping=ggplot2::aes_string(x="gsetrnk", y=-hgsetticks/2,
+                                 xend="gsetrnk", yend=hgsetticks/2),
+                     linewidth=1) +
+        ggplot2::geom_hline(yintercept=0, colour="grey", linetype="dashed") +
+        { if (!is.na(edata$whichMaxPos) &&
+              (edata$maxDiff || edata$maxPos >= abs(edata$maxNeg)))
+              ggplot2::geom_segment(data=data.frame(whichMaxPos=edata$whichMaxPos,
+                                           maxPos=edata$maxPos),
+                           mapping=ggplot2::aes_string(x="whichMaxPos", y=0,
+                                       xend="whichMaxPos", yend="maxPos"),
+                           colour="darkred", linetype="dashed") } +
+        { if (!is.na(edata$whichMaxPos) &&
+              (edata$maxDiff || edata$maxPos < abs(edata$maxNeg)))
+              ggplot2::geom_segment(data=data.frame(whichMaxNeg=edata$whichMaxNeg,
+                                           maxNeg=edata$maxNeg),
+                           mapping=ggplot2::aes_string(x="whichMaxNeg", y=0,
+                                       xend="whichMaxNeg", yend="maxNeg"),
+                           colour="darkred", linetype="dashed") } +
+        ggplot2::theme(panel.background=ggplot2::element_blank(),
+              panel.grid.major=ggplot2::element_line(colour="grey", linetype="dotted"),
+              panel.grid.minor=ggplot2::element_line(colour=NA),
+              axis.text=ggplot2::element_text(size=12),
+              axis.title=ggplot2::element_text(size=14),
+              panel.border=ggplot2::element_rect(colour="black", fill=NA)) +
+        ggplot2::labs(x="Gene Ranking", y="Random Walk Statistic")
 }
 
 ##
