@@ -19,6 +19,7 @@
 ##  values of genes: genes that are constant in their non-zero values will have
 ##  an SD of 0 and therefore scaling them will result in division by 0.
 
+#' @importFrom sparseMatrixStats rowRanges
 #' @importFrom cli cli_alert_warning
 .filterGenes <- function(expr, removeConstant=TRUE, removeNzConstant=TRUE) {
     geneRanges <- rowRanges(expr, na.rm=TRUE, useNames=FALSE)
@@ -67,20 +68,67 @@
 ## is a 'list' object with character string vectors as elements,
 ## and 'features' is a character string vector object. it assumes
 ## features in both input objects follow the same nomenclature,
+
+#' @importFrom cli cli_abort
 .mapGeneSetsToFeatures <- function(gsets, features) {
 
-  ## Aaron Lun's suggestion at
-  ## https://github.com/rcastelo/GSVA/issues/39#issuecomment-765549620
-  gsets2 <- CharacterList(gsets)
-  mt <- match(gsets2, features)
-  mapdgenesets <- as.list(mt[!is.na(mt)])
+    ## Aaron Lun's suggestion at
+    ## https://github.com/rcastelo/GSVA/issues/39#issuecomment-765549620
+    gsets2 <- CharacterList(gsets)
+    mt <- match(gsets2, features)
+    mapdgenesets <- as.list(mt[!is.na(mt)])
 
-  if (length(unlist(mapdgenesets, use.names=FALSE)) == 0)
-    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+    if (length(unlist(mapdgenesets, use.names=FALSE)) == 0) {
+      msg <- paste("No identifiers in the gene sets could be matched to the",
+                   "identifiers in the expression data.")
+      cli_abort("x"=msg)
+    }
 
-  mapdgenesets
+    mapdgenesets
 }
 
+## it assumes that all arguments have been already checked for correctness
+#' @importFrom cli cli_abort
+.filterAndMapGeneSets <- function(param, wgset=NA, filteredDataMatrix, verbose) {
+
+    geneSets <- get_geneSets(param)
+    if (!is.na(wgset))
+        geneSets <- geneSets[wgset]
+
+    minSize <- get_minSize(param)
+    maxSize <- get_maxSize(param)
+
+    ## note that the method for 'GeneSetCollection' calls geneIds(), i.e., 
+    ## whatever the input, from here on we have a list of character vectors
+    geneSets <- mapGeneSetsToAnno(geneSets=geneSets,
+                                  anno=get_annotation(param),
+                                  verbose=verbose)
+    
+    ## map to the actual features for which expression data is available
+    ## note that the result is a list of integer vectors (indices to rownames)
+    ## and not a list of character vector any longer
+    mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(filteredDataMatrix))
+    
+    ## remove gene sets from the analysis for which no features are available
+    ## and meet the minimum and maximum gene-set size specified by the user
+    filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
+                                             minSize=minSize,
+                                             maxSize=maxSize)
+    
+    if (length(filteredMappedGeneSets) == 0)
+        cli_abort("x"="The gene set list is empty! Filter may be too stringent.")
+
+    ## this should NEVER happen -- just to make sure it doesn't...
+    if (anyDuplicated(names(filteredMappedGeneSets)) > 0)
+        cli_abort("x"="The gene set list contains duplicated gene set names.")
+
+    if (any(lengths(filteredMappedGeneSets) == 1)) {
+        msg <- "Some gene sets have size one. Consider setting minSize > 1"
+        cli_alert_warning(msg)
+    }
+
+    return(filteredMappedGeneSets)
+}
 
 #' @importFrom cli cli_alert_warning
 .filterAndMapGenesAndGeneSets <- function(param,
@@ -96,34 +144,9 @@
                                        removeConstant=removeConstant,
                                        removeNzConstant=removeNzConstant)
 
-    ## note that the method for 'GeneSetCollection' calls geneIds(), i.e., 
-    ## whatever the input, from here on we have a list of character vectors
-    geneSets <- mapGeneSetsToAnno(geneSets=get_geneSets(param),
-                                  anno=get_annotation(param),
-                                  verbose=verbose)
-    
-    ## map to the actual features for which expression data is available
-    ## note that the result is a list of integer vectors (indices to rownames)
-    ## and not a list of character vector any longer
-    mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(filteredDataMatrix))
-    
-    ## remove gene sets from the analysis for which no features are available
-    ## and meet the minimum and maximum gene-set size specified by the user
-    filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
-                                             minSize=get_minSize(param),
-                                             maxSize=get_maxSize(param))
-
-    if (length(filteredMappedGeneSets) == 0)
-        stop("The gene set list is empty! Filter may be too stringent.")
-
-    ## this should NEVER happen -- just to make sure it doesn't...
-    if (anyDuplicated(names(filteredMappedGeneSets)) > 0)
-        stop("The gene set list contains duplicated gene set names.")
-
-    if (any(lengths(filteredMappedGeneSets) == 1)) {
-        msg <- "Some gene sets have size one. Consider setting minSize > 1"
-        cli_alert_warning(msg)
-    }
+    filteredMappedGeneSets <- .filterAndMapGeneSets(param=param,
+                                                    filteredDataMatrix=filteredDataMatrix,
+                                                    verbose=verbose)
 
     return(list(filteredDataMatrix=filteredDataMatrix,
                 filteredMappedGeneSets=filteredMappedGeneSets))
@@ -160,9 +183,13 @@
 }
 
 ## actually, it's not just an apply() but also in-place modification
-.sparseColumnApplyAndReplace <- function(m, FUN) {
-    x <- lapply(.sparse2columnList(m), FUN=FUN)
+## ellipsis added for cases such as when FUN=rank where we may need
+## to set the parameter 'ties.method' of the 'rank()' function
+.sparseColumnApplyAndReplace <- function(m, FUN, ...) {
+    x <- lapply(.sparse2columnList(m), FUN=FUN, ...)
     m@x <- unlist(x, use.names=FALSE)
+    if (is.integer(m@x)) ## rank(ties.method="first") returns integers
+        mode(m@x) <- "numeric" ## dgCMatrix holds only doubles and logicals
     return(m)
 }
 

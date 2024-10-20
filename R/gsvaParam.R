@@ -283,6 +283,26 @@ setMethod("show",
                   "tau: ", get_tau(object), "\n",
                   "maxDiff: ", get_maxDiff(object), "\n",
                   "absRanking: ", get_absRanking(object), "\n",
-                  "sparse: ", get_sparse(object), "\n",
                   sep="")
+              if ("dgCMatrix" %in% class(unwrapData(get_exprData(object), get_assay(object))))
+                  cat("sparse: ", get_sparse(object), "\n")
           })
+
+## ----- setters for gsvaRanksParam -----
+
+#' @param object For the replacement method, an object of class
+#' [`gsvaRanksParam-class`].
+#'
+#' @param value For the replacement method, an object of the classes supported by
+#' [`GsvaGeneSets-class`].
+#'
+#' @aliases geneSets<-
+#' @aliases geneSets<-,gsvaRanksParam,GsvaGeneSets-method
+#' @rdname gsvaParam-class
+#' @exportMethod geneSets
+setReplaceMethod("geneSets", signature=signature(object="gsvaRanksParam",
+                                                 value="GsvaGeneSets"),
+                 function(object, value) {
+                   object@geneSets <- value
+                   object
+                 })

@@ -336,3 +336,21 @@ setClass("gsvaParam",
                         maxDiff=NA,
                         absRanking=NA,
                         sparse=FALSE))
+
+#' @name gsvaRanksParam-class
+#' @rdname gsvaParam-class
+#' @exportClass gsvaRanksParam
+setClass("gsvaRanksParam",
+         contains="gsvaParam",
+         prototype=list(exprData=NULL,
+                        geneSets=NULL,
+                        assay=NA_character_,
+                        annotation=NULL,
+                        minSize=NA_integer_,
+                        maxSize=NA_integer_,
+                        kcdf=NA_character_,
+                        kcdfNoneMinSampleSize=NA_integer_,
+                        tau=NA_real_,
+                        maxDiff=NA,
+                        absRanking=NA,
+                        sparse=FALSE))

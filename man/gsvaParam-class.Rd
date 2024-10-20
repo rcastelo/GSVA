@@ -3,7 +3,10 @@
 \docType{class}
 \name{gsvaParam-class}
 \alias{gsvaParam-class}
+\alias{gsvaRanksParam-class}
 \alias{gsvaParam}
+\alias{geneSets<-,gsvaRanksParam,GsvaGeneSets-method}
+\alias{geneSets<-}
 \title{\code{gsvaParam} class}
 \usage{
 gsvaParam(
@@ -20,6 +23,8 @@ gsvaParam(
   absRanking = FALSE,
   sparse = TRUE
 )
+
+\S4method{geneSets}{gsvaRanksParam,GsvaGeneSets}(object) <- value
 }
 \arguments{
 \item{exprData}{The expression data set.  Must be one of the classes
@@ -101,6 +106,12 @@ data in \code{exprData} is stored in a sparse matrix (e.g., a \code{dgCMatrix} o
 In such a case, when \code{sparse=TRUE} (default), a sparse version of the GSVA
 algorithm will be applied. Otherwise, when \code{sparse=FALSE}, the classical
 version of the GSVA algorithm will be used.}
+
+\item{object}{For the replacement method, an object of class
+\code{\linkS4class{gsvaRanksParam}}.}
+
+\item{value}{For the replacement method, an object of the classes supported by
+\code{\linkS4class{GsvaGeneSets}}.}
 }
 \value{
 A new \code{\linkS4class{gsvaParam}} object.

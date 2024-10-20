@@ -105,7 +105,7 @@
 #' topTable(fit, coef="sampleGroup2vs1")
 #' 
 #' ## build GSVA parameter object
-#' gsvapar <- gsvaParam(y, geneSets, maxDiff=TRUE)
+#' gsvapar <- gsvaParam(y, geneSets)
 #' 
 #' ## estimate GSVA enrichment scores for the three sets
 #' gsva_es <- gsva(gsvapar)
@@ -305,14 +305,15 @@ setMethod("gsva", signature(param="gsvaParam"),
                   cli_alert_info(sprintf("Calculating GSVA scores for %d gene sets",
                                          length(filteredMappedGeneSets)))
               
+              psz <- if (inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM)
+
               gsvaScores <- compute.geneset.es(expr=filteredDataMatrix,
                                                gset.idx.list=filteredMappedGeneSets,
                                                sample.idxs=seq.int(ncol(filteredDataMatrix)),
                                                kcdf=get_kcdf(param),
                                                kcdf.min.ssize=get_kcdfNoneMinSampleSize(param),
                                                abs.ranking=get_absRanking(param),
-                                               parallel.sz=if(inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM),
-                                               mx.diff=get_maxDiff(param),
+                                               parallel.sz=psz, mx.diff=get_maxDiff(param),
                                                tau=get_tau(param),
                                                sparse=get_sparse(param),
                                                verbose=verbose,
@@ -1093,13 +1094,15 @@ setMethod("unwrapData", signature("SpatialExperiment"),
 ## wrapData: put the resulting data and gene sets into the original data container type
 setMethod("wrapData", signature(container="matrix"),
           function(container, dataMatrix, geneSets) {
-              attr(dataMatrix, "geneSets") <- geneSets
+              if (!missing(geneSets))
+                  attr(dataMatrix, "geneSets") <- geneSets
               return(dataMatrix)
           })
 
 setMethod("wrapData", signature(container="dgCMatrix"),
           function(container, dataMatrix, geneSets) {
-              attr(dataMatrix, "geneSets") <- geneSets
+              if (!missing(geneSets))
+                  attr(dataMatrix, "geneSets") <- geneSets
               return(dataMatrix)
           })
 
@@ -1109,45 +1112,79 @@ setMethod("wrapData", signature(container="ExpressionSet"),
                           phenoData=phenoData(container),
                           experimentData=experimentData(container),
                           annotation="")
-              attr(rval, "geneSets") <- geneSets
+              if (!missing(geneSets))
+                  attr(rval, "geneSets") <- geneSets
               
               return(rval)
           })
 
 setMethod("wrapData", signature(container="SummarizedExperiment"),
           function(container, dataMatrix, geneSets) {
+              rdata <- adata <- NULL
+              if (!missing(geneSets)) {
+                  adata <- SimpleList(es=dataMatrix)
+                  rdata <- DataFrame(gs=CharacterList(geneSets))
+              } else { ## assume missing geneSets imples dataMatrix are ranks
+                  mask <- rownames(container) %in% rownames(dataMatrix)
+                  adata <- c(assays(container[mask, ]),
+                             SimpleList(gsvaranks=dataMatrix))
+                  rdata <- rowData(container)[mask, ]
+              }
               rval <- SummarizedExperiment(
-                  assays=SimpleList(es=dataMatrix),
+                  assays=adata,
                   colData=colData(container),
-                  rowData=DataFrame(gs=CharacterList(geneSets)),
+                  rowData=rdata,
                   metadata=metadata(container))
-              metadata(rval)$annotation <- NULL
+              if (!missing(geneSets))
+                  metadata(rval)$annotation <- NULL
 
               return(rval)
           })
 
 setMethod("wrapData", signature(container="SingleCellExperiment"),
           function(container, dataMatrix, geneSets) {
+              rdata <- adata <- NULL
+              if (!missing(geneSets)) {
+                  adata <- SimpleList(es=dataMatrix)
+                  rdata <- DataFrame(gs=CharacterList(geneSets))
+              } else { ## assume missing geneSets imples dataMatrix are ranks
+                  mask <- rownames(container) %in% rownames(dataMatrix)
+                  adata <- c(assays(container[mask, ]),
+                             SimpleList(gsvaranks=dataMatrix))
+                  rdata <- rowData(container)[mask, ]
+              }
               rval <- SingleCellExperiment(
-                  assays=SimpleList(es=dataMatrix),
+                  assays=adata,
                   colData=colData(container),
-                  rowData=DataFrame(gs=CharacterList(geneSets)),
+                  rowData=rdata,
                   metadata=metadata(container))
-              metadata(rval)$annotation <- NULL
+              if (!missing(geneSets))
+                  metadata(rval)$annotation <- NULL
               
               return(rval)
           })
 
 setMethod("wrapData", signature(container="SpatialExperiment"),
           function(container, dataMatrix, geneSets) {
+              rdata <- adata <- NULL
+              if (!missing(geneSets)) {
+                  adata <- SimpleList(es=dataMatrix)
+                  rdata <- DataFrame(gs=CharacterList(geneSets))
+              } else { ## assume missing geneSets imples dataMatrix are ranks
+                  mask <- rownames(container) %in% rownames(dataMatrix)
+                  adata <- c(assays(container[mask, ]),
+                             SimpleList(gsvaranks=dataMatrix))
+                  rdata <- rowData(container)[mask, ]
+              }
               rval <- SpatialExperiment(
-                  assays=SimpleList(es=dataMatrix),
+                  assays=adata,
                   colData=colData(container),
-                  rowData=DataFrame(gs=CharacterList(geneSets)),
+                  rowData=rdata,
                   metadata=metadata(container),
-                  imgData = imgData(container),
-                  spatialCoords = spatialCoords(container))
-              metadata(rval)$annotation <- NULL
+                  imgData=imgData(container),
+                  spatialCoords=spatialCoords(container))
+              if (!missing(geneSets))
+                  metadata(rval)$annotation <- NULL
               
               return(rval)
           })
