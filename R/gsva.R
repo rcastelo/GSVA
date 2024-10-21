@@ -198,7 +198,7 @@ zorder_rankstat <- function(z, p) {
 #' @importFrom cli cli_alert_info cli_progress_bar
 #' @importFrom cli cli_progress_update cli_progress_done
 compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
-                               kcdf.min.ssize, abs.ranking, parallel.sz=1L,
+                               kcdf.min.ssize, abs.ranking,
                                mx.diff=TRUE, tau=1, sparse=FALSE,
                                verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose)) {
 
@@ -208,7 +208,8 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
 
     ## open parallelism only if ECDFs have to be estimated for
     ## more than 100 genes on more than 100 samples
-    if (parallel.sz > 1 && length(sample.idxs) > 100 && nrow(expr) > 100) {
+    if (bpnworkers(BPPARAM) > 1 && length(sample.idxs) > 100 &&
+        nrow(expr) > 100) {
         iter <- function(Y, idpb, n_chunks=bpnworkers(BPPARAM)) {
             idx <- splitIndices(nrow(Y), min(nrow(Y), n_chunks))
             i <- 0L
@@ -223,7 +224,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
         }
         if (verbose) {
             msg <- sprintf("Estimating ECDFs with %d cores",
-                           as.integer(parallel.sz))
+                           as.integer(bpnworkers(BPPARAM)))
             idpb <- cli_progress_bar(msg, total=100)
         }
         gene.density <- bpiterate(iter(expr, idpb, 100),
@@ -245,7 +246,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
     if (n > 10 && bpnworkers(BPPARAM) > 1) {
         if (verbose) {
             msg <- sprintf("Calculating GSVA scores with %d cores",
-                           as.integer(parallel.sz))
+                           as.integer(bpnworkers(BPPARAM)))
             cli_alert_info(msg)
         }
         es <- bplapply(as.list(1:n), function(j, Z) {
@@ -370,16 +371,16 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
 #'
 #' @importFrom cli cli_alert_info cli_alert_success
 #' @importFrom BiocParallel bpnworkers
-#' @importFrom utils packageDescription
 #' @exportMethod gsvaRanks
 setMethod("gsvaRanks", signature(param="gsvaParam"),
           function(param,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              if (verbose)
+              if (verbose && gsva_global$show_start_and_end_messages) {
                   cli_alert_info(sprintf("GSVA version %s",
                                          packageDescription("GSVA")[["Version"]]))
+              }
 
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
@@ -395,11 +396,10 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
               if (verbose)
                   cli_alert_info(sprintf("Calculating GSVA ranks"))
 
-              psz <- if(inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM)
-
+              kcdfminssize <-get_kcdfNoneMinSampleSize(param)
               gsvarnks <- .compute_gsva_ranks(expr=filteredDataMatrix,
                                               kcdf=get_kcdf(param),
-                                              kcdf.min.ssize=get_kcdfNoneMinSampleSize(param),
+                                              kcdf.min.ssize=kcdfminssize,
                                               sparse=get_sparse(param),
                                               verbose=verbose,
                                               BPPARAM=BPPARAM)
@@ -417,7 +417,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                           tau=get_tau(param), maxDiff=get_maxDiff(param),
                           absRanking=get_absRanking(param), sparse=get_sparse(param))
 
-              if (verbose)
+              if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")
 
               return(rval)
@@ -504,15 +504,15 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 #'
 #' @importFrom cli cli_alert_info cli_abort cli_alert_success
 #' @importFrom BiocParallel bpnworkers
-#' @importFrom utils packageDescription
 #' @exportMethod gsvaScores
 setMethod("gsvaScores", signature(param="gsvaRanksParam"),
           function(param, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              if (verbose)
+              if (verbose && gsva_global$show_start_and_end_messages) {
                   cli_alert_info(sprintf("GSVA version %s",
                                          packageDescription("GSVA")[["Version"]]))
+              }
 
               ## assuming rows in the rank data have been already filtered
               exprData <- get_exprData(param)
@@ -545,7 +545,7 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                                            names=rownames(filteredDataMatrix))
               rval <- wrapData(get_exprData(param), gsva_es, gs)
 
-              if (verbose)
+              if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")
 
               return(rval)
@@ -631,25 +631,25 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
               if (length(geneSet) > 1) {
                   msg <- paste("Please provide only the name or position of a",
                                "single gene set.")
-                  cli_abort("x"=msg)
+                  cli_abort(c("x"=msg))
               }
               if (is.character(geneSet)) {
                   if (!geneSet %in% names(geneSets)) {
                       msg <- paste("Gene set %s is missing from the input",
                                    "parameter object")
-                      cli_abort("x"=sprintf(msg, geneSet))
+                      cli_abort(c("x"=sprintf(msg, geneSet)))
                   }
               } else if (is.integer(geneSet) || is.numeric(geneSet)) {
                   if (geneSet < 1 || geneSet > length(geneSets)) {
                        msg <- paste("When 'geneSet' is numeric, it should be a",
                                     "number between 1 and the number of gene",
                                     "sets (%d).")
-                       cli_abort("x"=sprintf(msg, length(geneSets)))
+                       cli_abort(c("x"=sprintf(msg, length(geneSets))))
                   }
               } else {
                   msg <- paste("'geneSet' should be either numeric or",
                                "character.")
-                  cli_abort("x"=msg)
+                  cli_abort(c("x"=msg))
               }
 
               tau <- get_tau(param)
@@ -974,7 +974,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     if (!.isPackageLoaded("ggplot2")) {
         loaded <- suppressPackageStartupMessages(requireNamespace("ggplot2"))
         if (!loaded)
-            cli_abort("x"="ggplot2 could not be loaded")
+            cli_abort(c("x"="ggplot2 could not be loaded"))
     }
 
     ylim <- range(edata$stats$stat)

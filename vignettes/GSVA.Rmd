@@ -321,7 +321,7 @@ Using a Bioconductor organism-level package such as
 collection of gene sets defined as GO terms with annotated Entrez gene
 identifiers, as follows:
 
-```{r}
+```{r, message=FALSE}
 library(org.Hs.eg.db)
 
 goannot <- select(org.Hs.eg.db, keys=keys(org.Hs.eg.db), columns="GO")
@@ -341,7 +341,7 @@ provided by [MSigDB](https://www.gsea-msigdb.org/gsea/msigdb) into a
 of the C2 collection of curated genesets from [MSigDB](https://www.gsea-msigdb.org/gsea/msigdb),
 which can be loaded as follows.
 
-```{r}
+```{r, message=FALSE}
 library(GSEABase)
 library(GSVAdata)
 
@@ -366,7 +366,7 @@ pages contain details on how the data were processed. We start loading these
 data and verifying that they indeed contain expression data for the same genes
 and samples, as follows:
 
-```{r}
+```{r, message=FALSE}
 library(Biobase)
 
 data(commonPickrellHuang)
@@ -375,6 +375,14 @@ stopifnot(identical(featureNames(huangArrayRMAnoBatchCommon_eset),
                     featureNames(pickrellCountsArgonneCQNcommon_eset)))
 stopifnot(identical(sampleNames(huangArrayRMAnoBatchCommon_eset),
                     sampleNames(pickrellCountsArgonneCQNcommon_eset)))
+```
+```{r, echo=FALSE}
+## until the updated GSVAdata goes through the build system
+## remove duplicated rows
+fnames <- featureNames(huangArrayRMAnoBatchCommon_eset)
+mask <- duplicated(fnames)
+huangArrayRMAnoBatchCommon_eset <- huangArrayRMAnoBatchCommon_eset[!mask, ]
+pickrellCountsArgonneCQNcommon_eset <- pickrellCountsArgonneCQNcommon_eset[!mask, ]
 ```
 Next, for the current analysis we use the subset of canonical pathways from the C2
 collection of MSigDB Gene Sets. These correspond to the following pathways from

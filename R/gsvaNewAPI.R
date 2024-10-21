@@ -123,6 +123,7 @@ NULL
 #' @importFrom cli cli_alert_info cli_alert_success
 #' @importFrom utils packageDescription
 #' @importFrom BiocParallel bpnworkers
+#' @importFrom utils packageDescription
 #' @aliases gsva,plageParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -172,6 +173,7 @@ setMethod("gsva", signature(param="plageParam"),
 #' @importFrom cli cli_alert_info cli_alert_success
 #' @importFrom utils packageDescription
 #' @importFrom BiocParallel bpnworkers
+#' @importFrom utils packageDescription
 #' @aliases gsva,zscoreParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -223,6 +225,7 @@ setMethod("gsva", signature(param="zscoreParam"),
 #' @importFrom cli cli_alert_info cli_alert_success
 #' @importFrom utils packageDescription
 #' @importFrom BiocParallel bpnworkers
+#' @importFrom utils packageDescription
 #' @aliases gsva,ssgseaParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -284,53 +287,24 @@ setMethod("gsva", signature(param="gsvaParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              if (verbose)
+              if (verbose) {
                   cli_alert_info(sprintf("GSVA version %s",
                                          packageDescription("GSVA")[["Version"]]))
-
-              famGaGS <- .filterAndMapGenesAndGeneSets(param,
-                                                       removeConstant=TRUE,
-                                                       removeNzConstant=TRUE,
-                                                       verbose)
-              filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
-              filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
-
-              if (!inherits(BPPARAM, "SerialParam") && verbose) {
-                  msg <- sprintf("Using a %s parallel back-end with %d workers",
-                                 class(BPPARAM), bpnworkers(BPPARAM))
-                  cli_alert_info(msg)
+                  gsva_global$show_start_and_end_messages <- FALSE
               }
 
-              if(verbose)
-                  cli_alert_info(sprintf("Calculating GSVA scores for %d gene sets",
-                                         length(filteredMappedGeneSets)))
-              
-              psz <- if (inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM)
+              rankspar <- gsvaRanks(param=param, verbose=verbose,
+                                    BPPARAM=BPPARAM)
 
-              gsvaScores <- compute.geneset.es(expr=filteredDataMatrix,
-                                               gset.idx.list=filteredMappedGeneSets,
-                                               sample.idxs=seq.int(ncol(filteredDataMatrix)),
-                                               kcdf=get_kcdf(param),
-                                               kcdf.min.ssize=get_kcdfNoneMinSampleSize(param),
-                                               abs.ranking=get_absRanking(param),
-                                               parallel.sz=psz, mx.diff=get_maxDiff(param),
-                                               tau=get_tau(param),
-                                               sparse=get_sparse(param),
-                                               verbose=verbose,
-                                               BPPARAM=BPPARAM)
-              
-              colnames(gsvaScores) <- colnames(filteredDataMatrix)
-              rownames(gsvaScores) <- names(filteredMappedGeneSets)
+              es <- gsvaScores(param=rankspar, verbose=verbose,
+                               BPPARAM=BPPARAM)
 
-              gs <- .geneSetsIndices2Names(
-                  indices=filteredMappedGeneSets,
-                  names=rownames(filteredDataMatrix))
-              rval <- wrapData(get_exprData(param), gsvaScores, gs)
-
-              if (verbose)
+              if (verbose) {
                   cli_alert_success("Calculations finished")
+                  gsva_global$show_start_and_end_messages <- TRUE
+              }
               
-              return(rval)
+              return(es)
           })
 
 
@@ -955,8 +929,10 @@ readGMT <- function (con,
                      ...) {
     valueType <- match.arg(valueType)
 
-    if((!.isCharLength1(con)) && (!inherits(con, "connection"))) {
-        cli_abort("Argument 'con' is not a valid filename, URL or connection.")
+    if ((!.isCharLength1(con)) && (!inherits(con, "connection"))) {
+        msg <- paste("Argument 'con' is not a valid filename, URL",
+                     "or connection.")
+        cli_abort(c("x"=msg))
     }
     
     ## from GSEABase::getGmt()

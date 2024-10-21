@@ -1,3 +1,16 @@
+## check for presence of valid row/feature names
+#' @importFrom Biobase featureNames
+.check_rownames <- function(expr) {
+    ## CHECK: is this the right place to check this?
+    ## 21/10/24: let's do it at parameter constructor
+    if (is.null(rownames(expr)))
+        cli_abort(c("x"="The input assay object doesn't have rownames"))
+    else if (any(duplicated(rownames(expr)))) {
+        cli_abort(c("x"="The input assay object has duplicated rownames"))
+    } 
+}
+
+
 ## 2024-02-06  axel: function .filterGenes() is intended to detect genes (rows)
 ##  with constant expression (and, hence, no information), warn about them and
 ##  optionally remove them (in particular, ssGSEA's choice is to keep them).
@@ -20,7 +33,7 @@
 ##  an SD of 0 and therefore scaling them will result in division by 0.
 
 #' @importFrom sparseMatrixStats rowRanges
-#' @importFrom cli cli_alert_warning
+#' @importFrom cli cli_alert_warning cli_abort
 .filterGenes <- function(expr, removeConstant=TRUE, removeNzConstant=TRUE) {
     geneRanges <- rowRanges(expr, na.rm=TRUE, useNames=FALSE)
     constantGenes <- (geneRanges[, 1] == geneRanges[, 2])
@@ -54,11 +67,7 @@
     }
 
     if (nrow(expr) < 2)
-        stop("Less than two genes in the input assay object\n")
-    
-    ## CHECK: is this the right place to check this?
-    if (is.null(rownames(expr)))
-        stop("The input assay object doesn't have rownames\n")
+        cli_abort(c("x"="Less than two genes in the input assay object"))
     
     return(expr)
 }
@@ -81,7 +90,7 @@
     if (length(unlist(mapdgenesets, use.names=FALSE)) == 0) {
       msg <- paste("No identifiers in the gene sets could be matched to the",
                    "identifiers in the expression data.")
-      cli_abort("x"=msg)
+      cli_abort(c("x"=msg))
     }
 
     mapdgenesets
@@ -115,12 +124,16 @@
                                              minSize=minSize,
                                              maxSize=maxSize)
     
-    if (length(filteredMappedGeneSets) == 0)
-        cli_abort("x"="The gene set list is empty! Filter may be too stringent.")
+    if (length(filteredMappedGeneSets) == 0) {
+        msg <- "The gene set list is empty! Filter may be too stringent."
+        cli_abort(c("x"=msg))
+    }
 
     ## this should NEVER happen -- just to make sure it doesn't...
-    if (anyDuplicated(names(filteredMappedGeneSets)) > 0)
-        cli_abort("x"="The gene set list contains duplicated gene set names.")
+    if (anyDuplicated(names(filteredMappedGeneSets)) > 0) {
+        msg <- "The gene set list contains duplicated gene set names."
+        cli_abort(c("x"=msg))
+    }
 
     if (any(lengths(filteredMappedGeneSets) == 1)) {
         msg <- "Some gene sets have size one. Consider setting minSize > 1"
