@@ -30,6 +30,7 @@ double sd(double* x, int n);
 
 double sd_naprop(double* x, int n);
 
+double sd_narm(double* x, int n);
 
 /* including expression log-odds */
 void
@@ -90,7 +91,7 @@ void
 row_d_narm(double* x, double* y, double* r, int size_density_n,
            int size_test_n, int Gaussk) {
 
-  double bw = Gaussk ? (sd(x, size_density_n) / SIGMA_FACTOR) : 0.5;
+  double bw = Gaussk ? (sd_narm(x, size_density_n) / SIGMA_FACTOR) : 0.5;
 
   if (Gaussk && is_precomputed == 0) {
     initCdfs();
@@ -99,12 +100,22 @@ row_d_narm(double* x, double* y, double* r, int size_density_n,
 
 	for(int j = 0; j < size_test_n; ++j){
 		double left_tail = 0.0;
+    int    n_nas = 0;
 
-		for(int i = 0; i < size_density_n; ++i){
-			left_tail += Gaussk ? precomputedCdf(y[j]-x[i], bw) : ppois(y[j], x[i]+bw, TRUE, FALSE);
-		}
-		left_tail = left_tail / size_density_n;
-		r[j] = -1.0 * log((1.0-left_tail)/left_tail);
+    if (!ISNA(bw) && !ISNA(y[j])) {
+		  for(int i = 0; i < size_density_n; ++i){
+        if (!ISNA(x[i]))
+			    left_tail += Gaussk ? precomputedCdf(y[j]-x[i], bw) : ppois(y[j], x[i]+bw, TRUE, FALSE);
+        else
+          n_nas++;
+		  }
+      if (n_nas < size_density_n) {
+		    left_tail = left_tail / (size_density_n - n_nas);
+		    r[j] = -1.0 * log((1.0-left_tail)/left_tail);
+      } else
+        r[j] = NA_REAL;
+    } else
+      r[j] = NA_REAL;
 	}
 }
 
@@ -156,7 +167,7 @@ matrix_d(double* X, double* Y, double* R, int n_density_samples,
       if (na_use == 1L) /* propagate NAs */
 		    row_d_naprop(&X[offset_density], &Y[offset_test], &R[offset_test],
                      n_density_samples, n_test_samples, Gaussk);
-      else              /* remove NAs */
+      else              /* remove NAs (assuming 3 b/c 2 should have earlier prompt the error */
 		    row_d_narm(&X[offset_density], &Y[offset_test], &R[offset_test],
                    n_density_samples, n_test_samples, Gaussk);
     }
