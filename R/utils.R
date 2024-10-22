@@ -206,7 +206,7 @@
     return(m)
 }
 
-#' @importFrom cli cli_abort
+#' @importFrom cli cli_abort cli_alert_danger
 .check_for_na_values <- function(exprData, checkNA, use) {
     autonaclasseswocheck <- c("matrix", "ExpressionSet",
                               "SummarizedExperiment")
@@ -221,11 +221,11 @@
             if (use == "all.obs")
                 cli_abort(c("x"="Input expression data has NA values."))
             else if (use == "everything")
-                cli_alert_danger(paste("Input expression data has NA values,",
+                cli_alert_warning(paste("Input expression data has NA values,",
                                        "which will be propagated through",
                                        "calculations."))
             else ## na.rm
-                cli_alert_danger(paste("Input expression data has NA values,",
+                cli_alert_warning(paste("Input expression data has NA values,",
                                        "which will be discarded from",
                                        "calculations."))
         }

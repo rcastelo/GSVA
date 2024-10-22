@@ -62,10 +62,19 @@ setMethod("gsva", signature(param="SingleCellExperiment"), function(param, ...) 
 
 
 compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
-                             sparse=FALSE, verbose=TRUE) {
+                             sparse=FALSE, any_na=FALSE,
+                             na_use=c("everything", "all.obs", "na.rm"),
+                             verbose=TRUE) {
+    na_use <- match.arg(na_use)
     n.test.samples <- ncol(expr)
     n.genes <- nrow(expr)
     n.density.samples <- length(sample.idxs)
+
+    if (any_na && na_use == "all.obs") {
+        msg <- paste("missing values present in the input expression data and",
+                     "'use=\"all.obs\".")
+        cli_abort(c("x"=msg))
+    }
     
     gene.cdf <- NA
     if (kernel) {
@@ -84,6 +93,10 @@ compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
                       n.test.samples,
                       n.genes,
                       as.integer(Gaussk),
+                      any_na,
+                      as.integer(factor(na_use,
+                                        levels=c("everything", "all.obs",
+                                                 "na.rm"))),
                       verbose)
             gene.cdf <- t(matrix(A, n.test.samples, n.genes))
         } else
@@ -231,14 +244,16 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
                                   compute.gene.cdf,
                                   sample.idxs=sample.idxs,
                                   Gaussk=Gaussk, kernel=kernel,
-                                  sparse=sparse, verbose=FALSE,
+                                  sparse=sparse, any_na=FALSE,
+                                  na_use="everything", verbose=FALSE,
                                   REDUCE=rbind, reduce.in.order=TRUE,
                                   BPPARAM=BPPARAM)
         if (verbose)
             cli_progress_done(idpb)
     } else
         gene.density <- compute.gene.cdf(expr, sample.idxs, Gaussk, kernel,
-                                         sparse, verbose)
+                                         sparse, any_na=FALSE,
+                                         na_use="everything", verbose)
     
     gset.idx.list <- IntegerList(gset.idx.list)
     n <- ncol(expr)
@@ -401,6 +416,8 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                                               kcdf=get_kcdf(param),
                                               kcdf.min.ssize=kcdfminssize,
                                               sparse=get_sparse(param),
+                                              any_na=anyNA(param),
+                                              na_use=get_NAuse(param),
                                               verbose=verbose,
                                               BPPARAM=BPPARAM)
 
@@ -729,7 +746,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 #' @importFrom cli cli_progress_done
 #' @importFrom sparseMatrixStats colRanks
 .compute_gsva_ranks <- function(expr, kcdf, kcdf.min.ssize,
-                                sparse=FALSE, verbose=TRUE,
+                                sparse=FALSE, any_na, na_use, verbose=TRUE,
                                 BPPARAM=SerialParam(progressbar=verbose)) {
 
     kcdfparam <- .parse_kcdf_param(expr, kcdf, kcdf.min.ssize, sparse, verbose)
@@ -750,14 +767,15 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
                        compute.gene.cdf,
                        sample.idxs=seq.int(ncol(expr)),
                        Gaussk=Gaussk, kernel=kernel,
-                       sparse=sparse, verbose=FALSE,
+                       sparse=sparse, any_na=any_na,
+                       na_use=na_use, verbose=FALSE,
                        REDUCE=rbind, reduce.in.order=TRUE,
                        BPPARAM=BPPARAM)
         if (verbose)
             cli_progress_done(idpb)
     } else
         Z <- compute.gene.cdf(expr, seq.int(ncol(expr)), Gaussk, kernel,
-                              sparse, verbose)
+                              sparse, any_na=any_na, na_use=na_use, verbose)
 
     R <- NULL
     ## here 'ties.method="last"' allows one to obtain the result

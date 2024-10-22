@@ -7,7 +7,8 @@
 
 SEXP
 matrix_density_R(SEXP density_dataR, SEXP test_dataR, SEXP n_density_samplesR,
-                 SEXP n_test_samplesR, SEXP n_genesR, SEXP GausskR, SEXP verboseR);
+                 SEXP n_test_samplesR, SEXP n_genesR, SEXP GausskR,
+                 SEXP any_naR, SEXP na_useR, SEXP verboseR);
 
 SEXP
 ks_matrix_R(SEXP XR, SEXP sidxsR, SEXP n_genesR, SEXP geneset_idxsR,
@@ -49,7 +50,7 @@ order_rankstat_sparse_to_sparse_R(SEXP XCspR, SEXP jR);
 
 static R_CallMethodDef callMethods[] = {
   {"ks_matrix_R", (DL_FUNC) &ks_matrix_R, 9},
-  {"matrix_density_R", (DL_FUNC) &matrix_density_R, 7},
+  {"matrix_density_R", (DL_FUNC) &matrix_density_R, 9},
   {"kcdfvals_sparse_to_sparse_R", (DL_FUNC) &kcdfvals_sparse_to_sparse_R, 4},
   {"kcdfvals_sparse_to_dense_R", (DL_FUNC) &kcdfvals_sparse_to_dense_R, 4},
   {"ecdfvals_sparse_to_sparse_R", (DL_FUNC) &ecdfvals_sparse_to_sparse_R, 3},
