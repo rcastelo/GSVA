@@ -415,7 +415,10 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                           kcdf=get_kcdf(param),
                           kcdfNoneMinSampleSize=get_kcdfNoneMinSampleSize(param),
                           tau=get_tau(param), maxDiff=get_maxDiff(param),
-                          absRanking=get_absRanking(param), sparse=get_sparse(param))
+                          absRanking=get_absRanking(param),
+                          sparse=get_sparse(param), checkNA=get_checkNA(param),
+                          didCheckNA=get_didCheckNA(param), anyNA=anyNA(param),
+                          use=get_NAuse(param))
 
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")

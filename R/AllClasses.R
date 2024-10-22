@@ -305,6 +305,21 @@ setClass("ssgseaParam",
 #' will be applied. Otherwise, when `sparse=FALSE`, the classical version of
 #' the GSVA algorithm will be used.
 #'
+#' @slot checkNA Character vector of length 1. One of the strings `"auto"`
+#' (default), `"yes"`, or `"no"`, which refer to whether the input expression
+#' data should be checked for the presence of missing (`NA`) values.
+#'
+#' @slot didCheckNA Logical vector of length 1, indicating whether the input
+#' expression data was checked for the presence of missing (`NA`) values.
+#'
+#' @slot anyNA Logical vector of length 1, indicating whether the input
+#' expression data contains missing (`NA`) values.
+#'
+#' @slot use Character vector of length 1. One of the strings `"everything"`
+#' (default), `"all.obs"`, or `"na.rm"`, which refer to three different policies
+#' to apply in the presence of missing values in the input expression data; see
+#' [`ssgseaParam`].
+#'
 #' @seealso
 #' [`GsvaExprData-class`],
 #' [`GsvaGeneSets-class`],
@@ -322,7 +337,11 @@ setClass("gsvaParam",
                  tau="numeric", 
                  maxDiff="logical",
                  absRanking="logical",
-                 sparse="logical"),
+                 sparse="logical",
+                 checkNA="character",
+                 didCheckNA="logical",
+                 anyNA="logical",
+                 use="character"),
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
@@ -335,7 +354,11 @@ setClass("gsvaParam",
                         tau=NA_real_,
                         maxDiff=NA,
                         absRanking=NA,
-                        sparse=FALSE))
+                        sparse=FALSE,
+                        checkNA=NA_character_,
+                        didCheckNA=NA,
+                        anyNA=NA,
+                        use=NA_character_))
 
 #' @name gsvaRanksParam-class
 #' @rdname gsvaParam-class
@@ -353,4 +376,8 @@ setClass("gsvaRanksParam",
                         tau=NA_real_,
                         maxDiff=NA,
                         absRanking=NA,
-                        sparse=FALSE))
+                        sparse=FALSE,
+                        checkNA=NA_character_,
+                        didCheckNA=NA,
+                        anyNA=NA,
+                        use=NA_character_))

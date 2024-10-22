@@ -135,36 +135,15 @@ ssgseaParam <- function(exprData, geneSets,
         }
     }
 
-    autonaclasseswocheck <- c("matrix", "ExpressionSet",
-                              "SummarizedExperiment")
-    mask <- class(exprData) %in% autonaclasseswocheck
-    checkNAyesno <- switch(checkNA, yes="yes", no="no",
-                           ifelse(any(mask), "yes", "no"))
-    didCheckNA <- any_na <- FALSE
-    if (checkNAyesno == "yes") {
-        any_na <- anyNA(unwrapData(exprData))
-        didCheckNA <- TRUE
-        if (any_na) {
-            if (use == "all.obs")
-                stop("Input expression data has NA values.")
-            else if (use == "everything")
-                warning(paste("Input expression data has NA values,",
-                              "which will be propagated through",
-                              "calculations."))
-            else ## na.rm
-                warning(paste("Input expression data has NA values,",
-                              "which will be discarded from",
-                              "calculations."))
-        }
-    }
+    naparam <- .check_for_na_values(exprData=exprData, checkNA=checkNA, use=use)
     
     new("ssgseaParam",
         exprData=exprData, geneSets=geneSets,
         assay=assay, annotation=annotation,
         minSize=minSize, maxSize=maxSize,
         alpha=alpha, normalize=normalize,
-        checkNA=checkNA, didCheckNA=didCheckNA,
-        anyNA=any_na, use=use)
+        checkNA=checkNA, didCheckNA=naparam$didCheckNA,
+        anyNA=naparam$any_na, use=use)
 }
 
 
@@ -253,26 +232,29 @@ get_alpha <- function(object) {
 }
 
 #' @noRd
-do_normalize <- function(object) {
+get_normalize <- function(object) {
   stopifnot(inherits(object, "ssgseaParam"))
   return(object@normalize)
 }
 
 #' @noRd
-checkNA <- function(object) {
-  stopifnot(inherits(object, "ssgseaParam"))
+get_checkNA <- function(object) {
+  stopifnot(inherits(object, "ssgseaParam") ||
+            inherits(object, "gsvaParam"))
   return(object@checkNA)
 }
 
 #' @noRd
-didCheckNA <- function(object) {
-  stopifnot(inherits(object, "ssgseaParam"))
+get_didCheckNA <- function(object) {
+  stopifnot(inherits(object, "ssgseaParam") ||
+            inherits(object, "gsvaParam"))
   return(object@didCheckNA)
 }
 
-#' @param x An object of class [`ssgseaParam`].
+#' @param x An object of class [`ssgseaParam-class`].
 #'
-#' @param recursive Not used with `x` being an object of class [`ssgseaParam`].
+#' @param recursive Not used with `x` being an object of
+#' class [`ssgseaParam-class`].
 #'
 #' @aliases anyNA,ssgseaParam-method
 #' @rdname ssgseaParam-class
@@ -281,8 +263,9 @@ setMethod("anyNA", signature=c("ssgseaParam"),
             return(x@anyNA))
 
 #' @noRd
-na_use <- function(object) {
-  stopifnot(inherits(object, "ssgseaParam"))
+get_NAuse <- function(object) {
+  stopifnot(inherits(object, "ssgseaParam") ||
+            inherits(object, "gsvaParam"))
   return(object@use)
 }
 
@@ -293,12 +276,12 @@ setMethod("show",
           function(object) {
               callNextMethod(object)
               cat("alpha: ", get_alpha(object), "\n", 
-                  "normalize: ", do_normalize(object), "\n",
-                  "checkNA: ", checkNA(object), "\n", sep="")
-              if (didCheckNA(object)) {
+                  "normalize: ", get_normalize(object), "\n",
+                  "checkNA: ", get_checkNA(object), "\n", sep="")
+              if (get_didCheckNA(object)) {
                   if (anyNA(object)) {
                       cat("missing data: yes\n",
-                          "na_use: ", na_use(object), "\n", sep="")
+                          "na_use: ", get_NAuse(object), "\n", sep="")
                   } else
                       cat("missing data: no\n")
               } else
