@@ -136,7 +136,7 @@ ssgsea <- function(X, geneSets, alpha=0.25,
   if (any_na && na_use =="na.rm")
     if (get("w", envir=wna_env)) {
       msg <- sprintf(paste("NA enrichment scores in gene sets with less than",
-                           "%d genes after removing missing values", minSize))
+                           "%d genes after removing missing values"), minSize)
       cli_alert_warning(msg)
     }
   
