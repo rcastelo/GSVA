@@ -34,7 +34,7 @@ zscore <- function(X, geneSets, verbose=TRUE,
                                      total=length(geneSets))
         es <- lapply(geneSets, function(gSetIdx, verbose, idpb) {
                            if (verbose)
-                               cli_progress_update(idpb)
+                               cli_progress_update(id=idpb)
                            colSums(Z[gSetIdx, , drop=FALSE]) / sqrt(length(gSetIdx))
                      }, verbose, idpb)
         if (verbose)
