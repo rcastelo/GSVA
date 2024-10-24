@@ -99,7 +99,7 @@ fit <- eBayes(fit)
 topTable(fit, coef="sampleGroup2vs1")
 
 ## build GSVA parameter object
-gsvapar <- gsvaParam(y, geneSets, maxDiff=TRUE)
+gsvapar <- gsvaParam(y, geneSets)
 
 ## estimate GSVA enrichment scores for the three sets
 gsva_es <- gsva(gsvapar)

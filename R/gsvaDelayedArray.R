@@ -128,6 +128,8 @@ zscoreDelayed <- function(X, geneSets, parallel.sz, verbose=TRUE,
 }
 
 #### rank function for hdf5 files using sink and grid methods
+
+#' @importFrom sparseMatrixStats colRanks
 rankHDF5 <- function(X){
   sink <- HDF5RealizationSink(dim(X))
   grid <- defaultAutoGrid(sink, block.shape="first-dim-grows-first")

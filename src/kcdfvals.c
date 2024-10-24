@@ -31,7 +31,7 @@ outerselfsubtr(double* x, int n, double *out);
 
 void
 row_d_nologodds(double* x, double* y, double* r, int size_density_n,
-                int size_test_n, int rnaseq);
+                int size_test_n, int Gaussk);
 
 
 SEXP
@@ -152,7 +152,7 @@ kcdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP GausskR, SEXP verboseR)
         kx = Gaussk ? pnorm(ossx[j], 0.0, 1.0, TRUE, FALSE) :
                       ppois(ossx[j], ossx[j]+h, TRUE, FALSE);
       */
-      row_d_nologodds(x, x, r, nv, nv, !Gaussk);
+      row_d_nologodds(x, x, r, nv, nv, Gaussk);
 
       /* set kcdf values on the corresponding positions
        * of the output CSC matrix */
@@ -242,7 +242,7 @@ kcdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP GausskR, SEXP verboseR) 
     for (int j=XRsp_p[i]; j < XRsp_p[i+1]; j++)
       x[XRsp_j[j]] = XRsp_x[j];
 
-    row_d_nologodds(x, x, r, nc, nc, !Gaussk);
+    row_d_nologodds(x, x, r, nc, nc, Gaussk);
 
     /* set kcdf values on the corresponding positions
      * of the output dense matrix */

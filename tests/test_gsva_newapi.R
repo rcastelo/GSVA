@@ -33,6 +33,13 @@ stopifnot(identical(featureNames(huangArrayRMAnoBatchCommon_eset),
                     featureNames(pickrellCountsArgonneCQNcommon_eset)))
 stopifnot(identical(sampleNames(huangArrayRMAnoBatchCommon_eset),
                     sampleNames(pickrellCountsArgonneCQNcommon_eset)))
+## until the updated GSVAdata goes through the build system
+## remove duplicated rows
+fnames <- featureNames(huangArrayRMAnoBatchCommon_eset)
+mask <- duplicated(fnames)
+huangArrayRMAnoBatchCommon_eset <- huangArrayRMAnoBatchCommon_eset[!mask, ]
+pickrellCountsArgonneCQNcommon_eset <- pickrellCountsArgonneCQNcommon_eset[!mask, ]
+
 canonicalC2BroadSets <- c2BroadSets[c(grep("^KEGG", names(c2BroadSets)),
                                       grep("^REACTOME", names(c2BroadSets)),
                                       grep("^BIOCARTA", names(c2BroadSets)))]

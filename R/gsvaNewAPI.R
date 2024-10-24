@@ -105,7 +105,7 @@
 #' topTable(fit, coef="sampleGroup2vs1")
 #' 
 #' ## build GSVA parameter object
-#' gsvapar <- gsvaParam(y, geneSets, maxDiff=TRUE)
+#' gsvapar <- gsvaParam(y, geneSets)
 #' 
 #' ## estimate GSVA enrichment scores for the three sets
 #' gsva_es <- gsva(gsvapar)
@@ -123,6 +123,7 @@ NULL
 #' @importFrom cli cli_alert_info cli_alert_success
 #' @importFrom utils packageDescription
 #' @importFrom BiocParallel bpnworkers
+#' @importFrom utils packageDescription
 #' @aliases gsva,plageParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -172,6 +173,7 @@ setMethod("gsva", signature(param="plageParam"),
 #' @importFrom cli cli_alert_info cli_alert_success
 #' @importFrom utils packageDescription
 #' @importFrom BiocParallel bpnworkers
+#' @importFrom utils packageDescription
 #' @aliases gsva,zscoreParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -223,6 +225,7 @@ setMethod("gsva", signature(param="zscoreParam"),
 #' @importFrom cli cli_alert_info cli_alert_success
 #' @importFrom utils packageDescription
 #' @importFrom BiocParallel bpnworkers
+#' @importFrom utils packageDescription
 #' @aliases gsva,ssgseaParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -284,52 +287,24 @@ setMethod("gsva", signature(param="gsvaParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose))
           {
-              if (verbose)
+              if (verbose) {
                   cli_alert_info(sprintf("GSVA version %s",
                                          packageDescription("GSVA")[["Version"]]))
-
-              famGaGS <- .filterAndMapGenesAndGeneSets(param,
-                                                       removeConstant=TRUE,
-                                                       removeNzConstant=TRUE,
-                                                       verbose)
-              filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
-              filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
-
-              if (!inherits(BPPARAM, "SerialParam") && verbose) {
-                  msg <- sprintf("Using a %s parallel back-end with %d workers",
-                                 class(BPPARAM), bpnworkers(BPPARAM))
-                  cli_alert_info(msg)
+                  gsva_global$show_start_and_end_messages <- FALSE
               }
 
-              if(verbose)
-                  cli_alert_info(sprintf("Calculating GSVA scores for %d gene sets",
-                                         length(filteredMappedGeneSets)))
-              
-              gsvaScores <- compute.geneset.es(expr=filteredDataMatrix,
-                                               gset.idx.list=filteredMappedGeneSets,
-                                               sample.idxs=seq.int(ncol(filteredDataMatrix)),
-                                               kcdf=get_kcdf(param),
-                                               kcdf.min.ssize=get_kcdfNoneMinSampleSize(param),
-                                               abs.ranking=get_absRanking(param),
-                                               parallel.sz=if(inherits(BPPARAM, "SerialParam")) 1L else bpnworkers(BPPARAM),
-                                               mx.diff=get_maxDiff(param),
-                                               tau=get_tau(param),
-                                               sparse=get_sparse(param),
-                                               verbose=verbose,
-                                               BPPARAM=BPPARAM)
-              
-              colnames(gsvaScores) <- colnames(filteredDataMatrix)
-              rownames(gsvaScores) <- names(filteredMappedGeneSets)
+              rankspar <- gsvaRanks(param=param, verbose=verbose,
+                                    BPPARAM=BPPARAM)
 
-              gs <- .geneSetsIndices2Names(
-                  indices=filteredMappedGeneSets,
-                  names=rownames(filteredDataMatrix))
-              rval <- wrapData(get_exprData(param), gsvaScores, gs)
+              es <- gsvaScores(param=rankspar, verbose=verbose,
+                               BPPARAM=BPPARAM)
 
-              if (verbose)
+              if (verbose) {
                   cli_alert_success("Calculations finished")
+                  gsva_global$show_start_and_end_messages <- TRUE
+              }
               
-              return(rval)
+              return(es)
           })
 
 
@@ -954,8 +929,10 @@ readGMT <- function (con,
                      ...) {
     valueType <- match.arg(valueType)
 
-    if((!.isCharLength1(con)) && (!inherits(con, "connection"))) {
-        cli_abort("Argument 'con' is not a valid filename, URL or connection.")
+    if ((!.isCharLength1(con)) && (!inherits(con, "connection"))) {
+        msg <- paste("Argument 'con' is not a valid filename, URL",
+                     "or connection.")
+        cli_abort(c("x"=msg))
     }
     
     ## from GSEABase::getGmt()
@@ -1093,13 +1070,15 @@ setMethod("unwrapData", signature("SpatialExperiment"),
 ## wrapData: put the resulting data and gene sets into the original data container type
 setMethod("wrapData", signature(container="matrix"),
           function(container, dataMatrix, geneSets) {
-              attr(dataMatrix, "geneSets") <- geneSets
+              if (!missing(geneSets))
+                  attr(dataMatrix, "geneSets") <- geneSets
               return(dataMatrix)
           })
 
 setMethod("wrapData", signature(container="dgCMatrix"),
           function(container, dataMatrix, geneSets) {
-              attr(dataMatrix, "geneSets") <- geneSets
+              if (!missing(geneSets))
+                  attr(dataMatrix, "geneSets") <- geneSets
               return(dataMatrix)
           })
 
@@ -1109,45 +1088,79 @@ setMethod("wrapData", signature(container="ExpressionSet"),
                           phenoData=phenoData(container),
                           experimentData=experimentData(container),
                           annotation="")
-              attr(rval, "geneSets") <- geneSets
+              if (!missing(geneSets))
+                  attr(rval, "geneSets") <- geneSets
               
               return(rval)
           })
 
 setMethod("wrapData", signature(container="SummarizedExperiment"),
           function(container, dataMatrix, geneSets) {
+              rdata <- adata <- NULL
+              if (!missing(geneSets)) {
+                  adata <- SimpleList(es=dataMatrix)
+                  rdata <- DataFrame(gs=CharacterList(geneSets))
+              } else { ## assume missing geneSets imples dataMatrix are ranks
+                  mask <- rownames(container) %in% rownames(dataMatrix)
+                  adata <- c(assays(container[mask, ]),
+                             SimpleList(gsvaranks=dataMatrix))
+                  rdata <- rowData(container)[mask, ]
+              }
               rval <- SummarizedExperiment(
-                  assays=SimpleList(es=dataMatrix),
+                  assays=adata,
                   colData=colData(container),
-                  rowData=DataFrame(gs=CharacterList(geneSets)),
+                  rowData=rdata,
                   metadata=metadata(container))
-              metadata(rval)$annotation <- NULL
+              if (!missing(geneSets))
+                  metadata(rval)$annotation <- NULL
 
               return(rval)
           })
 
 setMethod("wrapData", signature(container="SingleCellExperiment"),
           function(container, dataMatrix, geneSets) {
+              rdata <- adata <- NULL
+              if (!missing(geneSets)) {
+                  adata <- SimpleList(es=dataMatrix)
+                  rdata <- DataFrame(gs=CharacterList(geneSets))
+              } else { ## assume missing geneSets imples dataMatrix are ranks
+                  mask <- rownames(container) %in% rownames(dataMatrix)
+                  adata <- c(assays(container[mask, ]),
+                             SimpleList(gsvaranks=dataMatrix))
+                  rdata <- rowData(container)[mask, ]
+              }
               rval <- SingleCellExperiment(
-                  assays=SimpleList(es=dataMatrix),
+                  assays=adata,
                   colData=colData(container),
-                  rowData=DataFrame(gs=CharacterList(geneSets)),
+                  rowData=rdata,
                   metadata=metadata(container))
-              metadata(rval)$annotation <- NULL
+              if (!missing(geneSets))
+                  metadata(rval)$annotation <- NULL
               
               return(rval)
           })
 
 setMethod("wrapData", signature(container="SpatialExperiment"),
           function(container, dataMatrix, geneSets) {
+              rdata <- adata <- NULL
+              if (!missing(geneSets)) {
+                  adata <- SimpleList(es=dataMatrix)
+                  rdata <- DataFrame(gs=CharacterList(geneSets))
+              } else { ## assume missing geneSets imples dataMatrix are ranks
+                  mask <- rownames(container) %in% rownames(dataMatrix)
+                  adata <- c(assays(container[mask, ]),
+                             SimpleList(gsvaranks=dataMatrix))
+                  rdata <- rowData(container)[mask, ]
+              }
               rval <- SpatialExperiment(
-                  assays=SimpleList(es=dataMatrix),
+                  assays=adata,
                   colData=colData(container),
-                  rowData=DataFrame(gs=CharacterList(geneSets)),
+                  rowData=rdata,
                   metadata=metadata(container),
-                  imgData = imgData(container),
-                  spatialCoords = spatialCoords(container))
-              metadata(rval)$annotation <- NULL
+                  imgData=imgData(container),
+                  spatialCoords=spatialCoords(container))
+              if (!missing(geneSets))
+                  metadata(rval)$annotation <- NULL
               
               return(rval)
           })

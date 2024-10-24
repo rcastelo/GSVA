@@ -28,7 +28,6 @@
 #' @importFrom BiocParallel SerialParam MulticoreParam multicoreWorkers bpnworkers
 #' @importFrom SingleCellExperiment SingleCellExperiment
 #' @importFrom SpatialExperiment SpatialExperiment
-#' @importFrom sparseMatrixStats colRanks rowRanges
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid defaultAutoGrid
 #' currentBlockId read_block gridReduce write_block close t colSums
 #' @importFrom HDF5Array HDF5RealizationSink writeHDF5Array
