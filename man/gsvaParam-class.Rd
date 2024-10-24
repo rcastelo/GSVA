@@ -21,7 +21,9 @@ gsvaParam(
   tau = 1,
   maxDiff = TRUE,
   absRanking = FALSE,
-  sparse = TRUE
+  sparse = TRUE,
+  checkNA = c("auto", "yes", "no"),
+  use = c("everything", "all.obs", "na.rm")
 )
 
 \S4method{geneSets}{gsvaRanksParam,GsvaGeneSets}(object) <- value
@@ -107,6 +109,32 @@ In such a case, when \code{sparse=TRUE} (default), a sparse version of the GSVA
 algorithm will be applied. Otherwise, when \code{sparse=FALSE}, the classical
 version of the GSVA algorithm will be used.}
 
+\item{checkNA}{Character vector of length 1 specifying whether the input
+expression data should be checked for the presence of missing (\code{NA}) values.
+This must be
+one of the strings \code{"auto"} (default), \code{"yes"}, or \code{"no"}. The default value
+\code{"auto"} means that the software will perform that check only when the input
+expression data is provided as a base \code{\link{matrix}}, an \code{\link{ExpressionSet}} or a
+\code{\link{SummarizedExperiment}} object, while every other type of input expression
+data container (e.g., \code{\link{SingleCellExperiment}}, etc.) will not be checked.
+If \code{checkNA="yes"}, then the input expression data will be checked for
+missing values irrespective of the object class of the data container, and
+if \code{checkNA="no"}, then that check will not be performed.}
+
+\item{use}{Character vector of length 1 specifying a policy for dealing with
+missing values (\code{NA}s) in the input expression data argument \code{exprData}. It
+only applies when either \code{checkNA="yes"}, or \code{checkNA="auto"} (see the
+\code{checkNA} parameter. The argument value must be one of the strings
+\code{"everything"} (default), \code{"all.obs"}, or \code{"na.rm"}. The policy of the
+default value \code{"everything"} consists of propagating \code{NA}s so that the
+resulting enrichment score will be \code{NA}, whenever one or more of its
+contributing values is \code{NA}, giving a warning when that happens. When
+\code{use="all.obs"}, the presence of \code{NA}s in the input expression data will
+produce an error. Finally, when \code{use="na.rm"}, \code{NA} values in the input
+expression data will be removed from calculations, giving a warning when that
+happens, and giving an error if no values are left after removing the \code{NA}
+values.}
+
 \item{object}{For the replacement method, an object of class
 \code{\linkS4class{gsvaRanksParam}}.}
 
@@ -180,6 +208,21 @@ data in a \code{dgCMatrix}).
 In such a case, when \code{sparse=TRUE}, a sparse version of the GSVA algorithm
 will be applied. Otherwise, when \code{sparse=FALSE}, the classical version of
 the GSVA algorithm will be used.}
+
+\item{\code{checkNA}}{Character vector of length 1. One of the strings \code{"auto"}
+(default), \code{"yes"}, or \code{"no"}, which refer to whether the input expression
+data should be checked for the presence of missing (\code{NA}) values.}
+
+\item{\code{didCheckNA}}{Logical vector of length 1, indicating whether the input
+expression data was checked for the presence of missing (\code{NA}) values.}
+
+\item{\code{anyNA}}{Logical vector of length 1, indicating whether the input
+expression data contains missing (\code{NA}) values.}
+
+\item{\code{use}}{Character vector of length 1. One of the strings \code{"everything"}
+(default), \code{"all.obs"}, or \code{"na.rm"}, which refer to three different policies
+to apply in the presence of missing values in the input expression data; see
+\code{\link{ssgseaParam}}.}
 }}
 
 \examples{

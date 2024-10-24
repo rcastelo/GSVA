@@ -258,9 +258,9 @@ setMethod("gsva", signature(param="ssgseaParam"),
               ssgseaScores <- ssgsea(X=filteredDataMatrix,
                                      geneSets=filteredMappedGeneSets,
                                      alpha=get_alpha(param), 
-                                     normalization=do_normalize(param),
+                                     normalization=get_normalize(param),
                                      any_na=anyNA(param),
-                                     na_use=na_use(param),
+                                     na_use=get_NAuse(param),
                                      minSize=get_minSize(param),
                                      BPPARAM=BPPARAM)
 

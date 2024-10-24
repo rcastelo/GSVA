@@ -206,6 +206,34 @@
     return(m)
 }
 
+#' @importFrom cli cli_abort cli_alert_danger
+.check_for_na_values <- function(exprData, checkNA, use) {
+    autonaclasseswocheck <- c("matrix", "ExpressionSet",
+                              "SummarizedExperiment")
+    mask <- class(exprData) %in% autonaclasseswocheck
+    checkNAyesno <- switch(checkNA, yes="yes", no="no",
+                           ifelse(any(mask), "yes", "no"))
+    didCheckNA <- any_na <- FALSE
+    if (checkNAyesno == "yes") {
+        any_na <- anyNA(unwrapData(exprData))
+        didCheckNA <- TRUE
+        if (any_na) {
+            if (use == "all.obs")
+                cli_abort(c("x"="Input expression data has NA values."))
+            else if (use == "everything")
+                cli_alert_warning(paste("Input expression data has NA values,",
+                                       "which will be propagated through",
+                                       "calculations."))
+            else ## na.rm
+                cli_alert_warning(paste("Input expression data has NA values,",
+                                       "which will be discarded from",
+                                       "calculations."))
+        }
+    }
+
+    list(any_na=any_na, didCheckNA=didCheckNA)
+}
+
 ## transforms a dgCMatrix into a list of its
 ## non-zero values by MARGIN (1 for row, 2 for column)
 ##

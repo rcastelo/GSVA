@@ -33,6 +33,9 @@ SEXP
 ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR);
 
 SEXP
+ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR);
+
+SEXP
 match_int(SEXP x, SEXP table);
 
 int
@@ -498,6 +501,137 @@ ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR) {
       int idx = nr * j + i;
 #endif
       ecdf_vals[idx] = ecdfuniqv[mt[j]-1];
+    }
+
+    R_Free(ecdfuniqv);
+    R_Free(tab);
+
+    UNPROTECT(2); /* xR uniqvR */
+  }
+
+  if (verbose)
+    cli_progress_done(pb);
+
+  UNPROTECT(nunprotect); /* XR ecdfRobj pb */
+
+  return(ecdfRobj);
+}
+
+/* calculate empirical cumulative distribution function values
+ * on the zero and nonzero entries from the input dense matrix,
+ * when missing (NA) values are present, the returned value is
+ * a dense matrix.
+ */
+SEXP
+ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR) {
+  double* X;
+  Rboolean verbose=asLogical(verboseR);
+  int     nr, nc;
+  SEXP    ecdfRobj;
+  double* ecdf_vals;
+  SEXP pb = R_NilValue;
+  int  nunprotect=0;
+
+  PROTECT(XR); nunprotect++;
+
+  nr = INTEGER(getAttrib(XR, R_DimSymbol))[0]; /* number of rows */
+  nc = INTEGER(getAttrib(XR, R_DimSymbol))[1]; /* number of columns */
+  X  = REAL(XR);
+
+  /* create a new dense matrix object to store the result,
+   * if nr * nc > INT_MAX and LONG_VECTOR_SUPPORT is not
+   * available, the function allocMatrix() will prompt an error */
+  ecdfRobj = PROTECT(allocMatrix(REALSXP, nr, nc)); nunprotect++;
+
+  if (verbose) {
+    pb = PROTECT(cli_progress_bar(nr, NULL));
+    cli_progress_set_name(pb, "Estimating ECDFs");
+    nunprotect++;
+  }
+
+  for (int i=0; i < nr; i++) {
+    SEXP          xR, uniqvR;
+    int           nuniqv;
+    double*       x;
+    double*       uniqv;
+    double*       ecdfuniqv;
+    int           sum;
+    double*       e1_p;
+    const double* e2_p;
+    int*          mt;
+    int*          tab;
+    int           nnas;
+
+    if (verbose) { /* show progress */
+      if (i % 100 == 0 && CLI_SHOULD_TICK)
+        cli_progress_set(pb, i);
+    }
+
+    /* remove consecutive repeated elements */
+    PROTECT(uniqvR = allocVector(REALSXP, nc));
+    PROTECT(xR = allocVector(REALSXP, nc));
+    uniqv = REAL(uniqvR);
+    x = REAL(xR);
+    nnas = 0; /* non-NA values */
+    for (int j=0; j < nc; j++) {
+#ifdef LONG_VECTOR_SUPPORT
+      R_xlen_t idx = nr * j + i;
+#else
+      int idx = nr * j + i;
+#endif
+      x[j] = X[idx];
+      if (!ISNA(x[j])) {
+        uniqv[nnas] = x[j];
+        nnas++;
+      }
+    }
+
+    qsort(uniqv, nnas, sizeof(double), dbl_cmp);
+    e1_p = uniqv;
+    e2_p = e1_p + 1;
+    nuniqv = 0;
+    for (int j=0; j < nnas; j++) {
+      if (*e2_p != *e1_p) {
+        *(++e1_p) = *e2_p;
+        nuniqv++;
+      }
+      e2_p++;
+    }
+
+    /* match original values to sorted unique values */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    mt = INTEGER(match_int(xR, uniqvR)); /* 1-based! */
+
+    /* tabulate matches */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    tab = R_Calloc(nuniqv, int); /* assuming zeroes are set */
+    for (int j=0; j < nc; j++)
+      if (!ISNA(mt[j]) && mt[j] > 0 && mt[j] <= nuniqv)
+        tab[mt[j] - 1]++;
+
+    /* cumulative sum to calculate ecdf values */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    ecdfuniqv = R_Calloc(nuniqv, double); /* assuming zeroes are set */
+    sum = 0;
+    for (int j=0; j < nuniqv; j++) {
+      sum = sum + tab[j];
+      ecdfuniqv[j] = ((double) sum) / ((double) nc);
+    }
+
+    /* set ecdf values on the corresponding positions
+     * of the output dense matrix */
+    ecdf_vals = REAL(ecdfRobj);
+
+    for (int j=0; j < nc; j++) {
+#ifdef LONG_VECTOR_SUPPORT
+      R_xlen_t idx = nr * j + i;
+#else
+      int idx = nr * j + i;
+#endif
+      if (!ISNA(X[idx]))
+        ecdf_vals[idx] = ecdfuniqv[mt[j]-1];
+      else
+        ecdf_vals[idx] = NA_REAL;
     }
 
     R_Free(ecdfuniqv);

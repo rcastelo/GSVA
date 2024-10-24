@@ -86,6 +86,32 @@
 #' algorithm will be applied. Otherwise, when `sparse=FALSE`, the classical
 #' version of the GSVA algorithm will be used.
 #'
+#' @param checkNA Character vector of length 1 specifying whether the input
+#' expression data should be checked for the presence of missing (`NA`) values.
+#' This must be
+#' one of the strings `"auto"` (default), `"yes"`, or `"no"`. The default value
+#' `"auto"` means that the software will perform that check only when the input
+#' expression data is provided as a base [`matrix`], an [`ExpressionSet`] or a
+#' [`SummarizedExperiment`] object, while every other type of input expression
+#' data container (e.g., [`SingleCellExperiment`], etc.) will not be checked.
+#' If `checkNA="yes"`, then the input expression data will be checked for
+#' missing values irrespective of the object class of the data container, and
+#' if `checkNA="no"`, then that check will not be performed.
+#'
+#' @param use Character vector of length 1 specifying a policy for dealing with
+#' missing values (`NA`s) in the input expression data argument `exprData`. It
+#' only applies when either `checkNA="yes"`, or `checkNA="auto"` (see the
+#' `checkNA` parameter. The argument value must be one of the strings
+#' `"everything"` (default), `"all.obs"`, or `"na.rm"`. The policy of the
+#' default value `"everything"` consists of propagating `NA`s so that the
+#' resulting enrichment score will be `NA`, whenever one or more of its
+#' contributing values is `NA`, giving a warning when that happens. When
+#' `use="all.obs"`, the presence of `NA`s in the input expression data will
+#' produce an error. Finally, when `use="na.rm"`, `NA` values in the input
+#' expression data will be removed from calculations, giving a warning when that
+#' happens, and giving an error if no values are left after removing the `NA`
+#' values.
+#'
 #' @return A new [`gsvaParam-class`] object.
 #'
 #' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
@@ -116,9 +142,13 @@ gsvaParam <- function(exprData, geneSets,
                       minSize=1, maxSize=Inf,
                       kcdf=c("auto", "Gaussian", "Poisson", "none"),
                       kcdfNoneMinSampleSize=200, tau=1, maxDiff=TRUE,
-                      absRanking=FALSE, sparse=TRUE) {
+                      absRanking=FALSE, sparse=TRUE,
+                      checkNA=c("auto", "yes", "no"),
+                      use=c("everything", "all.obs", "na.rm")) {
     kcdf <- match.arg(kcdf)
     kcdfNoneMinSampleSize <- as.integer(kcdfNoneMinSampleSize)
+    checkNA <- match.arg(checkNA)
+    use <- match.arg(use)
 
     an <- gsvaAssayNames(exprData)
     if((!is.na(assay)) && (!.isCharNonEmpty(an))) {
@@ -148,12 +178,16 @@ gsvaParam <- function(exprData, geneSets,
         }
     }
 
+    naparam <- .check_for_na_values(exprData=exprData, checkNA=checkNA, use=use)
+
     new("gsvaParam",
         exprData=exprData, geneSets=geneSets,
         assay=assay, annotation=annotation,
         minSize=minSize, maxSize=maxSize,
         kcdf=kcdf, kcdfNoneMinSampleSize=kcdfNoneMinSampleSize,
-        tau=tau, maxDiff=maxDiff, absRanking=absRanking, sparse=sparse)
+        tau=tau, maxDiff=maxDiff, absRanking=absRanking, sparse=sparse,
+        checkNA=checkNA, didCheckNA=naparam$didCheckNA,
+        anyNA=naparam$any_na, use=use)
 }
 
 
@@ -232,6 +266,24 @@ setValidity("gsvaParam", function(object) {
     if(is.na(object@sparse)) {
         inv <- c(inv, "@sparse must not be NA")
     }
+    if(!.isCharLength1(object@checkNA)) {
+        inv <- c(inv, "@use must be a single character string")
+    }
+    if(length(object@didCheckNA) != 1) {
+        inv <- c(inv, "@didCheckNA must be of length 1")
+    }
+    if(is.na(object@didCheckNA)) {
+        inv <- c(inv, "@didCheckNA must not be NA")
+    }
+    if(length(object@anyNA) != 1) {
+        inv <- c(inv, "@anyNA must be of length 1")
+    }
+    if(is.na(object@anyNA)) {
+        inv <- c(inv, "@anyNA must not be NA")
+    }
+    if(!.isCharLength1(object@use)) {
+        inv <- c(inv, "@use must be a single character string")
+    }
     return(if(length(inv) == 0) TRUE else inv)
 })
 
@@ -274,6 +326,20 @@ get_sparse <- function(object) {
   return(object@sparse)
 }
 
+## getters for 'checkNA', 'didCheckNA' and 'use' are
+## currently in ssgsea.R
+
+#' @param x An object of class [`gsvaParam-class`].
+#'
+#' @param recursive Not used with `x` being an object of
+#' class [`gsvaParam-class`].
+#'
+#' @aliases anyNA,ssgseaParam-method
+#' @rdname ssgseaParam-class
+setMethod("anyNA", signature=c("gsvaParam"),
+          function(x, recursive=FALSE)
+            return(x@anyNA))
+
 
 ## ----- show -----
 
@@ -289,6 +355,15 @@ setMethod("show",
                   sep="")
               if ("dgCMatrix" %in% class(unwrapData(get_exprData(object), get_assay(object))))
                   cat("sparse: ", get_sparse(object), "\n")
+              cat("checkNA: ", get_checkNA(object), "\n", sep="")
+              if (get_didCheckNA(object)) {
+                  if (anyNA(object)) {
+                      cat("missing data: yes\n",
+                          "na_use: ", get_NAuse(object), "\n", sep="")
+                  } else
+                      cat("missing data: no\n")
+              } else
+                  cat("missing data: didn't check\n")
           })
 
 ## ----- setters for gsvaRanksParam -----

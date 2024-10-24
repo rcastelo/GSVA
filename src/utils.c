@@ -21,6 +21,13 @@ double* global_dbl_p;
 double
 sd(double* x, int n);
 
+double
+sd_naprop(double* x, int n);
+
+double
+sd_narm(double* x, int n);
+
+
 /* calculates standard deviation, largely borrowed from C code in R's src/main/cov.c */
 double
 sd(double* x, int n) {
@@ -44,6 +51,78 @@ sd(double* x, int n) {
   sum = 0.0;
   for (i=0; i < n; i++)
     sum += (x[i] - mean) * (x[i] - mean);
+  sd = sqrt((double) (sum / ((long double) n1)));
+
+  return(sd);
+}
+
+/* calculates standard deviation, largely borrowed from C code in R's
+ * src/main/cov.c propagating NA values */
+double
+sd_naprop(double* x, int n) {
+  int         i, n1;
+  double      mean, sd;
+  long double sum = 0.0;
+  long double tmp;
+
+  for (i=0; i < n; i++) {
+    if (!ISNA(x[i]))
+      sum += x[i];
+    else
+      return(NA_REAL);
+  }
+  tmp = sum / n;
+  if (R_FINITE((double) tmp)) {
+    sum = 0.0;
+    for (i=0; i < n; i++)
+      sum += x[i] - tmp;
+    tmp = tmp + sum / n;
+  }
+  mean = tmp;
+  n1 = n - 1;
+
+  sum = 0.0;
+  for (i=0; i < n; i++)
+    sum += (x[i] - mean) * (x[i] - mean);
+  sd = sqrt((double) (sum / ((long double) n1)));
+
+  return(sd);
+}
+
+/* calculates standard deviation, largely borrowed from C code in R's
+ * src/main/cov.c removing NA values */
+double
+sd_narm(double* x, int n) {
+  int         i, n1;
+  double      mean, sd;
+  long double sum = 0.0;
+  long double tmp;
+  int         n_nas = 0;
+
+  for (i=0; i < n; i++) {
+    if (!ISNA(x[i]))
+      sum += x[i];
+    else
+      n_nas++;
+  }
+  if (n_nas >= n - 1)
+    return(NA_REAL);
+
+  tmp = sum / (n - n_nas);
+  if (R_FINITE((double) tmp)) {
+    sum = 0.0;
+    for (i=0; i < n; i++)
+      if (!ISNA(x[i]))
+        sum += x[i] - tmp;
+    tmp = tmp + sum / (n - n_nas);
+  }
+  mean = tmp;
+  n1 = n - n_nas - 1;
+
+  sum = 0.0;
+  for (i=0; i < n; i++)
+    if (!ISNA(x[i]))
+      sum += (x[i] - mean) * (x[i] - mean);
   sd = sqrt((double) (sum / ((long double) n1)));
 
   return(sd);
