@@ -109,10 +109,14 @@ compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
             else
                 gene.cdf <- .ecdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE],
                                                       verbose)
-        } else if (is.matrix(expr))
-            gene.cdf <- .ecdfvals_dense_to_dense(expr[, sample.idxs, drop=FALSE],
+        } else if (is.matrix(expr)) {
+            if (any_na)
+                gene.cdf <- .ecdfvals_dense_to_dense_nas(expr[, sample.idxs, drop=FALSE],
+                                                         verbose)
+            else
+                gene.cdf <- .ecdfvals_dense_to_dense(expr[, sample.idxs, drop=FALSE],
                                                  verbose)
-        else
+        } else
             stop(sprintf("Matrix class %s cannot be handled yet.", class(expr)))
     }
 
@@ -973,22 +977,20 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
                   walkStat <- .gsvaRndWalk_nas(gSetIdx, decOrdStat, symRnkStat,
                                                tau, na_use, minSize, wna_env)
                   maxDev <- c(NA_real_, NA_real_)
-                  if (na_use == "na.rm")
-                      maxDev <- c(max(c(0, max(walkStat, na.rm=TRUE))),
-                                  min(c(0, min(walkStat, na.rm=TRUE))))
-                  else
-                      maxDev <- c(max(c(0, max(walkStat))),
-                                  min(c(0, min(walkStat))))
+                  if (any(!is.na(walkStat))) {
+                      if (na_use == "na.rm")
+                          maxDev <- c(max(c(0, max(walkStat, na.rm=TRUE))),
+                                      min(c(0, min(walkStat, na.rm=TRUE))))
+                      else
+                          maxDev <- c(max(c(0, max(walkStat))),
+                                      min(c(0, min(walkStat))))
+                  }
                   maxDev
                 }, rnkstats$dos, rnkstats$srs, na_use)
                 md <- do.call("rbind", md)
                 if (maxDiff && absRanking)
                     md[, 2] <- -1 * md[, 2]
-                sco <- rep(NA_real_, length(geneSetsIdx))
-                if (na_use == "na.rm")
-                    sco <- rowSums(md, na.rm=TRUE)
-                else 
-                    sco <- rowSums(md)
+                sco <- rowSums(md)
                 if (!maxDiff) {
                     mask <- is.na(sco)
                     sco[!mask] <- md[cbind(1:sum(!mask), ifelse(sco[!mask] > 0,
@@ -1026,22 +1028,20 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
                   walkStat <- .gsvaRndWalk_nas(gSetIdx, decOrdStat, symRnkStat,
                                                tau, na_use, minSize, wna_env)
                   maxDev <- c(NA_real_, NA_real_)
-                  if (na_use == "na.rm")
-                      maxDev <- c(max(c(0, max(walkStat, na.rm=TRUE))),
-                                  min(c(0, min(walkStat, na.rm=TRUE))))
-                  else
-                      maxDev <- c(max(c(0, max(walkStat))),
-                                  min(c(0, min(walkStat))))
+                  if (any(!is.na(walkStat))) {
+                      if (na_use == "na.rm")
+                          maxDev <- c(max(c(0, max(walkStat, na.rm=TRUE))),
+                                      min(c(0, min(walkStat, na.rm=TRUE))))
+                      else
+                          maxDev <- c(max(c(0, max(walkStat))),
+                                      min(c(0, min(walkStat))))
+                  }
                   maxDev
                 }, rnkstats$dos, rnkstats$srs, na_use)
                 md <- do.call("rbind", md)
                 if (maxDiff && absRanking)
                     md[, 2] <- -1 * md[, 2]
-                sco <- rep(NA_real_, length(geneSetsIdx))
-                if (na_use == "na.rm")
-                    sco <- rowSums(md, na.rm=TRUE)
-                else 
-                    sco <- rowSums(md)
+                sco <- rowSums(md)
                 if (!maxDiff) {
                     mask <- is.na(sco)
                     sco[!mask] <- md[cbind(1:sum(!mask), ifelse(sco[!mask] > 0,
@@ -1223,6 +1223,12 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
   stopifnot(is.matrix(X)) ## QC
   stopifnot(is.logical(verbose)) ## QC
   .Call("ecdfvals_dense_to_dense_R", X, verbose)
+}
+
+.ecdfvals_dense_to_dense_nas <- function(X, verbose) {
+  stopifnot(is.matrix(X)) ## QC
+  stopifnot(is.logical(verbose)) ## QC
+  .Call("ecdfvals_dense_to_dense_nas_R", X, verbose)
 }
 
 .kcdfvals_sparse_to_sparse <- function(X, Gaussk, verbose) {

@@ -29,6 +29,8 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP verboseR);
 SEXP
 ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR);
 
+SEXP
+ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR);
 
 SEXP
 order_rankstat_R(SEXP xR);
@@ -56,6 +58,7 @@ static R_CallMethodDef callMethods[] = {
   {"ecdfvals_sparse_to_sparse_R", (DL_FUNC) &ecdfvals_sparse_to_sparse_R, 3},
   {"ecdfvals_sparse_to_dense_R", (DL_FUNC) &ecdfvals_sparse_to_dense_R, 3},
   {"ecdfvals_dense_to_dense_R", (DL_FUNC) &ecdfvals_dense_to_dense_R, 2},
+  {"ecdfvals_dense_to_dense_nas_R", (DL_FUNC) &ecdfvals_dense_to_dense_nas_R, 2},
   {"gsva_rnd_walk_R", (DL_FUNC) &gsva_rnd_walk_R, 3},
   {"gsva_scores_genesets_R", (DL_FUNC) &gsva_score_genesets_R, 5},
   {"order_rankstat_sparse_to_dense_R", (DL_FUNC) &order_rankstat_sparse_to_dense_R, 2},
