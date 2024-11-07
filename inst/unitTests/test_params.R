@@ -79,7 +79,7 @@ test_gsvaParam <- function() {
     checkTrue(inherits(gp, "gsvaParam"))
     checkTrue(inherits(gp, "GsvaMethodParam"))
 
-    checkEquals(gp@kcdf, "Gaussian")
+    checkEquals(gp@kcdf, "auto")
     checkEqualsNumeric(gp@tau, 1)
     checkTrue(gp@maxDiff)
     checkTrue(!gp@absRanking)

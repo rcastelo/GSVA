@@ -40,7 +40,8 @@ test_ssgsea <- function() {
 
     for (i in 1:n) {
         geneRanking <- order(R[, i], decreasing=TRUE)
-        frw <- GSVA:::.fastRndWalk(gset.idx.list[[1]], geneRanking, i, Ra)
+        gset1rnkidx <- match(gset.idx.list[[1]], geneRanking)
+        frw <- GSVA:::.fastRndWalk(gset1rnkidx, geneRanking, i, Ra)
         rw <- GSVA:::.rndWalk(gset.idx.list[[1]], geneRanking, i, R, alpha)
         checkEqualsNumeric(rw, frw)
     }

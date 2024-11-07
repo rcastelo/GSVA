@@ -4,6 +4,18 @@ setGeneric("gsva",
            function(param, ...) standardGeneric("gsva"))
 
 #' @export 
+setGeneric("gsvaRanks",
+           function(param, ...) standardGeneric("gsvaRanks"))
+
+#' @export 
+setGeneric("gsvaScores",
+           function(param, ...) standardGeneric("gsvaScores"))
+
+#' @export 
+setGeneric("gsvaEnrichment",
+           function(param, ranks, ...) standardGeneric("gsvaEnrichment"))
+
+#' @export 
 setGeneric("filterGeneSets",
            function(gSets, ...) standardGeneric("filterGeneSets"))
 
@@ -11,16 +23,37 @@ setGeneric("filterGeneSets",
 setGeneric("computeGeneSetsOverlap",
            function(gSets, uniqGenes=unique(unlist(gSets, use.names=FALSE)), ...) standardGeneric("computeGeneSetsOverlap"))
 
+#' @export
+setGeneric("geneSets",
+           function(obj, ...) standardGeneric("geneSets"))
+
+#' @export
+setGeneric("geneSets<-",
+           function(object, value) standardGeneric("geneSets<-"))
+
+#' @export
+setGeneric("geneSetSizes",
+           function(obj, ...) standardGeneric("geneSetSizes"))
+
+#' @export
+setGeneric("gsvaAnnotation",
+           function(object) standardGeneric("gsvaAnnotation"))
+
+#' @export
+setGeneric("gsvaAnnotation<-",
+           function(object, value) standardGeneric("gsvaAnnotation<-"))
+
+
 ## for now, these should be private methods
 
 setGeneric("unwrapData",
            function(container, ...) standardGeneric("unwrapData"))
 
 setGeneric("wrapData",
-           function(dataMatrix, container) standardGeneric("wrapData"))
+           function(container, dataMatrix, geneSets) standardGeneric("wrapData"))
 
 setGeneric("mapGeneSetsToAnno",
-           function(geneSets, ...) standardGeneric("mapGeneSetsToAnno"))
+           function(geneSets, anno, ...) standardGeneric("mapGeneSetsToAnno"))
 
 setGeneric("get_exprData", function(object) standardGeneric("get_exprData"))
 
@@ -36,7 +69,14 @@ setGeneric("get_maxSize", function(object) standardGeneric("get_maxSize"))
 
 setGeneric("gsvaShow", function(object) standardGeneric("gsvaShow"))
 
-setGeneric("gsvaAnnotation", function(object) standardGeneric("gsvaAnnotation"))
-
 setGeneric("gsvaAssayNames", function(object) standardGeneric("gsvaAssayNames"))
+
+## spatial methods
+
+#' @export
+setGeneric("spatCor",
+           function(spe, ...) standardGeneric("spatCor"))
+
+
+
 

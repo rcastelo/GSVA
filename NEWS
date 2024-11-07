@@ -1,3 +1,61 @@
+CHANGES IN VERSION 2.00
+-----------------------
+
+USER VISIBLE CHANGES
+
+  o Added a missing data policy for the GSVA and the ssGSEA methods by which missing values in the input expression data either propagate throughout calculations (use="everything"), prompt an error (use="all.obs"), or are discarded from calculations (use="na.rm").
+
+  o The readGMT() function now returns also a GeneSetCollection object, and can automatically identify the type of feature/gene identifier used in the GMT file, adding it to the metadata of the return object.
+
+  o Mapping between different types of feature/gene identifiers between gene sets and expression data has been improved.
+
+  o Added a new default for the kcdf parameter in the GSVA method, kcdf='auto', which tries to select the best value for this parameter, according to the input data.
+
+  o Added a new sparse regime of the GSVA algorithm, specifically tailored for expression data stored in sparse matrices, such as single-cell data, to address some of the shortcomings of the original (classical) algorithm with this type of data.
+
+  o Added two new methods, gsvaRanks() and gsvaScores(), to run the GSVA algorithm in two steps that provide additional flexibility to score gene sets and extract enrichment information.
+
+  o Added a new method gsvaEnrichment() to be used after gsvaRanks(), which allows one to extract enrichment information for a particular gene set and sample/column, including the possibility to produce an enrichment plot using base R or ggplot2 graphics.
+
+  o Package messages are now displayed using the cli package, changing and removing some of them, as well as adding other ones, to improve the information reported to the user.
+
+BUG FIXES
+
+  o Removed API legacy convenience features, which keep causing problems, as per request of CRAN maintainers.
+
+  o Fixed some bugs in the shiny app.
+
+CHANGES IN VERSION 1.52
+-----------------------
+
+USER VISIBLE CHANGES
+
+  o Moved old API from deprecated to defunct; see vignette and help pages for examples on how to use the new API.
+
+  o Documentation fixes.
+
+  o Gene/feature filtering is not based anymore on floating point arithmetic, but on comparing minimum and maximum values. In the case of expression data stored in dgCMatrix objects, this criterion applies to non-zero values only.
+
+  o Parameter objects have nicer show methods.
+
+  o Resulting enrichment score matrices are now always dense.
+
+  o Added a first version of the support to SpatialExperiment objects. At the moment, only GSVA scores are calculated without using spatial coordinates information.
+
+  o When expression data is stored in an input sparse matrix of class dgCMatrix, now it is handled as such a sparse matrix as much as possible to reduce memory consumption.
+
+  o Added geneSets() and geneSetSizes() methods that allow one to retrieve, respectively, the filtered collection of gene sets and their sizes from either the parameter object or the resulting object output by the gsva() function. This allows the user to more easily give this information to analysis pipelines that exploit it, such as limma-trend; see the vignette for an example.
+
+  o Added functions readGMT() and deduplicateGeneSets() to read GMT files, handling the case when the file contains gene sets with duplicated names; see the corresponding help pages for more information.
+
+  o The underlying code of the ssGSEA method has been optimized after discussion on https://github.com/rcastelo/GSVA/issues/71 and now it runs one order of magnitude faster and consumes one order of magnitude less memory.
+
+BUG FIXES
+
+  o Bugfix on accessing the assay names of a SingleCellExperiment object from the 'gsva()' function.
+
+  o Bugfix on a rare combination of input parameter for gsvaParam().
+
 CHANGES IN VERSION 1.50
 -----------------------
 

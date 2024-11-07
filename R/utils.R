@@ -1,3 +1,16 @@
+## check for presence of valid row/feature names
+#' @importFrom Biobase featureNames
+.check_rownames <- function(expr) {
+    ## CHECK: is this the right place to check this?
+    ## 21/10/24: let's do it at parameter constructor
+    if (is.null(rownames(expr)))
+        cli_abort(c("x"="The input assay object doesn't have rownames"))
+    else if (any(duplicated(rownames(expr)))) {
+        cli_abort(c("x"="The input assay object has duplicated rownames"))
+    } 
+}
+
+
 ## 2024-02-06  axel: function .filterGenes() is intended to detect genes (rows)
 ##  with constant expression (and, hence, no information), warn about them and
 ##  optionally remove them (in particular, ssGSEA's choice is to keep them).
@@ -19,42 +32,42 @@
 ##  values of genes: genes that are constant in their non-zero values will have
 ##  an SD of 0 and therefore scaling them will result in division by 0.
 
+#' @importFrom sparseMatrixStats rowRanges
+#' @importFrom cli cli_alert_warning cli_abort
 .filterGenes <- function(expr, removeConstant=TRUE, removeNzConstant=TRUE) {
-    geneRanges <- rowRanges(expr, useNames=FALSE)
+    geneRanges <- rowRanges(expr, na.rm=TRUE, useNames=FALSE)
     constantGenes <- (geneRanges[, 1] == geneRanges[, 2])
 
-    if(any(constantGenes) || anyNA(constantGenes)) {
+    if (any(constantGenes) || anyNA(constantGenes)) {
         invalidGenes <- (constantGenes | is.na(constantGenes))
-        warning(sum(invalidGenes),
-                " genes with constant values throughout the samples.")
-        if(removeConstant) {
-            warning("Genes with constant values are discarded.")
+        msg <- sprintf("%d genes with constant values throughout the samples",
+                       sum(invalidGenes))
+        cli_alert_warning(msg)
+        if (removeConstant) {
+            cli_alert_warning("Genes with constant values are discarded")
             expr <- expr[!invalidGenes, ]
         }
     }
 
-    if(is(expr, "dgCMatrix")) {
+    if (is(expr, "dgCMatrix")) {
         nzGeneList <- .sparse2columnList(t(expr))
         nzGeneRanges <- vapply(nzGeneList, FUN=range, FUN.VALUE=double(2))
         constantNzGenes <- (nzGeneRanges[1,] == nzGeneRanges[2,])
 
-        if(any(constantNzGenes) || anyNA(constantNzGenes)) {
+        if (any(constantNzGenes) || anyNA(constantNzGenes)) {
             invalidNzGenes <- (constantNzGenes | is.na(constantNzGenes))
-            warning(sum(invalidNzGenes),
-                    " genes with constant non-zero values throughout the sample.")
-            if(removeNzConstant) {
-                warning("Genes with constant non-zero values are discarded.")
+            msg <- sprintf("%d genes with constant non-zero values throughout the samples",
+                           sum(invalidNzGenes))
+            cli_alert_warning(msg)
+            if (removeNzConstant) {
+                cli_alert_warning("Genes with constant non-zero values are discarded")
                 expr <- expr[!invalidNzGenes, ]
             }
         }
     }
 
-    if(nrow(expr) < 2)
-        stop("Less than two genes in the input assay object\n")
-    
-    ## CHECK: is this the right place to check this?
-    if(is.null(rownames(expr)))
-        stop("The input assay object doesn't have rownames\n")
+    if (nrow(expr) < 2)
+        cli_abort(c("x"="Less than two genes in the input assay object"))
     
     return(expr)
 }
@@ -64,18 +77,110 @@
 ## is a 'list' object with character string vectors as elements,
 ## and 'features' is a character string vector object. it assumes
 ## features in both input objects follow the same nomenclature,
+
+#' @importFrom cli cli_abort
 .mapGeneSetsToFeatures <- function(gsets, features) {
 
-  ## Aaron Lun's suggestion at
-  ## https://github.com/rcastelo/GSVA/issues/39#issuecomment-765549620
-  gsets2 <- CharacterList(gsets)
-  mt <- match(gsets2, features)
-  mapdgenesets <- as.list(mt[!is.na(mt)])
+    ## Aaron Lun's suggestion at
+    ## https://github.com/rcastelo/GSVA/issues/39#issuecomment-765549620
+    gsets2 <- CharacterList(gsets)
+    mt <- match(gsets2, features)
+    mapdgenesets <- as.list(mt[!is.na(mt)])
 
-  if (length(unlist(mapdgenesets, use.names=FALSE)) == 0)
-    stop("No identifiers in the gene sets could be matched to the identifiers in the expression data.")
+    if (length(unlist(mapdgenesets, use.names=FALSE)) == 0) {
+      msg <- paste("No identifiers in the gene sets could be matched to the",
+                   "identifiers in the expression data.")
+      cli_abort(c("x"=msg))
+    }
 
-  mapdgenesets
+    mapdgenesets
+}
+
+## it assumes that all arguments have been already checked for correctness
+#' @importFrom cli cli_abort
+.filterAndMapGeneSets <- function(param, wgset=NA, filteredDataMatrix, verbose) {
+
+    geneSets <- get_geneSets(param)
+    if (!is.na(wgset))
+        geneSets <- geneSets[wgset]
+
+    minSize <- get_minSize(param)
+    maxSize <- get_maxSize(param)
+
+    ## note that the method for 'GeneSetCollection' calls geneIds(), i.e., 
+    ## whatever the input, from here on we have a list of character vectors
+    geneSets <- mapGeneSetsToAnno(geneSets=geneSets,
+                                  anno=get_annotation(param),
+                                  verbose=verbose)
+    
+    ## map to the actual features for which expression data is available
+    ## note that the result is a list of integer vectors (indices to rownames)
+    ## and not a list of character vector any longer
+    mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(filteredDataMatrix))
+    
+    ## remove gene sets from the analysis for which no features are available
+    ## and meet the minimum and maximum gene-set size specified by the user
+    filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
+                                             minSize=minSize,
+                                             maxSize=maxSize)
+    
+    if (length(filteredMappedGeneSets) == 0) {
+        msg <- "No gene set left after mapping and filtering."
+        cli_abort(c("x"=msg))
+    }
+
+    ## this should NEVER happen -- just to make sure it doesn't...
+    if (anyDuplicated(names(filteredMappedGeneSets)) > 0) {
+        msg <- "The gene set list contains duplicated gene set names."
+        cli_abort(c("x"=msg))
+    }
+
+    if (any(lengths(filteredMappedGeneSets) == 1)) {
+        msg <- "Some gene sets have size one. Consider setting minSize > 1"
+        cli_alert_warning(msg)
+    }
+
+    return(filteredMappedGeneSets)
+}
+
+#' @importFrom cli cli_alert_warning
+.filterAndMapGenesAndGeneSets <- function(param,
+                                          removeConstant=TRUE,
+                                          removeNzConstant=TRUE,
+                                          verbose=FALSE) {
+    exprData <- get_exprData(param)
+    dataMatrix <- unwrapData(exprData, get_assay(param))
+    
+    ## filter genes according to various criteria,
+    ## e.g., constant expression
+    filteredDataMatrix <- .filterGenes(dataMatrix,
+                                       removeConstant=removeConstant,
+                                       removeNzConstant=removeNzConstant)
+
+    filteredMappedGeneSets <- .filterAndMapGeneSets(param=param,
+                                                    filteredDataMatrix=filteredDataMatrix,
+                                                    verbose=verbose)
+
+    return(list(filteredDataMatrix=filteredDataMatrix,
+                filteredMappedGeneSets=filteredMappedGeneSets))
+}
+
+
+## (re-)extract a list of gene names from a list of indices
+## (indices resulting from the matching above)
+.geneSetsIndices2Names <- function(indices, names) {
+    return(lapply(indices, function(i, n) n[i], n=names))
+}
+
+
+## access to gene set attribute without explicit use of attributes
+.geneSets <- function(obj) {
+    gs <- attr(obj, "geneSets", exact=TRUE)
+
+    if (is.null(gs))
+        stop("The object does not contain information about gene sets.")
+
+    return(gs)
 }
 
 
@@ -91,18 +196,42 @@
 }
 
 ## actually, it's not just an apply() but also in-place modification
-.sparseColumnApplyAndReplace <- function(m, FUN) {
-    x <- lapply(.sparse2columnList(m), FUN=FUN)
+## ellipsis added for cases such as when FUN=rank where we may need
+## to set the parameter 'ties.method' of the 'rank()' function
+.sparseColumnApplyAndReplace <- function(m, FUN, ...) {
+    x <- lapply(.sparse2columnList(m), FUN=FUN, ...)
     m@x <- unlist(x, use.names=FALSE)
+    if (is.integer(m@x)) ## rank(ties.method="first") returns integers
+        mode(m@x) <- "numeric" ## dgCMatrix holds only doubles and logicals
     return(m)
 }
 
-.sparseScaleMessage <- function() {
-    message("Please bear in mind that this method first scales the values of ",
-            "the gene expression data. In order to take advantage of the ",
-            "sparse Matrix type, the scaling will only be applied to the ",
-            "non-zero values of the data. This is a provisional solution in ",
-            "order to give support to the dgCMatrix format.")
+#' @importFrom cli cli_abort cli_alert_danger
+.check_for_na_values <- function(exprData, checkNA, use) {
+    autonaclasseswocheck <- c("matrix", "ExpressionSet",
+                              "SummarizedExperiment")
+    mask <- class(exprData) %in% autonaclasseswocheck
+    checkNAyesno <- switch(checkNA, yes="yes", no="no",
+                           ifelse(any(mask), "yes", "no"))
+    didCheckNA <- any_na <- FALSE
+    if (checkNAyesno == "yes") {
+        any_na <- anyNA(unwrapData(exprData))
+        didCheckNA <- TRUE
+        if (any_na) {
+            if (use == "all.obs")
+                cli_abort(c("x"="Input expression data has NA values."))
+            else if (use == "everything")
+                cli_alert_warning(paste("Input expression data has NA values,",
+                                       "which will be propagated through",
+                                       "calculations."))
+            else ## na.rm
+                cli_alert_warning(paste("Input expression data has NA values,",
+                                       "which will be discarded from",
+                                       "calculations."))
+        }
+    }
+
+    list(any_na=any_na, didCheckNA=didCheckNA)
 }
 
 ## transforms a dgCMatrix into a list of its
@@ -142,6 +271,22 @@
 }
 
 
+## from https://stat.ethz.ch/pipermail/r-help/2005-September/078974.html
+## function: isPackageLoaded
+## purpose: to check whether the package specified by the name given in
+##          the input argument is loaded. this function is borrowed from
+##          the discussion on the R-help list found in this url:
+##          https://stat.ethz.ch/pipermail/r-help/2005-September/078974.html
+## parameters: name - package name
+## return: TRUE if the package is loaded, FALSE otherwise
+
+.isPackageLoaded <- function(name) {
+  ## Purpose: is package 'name' loaded?
+  ## --------------------------------------------------
+  (paste("package:", name, sep="") %in% search()) ||
+  (name %in% loadedNamespaces())
+}
+
 .objPkgClass <- function(obj) {
     oc <- class(obj)
     pkg <- attr(oc, "package", exact=TRUE)
@@ -159,7 +304,11 @@
 }
 
 .catObj <- function(x, prefix = "  ") {
-    cat(paste0(prefix, capture.output(gsvaShow(x))), sep="\n")
+    if(is.null(x)) {
+        cat(paste0(prefix, "none."))
+    } else {
+        cat(paste0(prefix, capture.output(gsvaShow(x))), sep="\n")
+    }
 }
 
 .isCharNonEmpty <- function(x) {
@@ -189,3 +338,39 @@
 .matrix2dgCMatrix <- function(m) {
     return(as(as(as(m, "dMatrix"), "generalMatrix"), "CsparseMatrix"))
 }
+
+
+### 2024-08-02  axel: the following three functions have been copied from
+### GSEABase/R/utilities.R (v. 1.66.0) as our implementation of readGMT()
+### is mostly based on (a copy of) GSEABase::getGmt() which is making use
+### of these utility functions.  Since we decided that GSVA::readGMT() may
+### return a list of gene sets as well as a GeneSetCollection, it should work
+### if a user doesn't have GSEABase installed at all.
+
+## Placeholder 'till something appropriate decided
+.uniqueIdentifier <- local({
+    node <- NULL
+    pid <- NULL
+    uid <- 0L
+    function() {
+        if (is.null(node)) {
+            node <<- Sys.info()['nodename']
+            pid <<- Sys.getpid()
+        }
+        uid <<- uid + 1L
+        base::paste(node, pid, date(), uid, sep=":")
+    }
+})
+
+.stopf <- function(...) {
+    call <- match.call(call=sys.call(sys.parent(1)))
+    msg <- paste(sprintf(...), collapse="\n")
+    stop(simpleError(msg, call=call))
+}
+
+.warningf <- function(...) {
+    call <- match.call(call=sys.call(sys.parent(1)))
+    msg <- paste(sprintf(...), collapse="\n")
+    warning(simpleWarning(msg, call=call))
+}
+### end of copy from GSEABase/R/utilities.R

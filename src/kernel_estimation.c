@@ -9,10 +9,12 @@
 #include <Rinternals.h>
 #include <Rmath.h>
 #include <R_ext/Rdynload.h>
+#include <cli/progress.h>
 
 SEXP
-matrix_density_R(SEXP X, SEXP Y, SEXP n_density_samples, SEXP n_test_samples,
-                 SEXP n_genes, SEXP rnaseq);
+matrix_density_R(SEXP density_dataR, SEXP test_dataR, SEXP n_density_samplesR,
+                 SEXP n_test_samplesR, SEXP n_genesR, SEXP GausskR,
+                 SEXP any_naR, SEXP na_useR, SEXP verboseR);
 
 void initCdfs(void);
 double precomputedCdf(double x, double sigma);
@@ -24,41 +26,20 @@ double precomputedCdf(double x, double sigma);
 double precomputed_cdf[PRECOMPUTE_RESOLUTION+1];
 int is_precomputed = 0;
 
-/* calculates standard deviation, largely borrowed from C code in R's src/main/cov.c */
-double sd(double* x, int n) {
-  int         i, n1;
-  double      mean, sd;
-  long double sum = 0.0;
-  long double tmp;
+double sd(double* x, int n);
 
-  for (i=0; i < n; i++)
-    sum += x[i];
-  tmp = sum / n;
-  if (R_FINITE((double) tmp)) {
-    sum = 0.0;
-    for (i=0; i < n; i++)
-      sum += x[i] - tmp;
-    tmp = tmp + sum / n;
-  }
-  mean = tmp;
-  n1 = n - 1;
+double sd_naprop(double* x, int n);
 
-  sum = 0.0;
-  for (i=0; i < n; i++)
-    sum += (x[i] - mean) * (x[i] - mean);
-  sd = sqrt((double) (sum / ((long double) n1)));
+double sd_narm(double* x, int n);
 
-  return(sd);
-}
+/* including expression log-odds */
+void
+row_d(double* x, double* y, double* r, int size_density_n,
+      int size_test_n, int Gaussk) {
 
-/**
- * for resampling, x are the resampled points and y are the
- */
-void row_d(double* x, double* y, double* r, int size_density_n, int size_test_n, int rnaseq){
+  double bw = Gaussk ? (sd(x, size_density_n) / SIGMA_FACTOR) : 0.5;
 
-  double bw = rnaseq ? 0.5 : (sd(x, size_density_n) / SIGMA_FACTOR);
-
-  if (!rnaseq && is_precomputed == 0) {
+  if (Gaussk && is_precomputed == 0) {
     initCdfs();
     is_precomputed = 1;
   }
@@ -67,37 +48,163 @@ void row_d(double* x, double* y, double* r, int size_density_n, int size_test_n,
 		double left_tail = 0.0;
 
 		for(int i = 0; i < size_density_n; ++i){
-			left_tail += rnaseq ? ppois(y[j], x[i]+bw, TRUE, FALSE) : precomputedCdf(y[j]-x[i], bw);
+			left_tail += Gaussk ? precomputedCdf(y[j]-x[i], bw) : ppois(y[j], x[i]+bw, TRUE, FALSE);
 		}
 		left_tail = left_tail / size_density_n;
 		r[j] = -1.0 * log((1.0-left_tail)/left_tail);
 	}
 }
 
-void matrix_d(double* X, double* Y, double* R, int n_density_samples, int n_test_samples, int n_genes, int rnaseq){
+/* including expression log-odds, propagating NAs */
+void
+row_d_naprop(double* x, double* y, double* r, int size_density_n,
+             int size_test_n, int Gaussk) {
+
+  double bw = Gaussk ? (sd_naprop(x, size_density_n) / SIGMA_FACTOR) : 0.5;
+
+  if (Gaussk && is_precomputed == 0) {
+    initCdfs();
+    is_precomputed = 1;
+  }
+
+	for (int j = 0; j < size_test_n; ++j) {
+		double left_tail = 0.0;
+
+    if (!ISNA(bw) && !ISNA(y[j])) {
+      int i = 0;
+      while (!ISNA(x[i]) && i < size_density_n) {
+			    left_tail += Gaussk ? precomputedCdf(y[j]-x[i], bw) :
+                                ppois(y[j], x[i]+bw, TRUE, FALSE);
+          i++;
+		  }
+      if (!ISNA(x[i])) {
+		    left_tail = left_tail / size_density_n;
+		    r[j] = -1.0 * log((1.0-left_tail)/left_tail);
+      } else
+        r[j] = NA_REAL;
+    } else
+      r[j] = NA_REAL;
+	}
+}
+
+void
+row_d_narm(double* x, double* y, double* r, int size_density_n,
+           int size_test_n, int Gaussk) {
+
+  double bw = Gaussk ? (sd_narm(x, size_density_n) / SIGMA_FACTOR) : 0.5;
+
+  if (Gaussk && is_precomputed == 0) {
+    initCdfs();
+    is_precomputed = 1;
+  }
+
+	for(int j = 0; j < size_test_n; ++j){
+		double left_tail = 0.0;
+    int    n_nas = 0;
+
+    if (!ISNA(bw) && !ISNA(y[j])) {
+		  for(int i = 0; i < size_density_n; ++i){
+        if (!ISNA(x[i]))
+			    left_tail += Gaussk ? precomputedCdf(y[j]-x[i], bw) : ppois(y[j], x[i]+bw, TRUE, FALSE);
+        else
+          n_nas++;
+		  }
+      if (n_nas < size_density_n) {
+		    left_tail = left_tail / (size_density_n - n_nas);
+		    r[j] = -1.0 * log((1.0-left_tail)/left_tail);
+      } else
+        r[j] = NA_REAL;
+    } else
+      r[j] = NA_REAL;
+	}
+}
+
+/* without expression log-odds, called from sparse methods */
+void
+row_d_nologodds(double* x, double* y, double* r, int size_density_n,
+                int size_test_n, int Gaussk);
+void
+row_d_nologodds(double* x, double* y, double* r, int size_density_n,
+                int size_test_n, int Gaussk) {
+
+  double bw = Gaussk ? (sd(x, size_density_n) / SIGMA_FACTOR) : 0.5;
+
+  if (Gaussk && is_precomputed == 0) {
+    initCdfs();
+    is_precomputed = 1;
+  }
+
+	for(int j = 0; j < size_test_n; ++j){
+		double left_tail = 0.0;
+
+		for(int i = 0; i < size_density_n; ++i){
+			left_tail += Gaussk ? precomputedCdf(y[j]-x[i], bw) : ppois(y[j], x[i]+bw, TRUE, FALSE);
+		}
+		r[j] = left_tail / size_density_n;
+	}
+}
+
+
+void
+matrix_d(double* X, double* Y, double* R, int n_density_samples,
+         int n_test_samples, int n_genes, int Gaussk, Rboolean any_na,
+         int na_use, Rboolean verbose) {
+  SEXP pb = R_NilValue;
+
+  if (verbose) {
+    pb = PROTECT(cli_progress_bar(n_genes, NULL));
+    cli_progress_set_name(pb, "Estimating ECDFs");
+  }
+    
 	for(int j = 0; j < n_genes; ++j){
 		int offset_density = j * n_density_samples;
 		int offset_test = j * n_test_samples;
-		row_d(&X[offset_density], &Y[offset_test], &R[offset_test], n_density_samples, n_test_samples, rnaseq);
+
+    if (!any_na)
+		  row_d(&X[offset_density], &Y[offset_test], &R[offset_test],
+            n_density_samples, n_test_samples, Gaussk);
+    else {
+      if (na_use == 1L) /* propagate NAs */
+		    row_d_naprop(&X[offset_density], &Y[offset_test], &R[offset_test],
+                     n_density_samples, n_test_samples, Gaussk);
+      else              /* remove NAs (assuming 3 b/c 2 should have earlier prompt the error */
+		    row_d_narm(&X[offset_density], &Y[offset_test], &R[offset_test],
+                   n_density_samples, n_test_samples, Gaussk);
+    }
+
+    if (verbose) { /* show progress */
+      if (j % 100 == 0 && CLI_SHOULD_TICK)
+        cli_progress_set(pb, j);
+    }
 	}
+
+  if (verbose) {
+    cli_progress_done(pb);
+    UNPROTECT(1); /* pb */
+  }
 }
 
 SEXP
 matrix_density_R(SEXP density_dataR, SEXP test_dataR, SEXP n_density_samplesR,
-                 SEXP n_test_samplesR, SEXP n_genesR, SEXP rnaseqR) {
+                 SEXP n_test_samplesR, SEXP n_genesR, SEXP GausskR,
+                 SEXP any_naR, SEXP na_useR, SEXP verboseR) {
   double* density_data=REAL(density_dataR);
   double* test_data=REAL(test_dataR);
   int     n_density_samples=INTEGER(n_density_samplesR)[0];
   int     n_test_samples=INTEGER(n_test_samplesR)[0];
   int     n_genes=INTEGER(n_genesR)[0];
-  int     rnaseq=INTEGER(rnaseqR)[0];
+  int     Gaussk=INTEGER(GausskR)[0];
+  Rboolean any_na=asLogical(any_naR);
+  int      na_use=INTEGER(na_useR)[0]; /* everything=1 all.obs=2 na.rm=3 */
+  Rboolean verbose=asLogical(verboseR);
   SEXP    resR;
   double* res;
 
   PROTECT(resR = allocVector(REALSXP, n_test_samples * n_genes));
   res = REAL(resR);
 
-	matrix_d(density_data, test_data, res, n_density_samples, n_test_samples, n_genes, rnaseq);
+  matrix_d(density_data, test_data, res, n_density_samples, n_test_samples,
+           n_genes, Gaussk, any_na, na_use, verbose);
 
   UNPROTECT(1); /* resR */
 

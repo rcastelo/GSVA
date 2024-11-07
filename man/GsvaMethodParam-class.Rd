@@ -13,22 +13,57 @@ parameter classes.
 \details{
 \code{GSVA} implements four single-sample gene set analysis methods: PLAGE,
 combined z-scores, ssGSEA, and GSVA.  All of them take at least an expression
-data matrix and one or many gene sets as input.  This virtual class provides
-the necessary slots for this minimum parameter set and serves as all \code{GSVA}
-method parameter classes,
+data matrix and one or more gene sets as input.  Further common parameters
+include an assay name for use with multi-assay expression data containers,
+the gene ID type used by the expression data set, and a minimum and maximum
+size for gene sets to limit the range of gene set sizes used in an analysis.
+This virtual class provides the necessary slots for this shared parameter set
+and serves as the parent class for all \code{GSVA} method parameter classes.
 
 The \code{GSVA} package implements four single-sample gene set analysis
 methods (PLAGE, combined z-scores, ssGSEA, and GSVA) and a respective
 method-specific parameter class that is used to invoke each of them with a
 matching set of parameters.
 }
+\section{Slots}{
+
+\describe{
+\item{\code{exprData}}{The expression data set.  Must be one of the classes
+supported by \code{\linkS4class{GsvaExprData}}.  For a list of these classes, see its
+help page using \code{help(GsvaExprData)}.}
+
+\item{\code{geneSets}}{The gene sets.  Must be one of the classes supported by
+\code{\linkS4class{GsvaGeneSets}}.  For a list of these classes, see its help page using
+\code{help(GsvaGeneSets)}.}
+
+\item{\code{assay}}{Character vector of length 1.  The name of the assay to use in
+case \code{exprData} is a multi-assay container, otherwise ignored.  By default,
+the first assay is used.}
+
+\item{\code{annotation}}{An object of class \code{\linkS4class{GeneIdentifierType}} from package
+\code{GSEABase} describing the gene identifiers used as the row names of the
+expression data set.  See \code{\link{GeneIdentifierType}} for help on available gene
+identifier types and how to construct them.  This
+information can be used to map gene identifiers occurring in the gene sets.
+By default, this slot has value \code{NullIdentifier} and gene identifiers used in
+expression data set and gene sets are matched directly.}
+
+\item{\code{minSize}}{Numeric vector of length 1.  Minimum size of the resulting gene
+sets after gene identifier mapping. By default, the minimum size is 1.}
+
+\item{\code{maxSize}}{Numeric vector of length 1.  Maximum size of the resulting gene
+sets after gene identifier mapping. By default, the maximum size is \code{Inf}.}
+}}
+
 \seealso{
 \code{\linkS4class{GsvaExprData}},
 \code{\linkS4class{GsvaGeneSets}},
 \code{\linkS4class{zscoreParam}},
 \code{\linkS4class{plageParam}},
 \code{\linkS4class{ssgseaParam}},
-\code{\linkS4class{gsvaParam}}
+\code{\linkS4class{gsvaParam}},
+\code{\linkS4class{GeneIdentifierType}}
+\code{\link{GeneIdentifierType}}
 
 \code{\link{plageParam}}, \code{\link{zscoreParam}}, \code{\link{ssgseaParam}}, \code{\link{gsvaParam}}
 }

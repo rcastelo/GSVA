@@ -26,6 +26,8 @@ setMethod("show",
               .catObj(get_exprData(object))
               oa <- if(is.na(get_assay(object))) "none" else get_assay(object)
               cat("using assay: ", oa, "\n", sep="")
+              cat("using annotation:\n")
+              .catObj(get_annotation(object))
               cat("gene sets:\n")
               .catObj(get_geneSets(object))
               cat("gene set size: [", get_minSize(object), ", ",
@@ -114,33 +116,11 @@ setMethod("gsvaShow",
               show(object)
           })
 
-
-## ----- uniform access to annotation -----
-
-setMethod("gsvaAnnotation",
-          signature=signature(object="GsvaExprData"),
+setMethod("gsvaShow",
+          signature=signature(object="GeneIdentifierType"),
           function(object) {
-              return(NA_character_)
+              show(object)
           })
-
-setMethod("gsvaAnnotation",
-          signature=signature(object="ExpressionSet"),
-          function(object) {
-              return(annotation(object))
-          })
-
-setMethod("gsvaAnnotation", signature("SummarizedExperiment"),
-          function(object) {
-              a <- metadata(object)$annotation
-              return(if(.isCharLength1(a)) a else NA_character_)
-          })
-
-## setMethod("gsvaAnnotation", signature("SingleCellExperiment"),
-##           function(object) {
-##               a <- metadata(object)$annotation
-##               return(if(.isCharLength1(a)) a else NA_character_)
-##           })
-
 
 
 ## ----- uniform access to assay names -----

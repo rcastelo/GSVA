@@ -77,7 +77,9 @@ function(input, output, session) {
                           minSize=isolate(argInp[["varMinsz"]]()),
                           maxSize=isolate(argInp[["varMaxsz"]]()),
                           alpha=isolate(argInp[["selectedTau"]]()),
-                          normalize=isolate(argInp[["ssgseaNorm"]]())),
+                          normalize=isolate(argInp[["ssgseaNorm"]]()),
+                          checkNA=isolate(argInp[["checkNA"]]()),
+                          use=isolate(argInp[["use"]]())),
                       gsvaParam(
                           exprData=isolate(matrix()),
                           geneSets=isolate(genesets()),
@@ -86,8 +88,10 @@ function(input, output, session) {
                           kcdf=isolate(argInp[["kcdf"]]()),
                           tau=isolate(argInp[["selectedTau"]]()),
                           maxDiff=isolate(argInp[["mxDiff"]]()),
-                          absRanking=isolate(argInp[["absRanking"]]())))
-      result <- gsva(expr=param, verbose=TRUE)
+                          absRanking=isolate(argInp[["absRanking"]]()),
+                          checkNA=isolate(argInp[["checkNA"]]()),
+                          use=isolate(argInp[["use"]]())))
+      result <- gsva(param=param, verbose=TRUE)
       sink()
       ## when gsva() ends, we reset the console text file to empty
       write("", file=rout)

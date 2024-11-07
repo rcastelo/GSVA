@@ -15,7 +15,7 @@
     stop("The gene set list is empty! Filter may be too stringent.")
   
   if (any(lengths(gset.idx.list) == 1))
-    warning("Some gene sets have size one. Consider setting 'minSize > 1'.")
+    warning("Some gene sets have size one. Consider setting 'minSize' to a value > 1.")
   
   parallel.sz <- as.integer(parallel.sz)
   if (parallel.sz < 1L)
@@ -128,6 +128,8 @@ zscoreDelayed <- function(X, geneSets, parallel.sz, verbose=TRUE,
 }
 
 #### rank function for hdf5 files using sink and grid methods
+
+#' @importFrom sparseMatrixStats colRanks
 rankHDF5 <- function(X){
   sink <- HDF5RealizationSink(dim(X))
   grid <- defaultAutoGrid(sink, block.shape="first-dim-grows-first")
