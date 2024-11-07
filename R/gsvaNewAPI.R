@@ -1047,25 +1047,25 @@ setMethod("unwrapData", signature("SummarizedExperiment"),
 ##               return(assays(container)[[assay]])
 ##           })
 
-setMethod("unwrapData", signature("SpatialExperiment"),
-          function(container, assay) {
-            if (length(assays(container)) == 0L)
-              stop("The input SpatialExperiment object has no assay data.")
+## setMethod("unwrapData", signature("SpatialExperiment"),
+##           function(container, assay) {
+##             if (length(assays(container)) == 0L)
+##               stop("The input SpatialExperiment object has no assay data.")
             
-            if (missing(assay) || is.na(assay)) {
-              assay <- names(assays(container))[1]
-            } else {
-              if (!is.character(assay))
-                stop("The 'assay' argument must contain a character string.")
+##             if (missing(assay) || is.na(assay)) {
+##               assay <- names(assays(container))[1]
+##             } else {
+##               if (!is.character(assay))
+##                 stop("The 'assay' argument must contain a character string.")
               
-              assay <- assay[1]
+##               assay <- assay[1]
               
-              if (!assay %in% names(assays(container)))
-                stop(sprintf("Assay %s not found in the input SpatialExperiment object.", assay))
-            }
+##               if (!assay %in% names(assays(container)))
+##                 stop(sprintf("Assay %s not found in the input SpatialExperiment object.", assay))
+##             }
             
-            return(assays(container)[[assay]])
-          })
+##             return(assays(container)[[assay]])
+##           })
 
 
 ## wrapData: put the resulting data and gene sets into the original data container type
