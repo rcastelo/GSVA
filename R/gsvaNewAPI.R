@@ -1163,8 +1163,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
               if (!missing(geneSets))
                   metadata(rval)$annotation <- NULL
               
-##               return(rval)
-##           })
+              return(rval)
+          })
 
 
 ## mapGeneSetsToAnno: translate feature IDs used in gene sets to specified
