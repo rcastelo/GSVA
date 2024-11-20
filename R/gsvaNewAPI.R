@@ -567,18 +567,18 @@ setMethod("geneSets", signature("SummarizedExperiment"),
 #' @aliases geneSets,SingleCellExperiment-method
 #' @rdname geneSets
 #' @exportMethod geneSets
-setMethod("geneSets", signature("SingleCellExperiment"),
-          function(obj) {
-              return(as(rowData(obj)$gs, "list"))
-          })
+## setMethod("geneSets", signature("SingleCellExperiment"),
+##           function(obj) {
+##               return(as(rowData(obj)$gs, "list"))
+##           })
 
 #' @aliases geneSets,SpatialExperiment-method
 #' @rdname geneSets
 #' @exportMethod geneSets
-setMethod("geneSets", signature("SpatialExperiment"),
-          function(obj) {
-              return(as(rowData(obj)$gs, "list"))
-          })
+## setMethod("geneSets", signature("SpatialExperiment"),
+##           function(obj) {
+##               return(as(rowData(obj)$gs, "list"))
+##           })
 
 #' @aliases geneSets,GsvaExprData-method
 #' @rdname geneSets
