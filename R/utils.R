@@ -207,15 +207,16 @@
 }
 
 #' @importFrom cli cli_abort cli_alert_danger
-.check_for_na_values <- function(exprData, checkNA, use) {
+.check_for_na_values <- function(exprData, assay, checkNA, use) {
     autonaclasseswocheck <- c("matrix", "ExpressionSet",
-                              "SummarizedExperiment")
+                              "SummarizedExperiment",
+                              "RangedSummarizedExperiment")
     mask <- class(exprData) %in% autonaclasseswocheck
     checkNAyesno <- switch(checkNA, yes="yes", no="no",
                            ifelse(any(mask), "yes", "no"))
     didCheckNA <- any_na <- FALSE
     if (checkNAyesno == "yes") {
-        any_na <- anyNA(unwrapData(exprData))
+        any_na <- anyNA(unwrapData(exprData, assay))
         didCheckNA <- TRUE
         if (any_na) {
             if (use == "all.obs")

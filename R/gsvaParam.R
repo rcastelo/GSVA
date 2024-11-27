@@ -178,7 +178,8 @@ gsvaParam <- function(exprData, geneSets,
         }
     }
 
-    naparam <- .check_for_na_values(exprData=exprData, checkNA=checkNA, use=use)
+    naparam <- .check_for_na_values(exprData=exprData, assay=assay,
+                                    checkNA=checkNA, use=use)
 
     new("gsvaParam",
         exprData=exprData, geneSets=geneSets,
