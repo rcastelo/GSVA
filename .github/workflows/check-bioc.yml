@@ -32,6 +32,8 @@ on:
     branches:
       - devel
       - 'RELEASE_*'
+  schedule:
+    - cron: '0 6 * * 0'
 
 name: R-CMD-check-bioc
 
@@ -73,8 +75,8 @@ jobs:
           echo $biocversion
 
           ## Save the information for the next job
-          echo "::set-output name=imagename::${imagename}"
-          echo "::set-output name=biocversion::${biocversion}"
+          echo "imagename=${imagename}" >> $GITHUB_OUTPUT
+          echo "biocversion=${biocversion}" >> $GITHUB_OUTPUT
 
   R-CMD-check-bioc:
     ## This job then checks the R package using the Bioconductor docker that
@@ -98,6 +100,7 @@ jobs:
       NOT_CRAN: true
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      cache_version: v2
 
     ## The docker container to use. Note that we link a directory on the GHA
     ## runner to a docker directory, such that we can then cache the linked
@@ -162,14 +165,14 @@ jobs:
           echo $rversion
 
           ## Save the info for the next job
-          echo "::set-output name=rversion::${rversion}"
-          echo "::set-output name=biocversionnum::${biocversionnum}"
+          echo "rversion=${rversion}" >> $GITHUB_OUTPUT
+          echo "biocversionnum=${biocversionnum}" >> $GITHUB_OUTPUT
         shell:
           bash {0}
 
       - name: Cache R packages
         if: "!contains(github.event.head_commit.message, '/nocache')"
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: /home/runner/work/_temp/Library
           key: ${{ env.cache-version }}-${{ runner.os }}-biocdocker-biocbranch-${{ needs.define-docker-info.outputs.biocversion }}-r-${{ steps.findrversion.outputs.rversion }}-bioc-${{ steps.findrversion.outputs.biocversionnum }}-${{ hashFiles('.github/depends.Rds') }}
@@ -242,7 +245,7 @@ jobs:
       - name: Test coverage
         if: github.ref == 'refs/heads/devel' && env.run_covr == 'true'
         run: |
-          covr::codecov()
+          covr::codecov(token = "${{secrets.CODECOV_TOKEN}}")
         shell: Rscript {0}
 
       - name: Install pkgdown
