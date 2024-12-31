@@ -135,11 +135,18 @@ jobs:
       ## If they update their steps, we will also need to update ours.
       - uses: actions/checkout@v4
 
+      - name: Set up RStudio Package Manager for R binary packages
+        run: install.packages("rspm", repos="https://cran.r-project.org")
+      - name: Install remotes package
+        run: |
+          rspm::enable()
+          install.packages("remotes")
+        shell: Rscript {0}
       - name: Query dependencies
         run: |
-          install.packages('remotes')
           saveRDS(remotes::dev_package_deps(dependencies = TRUE), ".github/depends.Rds", version = 2)
           message(paste('****', Sys.time(), 'installing BiocManager ****'))
+          rspm::enable()
           remotes::install_cran("BiocManager")
         shell: Rscript {0}
 
@@ -191,6 +198,7 @@ jobs:
           message(paste('****', Sys.time(), 'pass number 1 at installing dependencies: local dependencies ****'))
           local_deps <- remotes::local_package_deps(dependencies = TRUE)
           deps <- remotes::dev_package_deps(dependencies = TRUE, repos = BiocManager::repositories())
+          rspm::enable()
           BiocManager::install(local_deps[local_deps %in% deps$package[deps$diff != 0]])
 
           ## Pass #2 at installing dependencies
