@@ -133,7 +133,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up RStudio Package Manager for R binary packages
-        run: install.packages("rspm", repos="https://cran.r-project.org")
+        run: Rscript --vanilla -e 'install.packages("rspm", repos="https://cran.r-project.org")'
       - name: Install remotes package
         run: |
           rspm::enable()
