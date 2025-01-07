@@ -19,7 +19,7 @@
 #'
 #' @importClassesFrom Matrix dgCMatrix
 #' @importClassesFrom Biobase ExpressionSet
-#' @importClassesFrom SummarizedExperiment SummarizedExperiment
+#' @importClassesFrom SummarizedExperiment SummarizedExperiment RangedSummarizedExperiment
 #' @importClassesFrom SingleCellExperiment SingleCellExperiment
 #' @importClassesFrom SpatialExperiment SpatialExperiment
 #' @importClassesFrom DelayedArray DelayedArray

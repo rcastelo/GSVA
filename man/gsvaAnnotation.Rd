@@ -10,10 +10,6 @@
 \alias{gsvaAnnotation<-,ExpressionSet,GeneIdentifierType-method}
 \alias{gsvaAnnotation,SummarizedExperiment-method}
 \alias{gsvaAnnotation<-,SummarizedExperiment,GeneIdentifierType-method}
-\alias{gsvaAnnotation,SingleCellExperiment-method}
-\alias{gsvaAnnotation<-,SingleCellExperiment,GeneIdentifierType-method}
-\alias{gsvaAnnotation,SpatialExperiment-method}
-\alias{gsvaAnnotation<-,SpatialExperiment,GeneIdentifierType-method}
 \alias{gsvaAnnotation,list-method}
 \alias{gsvaAnnotation<-,list,GeneIdentifierType-method}
 \alias{gsvaAnnotation,GeneSetCollection-method}
@@ -32,14 +28,6 @@
 \S4method{gsvaAnnotation}{SummarizedExperiment}(object)
 
 \S4method{gsvaAnnotation}{SummarizedExperiment,GeneIdentifierType}(object) <- value
-
-\S4method{gsvaAnnotation}{SingleCellExperiment}(object)
-
-\S4method{gsvaAnnotation}{SingleCellExperiment,GeneIdentifierType}(object) <- value
-
-\S4method{gsvaAnnotation}{SpatialExperiment}(object)
-
-\S4method{gsvaAnnotation}{SpatialExperiment,GeneIdentifierType}(object) <- value
 
 \S4method{gsvaAnnotation}{list}(object)
 

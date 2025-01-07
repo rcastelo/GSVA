@@ -5,8 +5,6 @@
 \alias{geneSetSizes}
 \alias{geneSets,GsvaMethodParam-method}
 \alias{geneSets,SummarizedExperiment-method}
-\alias{geneSets,SingleCellExperiment-method}
-\alias{geneSets,SpatialExperiment-method}
 \alias{geneSets,GsvaExprData-method}
 \alias{geneSetSizes,GsvaMethodParam-method}
 \alias{geneSetSizes,GsvaExprData-method}
@@ -15,10 +13,6 @@
 \S4method{geneSets}{GsvaMethodParam}(obj)
 
 \S4method{geneSets}{SummarizedExperiment}(obj)
-
-\S4method{geneSets}{SingleCellExperiment}(obj)
-
-\S4method{geneSets}{SpatialExperiment}(obj)
 
 \S4method{geneSets}{GsvaExprData}(obj)
 

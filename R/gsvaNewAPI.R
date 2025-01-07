@@ -429,18 +429,18 @@ setReplaceMethod("gsvaAnnotation",
                      object
                  })
 
-#' @aliases gsvaAnnotation,SingleCellExperiment-method
-#' @rdname gsvaAnnotation
-#' @exportMethod gsvaAnnotation
-## setMethod("gsvaAnnotation", signature("SingleCellExperiment"),
+## #' @aliases gsvaAnnotation,SingleCellExperiment-method
+## #' @rdname gsvaAnnotation
+## #' @exportMethod gsvaAnnotation
+## ## setMethod("gsvaAnnotation", signature("SingleCellExperiment"),
 ##           function(object) {
 ##               return(metadata(object)$annotation)
 ##           })
 
-#' @aliases gsvaAnnotation<-,SingleCellExperiment,GeneIdentifierType-method
-#' @rdname gsvaAnnotation
-#' @exportMethod gsvaAnnotation
-## setReplaceMethod("gsvaAnnotation",
+## #' @aliases gsvaAnnotation<-,SingleCellExperiment,GeneIdentifierType-method
+## #' @rdname gsvaAnnotation
+## #' @exportMethod gsvaAnnotation
+## ## setReplaceMethod("gsvaAnnotation",
 ##                  signature=signature(
 ##                    object="SingleCellExperiment",
 ##                    value="GeneIdentifierType"),
@@ -449,18 +449,18 @@ setReplaceMethod("gsvaAnnotation",
 ##                      object
 ##                  })
 
-#' @aliases gsvaAnnotation,SpatialExperiment-method
-#' @rdname gsvaAnnotation
-#' @exportMethod gsvaAnnotation
-## setMethod("gsvaAnnotation", signature("SpatialExperiment"),
+## #' @aliases gsvaAnnotation,SpatialExperiment-method
+## #' @rdname gsvaAnnotation
+## #' @exportMethod gsvaAnnotation
+## ## setMethod("gsvaAnnotation", signature("SpatialExperiment"),
 ##           function(object) {
 ##               return(metadata(object)$annotation)
 ##           })
 
-#' @aliases gsvaAnnotation<-,SpatialExperiment,GeneIdentifierType-method
-#' @rdname gsvaAnnotation
-#' @exportMethod gsvaAnnotation
-## setReplaceMethod("gsvaAnnotation",
+## #' @aliases gsvaAnnotation<-,SpatialExperiment,GeneIdentifierType-method
+## #' @rdname gsvaAnnotation
+## #' @exportMethod gsvaAnnotation
+## ## setReplaceMethod("gsvaAnnotation",
 ##                  signature=signature(
 ##                    object="SpatialExperiment",
 ##                    value="GeneIdentifierType"),
@@ -564,18 +564,18 @@ setMethod("geneSets", signature("SummarizedExperiment"),
               return(as(rowData(obj)$gs, "list"))
           })
 
-#' @aliases geneSets,SingleCellExperiment-method
-#' @rdname geneSets
-#' @exportMethod geneSets
-## setMethod("geneSets", signature("SingleCellExperiment"),
+## #' @aliases geneSets,SingleCellExperiment-method
+## #' @rdname geneSets
+## #' @exportMethod geneSets
+## ## setMethod("geneSets", signature("SingleCellExperiment"),
 ##           function(obj) {
 ##               return(as(rowData(obj)$gs, "list"))
 ##           })
 
-#' @aliases geneSets,SpatialExperiment-method
-#' @rdname geneSets
-#' @exportMethod geneSets
-## setMethod("geneSets", signature("SpatialExperiment"),
+## #' @aliases geneSets,SpatialExperiment-method
+## #' @rdname geneSets
+## #' @exportMethod geneSets
+## ## setMethod("geneSets", signature("SpatialExperiment"),
 ##           function(obj) {
 ##               return(as(rowData(obj)$gs, "list"))
 ##           })
