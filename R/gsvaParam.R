@@ -186,8 +186,8 @@ gsvaParam <- function(exprData, geneSets,
         assay=assay, annotation=annotation,
         minSize=minSize, maxSize=maxSize,
         kcdf=kcdf, kcdfNoneMinSampleSize=kcdfNoneMinSampleSize,
-        tau=tau, maxDiff=maxDiff, absRanking=absRanking, sparse=sparse,
-        checkNA=checkNA, didCheckNA=naparam$didCheckNA,
+        tau=as.double(tau), maxDiff=maxDiff, absRanking=absRanking,
+        sparse=sparse, checkNA=checkNA, didCheckNA=naparam$didCheckNA,
         anyNA=naparam$any_na, use=use)
 }
 
