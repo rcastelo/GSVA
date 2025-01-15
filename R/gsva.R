@@ -1290,14 +1290,14 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
   stopifnot(is.numeric(symRnkStat)) ## QC
   stopifnot(is.logical(maxDiff)) ## QC
   stopifnot(is.logical(absRanking)) ## QC
-  stopifnot(is.numeric(tau)) ## QC
+  stopifnot(is.numeric(tau)) ## QC but it still migth be an integer!!
   stopifnot(is.logical(any_na)) ## QC
   stopifnot(is.character(na_use)) ## QC
   stopifnot(is.integer(minSize)) ## QC
   na_use <- as.integer(factor(na_use, levels=c("everything", "all.obs",
                                                "na.rm")))
   sco <- .Call("gsva_score_genesets_R", geneSetsIdx, decOrdStat, symRnkStat,
-               maxDiff, absRanking, tau, any_na, na_use, minSize)
+               maxDiff, absRanking, as.double(tau), any_na, na_use, minSize)
   if (any_na) {
     if (na_use == 2 && !is.null(attr(sco, "class")))
         cli_abort(c("x"="Input GSVA ranks have NA values."))
