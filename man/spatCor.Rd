@@ -5,7 +5,7 @@
 \alias{spatCor,SpatialExperiment-method}
 \title{Compute Spatial Autocorrelation for SpatialExperiment objects}
 \usage{
-\S4method{spatCor}{SpatialExperiment}(spe, na.rm = FALSE, alternative = "two.sided", squared = TRUE)
+\S4method{spatCor}{SpatialExperiment}(spe, na.rm = FALSE, alternative = "two.sided", squared = TRUE, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
 }
 \arguments{
 \item{spe}{An object of \code{SpatialExperiment} class.}
@@ -16,7 +16,12 @@
 must be one of "two.sided", "less", or "greater", or any unambiguous abbreviation of these.}
 
 \item{squared}{A logical indicating whether the inverse distance weight matrix should be squared or not.}
+
+\item{verbose}{Gives information about each calculation step. Default: \code{TRUE}.}
+
+\item{BPPARAM}{An object of class \code{\link{BiocParallelParam}} specifying parameters related to the parallel execution of some of the tasks and calculations within this function}
 }
+
 \value{
 A \code{data.frame} with the same row names as the original \code{SpatialExperiment} object.
 Columns include the observed Moran's I statistic, the expected Moran's I statistic under no spatial autocorrelation, the expected
