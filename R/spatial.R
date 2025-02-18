@@ -27,15 +27,14 @@
 #' @export
 
 setMethod("spatCor", signature("SpatialExperiment"),
-          function(spe, na.rm = FALSE, alternative = "two.sided", squared = TRUE) {
+          function(spe, na.rm = FALSE, alternative = "two.sided", squared = TRUE, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose)) {
             weight_list <- .spe_dist_weight_matrix(spe, squared)
             logc <- assay(spe)
-            
             spe_Moran <- list()
             rowns <- rownames(spe)
-            spe_Moran <- lapply(rowns, function(x){
-              .internal_moran(logc[rowns == x, ], weight_list, na.rm = na.rm, alternative = alternative)
-            })
+            spe_Moran <- bplapply(rowns, function(x){
+	       .internal_moran(logc[rowns == x, ], weight_list, na.rm = na.rm, alternative = alternative)	       
+            }, BPPARAM = BPPARAM)
             names(spe_Moran) <- rownames(spe)
             df_res <- do.call(rbind, lapply(spe_Moran, as.data.frame))
             return(df_res)
