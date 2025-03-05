@@ -33,6 +33,9 @@ setClassUnion("GsvaExprData",
               c("matrix", "dgCMatrix", "ExpressionSet",
                 "SummarizedExperiment", "HDF5Array"))
 
+setIs("SingleCellExperiment", "GsvaExprData")
+setIs("SpatialExperiment", "GsvaExprData")
+
 
 #' `GsvaGeneSets` class
 #'
