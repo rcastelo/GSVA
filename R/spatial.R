@@ -17,7 +17,7 @@
 #' @param squared A logical indicating whether the inverse distance weight matrix should be squared or not.
 #' 
 #' @return A \code{data.frame} with the same row names as the original \code{SpatialExperiment} object.
-#' Columns include the observed Moran's I statistic, the expected Moran's I statistic under no spatial autocorrelation, the expected
+	#' Columns include the observed Moran's I statistic, the expected Moran's I statistic under no spatial autocorrelation, the expected
 #' standard deviation under no spatial autocorrelation, and the p-value of the test.
 #' 
 #' @aliases spatCor spatCor,SpatialExperiment-method
@@ -27,22 +27,33 @@
 #' @export
 
 setMethod("spatCor", signature("SpatialExperiment"),
-          function(spe, na.rm = FALSE, alternative = "two.sided", squared = TRUE, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose)) {
-            weight_list <- .spe_dist_weight_matrix(spe, squared)
-            logc <- assay(spe)
-            spe_Moran <- list()
+          function(spe, assay = NA_character_, na.rm = FALSE, alternative = "two.sided", squared = TRUE, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose)) {
+	    if(is.na(assay)) assay <- na.omit(assayNames(spe))[1]
+            weight_list <- .spe_dist_weight_matrix(spe,squared)
             rowns <- rownames(spe)
-            spe_Moran <- bplapply(rowns, function(x){
-	       .internal_moran(logc[rowns == x, ], weight_list, na.rm = na.rm, alternative = alternative)	       
-            }, BPPARAM = BPPARAM)
-            names(spe_Moran) <- rownames(spe)
-            df_res <- do.call(rbind, lapply(spe_Moran, as.data.frame))
+	    df_res <- data.frame(observed = numeric(), expected = numeric(), sd = numeric(), p.value = numeric(), sample_id = character())
+	    for(sample in unique(colData(spe)$sample_id)){
+		spe_Moran <- list()
+		logc <- assay(spe[,colData(spe)$sample_id == sample], assay)
+		logc <- .filterGenes(logc)
+            	spe_Moran <- bplapply(rowns, function(x){
+	       			if(!(x %in% rownames(logc))) {
+		       			return(list(observed = NA, expected = NA, sd = NA, p.value = NA))
+	       			} else {
+	       				.internal_moran(logc[x, ], weight_list, na.rm = na.rm, alternative = alternative)	       
+	       			}
+	    		}, BPPARAM = BPPARAM)
+            	df_sample <- do.call(rbind, lapply(spe_Moran, as.data.frame))
+		df_sample <- data.frame(gene_id = rownames(spe), df_sample) 
+		df_sample$sample_id <- sample
+	        df_res <- rbind(df_res,df_sample)
+	    }
             return(df_res)
           })
 
 .internal_moran <- function (x, weight_list, na.rm = FALSE, alternative = "two.sided") 
 {
-  weight <- weight_list$weight
+  weight <- weight_list$weight[names(x),names(x),drop=FALSE]
   n <- length(x)
   ei <- -1/(n - 1)
   nas <- is.na(x)
@@ -86,7 +97,7 @@ setMethod("spatCor", signature("SpatialExperiment"),
 
 
 .spe_dist_weight_matrix<-function(spe, squared = TRUE){
-  xy <- spatialCoords(spe)
+  xy <- spatialCoords(spe)[unique(rownames(spatialCoords(spe))),]
   weight<-as.matrix(dist(xy))
   if(squared == TRUE)
     weight=1/weight^2

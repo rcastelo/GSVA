@@ -5,10 +5,12 @@
 \alias{spatCor,SpatialExperiment-method}
 \title{Compute Spatial Autocorrelation for SpatialExperiment objects}
 \usage{
-\S4method{spatCor}{SpatialExperiment}(spe, na.rm = FALSE, alternative = "two.sided", squared = TRUE, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
+\S4method{spatCor}{SpatialExperiment}(spe, assay = NA_character_, na.rm = FALSE, alternative = "two.sided", squared = TRUE, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
 }
 \arguments{
 \item{spe}{An object of \code{SpatialExperiment} class.}
+
+\item{assay}{The name of the assay to use in case \code{spe} is a multi-assay container, otherwise ignored. By default, the first assay is used.}
 
 \item{na.rm}{A logical indicating whether missing values should be removed.}
 
