@@ -11,6 +11,73 @@
 }
 
 
+## check if the expression data object at hand is a multi-assay container
+## required by .check_assayNames() (see below) but may be re-used elsewhere
+## *currently* only TRUE for SummarizedExperiment and its subclasses, else FALSE
+.isMultiAssayContainer <- function(xd) {
+    return(is(xd, "SummarizedExperiment"))
+}
+
+
+## check assay parameter and assay names:
+##   abort if selected assay name not found in existing assay name list
+##   alert if no assay name selected while there are assay names (and select
+##     the first one)
+##   alert if assay name selected while there are none
+##
+##   tricky: no assay names AND no assay name selected is the normal case for
+##     non-container data objects, e.g. matrix,  or single-assay containers,
+##     e.g. ExpressionSet, and should hence be silently accepted.  Multi-assay
+##     containers, e.g. SummarizedExperiment, MAY contain more than one assays
+##     BUT no assay names.  In this case we also abort because our parameter
+##     objects can only store assay names and we prefer requiring assay names
+##     for multi-assay containers (which is not unreasonable!) over making
+##     things even more complicated for little practical gain.
+.check_assayNames <- function(a, xd) {
+    an <- gsvaAssayNames(xd)
+
+    if(length(a) != 1) {
+        msg <- sprintf("argument 'assay' must be of length 1 (is %d)", length(a))
+        cli_abort(msg)
+    }
+    
+    if(.isCharNonEmpty(an)) {   # we have assay names
+        an <- .omitEmptyChar(an)
+        
+        if(is.na(a)) {          # but none selected: by default, use the first one
+            assay <- an[1]
+            msg <- sprintf("No assay name provided; using first assay '%s'", assay)
+            cli_alert_info(msg)
+        } else {                # check the provided assay name before using it
+            if(a %in% an) {
+                assay <- a      # found it: OK!
+            } else {            # assay name provided but not found: ERROR
+                msg <- sprintf(paste0("invalid argument assay='%s': not part of ",
+                                      "exprData's assay name list."), a)
+                cli_abort(msg)
+            }
+        }
+    } else {                    # we don't have no assay names at all
+        if(.isMultiAssayContainer(xd)) {  # these must have assay names: ERROR
+            msg <- sprintf("exprData object of class '%s' has no assay names.",
+                           class(xd))
+            cli_abort(msg)
+        } else {                # i.e. there is exactly one unnamed assay
+            if(!is.na(a)) {     # and the provided name is useless but harmless
+                msg <- sprintf(paste0("argument assay='%s' ignored since exprData ",
+                                      "has no assay names."), a)
+                cli_alert_info(msg)
+            }
+
+            assay <- NA_character_
+        }
+    }
+
+    return(assay)
+}
+
+
+
 ## 2024-02-06  axel: function .filterGenes() is intended to detect genes (rows)
 ##  with constant expression (and, hence, no information), warn about them and
 ##  optionally remove them (in particular, ssGSEA's choice is to keep them).
@@ -317,7 +384,15 @@
            (length(x) > 0) &&
            (is.character(x)) &&
            (!all(is.na(x))) &&
-           (any(nchar(x) > 0)))
+           any(nzchar(x)))
+}
+
+.omitEmptyChar <- function(x) {
+    if(.isCharNonEmpty(x)) {
+        return(x[(nzchar(x)) & (!is.na(x))])
+    } else {
+        return(character(0))
+    }
 }
 
 .isCharLength1 <- function(x) {
