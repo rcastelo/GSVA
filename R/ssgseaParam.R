@@ -107,14 +107,9 @@ ssgseaParam <- function(exprData, geneSets,
                         use=c("everything", "all.obs", "na.rm")) {
     checkNA <- match.arg(checkNA)
     use <- match.arg(use)
-    an <- gsvaAssayNames(exprData)
-    if((!is.na(assay)) && (!.isCharNonEmpty(an))) {
-        msg <- sprintf(paste0("argument assay='%s' ignored since exprData has ",
-                              "no assayNames()"), assay)
-        cli_alert_info(msg)
-    }
-    if(is.na(assay) && .isCharNonEmpty(an))
-        assay <- na.omit(an)[1]
+
+    ## check assay parameter and assay names
+    assay <- .check_assayNames(assay, exprData)
 
     ## check for presence of valid row/feature names
     .check_rownames(exprData)
