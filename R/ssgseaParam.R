@@ -19,7 +19,8 @@
 #' 
 #' @param assay Character vector of length 1.  The name of the assay to use in
 #' case `exprData` is a multi-assay container, otherwise ignored.  By default,
-#' the first assay is used.
+#' an assay called 'logcounts' will be used if present, otherwise the first
+#' assay is used.
 #' 
 #' @param annotation An object of class [`GeneIdentifierType-class`] from
 #' package `GSEABase` describing the gene identifiers used as the row names of
