@@ -34,7 +34,7 @@
 
 setMethod("spatCor", signature("SpatialExperiment"),
           function(spe, assay = NA_character_, na.rm = FALSE, alternative = "two.sided", squared = TRUE, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose)) {
-	    if(is.na(assay)) assay <- na.omit(assayNames(spe))[1]
+            assay <- .check_assayNames(assay, spe)
             weight_list <- .spe_dist_weight_matrix(spe,squared)
             rowns <- rownames(spe)
 	    df_res <- data.frame(observed = numeric(), expected = numeric(), sd = numeric(), p.value = numeric(), sample_id = character())
