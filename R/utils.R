@@ -33,6 +33,10 @@
 ##     objects can only store assay names and we prefer requiring assay names
 ##     for multi-assay containers (which is not unreasonable!) over making
 ##     things even more complicated for little practical gain.
+##
+## 2025-03-12  axel: as an afterthought, if we have a multi-assay container with
+##   assay names AND no assay is selected AND one of the assay names happens to
+##   be 'logcounts' --> use this one by default rather than the first in list.
 .check_assayNames <- function(a, xd) {
     an <- gsvaAssayNames(xd)
 
@@ -44,9 +48,13 @@
     if(.isCharNonEmpty(an)) {   # we have assay names
         an <- .omitEmptyChar(an)
         
-        if(is.na(a)) {          # but none selected: by default, use the first one
-            assay <- an[1]
-            msg <- sprintf("No assay name provided; using first assay '%s'", assay)
+        if(is.na(a)) {          # but none selected: by default, 
+            ## select a common value by default if available -- see afterthought
+            ## if unavailable, just select the first available assay name
+            def <- grep("logcounts", an, fixed=TRUE, value=TRUE)
+            assay <- if(length(def) > 0) head(def, 1) else head(an, 1)
+            msg <- sprintf("No assay name provided; using default assay '%s'",
+                           assay)
             cli_alert_info(msg)
         } else {                # check the provided assay name before using it
             if(a %in% an) {

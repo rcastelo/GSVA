@@ -5,12 +5,22 @@
 \alias{spatCor,SpatialExperiment-method}
 \title{Compute Spatial Autocorrelation for SpatialExperiment objects}
 \usage{
-\S4method{spatCor}{SpatialExperiment}(spe, assay = NA_character_, na.rm = FALSE, alternative = "two.sided", squared = TRUE, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
+\S4method{spatCor}{SpatialExperiment}(
+  spe,
+  assay = NA_character_,
+  na.rm = FALSE,
+  alternative = "two.sided",
+  squared = TRUE,
+  verbose = TRUE,
+  BPPARAM = SerialParam(progressbar = verbose)
+)
 }
 \arguments{
 \item{spe}{An object of \code{SpatialExperiment} class.}
 
-\item{assay}{The name of the assay to use in case \code{spe} is a multi-assay container, otherwise ignored. By default, the first assay is used.}
+\item{assay}{Character vector of length 1, specifying the name of the assay to use.
+By default, an assay called 'logcounts' will be used if present, otherwise the first
+assay is used.}
 
 \item{na.rm}{A logical indicating whether missing values should be removed.}
 
@@ -21,9 +31,10 @@ must be one of "two.sided", "less", or "greater", or any unambiguous abbreviatio
 
 \item{verbose}{Gives information about each calculation step. Default: \code{TRUE}.}
 
-\item{BPPARAM}{An object of class \code{\link{BiocParallelParam}} specifying parameters related to the parallel execution of some of the tasks and calculations within this function}
+\item{BPPARAM}{An object of class \code{\link{BiocParallelParam}} specifying parameters
+related to the parallel execution of some of the tasks and calculations
+within this function.}
 }
-
 \value{
 A \code{data.frame} with the same row names as the original \code{SpatialExperiment} object.
 Columns include the observed Moran's I statistic, the expected Moran's I statistic under no spatial autocorrelation, the expected
