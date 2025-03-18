@@ -11,10 +11,16 @@
 #' assuming normality.
 #' 
 #' @param spe An object of \code{SpatialExperiment} class.
+#' @param assay Character vector of length 1, specifying the name of the assay to use.
+#' By default, the first assay is used.
 #' @param alternative A character string specifying the alternative hypothesis tested against the null hypothesis of no spatial autocorrelation;
 #'  must be one of "two.sided", "less", or "greater", or any unambiguous abbreviation of these.
 #' @param na.rm A logical indicating whether missing values should be removed.
 #' @param squared A logical indicating whether the inverse distance weight matrix should be squared or not.
+#' @param verbose Gives information about each calculation step. Default: `TRUE`.
+#' @param BPPARAM An object of class [`BiocParallelParam`] specifying parameters
+#'   related to the parallel execution of some of the tasks and calculations
+#'   within this function.
 #' 
 #' @return A \code{data.frame} with the same row names as the original \code{SpatialExperiment} object.
 	#' Columns include the observed Moran's I statistic, the expected Moran's I statistic under no spatial autocorrelation, the expected
