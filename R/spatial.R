@@ -12,7 +12,8 @@
 #' 
 #' @param spe An object of \code{SpatialExperiment} class.
 #' @param assay Character vector of length 1, specifying the name of the assay to use.
-#' By default, the first assay is used.
+#' By default, an assay called 'logcounts' will be used if present, otherwise the first
+#' assay is used.
 #' @param alternative A character string specifying the alternative hypothesis tested against the null hypothesis of no spatial autocorrelation;
 #'  must be one of "two.sided", "less", or "greater", or any unambiguous abbreviation of these.
 #' @param na.rm A logical indicating whether missing values should be removed.

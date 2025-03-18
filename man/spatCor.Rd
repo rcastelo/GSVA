@@ -19,7 +19,8 @@
 \item{spe}{An object of \code{SpatialExperiment} class.}
 
 \item{assay}{Character vector of length 1, specifying the name of the assay to use.
-By default, the first assay is used.}
+By default, an assay called 'logcounts' will be used if present, otherwise the first
+assay is used.}
 
 \item{na.rm}{A logical indicating whether missing values should be removed.}
 

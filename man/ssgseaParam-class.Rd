@@ -41,7 +41,8 @@ help page using \code{help(GsvaExprData)}.}
 
 \item{assay}{Character vector of length 1.  The name of the assay to use in
 case \code{exprData} is a multi-assay container, otherwise ignored.  By default,
-the first assay is used.}
+an assay called 'logcounts' will be used if present, otherwise the first
+assay is used.}
 
 \item{annotation}{An object of class \code{\linkS4class{GeneIdentifierType}} from
 package \code{GSEABase} describing the gene identifiers used as the row names of
