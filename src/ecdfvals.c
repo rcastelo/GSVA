@@ -44,7 +44,7 @@ pending_interrupt(void);
 SEXP
 allocMatrix(SEXPTYPE mode, int nrow, int ncol);
 
-/* numerical (double) comparison for qsort() */
+/* numerical (double) comparison for qsort() - not needed with R_qsort() */
 int
 dbl_cmp(const void* a, const void* b) {
   const double *ad = (double*) a;
@@ -150,12 +150,14 @@ ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
       uniqv[k] = x[k] = XRsp_x[j];
     }
 
-    qsort(uniqv, nv, sizeof(double), dbl_cmp);
+    /* qsort(uniqv, nv, sizeof(double), dbl_cmp); */
+    R_qsort(uniqv, (size_t) 1, (size_t) nv);
     e1_p = uniqv;
     e2_p = e1_p + 1;
     nuniqv = 0;
-    /* for (int j=XRsp_p[i]; j < XRsp_p[i+1]; j++) { */
-    for (int j=0; j < nv; j++) {
+    if (nv > 0)
+      nuniqv = 1;
+    for (int j=0; j < nv-1; j++) { /* -1 for e2_p = e1_p + 1 */
       if (*e2_p != *e1_p) {
         *(++e1_p) = *e2_p;
         nuniqv++;
@@ -304,11 +306,14 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
       }
     }
 
-    qsort(uniqv, nv, sizeof(double), dbl_cmp);
+    /* qsort(uniqv, nv, sizeof(double), dbl_cmp); */
+    R_qsort(uniqv, (size_t) 1, (size_t) nv);
     e1_p = uniqv;
     e2_p = e1_p + 1;
     nuniqv = 0;
-    for (int j=0; j < nv; j++) {
+    if (nv > 0)
+      nuniqv = 1;
+    for (int j=0; j < nv-1; j++) { /* -1 for e2_p = e1_p + 1 */
       if (*e2_p != *e1_p) {
         *(++e1_p) = *e2_p;
         nuniqv++;
@@ -458,11 +463,14 @@ ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR) {
       uniqv[j] = x[j] = X[idx];
     }
 
-    qsort(uniqv, nc, sizeof(double), dbl_cmp);
+    /* qsort(uniqv, nc, sizeof(double), dbl_cmp); */
+    R_qsort(uniqv, (size_t) 1, (size_t) nc);
     e1_p = uniqv;
     e2_p = e1_p + 1;
     nuniqv = 0;
-    for (int j=0; j < nc; j++) {
+    if (nc > 0)
+      nuniqv = 1;
+    for (int j=0; j < nc-1; j++) { /* -1 for e2_p = e1_p + 1 */
       if (*e2_p != *e1_p) {
         *(++e1_p) = *e2_p;
         nuniqv++;
@@ -586,11 +594,14 @@ ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR) {
       }
     }
 
-    qsort(uniqv, nnas, sizeof(double), dbl_cmp);
+    /* qsort(uniqv, nnas, sizeof(double), dbl_cmp); */
+    R_qsort(uniqv, (size_t) 1, (size_t) nnas);
     e1_p = uniqv;
     e2_p = e1_p + 1;
     nuniqv = 0;
-    for (int j=0; j < nnas; j++) {
+    if (nnas > 0)
+      nuniqv = 1;
+    for (int j=0; j < nnas-1; j++) { /* -1 for e2_p = e1_p + 1 */
       if (*e2_p != *e1_p) {
         *(++e1_p) = *e2_p;
         nuniqv++;
