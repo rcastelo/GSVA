@@ -1,11 +1,7 @@
 
 #' @title Gene Set Variation Analysis
 #' 
-#' @description Estimates GSVA enrichment scores. The API of this function has
-#' changed in the Bioconductor release 3.18 and this help page describes the
-#' new API. The old API is defunct and will be removed in the next
-#' Bioconductor release. If you are looking for the documentation of the old
-#' API to the `gsva()` function, please consult [`GSVA-pkg-defunct`].
+#' @description Estimates GSVA enrichment scores.
 #' 
 #' @param param A parameter object of one of the following classes:
 #' * A [`gsvaParam`] object built using the constructor function
