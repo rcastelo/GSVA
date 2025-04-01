@@ -117,22 +117,22 @@ topTable(fit, coef="sampleGroup2vs1")
 Barbie, D.A. et al. Systematic RNA interference reveals that
 oncogenic KRAS-driven cancers require TBK1.
 \emph{Nature}, 462(5):108-112, 2009.
-\href{https://doi.org/10.1038/nature08460}{DOI}
+\doi{10.1038/nature08460}
 
 Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
 variation analysis for microarray and RNA-Seq data.
 \emph{BMC Bioinformatics}, 14:7, 2013.
-\href{https://doi.org/10.1186/1471-2105-14-7}{DOI}
+\doi{10.1186/1471-2105-14-7}
 
 Lee, E. et al. Inferring pathway activity toward precise
 disease classification.
 \emph{PLoS Comp Biol}, 4(11):e1000217, 2008.
-\href{https://doi.org/10.1371/journal.pcbi.1000217}{DOI}
+\doi{10.1371/journal.pcbi.1000217}
 
 Tomfohr, J. et al. Pathway level analysis of gene expression
 using singular value decomposition.
 \emph{BMC Bioinformatics}, 6:225, 2005.
-\href{https://doi.org/10.1186/1471-2105-6-225}{DOI}
+\doi{10.1186/1471-2105-6-225}
 }
 \seealso{
 \code{\link{plageParam}}, \code{\link{zscoreParam}}, \code{\link{ssgseaParam}}, \code{\link{gsvaParam}}

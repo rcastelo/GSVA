@@ -345,7 +345,7 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
 #' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
 #' variation analysis for microarray and RNA-Seq data.
 #' *BMC Bioinformatics*, 14:7, 2013.
-#' [DOI](https://doi.org/10.1186/1471-2105-14-7)
+#' \doi{10.1186/1471-2105-14-7}
 #'
 #' @examples
 #' library(GSVA)
@@ -616,7 +616,7 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
 #' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
 #' variation analysis for microarray and RNA-Seq data.
 #' *BMC Bioinformatics*, 14:7, 2013.
-#' [DOI](https://doi.org/10.1186/1471-2105-14-7)
+#' \doi{10.1186/1471-2105-14-7}
 #'
 #' @examples
 #' library(GSVA)

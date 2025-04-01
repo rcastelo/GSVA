@@ -164,7 +164,7 @@ sp1
 Barbie, D.A. et al. Systematic RNA interference reveals that
 oncogenic KRAS-driven cancers require TBK1.
 \emph{Nature}, 462(5):108-112, 2009.
-\href{https://doi.org/10.1038/nature08460}{DOI}
+\doi{10.1038/nature08460}
 }
 \seealso{
 \code{\linkS4class{GsvaExprData}},

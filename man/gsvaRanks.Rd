@@ -93,7 +93,7 @@ gsvaScores(gsvarankspar)
 Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
 variation analysis for microarray and RNA-Seq data.
 \emph{BMC Bioinformatics}, 14:7, 2013.
-\href{https://doi.org/10.1186/1471-2105-14-7}{DOI}
+\doi{10.1186/1471-2105-14-7}
 }
 \seealso{
 \code{\linkS4class{gsvaParam}}, \code{\linkS4class{gsvaRanksParam}}, \code{\link{gsva}}

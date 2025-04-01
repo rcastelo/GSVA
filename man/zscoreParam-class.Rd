@@ -86,7 +86,7 @@ zp1
 Lee, E. et al. Inferring pathway activity toward precise
 disease classification.
 \emph{PLoS Comp Biol}, 4(11):e1000217, 2008.
-\href{https://doi.org/10.1371/journal.pcbi.1000217}{DOI}
+\doi{10.1371/journal.pcbi.1000217}
 }
 \seealso{
 \code{\linkS4class{GsvaExprData}},

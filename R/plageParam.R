@@ -45,7 +45,7 @@
 #' @references Tomfohr, J. et al. Pathway level analysis of gene expression
 #' using singular value decomposition.
 #' *BMC Bioinformatics*, 6:225, 2005.
-#' [DOI](https://doi.org/10.1186/1471-2105-6-225)
+#' \doi{10.1186/1471-2105-6-225}
 #'
 #' @examples
 #' library(GSVA)

@@ -84,7 +84,7 @@ pp1
 Tomfohr, J. et al. Pathway level analysis of gene expression
 using singular value decomposition.
 \emph{BMC Bioinformatics}, 6:225, 2005.
-\href{https://doi.org/10.1186/1471-2105-6-225}{DOI}
+\doi{10.1186/1471-2105-6-225}
 }
 \seealso{
 \code{\linkS4class{GsvaExprData}},
