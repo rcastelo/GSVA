@@ -29,9 +29,9 @@ case \code{exprData} is a multi-assay container, otherwise ignored.  By default,
 an assay called 'logcounts' will be used if present, otherwise the first
 assay is used.}
 
-\item{annotation}{An object of class \code{\linkS4class{GeneIdentifierType}} from
+\item{annotation}{An object of class \code{GeneIdentifierType} from
 package \code{GSEABase} describing the gene identifiers used as the row names of
-the expression data set.  See \code{\link{GeneIdentifierType}} for help on available
+the expression data set.  See \code{GeneIdentifierType} for help on available
 gene identifier types and how to construct them.  This
 information can be used to map gene identifiers occurring in the gene sets.
 
@@ -60,7 +60,7 @@ running the combined z-scores method.
 \details{
 Since the combined z-scores method does not take any method-specific
 parameters, this class does not add any slots to the common slots inherited
-from \code{\linkS4class{GsvaMethodParam}}.
+from \code{GsvaMethodParam}.
 
 The combined z-scores method takes a number of parameters shared
 with all methods implemented by package GSVA but does not take any
@@ -86,7 +86,7 @@ zp1
 Lee, E. et al. Inferring pathway activity toward precise
 disease classification.
 \emph{PLoS Comp Biol}, 4(11):e1000217, 2008.
-\href{https://doi.org/10.1371/journal.pcbi.1000217}{DOI}
+\doi{10.1371/journal.pcbi.1000217}
 }
 \seealso{
 \code{\linkS4class{GsvaExprData}},
@@ -95,4 +95,6 @@ disease classification.
 \code{\linkS4class{plageParam}},
 \code{\linkS4class{ssgseaParam}},
 \code{\linkS4class{gsvaParam}}
+
+\code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}}
 }

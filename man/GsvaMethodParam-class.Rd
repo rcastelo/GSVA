@@ -29,20 +29,20 @@ matching set of parameters.
 
 \describe{
 \item{\code{exprData}}{The expression data set.  Must be one of the classes
-supported by \code{\linkS4class{GsvaExprData}}.  For a list of these classes, see its
+supported by \code{GsvaExprData}.  For a list of these classes, see its
 help page using \code{help(GsvaExprData)}.}
 
 \item{\code{geneSets}}{The gene sets.  Must be one of the classes supported by
-\code{\linkS4class{GsvaGeneSets}}.  For a list of these classes, see its help page using
+\code{GsvaGeneSets}.  For a list of these classes, see its help page using
 \code{help(GsvaGeneSets)}.}
 
 \item{\code{assay}}{Character vector of length 1.  The name of the assay to use in
 case \code{exprData} is a multi-assay container, otherwise ignored.  By default,
 the first assay is used.}
 
-\item{\code{annotation}}{An object of class \code{\linkS4class{GeneIdentifierType}} from package
+\item{\code{annotation}}{An object of class \code{GeneIdentifierType} from package
 \code{GSEABase} describing the gene identifiers used as the row names of the
-expression data set.  See \code{\link{GeneIdentifierType}} for help on available gene
+expression data set.  See \code{GeneIdentifierType} for help on available gene
 identifier types and how to construct them.  This
 information can be used to map gene identifiers occurring in the gene sets.
 By default, this slot has value \code{NullIdentifier} and gene identifiers used in
@@ -62,8 +62,7 @@ sets after gene identifier mapping. By default, the maximum size is \code{Inf}.}
 \code{\linkS4class{plageParam}},
 \code{\linkS4class{ssgseaParam}},
 \code{\linkS4class{gsvaParam}},
-\code{\linkS4class{GeneIdentifierType}}
-\code{\link{GeneIdentifierType}}
+\code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}}
 
 \code{\link{plageParam}}, \code{\link{zscoreParam}}, \code{\link{ssgseaParam}}, \code{\link{gsvaParam}}
 }

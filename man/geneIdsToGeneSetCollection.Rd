@@ -16,7 +16,7 @@ by \code{geneIds()}.  Names must be unique; otherwise see \code{deduplicateGeneS
 for a number of strategies to resolve this issue.}
 
 \item{geneIdType}{By default a character vector of length 1 with the special
-value \code{"auto"} or an object of a subclass of \code{\link{GeneIdentifierType}}.  If set
+value \code{"auto"} or an object of a subclass of \code{GeneIdentifierType}.  If set
 to \code{"auto"}, the function will try to derive the gene ID type from argument
 \code{geneIdsList} using \code{\link{guessGeneIdType}}.
 Other values, including \code{NULL}, will be ignored with a warning and
@@ -24,13 +24,13 @@ Other values, including \code{NULL}, will be ignored with a warning and
 The gene ID type of all \code{GeneSet} objects in the resulting
 \code{GeneSetCollection} will be set to this value.}
 
-\item{collectionType}{An object of class \code{\link{CollectionType}}.  The collection
+\item{collectionType}{An object of class \code{CollectionType}.  The collection
 type of all \code{GeneSet} objects in the resulting \code{GeneSetCollection} will be
 set to this value but can afterwards be modified for individual \code{GeneSet}s
 if necessary.}
 }
 \value{
-An object of class \code{\link{GeneSetCollection}} with all its \code{\link{GeneSet}}
+An object of class \code{GeneSetCollection} with all its \code{GeneSet}
 objects using the gene ID and collection types specified by the corresponding
 arguments.  Applying function \code{geneIds()} to this object should return a list
 identical to the \code{geneIdsList} argument.
@@ -42,6 +42,10 @@ vectors representing gene sets and returns the corresponding
 GeneSetCollection object.
 }
 \seealso{
-\code{\link{GeneSetCollection}}, \code{\link{geneIds}}, \code{\link{deduplicateGeneSets}},
-\code{\link{guessGeneIdType}}, \code{\link{GeneSet}}
+\code{\link[GSEABase:GeneSetCollection-class]{GeneSetCollection}},
+\code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}},
+\code{\link[GSEABase:GeneSet-class]{geneIds}},
+\code{\link{deduplicateGeneSets}},
+\code{\link{guessGeneIdType}},
+\code{\link[GSEABase:GeneSet-class]{GeneSet}}
 }

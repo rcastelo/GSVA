@@ -22,9 +22,9 @@
 #' an assay called 'logcounts' will be used if present, otherwise the first
 #' assay is used.
 #' 
-#' @param annotation An object of class [`GeneIdentifierType-class`] from
+#' @param annotation An object of class `GeneIdentifierType` from
 #' package `GSEABase` describing the gene identifiers used as the row names of
-#' the expression data set.  See [`GeneIdentifierType`] for help on available
+#' the expression data set.  See `GeneIdentifierType` for help on available
 #' gene identifier types and how to construct them.  This
 #' information can be used to map gene identifiers occurring in the gene sets.
 #' 
@@ -43,10 +43,12 @@
 #' 
 #' @return A new [`zscoreParam-class`] object.
 #'
+#' @seealso [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class]
+#'
 #' @references Lee, E. et al. Inferring pathway activity toward precise
 #' disease classification.
 #' *PLoS Comp Biol*, 4(11):e1000217, 2008.
-#' [DOI](https://doi.org/10.1371/journal.pcbi.1000217)
+#' \doi{10.1371/journal.pcbi.1000217}
 #'
 #' @examples
 #' library(GSVA)

@@ -16,7 +16,7 @@
 
 \item{verbose}{Gives information about each calculation step. Default: \code{TRUE}.}
 
-\item{BPPARAM}{An object of class \code{\link{BiocParallelParam}} specifying parameters
+\item{BPPARAM}{An object of class \code{BiocParallelParam} specifying parameters
 related to the parallel execution of some of the tasks and calculations
 within this function.}
 }
@@ -27,13 +27,13 @@ In the case of the \code{gsvaRanks()} method, an object of class
 In the case of the \code{gsvaScores()} method, a gene-set by sample matrix
 of GSVA enrichment scores stored in a container object of the same type as
 the input ranks data container. If
-the input was a base matrix or a \code{\linkS4class{dgCMatrix}} object, then the output will
+the input was a base matrix or a \code{dgCMatrix} object, then the output will
 be a base matrix object with the gene sets employed in the calculations
 stored in an attribute called \code{geneSets}. If the input was an
-\code{\link{ExpressionSet}} object, then the output will be also an \code{\link{ExpressionSet}}
+\code{ExpressionSet} object, then the output will be also an \code{ExpressionSet}
 object with the gene sets employed in the calculations stored in an
 attributed called \code{geneSets}. If the input was an object of one of the
-classes described in \code{\link{GsvaExprData}}, such as a \code{\link{SingleCellExperiment}},
+classes described in \code{\link{GsvaExprData}}, such as a \code{SingleCellExperiment},
 then the output will be of the same class, where enrichment scores will be
 stored in an assay called \code{es} and the gene sets employed in the
 calculations will be stored in the \code{rowData} slot of the object under the
@@ -93,8 +93,12 @@ gsvaScores(gsvarankspar)
 Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
 variation analysis for microarray and RNA-Seq data.
 \emph{BMC Bioinformatics}, 14:7, 2013.
-\href{https://doi.org/10.1186/1471-2105-14-7}{DOI}
+\doi{10.1186/1471-2105-14-7}
 }
 \seealso{
-\code{\linkS4class{gsvaParam}}, \code{\linkS4class{gsvaRanksParam}}, \code{\link{gsva}}
+\code{\linkS4class{gsvaParam}}, \code{\linkS4class{gsvaRanksParam}}, \code{\link{gsva}},
+\code{\link[BiocParallel:BiocParallelParam-class]{BiocParallelParam}},
+\code{\link[Matrix:dgCMatrix-class]{dgCMatrix}},
+\code{\link[Biobase:class.ExpressionSet]{ExpressionSet}},
+\code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}}
 }

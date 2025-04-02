@@ -29,9 +29,9 @@ case \code{exprData} is a multi-assay container, otherwise ignored.  By default,
 an assay called 'logcounts' will be used if present, otherwise the first
 assay is used.}
 
-\item{annotation}{An object of class \code{\linkS4class{GeneIdentifierType}} from
+\item{annotation}{An object of class \code{GeneIdentifierType} from
 package \code{GSEABase} describing the gene identifiers used as the row names of
-the expression data set.  See \code{\link{GeneIdentifierType}} for help on available
+the expression data set.  See \code{GeneIdentifierType} for help on available
 gene identifier types and how to construct them.  This
 information can be used to map gene identifiers occurring in the gene sets.
 
@@ -60,7 +60,7 @@ the \code{PLAGE} method.
 \details{
 Since method PLAGE does not take any method-specific parameters, this
 class does not add any slots to the common slots inherited from
-\code{\linkS4class{GsvaMethodParam}}.
+\code{GsvaMethodParam}.
 
 \code{PLAGE} takes a number of parameters shared with all methods
 implemented by package GSVA but does not take any method-specific parameters.
@@ -84,7 +84,7 @@ pp1
 Tomfohr, J. et al. Pathway level analysis of gene expression
 using singular value decomposition.
 \emph{BMC Bioinformatics}, 6:225, 2005.
-\href{https://doi.org/10.1186/1471-2105-6-225}{DOI}
+\doi{10.1186/1471-2105-6-225}
 }
 \seealso{
 \code{\linkS4class{GsvaExprData}},
@@ -93,4 +93,6 @@ using singular value decomposition.
 \code{\linkS4class{zscoreParam}},
 \code{\linkS4class{ssgseaParam}},
 \code{\linkS4class{gsvaParam}}
+
+\code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}}
 }

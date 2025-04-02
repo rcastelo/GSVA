@@ -39,20 +39,20 @@ Barbie et al. (2009).
 
 \item{verbose}{Gives information about each calculation step. Default: \code{TRUE}.}
 
-\item{BPPARAM}{An object of class \code{\link{BiocParallelParam}} specifying parameters
+\item{BPPARAM}{An object of class \code{BiocParallelParam} specifying parameters
 related to the parallel execution of some of the tasks and calculations
 within this function.}
 }
 \value{
 A gene-set by sample matrix of GSVA enrichment scores stored in a
 container object of the same type as the input expression data container. If
-the input was a base matrix or a \code{\linkS4class{dgCMatrix}} object, then the output will
+the input was a base matrix or a \code{dgCMatrix} object, then the output will
 be a base matrix object with the gene sets employed in the calculations
 stored in an attribute called \code{geneSets}. If the input was an
-\code{\link{ExpressionSet}} object, then the output will be also an \code{\link{ExpressionSet}}
+\code{ExpressionSet} object, then the output will be also an \code{ExpressionSet}
 object with the gene sets employed in the calculations stored in an
-attributed called \code{geneSets}. If the input was an object of one of the
-classes described in \code{\link{GsvaExprData}}, such as a \code{\link{SingleCellExperiment}},
+attribute called \code{geneSets}. If the input was an object of one of the
+classes described in \code{\link{GsvaExprData}}, such as a \code{SingleCellExperiment},
 then the output will be of the same class, where enrichment scores will be
 stored in an assay called \code{es} and the gene sets employed in the
 calculations will be stored in the \code{rowData} slot of the object under the
@@ -113,23 +113,27 @@ topTable(fit, coef="sampleGroup2vs1")
 Barbie, D.A. et al. Systematic RNA interference reveals that
 oncogenic KRAS-driven cancers require TBK1.
 \emph{Nature}, 462(5):108-112, 2009.
-\href{https://doi.org/10.1038/nature08460}{DOI}
+\doi{10.1038/nature08460}
 
 Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
 variation analysis for microarray and RNA-Seq data.
 \emph{BMC Bioinformatics}, 14:7, 2013.
-\href{https://doi.org/10.1186/1471-2105-14-7}{DOI}
+\doi{10.1186/1471-2105-14-7}
 
 Lee, E. et al. Inferring pathway activity toward precise
 disease classification.
 \emph{PLoS Comp Biol}, 4(11):e1000217, 2008.
-\href{https://doi.org/10.1371/journal.pcbi.1000217}{DOI}
+\doi{10.1371/journal.pcbi.1000217}
 
 Tomfohr, J. et al. Pathway level analysis of gene expression
 using singular value decomposition.
 \emph{BMC Bioinformatics}, 6:225, 2005.
-\href{https://doi.org/10.1186/1471-2105-6-225}{DOI}
+\doi{10.1186/1471-2105-6-225}
 }
 \seealso{
-\code{\link{plageParam}}, \code{\link{zscoreParam}}, \code{\link{ssgseaParam}}, \code{\link{gsvaParam}}
+\code{\link{plageParam}}, \code{\link{zscoreParam}}, \code{\link{ssgseaParam}}, \code{\link{gsvaParam}},
+\code{\link[BiocParallel:BiocParallelParam-class]{BiocParallelParam}},
+\code{\link[Matrix:dgCMatrix-class]{dgCMatrix}},
+\code{\link[Biobase:class.ExpressionSet]{ExpressionSet}},
+\code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}}
 }

@@ -19,7 +19,7 @@
 
 ## optimized version of the function .rndWalk by Alexey Sergushichev
 ## https://github.com/rcastelo/GSVA/pull/15
-## based on his paper https://doi.org/10.1101/060012
+## based on his paper DOI:10.1101/060012
 ## with further optimizations with Bob Policastro discussed in
 ## https://github.com/rcastelo/GSVA/issues/71
 .fastRndWalk <- function(gSetIdx, geneRanking, j, Ra) {

@@ -31,7 +31,7 @@ must be one of "two.sided", "less", or "greater", or any unambiguous abbreviatio
 
 \item{verbose}{Gives information about each calculation step. Default: \code{TRUE}.}
 
-\item{BPPARAM}{An object of class \code{\link{BiocParallelParam}} specifying parameters
+\item{BPPARAM}{An object of class \code{BiocParallelParam} specifying parameters
 related to the parallel execution of some of the tasks and calculations
 within this function.}
 }
@@ -45,4 +45,7 @@ Computes spatial autocorrelation using Moran's I statistic
 for a \code{SpatialExperiment} object, using an inverse squared distance weight matrix as default,
 or an inverse distance weight matrix as an alternative. It also tests for spatial autocorrelation
 assuming normality.
+}
+\seealso{
+\code{\link[BiocParallel:BiocParallelParam-class]{BiocParallelParam}}
 }

@@ -300,7 +300,7 @@ processes we are studying, we will likely not find any relevant insights in our
 data from an analysis based on these gene sets.
 
 There are multiple sources of gene sets, the most popular ones being
-[The Gene Ontology (GO) project](http://geneontology.org) and
+[The Gene Ontology (GO) project](https://geneontology.org) and
 [The Molecular Signatures Database (MSigDB)](https://www.gsea-msigdb.org/gsea/msigdb).
 Sometimes gene set databases will not include the ones we need. In such a case
 we should either curate our own gene sets or use techniques to infer them from
@@ -334,7 +334,7 @@ head(genesbygo)
 A more sophisticated container for gene sets is the `GeneSetCollection`
 object class defined in the `r Biocpkg("GSEABase")` package, which also
 provides the function `getGmt()` to import
-[gene matrix transposed (GMT)](http://software.broadinstitute.org/cancer/software/gsea/wiki/index.php/Data_formats#GMT:_Gene_Matrix_Transposed_file_format_.28.2A.gmt.29) files such as those
+[gene matrix transposed (GMT)](https://software.broadinstitute.org/cancer/software/gsea/wiki/index.php/Data_formats#GMT:_Gene_Matrix_Transposed_file_format_.28.2A.gmt.29) files such as those
 provided by [MSigDB](https://www.gsea-msigdb.org/gsea/msigdb) into a
 `GeneSetCollection` object. The experiment data package
 `r Biocpkg("GSVAdata")` provides one such object with the old (3.0) version
