@@ -55,8 +55,8 @@ capable of storing annotation metadata and will return \code{NULL}.}
 \item{value}{For the replacement methods, the annotation metadata to be
 stored in the object.  For \code{\linkS4class{ExpressionSet}} objects, this must be a
 character of length 1 specifying the name of the annotation database to be
-used.  For \code{\linkS4class{SummarizedExperiment}} and its subclasses, this must be
-a \code{\link{GeneIdentifierType}} created by one of the constructors from package
+used.  For \code{SummarizedExperiment} and its subclasses, this must be
+a \code{GeneIdentifierType} created by one of the constructors from package
 \code{GSEABase} where the \code{annotation} argument is typically the name of an
 organism or annotation database, e.g. \code{org.Hs.eg.db}.  Simple \code{matrix} and
 \code{dgCMatrix} objects are not capable of storing annotation metadata and the
@@ -64,7 +64,7 @@ attempt to do so will result in an error.}
 }
 \value{
 For the retrieval methods, the annotation metadata stored in the
-object of \code{NULL}.  For the replacement methods, the updated object.
+object or \code{NULL}.  For the replacement methods, the updated object.
 }
 \description{
 Methods for storing and retrieving annotation metadata in
@@ -74,4 +74,10 @@ annotation database is available, gene set identifiers can be mapped to
 expression data identifiers without manual user intervention, e.g. from
 an MSigDb gene set using ENTREZ IDs or gene symbols to an expression data
 set using ENSEMBL IDs.
+}
+\seealso{
+\code{\link[Biobase:class.ExpressionSet]{ExpressionSet}},
+\code{\link[SummarizedExperiment:SummarizedExperiment-class]{SummarizedExperiment}},
+\code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}},
+\code{\link[Matrix:dgCMatrix-class]{dgCMatrix}}
 }

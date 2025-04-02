@@ -60,7 +60,7 @@ the \code{PLAGE} method.
 \details{
 Since method PLAGE does not take any method-specific parameters, this
 class does not add any slots to the common slots inherited from
-\code{\linkS4class{GsvaMethodParam}}.
+\code{GsvaMethodParam}.
 
 \code{PLAGE} takes a number of parameters shared with all methods
 implemented by package GSVA but does not take any method-specific parameters.

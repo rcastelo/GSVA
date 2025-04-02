@@ -15,5 +15,5 @@ them.
 }
 \seealso{
 \code{\link{list}},
-\code{\link{GeneSetCollection}}
+\code{\link[GSEABase:GeneSetCollection-class]{GeneSetCollection}}
 }

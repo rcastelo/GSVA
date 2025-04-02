@@ -143,7 +143,7 @@ expression data contains missing (\code{NA}) values.}
 \item{\code{use}}{Character vector of length 1. One of the strings \code{"everything"}
 (default), \code{"all.obs"}, or \code{"na.rm"}, which refer to three different policies
 to apply in the presence of missing values in the input expression data; see
-\code{\link{ssgseaParam}}.}
+\code{ssgseaParam}.}
 }}
 
 \examples{

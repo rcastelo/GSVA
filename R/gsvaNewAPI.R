@@ -27,25 +27,29 @@
 #'
 #' @param verbose Gives information about each calculation step. Default: `TRUE`.
 #' 
-#' @param BPPARAM An object of class [`BiocParallelParam`] specifying parameters
+#' @param BPPARAM An object of class `BiocParallelParam` specifying parameters
 #'   related to the parallel execution of some of the tasks and calculations
 #'   within this function.
 #' 
 #' @return A gene-set by sample matrix of GSVA enrichment scores stored in a
 #' container object of the same type as the input expression data container. If
-#' the input was a base matrix or a [`dgCMatrix-class`] object, then the output will
+#' the input was a base matrix or a `dgCMatrix` object, then the output will
 #' be a base matrix object with the gene sets employed in the calculations
 #' stored in an attribute called `geneSets`. If the input was an
-#' [`ExpressionSet`] object, then the output will be also an [`ExpressionSet`]
+#' `ExpressionSet` object, then the output will be also an `ExpressionSet`
 #' object with the gene sets employed in the calculations stored in an
-#' attributed called `geneSets`. If the input was an object of one of the
-#' classes described in [`GsvaExprData`], such as a [`SingleCellExperiment`],
+#' attribute called `geneSets`. If the input was an object of one of the
+#' classes described in [`GsvaExprData`], such as a `SingleCellExperiment`,
 #' then the output will be of the same class, where enrichment scores will be
 #' stored in an assay called `es` and the gene sets employed in the
 #' calculations will be stored in the `rowData` slot of the object under the
 #' column name `gs`.
 #' 
-#' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`]
+#' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`],
+#' [`BiocParallelParam`][BiocParallel::BiocParallelParam-class],
+#' [`dgCMatrix`][Matrix::dgCMatrix-class],
+#' [`ExpressionSet`][Biobase::ExpressionSet-class],
+#' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class]
 #'
 #' @aliases gsva
 #' @name gsva
@@ -328,16 +332,21 @@ setMethod("gsva", signature(param="gsvaParam"),
 #' @param value For the replacement methods, the annotation metadata to be
 #' stored in the object.  For [`ExpressionSet-class`] objects, this must be a
 #' character of length 1 specifying the name of the annotation database to be
-#' used.  For [`SummarizedExperiment-class`] and its subclasses, this must be
-#' a [`GeneIdentifierType`] created by one of the constructors from package
+#' used.  For `SummarizedExperiment` and its subclasses, this must be
+#' a `GeneIdentifierType` created by one of the constructors from package
 #' `GSEABase` where the `annotation` argument is typically the name of an
 #' organism or annotation database, e.g. `org.Hs.eg.db`.  Simple `matrix` and
 #' `dgCMatrix` objects are not capable of storing annotation metadata and the
 #' attempt to do so will result in an error.
 #'
 #' @return For the retrieval methods, the annotation metadata stored in the
-#' object of `NULL`.  For the replacement methods, the updated object.
+#' object or `NULL`.  For the replacement methods, the updated object.
 #'
+#' @seealso [`ExpressionSet`][Biobase::ExpressionSet-class],
+#' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment-class],
+#' [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class],
+#' [`dgCMatrix`][Matrix::dgCMatrix-class]
+#' 
 #' @aliases gsvaAnnotation gsvaAnnotation<-
 #' @name gsvaAnnotation
 #' @rdname gsvaAnnotation
@@ -735,7 +744,7 @@ deduplicateGmtLines <- function(geneSets,
 #' @param geneIdsList A named list of character vectors like the ones returned
 #' by `geneIds()`.
 #'
-#' @return An object of a subclass of [`GeneIdentifierType`] derived from the
+#' @return An object of a subclass of `GeneIdentifierType` derived from the
 #' input.
 #'
 #' @details In order to make this function useful and keep it as simple as
@@ -744,7 +753,7 @@ deduplicateGmtLines <- function(geneSets,
 #' starting with 'ENS' an ENSEMBL identifier and anything else a HuGO gene
 #' symbol.
 #' 
-#' @seealso [`GeneIdentifierType`]
+#' @seealso [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class]
 #'
 #' @aliases guessGeneIdType
 #' @name guessGeneIdType
@@ -778,7 +787,7 @@ guessGeneIdType <- function(geneIdsList) {
 #' for a number of strategies to resolve this issue.  
 #'
 #' @param geneIdType By default a character vector of length 1 with the special
-#' value `"auto"` or an object of a subclass of [`GeneIdentifierType`].  If set
+#' value `"auto"` or an object of a subclass of `GeneIdentifierType`.  If set
 #' to `"auto"`, the function will try to derive the gene ID type from argument
 #' `geneIdsList` using [`guessGeneIdType`].
 #' Other values, including `NULL`, will be ignored with a warning and
@@ -786,18 +795,22 @@ guessGeneIdType <- function(geneIdsList) {
 #' The gene ID type of all `GeneSet` objects in the resulting
 #' `GeneSetCollection` will be set to this value.
 #' 
-#' @param collectionType An object of class [`CollectionType`].  The collection
+#' @param collectionType An object of class `CollectionType`.  The collection
 #' type of all `GeneSet` objects in the resulting `GeneSetCollection` will be
 #' set to this value but can afterwards be modified for individual `GeneSet`s
 #' if necessary.
 #'
-#' @return An object of class [`GeneSetCollection`] with all its [`GeneSet`]
+#' @return An object of class `GeneSetCollection` with all its `GeneSet`
 #' objects using the gene ID and collection types specified by the corresponding
 #' arguments.  Applying function `geneIds()` to this object should return a list
 #' identical to the `geneIdsList` argument.
 #' 
-#' @seealso [`GeneSetCollection`], [`geneIds`], [`deduplicateGeneSets`],
-#' [`guessGeneIdType`], [`GeneSet`]
+#' @seealso [`GeneSetCollection`][GSEABase::GeneSetCollection-class],
+#' [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class],
+#' [`geneIds`][GSEABase::geneIds],
+#' [`deduplicateGeneSets`],
+#' [`guessGeneIdType`],
+#' [`GeneSet`][GSEABase::GeneSet-class]
 #'
 #' @aliases geneIdsToGeneSetCollection
 #' @name geneIdsToGeneSetCollection
@@ -846,7 +859,7 @@ geneIdsToGeneSetCollection <- function(geneIdsList,
 #' GMT file.
 #'
 #' @param geneIdType By default a character vector of length 1 with the special
-#' value `"auto"` or an object of a subclass of [`GeneIdentifierType`].  If set
+#' value `"auto"` or an object of a subclass of `GeneIdentifierType`.  If set
 #' to `"auto"`, the function will try to derive the gene ID type from argument
 #' `geneIdsList` using [`guessGeneIdType`].
 #' Other values, including `NULL`, will be ignored with a warning and
@@ -856,12 +869,12 @@ geneIdsToGeneSetCollection <- function(geneIdsList,
 #' `GeneSetCollection` will be set to this value.
 #' 
 #' @param collectionType Only used when `valueType == "GeneSetCollection"`. See
-#' [`getGmt`] for more information.
+#' `getGmt` for more information.
 #'
 #' @param valueType A character vector of length 1 specifying the desired type
 #' of return value.  It must be one of:
-#' * `GeneSetCollection` (the default): a [`GeneSetCollection`] object as defined
-#' and described by package [`GSEABase`].
+#' * `GeneSetCollection` (the default): a `GeneSetCollection` object as defined
+#' and described by package `GSEABase`.
 #' * `list`: a named list of gene sets represented as character vectors of gene IDs.
 #' This format is much simpler and cannot store the metadata required for automatic
 #' mapping of gene IDs.
@@ -892,7 +905,10 @@ geneIdsToGeneSetCollection <- function(geneIdsList,
 #' resolved according to argument `deduplUse` and in the format determined by
 #' argument `valueType`.
 #' 
-#' @seealso [`readLines`], [`GeneSetCollection`], [`getGmt`]
+#' @seealso [`readLines`],
+#' [`GeneSetCollection`][GSEABase::GeneSetCollection-class],
+#' [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class],
+#' [`getGmt`][GSEABase::getGmt]
 #'
 #' @examples
 #' library(GSVA)
