@@ -330,7 +330,7 @@ setMethod("gsva", signature(param="gsvaParam"),
 #' capable of storing annotation metadata and will return `NULL`.
 #'
 #' @param value For the replacement methods, the annotation metadata to be
-#' stored in the object.  For [`ExpressionSet-class`] objects, this must be a
+#' stored in the object.  For `ExpressionSet` objects, this must be a
 #' character of length 1 specifying the name of the annotation database to be
 #' used.  For `SummarizedExperiment` and its subclasses, this must be
 #' a `GeneIdentifierType` created by one of the constructors from package

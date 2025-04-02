@@ -42,9 +42,9 @@ case \code{exprData} is a multi-assay container, otherwise ignored.  By default,
 an assay called 'logcounts' will be used if present, otherwise the first
 assay is used.}
 
-\item{annotation}{An object of class \code{\linkS4class{GeneIdentifierType}} from
+\item{annotation}{An object of class \code{GeneIdentifierType} from
 package \code{GSEABase} describing the gene identifiers used as the row names of
-the expression data set.  See \code{\link{GeneIdentifierType}} for help on available
+the expression data set.  See \code{GeneIdentifierType} for help on available
 gene identifier types and how to construct them.  This
 information can be used to map gene identifiers occurring in the gene sets.
 
@@ -115,9 +115,9 @@ expression data should be checked for the presence of missing (\code{NA}) values
 This must be
 one of the strings \code{"auto"} (default), \code{"yes"}, or \code{"no"}. The default value
 \code{"auto"} means that the software will perform that check only when the input
-expression data is provided as a base \code{\link{matrix}}, an \code{\link{ExpressionSet}} or a
-\code{\link{SummarizedExperiment}} object, while every other type of input expression
-data container (e.g., \code{\link{SingleCellExperiment}}, etc.) will not be checked.
+expression data is provided as a base \code{matrix}, an \code{ExpressionSet} or a
+\code{SummarizedExperiment} object, while every other type of input expression
+data container (e.g., \code{SingleCellExperiment}, etc.) will not be checked.
 If \code{checkNA="yes"}, then the input expression data will be checked for
 missing values irrespective of the object class of the data container, and
 if \code{checkNA="no"}, then that check will not be performed.}
@@ -254,4 +254,10 @@ variation analysis for microarray and RNA-Seq data.
 \code{\linkS4class{plageParam}},
 \code{\linkS4class{zscoreParam}},
 \code{\linkS4class{ssgseaParam}}
+
+\code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}},
+\code{\link{matrix}},
+\code{\link[Biobase:class.ExpressionSet]{ExpressionSet}},
+\code{\link[SummarizedExperiment:SummarizedExperiment-class]{SummarizedExperiment}},
+\code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}}
 }

@@ -29,9 +29,9 @@ case \code{exprData} is a multi-assay container, otherwise ignored.  By default,
 an assay called 'logcounts' will be used if present, otherwise the first
 assay is used.}
 
-\item{annotation}{An object of class \code{\linkS4class{GeneIdentifierType}} from
+\item{annotation}{An object of class \code{GeneIdentifierType} from
 package \code{GSEABase} describing the gene identifiers used as the row names of
-the expression data set.  See \code{\link{GeneIdentifierType}} for help on available
+the expression data set.  See \code{GeneIdentifierType} for help on available
 gene identifier types and how to construct them.  This
 information can be used to map gene identifiers occurring in the gene sets.
 
@@ -95,4 +95,6 @@ disease classification.
 \code{\linkS4class{plageParam}},
 \code{\linkS4class{ssgseaParam}},
 \code{\linkS4class{gsvaParam}}
+
+\code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}}
 }

@@ -53,7 +53,7 @@
 capable of storing annotation metadata and will return \code{NULL}.}
 
 \item{value}{For the replacement methods, the annotation metadata to be
-stored in the object.  For \code{\linkS4class{ExpressionSet}} objects, this must be a
+stored in the object.  For \code{ExpressionSet} objects, this must be a
 character of length 1 specifying the name of the annotation database to be
 used.  For \code{SummarizedExperiment} and its subclasses, this must be
 a \code{GeneIdentifierType} created by one of the constructors from package

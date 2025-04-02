@@ -329,14 +329,18 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
 #'
 #' @param verbose Gives information about each calculation step. Default: `TRUE`.
 #'
-#' @param BPPARAM An object of class [`BiocParallelParam`] specifying parameters
+#' @param BPPARAM An object of class `BiocParallelParam` specifying parameters
 #'   related to the parallel execution of some of the tasks and calculations
 #'   within this function.
 #'
 #' @return In the case of the `gsvaRanks()` method, an object of class
 #' [`gsvaRanksParam-class`].
 #'
-#' @seealso [`gsvaParam-class`], [`gsvaRanksParam-class`], [`gsva`]
+#' @seealso [`gsvaParam-class`], [`gsvaRanksParam-class`], [`gsva`],
+#' [`BiocParallelParam`][BiocParallel::BiocParallelParam-class],
+#' [`dgCMatrix`][Matrix::dgCMatrix-class],
+#' [`ExpressionSet`][Biobase::ExpressionSet-class],
+#' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class]
 #'
 #' @aliases gsvaRanks,gsvaParam-method
 #' @name gsvaRanks
@@ -513,13 +517,13 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 #' @return In the case of the `gsvaScores()` method, a gene-set by sample matrix
 #' of GSVA enrichment scores stored in a container object of the same type as
 #' the input ranks data container. If
-#' the input was a base matrix or a [`dgCMatrix-class`] object, then the output will
+#' the input was a base matrix or a `dgCMatrix` object, then the output will
 #' be a base matrix object with the gene sets employed in the calculations
 #' stored in an attribute called `geneSets`. If the input was an
-#' [`ExpressionSet`] object, then the output will be also an [`ExpressionSet`]
+#' `ExpressionSet` object, then the output will be also an `ExpressionSet`
 #' object with the gene sets employed in the calculations stored in an
 #' attributed called `geneSets`. If the input was an object of one of the
-#' classes described in [`GsvaExprData`], such as a [`SingleCellExperiment`],
+#' classes described in [`GsvaExprData`], such as a `SingleCellExperiment`,
 #' then the output will be of the same class, where enrichment scores will be
 #' stored in an assay called `es` and the gene sets employed in the
 #' calculations will be stored in the `rowData` slot of the object under the

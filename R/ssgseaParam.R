@@ -22,9 +22,9 @@
 #' an assay called 'logcounts' will be used if present, otherwise the first
 #' assay is used.
 #' 
-#' @param annotation An object of class [`GeneIdentifierType-class`] from
+#' @param annotation An object of class `GeneIdentifierType` from
 #' package `GSEABase` describing the gene identifiers used as the row names of
-#' the expression data set.  See [`GeneIdentifierType`] for help on available
+#' the expression data set.  See `GeneIdentifierType` for help on available
 #' gene identifier types and how to construct them.  This
 #' information can be used to map gene identifiers occurring in the gene sets.
 #' 
@@ -55,9 +55,9 @@
 #' This must be
 #' one of the strings `"auto"` (default), `"yes"`, or `"no"`. The default value
 #' `"auto"` means that the software will perform that check only when the input
-#' expression data is provided as a base [`matrix`], an [`ExpressionSet`] or a
-#' [`SummarizedExperiment`] object, while every other type of input expression
-#' data container (e.g., [`SingleCellExperiment`], etc.) will not be checked.
+#' expression data is provided as a base `matrix`, an `ExpressionSet` or a
+#' `SummarizedExperiment` object, while every other type of input expression
+#' data container (e.g., `SingleCellExperiment`, etc.) will not be checked.
 #' If `checkNA="yes"`, then the input expression data will be checked for
 #' missing values irrespective of the object class of the data container, and
 #' if `checkNA="no"`, then that check will not be performed.
@@ -77,6 +77,12 @@
 #' values.
 #'
 #' @return A new [`ssgseaParam-class`] object.
+#'
+#' @seealso [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class],
+#' [`matrix`],
+#' [`ExpressionSet`][Biobase::ExpressionSet-class],
+#' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment-class],
+#' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class]
 #'
 #' @references Barbie, D.A. et al. Systematic RNA interference reveals that
 #' oncogenic KRAS-driven cancers require TBK1.
