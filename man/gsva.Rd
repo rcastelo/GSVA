@@ -59,11 +59,7 @@ calculations will be stored in the \code{rowData} slot of the object under the
 column name \code{gs}.
 }
 \description{
-Estimates GSVA enrichment scores. The API of this function has
-changed in the Bioconductor release 3.18 and this help page describes the
-new API. The old API is defunct and will be removed in the next
-Bioconductor release. If you are looking for the documentation of the old
-API to the \code{gsva()} function, please consult \code{\link{GSVA-pkg-defunct}}.
+Estimates GSVA enrichment scores.
 }
 \examples{
 library(GSVA)
