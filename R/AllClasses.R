@@ -12,7 +12,12 @@
 #' @seealso
 #' [`matrix`],
 #' [`dgcMatrix`][Matrix::dgCMatrix-class],
-#' [`ExpressionSet`][Biobase::ExpressionSet-class],
+#' \code{\link[Biobase]{ExpressionSet}},
+### we are using the plain Rd above because
+###  #' [`ExpressionSet`][Biobase::ExpressionSet-class],
+### results in the following R CMD check NOTE:
+### Non-topic package-anchored link(s) in Rd file 'gsvaExprData-class.Rd':
+###  ‘[Biobase:class.ExpressionSet]{ExpressionSet}’
 #' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment-class],
 #' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class],
 #' [`SpatialExperiment`][SpatialExperiment::SpatialExperiment-class]

@@ -99,6 +99,6 @@ variation analysis for microarray and RNA-Seq data.
 \code{\linkS4class{gsvaParam}}, \code{\linkS4class{gsvaRanksParam}}, \code{\link{gsva}},
 \code{\link[BiocParallel:BiocParallelParam-class]{BiocParallelParam}},
 \code{\link[Matrix:dgCMatrix-class]{dgCMatrix}},
-\code{\link[Biobase:class.ExpressionSet]{ExpressionSet}},
+\code{\link[Biobase]{ExpressionSet}},
 \code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}}
 }

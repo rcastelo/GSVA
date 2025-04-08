@@ -44,7 +44,12 @@
 #' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`],
 #' [`BiocParallelParam`][BiocParallel::BiocParallelParam-class],
 #' [`dgCMatrix`][Matrix::dgCMatrix-class],
-#' [`ExpressionSet`][Biobase::ExpressionSet-class],
+#' \code{\link[Biobase]{ExpressionSet}},
+### we are using the plain Rd above because
+###  #' [`ExpressionSet`][Biobase::ExpressionSet-class],
+### results in the following R CMD check NOTE:
+### Non-topic package-anchored link(s) in Rd file 'gsva.Rd':
+###  ‘[Biobase:class.ExpressionSet]{ExpressionSet}’
 #' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class]
 #'
 #' @aliases gsva
@@ -338,7 +343,13 @@ setMethod("gsva", signature(param="gsvaParam"),
 #' @return For the retrieval methods, the annotation metadata stored in the
 #' object or `NULL`.  For the replacement methods, the updated object.
 #'
-#' @seealso [`ExpressionSet`][Biobase::ExpressionSet-class],
+#' @seealso
+#' \code{\link[Biobase]{ExpressionSet}},
+### we are using the plain Rd above because
+###  #' [`ExpressionSet`][Biobase::ExpressionSet-class],
+### results in the following R CMD check NOTE:
+### Non-topic package-anchored link(s) in Rd file 'gsvaAnnotation.Rd':
+###  ‘[Biobase:class.ExpressionSet]{ExpressionSet}’
 #' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment-class],
 #' [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class],
 #' [`dgCMatrix`][Matrix::dgCMatrix-class]
@@ -904,7 +915,12 @@ geneIdsToGeneSetCollection <- function(geneIdsList,
 #' @seealso [`readLines`],
 #' [`GeneSetCollection`][GSEABase::GeneSetCollection-class],
 #' [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class],
-#' [`getGmt`][GSEABase::getGmt]
+#' \code{\link[GSEABase]{getGmt}},
+### we are using the plain Rd above because
+###  #' [`getGmt`][GSEABase::getGmt]
+### results in the following R CMD check NOTE:
+### Non-topic package-anchored link(s) in Rd file 'readGMT.Rd':
+###   ‘[GSEABase:getObjects]{getGmt}’
 #'
 #' @examples
 #' library(GSVA)

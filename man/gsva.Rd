@@ -134,6 +134,6 @@ using singular value decomposition.
 \code{\link{plageParam}}, \code{\link{zscoreParam}}, \code{\link{ssgseaParam}}, \code{\link{gsvaParam}},
 \code{\link[BiocParallel:BiocParallelParam-class]{BiocParallelParam}},
 \code{\link[Matrix:dgCMatrix-class]{dgCMatrix}},
-\code{\link[Biobase:class.ExpressionSet]{ExpressionSet}},
+\code{\link[Biobase]{ExpressionSet}},
 \code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}}
 }

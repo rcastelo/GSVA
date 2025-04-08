@@ -80,7 +80,12 @@
 #'
 #' @seealso [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class],
 #' [`matrix`],
-#' [`ExpressionSet`][Biobase::ExpressionSet-class],
+#' \code{\link[Biobase]{ExpressionSet}},
+### we are using the plain Rd above because
+###  #' [`ExpressionSet`][Biobase::ExpressionSet-class],
+### results in the following R CMD check NOTE:
+### Non-topic package-anchored link(s) in Rd file 'ssgseaParam-class.Rd':
+###  ‘[Biobase:class.ExpressionSet]{ExpressionSet}’
 #' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment-class],
 #' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class]
 #'

@@ -257,7 +257,7 @@ variation analysis for microarray and RNA-Seq data.
 
 \code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}},
 \code{\link{matrix}},
-\code{\link[Biobase:class.ExpressionSet]{ExpressionSet}},
+\code{\link[Biobase]{ExpressionSet}},
 \code{\link[SummarizedExperiment:SummarizedExperiment-class]{SummarizedExperiment}},
 \code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}}
 }

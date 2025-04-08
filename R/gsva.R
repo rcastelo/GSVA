@@ -277,7 +277,12 @@ compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
 #' @seealso [`gsvaParam-class`], [`gsvaRanksParam-class`], [`gsva`],
 #' [`BiocParallelParam`][BiocParallel::BiocParallelParam-class],
 #' [`dgCMatrix`][Matrix::dgCMatrix-class],
-#' [`ExpressionSet`][Biobase::ExpressionSet-class],
+#' \code{\link[Biobase]{ExpressionSet}},
+### we are using the plain Rd above because
+###  #' [`ExpressionSet`][Biobase::ExpressionSet-class],
+### results in the following R CMD check NOTE:
+### Non-topic package-anchored link(s) in Rd file 'gsvaRanks.Rd':
+###  ‘[Biobase:class.ExpressionSet]{ExpressionSet}’
 #' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class]
 #'
 #' @aliases gsvaRanks,gsvaParam-method
