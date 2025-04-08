@@ -79,10 +79,10 @@ format file, offering a choice of ways to handle duplicated gene set names.
 }
 \examples{
 library(GSVA)
-library(GSVAdata)
+suppressPackageStartupMessages(library(GSVAdata))
 
-fname <- system.file("extdata", "c7.immunesigdb.v2024.1.Hs.symbols.gmt.gz",
-                     package="GSVAdata")
+fname <- file.path(system.file("extdata", package="GSVAdata"),
+   "c2.subsetdups.v7.5.symbols.gmt.gz")
 
 ## by default, guess geneIdType from content and return a GeneSetCollection
 genesets <- readGMT(fname)
@@ -90,6 +90,11 @@ genesets
 
 ## how to manually override the geneIdType
 genesets <- readGMT(fname, geneIdType=NullIdentifier())
+genesets
+
+## how to drop *all* gene sets with duplicated names (instead of ignoring
+## only the duplicated one)
+genesets <- readGMT(fname, deduplUse="drop")
 genesets
 
 ## return a simple list instead of a GeneSetCollection

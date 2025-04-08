@@ -148,7 +148,7 @@ to apply in the presence of missing values in the input expression data; see
 
 \examples{
 library(GSVA)
-library(GSVAdata)
+suppressPackageStartupMessages(library(GSVAdata))
 
 data(leukemia)
 data(c2BroadSets)

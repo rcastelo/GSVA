@@ -96,7 +96,7 @@
 #' 
 #' @examples
 #' library(GSVA)
-#' library(GSVAdata)
+#' suppressPackageStartupMessages(library(GSVAdata))
 #'
 #' data(leukemia)
 #' data(c2BroadSets)
