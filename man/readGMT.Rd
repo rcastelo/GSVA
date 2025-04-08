@@ -104,5 +104,5 @@ gsvaAnnotation(genesets)
 \code{\link{readLines}},
 \code{\link[GSEABase:GeneSetCollection-class]{GeneSetCollection}},
 \code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}},
-\code{\link[GSEABase:getObjects]{getGmt}}
+\code{\link[GSEABase]{getGmt}},
 }

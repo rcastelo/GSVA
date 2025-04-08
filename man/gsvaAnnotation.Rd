@@ -76,7 +76,7 @@ an MSigDb gene set using ENTREZ IDs or gene symbols to an expression data
 set using ENSEMBL IDs.
 }
 \seealso{
-\code{\link[Biobase:class.ExpressionSet]{ExpressionSet}},
+\code{\link[Biobase]{ExpressionSet}},
 \code{\link[SummarizedExperiment:SummarizedExperiment-class]{SummarizedExperiment}},
 \code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}},
 \code{\link[Matrix:dgCMatrix-class]{dgCMatrix}}
