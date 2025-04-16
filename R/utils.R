@@ -185,7 +185,7 @@
     ## we'll try to handle index lists of numeric/integer vectors as gene sets
     if(is(geneSets, "list") && all(sapply(geneSets, is.numeric))) {
         mappedGeneSets <- lapply(geneSets, function(idx) {
-            idx[idx > 0 & idx <= nrow(filteredDataMatrix)]
+            as.integer(idx[idx > 0 & idx <= nrow(filteredDataMatrix)])
         })
 
         ## check and alert if we had to drop out-of-range indices
