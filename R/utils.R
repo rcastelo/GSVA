@@ -172,26 +172,47 @@
 }
 
 ## it assumes that all arguments have been already checked for correctness
-#' @importFrom cli cli_abort
+#' @importFrom cli cli_abort cli_alert_warning
 .filterAndMapGeneSets <- function(param, wgset=NA, filteredDataMatrix, verbose) {
+
+    minSize <- get_minSize(param)
+    maxSize <- get_maxSize(param)
 
     geneSets <- get_geneSets(param)
     if (!is.na(wgset))
         geneSets <- geneSets[wgset]
 
-    minSize <- get_minSize(param)
-    maxSize <- get_maxSize(param)
+    ## we'll try to handle index lists of numeric/integer vectors as gene sets
+    if(is(geneSets, "list") && all(sapply(geneSets, is.numeric))) {
+        mappedGeneSets <- lapply(geneSets, function(idx) {
+            idx[idx > 0 & idx <= nrow(filteredDataMatrix)]
+        })
 
-    ## note that the method for 'GeneSetCollection' calls geneIds(), i.e., 
-    ## whatever the input, from here on we have a list of character vectors
-    geneSets <- mapGeneSetsToAnno(geneSets=geneSets,
-                                  anno=get_annotation(param),
-                                  verbose=verbose)
-    
-    ## map to the actual features for which expression data is available
-    ## note that the result is a list of integer vectors (indices to rownames)
-    ## and not a list of character vector any longer
-    mappedGeneSets <- .mapGeneSetsToFeatures(geneSets, rownames(filteredDataMatrix))
+        ## check and alert if we had to drop out-of-range indices
+        diffGs <- names(geneSets)[lengths(geneSets) != lengths(mappedGeneSets)]
+        if(length(diffGs) > 0) {
+            singular <- length(diffGs) == 1
+            msg <- sprintf(
+                paste0("Out-of-range indices from %d index gene %s (%s) ",
+                       "have been dropped."),
+                length(diffGs),
+                if(singular) "set" else "sets",
+                paste0(sQuote(diffGs, q=FALSE), collapse = ", "))
+            cli_alert_warning(msg)
+        }
+    } else { # not a list of index vectors, i.e., as before
+        ## note that the method for 'GeneSetCollection' calls geneIds(), i.e., 
+        ## whatever the input, from here on we have a list of character vectors
+        geneSets <- mapGeneSetsToAnno(geneSets=geneSets,
+                                      anno=get_annotation(param),
+                                      verbose=verbose)
+        
+        ## map to the actual features for which expression data is available
+        ## note that the result is a list of integer vectors (indices to
+        ## rownames) and not a list of character vector any longer
+        mappedGeneSets <- .mapGeneSetsToFeatures(geneSets,
+                                                 rownames(filteredDataMatrix))
+    }
     
     ## remove gene sets from the analysis for which no features are available
     ## and meet the minimum and maximum gene-set size specified by the user
