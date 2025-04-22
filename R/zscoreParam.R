@@ -75,7 +75,7 @@ zscoreParam <- function(exprData, geneSets,
     assay <- .check_assayNames(assay, exprData)
 
     ## check for presence of valid row/feature names
-    .check_rownames(exprData)
+    exprData <- .check_rownames(exprData)
 
     xa <- gsvaAnnotation(exprData)
     if(is.null(xa)) {

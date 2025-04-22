@@ -1,13 +1,27 @@
+## generate dummy names, e.g. row/col names for object M that knows 'nrow()'
+.dummyNames <- function(M, n=nrow(M), prefix="row") {
+    fmt <- sprintf("%s%%0%dd", prefix, floor(log10(n)) + 1)
+    sprintf(fmt, seq_len(n))
+}
+
 ## check for presence of valid row/feature names
-#' @importFrom Biobase featureNames
-.check_rownames <- function(expr) {
+##   and abort or generate dummy names
+## #' @importFrom Biobase featureNames
+.check_rownames <- function(expr, useDummyNames=TRUE) {
     ## CHECK: is this the right place to check this?
     ## 21/10/24: let's do it at parameter constructor
-    if (is.null(rownames(expr)))
-        cli_abort(c("x"="The input assay object doesn't have rownames"))
-    else if (any(duplicated(rownames(expr)))) {
+    if (is.null(rownames(expr))) {
+        if (useDummyNames) {
+            cli_alert_info("Using dummy rownames for the input assay object.")
+            rownames(expr) <- .dummyNames(expr)
+        } else {
+            cli_abort(c("x"="The input assay object doesn't have rownames"))
+        }
+    } else if (any(duplicated(rownames(expr)))) {
         cli_abort(c("x"="The input assay object has duplicated rownames"))
-    } 
+    }
+
+    return(expr)
 }
 
 
