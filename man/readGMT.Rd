@@ -22,7 +22,7 @@ containing e.g. the filename or URL of a (possibly compressed) GMT file.}
 GMT file.}
 
 \item{geneIdType}{By default a character vector of length 1 with the special
-value \code{"auto"} or an object of a subclass of \code{\link{GeneIdentifierType}}.  If set
+value \code{"auto"} or an object of a subclass of \code{GeneIdentifierType}.  If set
 to \code{"auto"}, the function will try to derive the gene ID type from argument
 \code{geneIdsList} using \code{\link{guessGeneIdType}}.
 Other values, including \code{NULL}, will be ignored with a warning and
@@ -32,13 +32,13 @@ resulting list or of all \code{GeneSet} objects in the resulting
 \code{GeneSetCollection} will be set to this value.}
 
 \item{collectionType}{Only used when \code{valueType == "GeneSetCollection"}. See
-\code{\link{getGmt}} for more information.}
+\code{getGmt} for more information.}
 
 \item{valueType}{A character vector of length 1 specifying the desired type
 of return value.  It must be one of:
 \itemize{
-\item \code{GeneSetCollection} (the default): a \code{\link{GeneSetCollection}} object as defined
-and described by package \code{\link{GSEABase}}.
+\item \code{GeneSetCollection} (the default): a \code{GeneSetCollection} object as defined
+and described by package \code{GSEABase}.
 \item \code{list}: a named list of gene sets represented as character vectors of gene IDs.
 This format is much simpler and cannot store the metadata required for automatic
 mapping of gene IDs.
@@ -79,10 +79,10 @@ format file, offering a choice of ways to handle duplicated gene set names.
 }
 \examples{
 library(GSVA)
-library(GSVAdata)
+suppressPackageStartupMessages(library(GSVAdata))
 
-fname <- system.file("extdata", "c7.immunesigdb.v2024.1.Hs.symbols.gmt.gz",
-                     package="GSVAdata")
+fname <- file.path(system.file("extdata", package="GSVAdata"),
+   "c2.subsetdups.v7.5.symbols.gmt.gz")
 
 ## by default, guess geneIdType from content and return a GeneSetCollection
 genesets <- readGMT(fname)
@@ -90,6 +90,11 @@ genesets
 
 ## how to manually override the geneIdType
 genesets <- readGMT(fname, geneIdType=NullIdentifier())
+genesets
+
+## how to drop *all* gene sets with duplicated names (instead of ignoring
+## only the duplicated one)
+genesets <- readGMT(fname, deduplUse="drop")
 genesets
 
 ## return a simple list instead of a GeneSetCollection
@@ -101,5 +106,8 @@ gsvaAnnotation(genesets)
 
 }
 \seealso{
-\code{\link{readLines}}, \code{\link{GeneSetCollection}}, \code{\link{getGmt}}
+\code{\link{readLines}},
+\code{\link[GSEABase:GeneSetCollection-class]{GeneSetCollection}},
+\code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}},
+\code{\link[GSEABase]{getGmt}},
 }

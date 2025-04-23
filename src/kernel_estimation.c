@@ -39,6 +39,9 @@ row_d(double* x, double* y, double* r, int size_density_n,
 
   double bw = Gaussk ? (sd(x, size_density_n) / SIGMA_FACTOR) : 0.5;
 
+  if (bw == 0) /* just in case */
+    bw = 0.001;
+
   if (Gaussk && is_precomputed == 0) {
     initCdfs();
     is_precomputed = 1;
@@ -61,6 +64,9 @@ row_d_naprop(double* x, double* y, double* r, int size_density_n,
              int size_test_n, int Gaussk) {
 
   double bw = Gaussk ? (sd_naprop(x, size_density_n) / SIGMA_FACTOR) : 0.5;
+
+  if (!ISNA(bw) && bw == 0) /* just in case */
+    bw = 0.001;
 
   if (Gaussk && is_precomputed == 0) {
     initCdfs();
@@ -92,6 +98,9 @@ row_d_narm(double* x, double* y, double* r, int size_density_n,
            int size_test_n, int Gaussk) {
 
   double bw = Gaussk ? (sd_narm(x, size_density_n) / SIGMA_FACTOR) : 0.5;
+
+  if (!ISNA(bw) && bw == 0) /* just in case */
+    bw = 0.001;
 
   if (Gaussk && is_precomputed == 0) {
     initCdfs();
@@ -128,6 +137,9 @@ row_d_nologodds(double* x, double* y, double* r, int size_density_n,
                 int size_test_n, int Gaussk) {
 
   double bw = Gaussk ? (sd(x, size_density_n) / SIGMA_FACTOR) : 0.5;
+
+  if (bw == 0) /* just in case */
+    bw = 0.001;
 
   if (Gaussk && is_precomputed == 0) {
     initCdfs();

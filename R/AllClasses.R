@@ -11,11 +11,17 @@
 #'
 #' @seealso
 #' [`matrix`],
-#' [`dgCMatrix-class`],
-#' [`ExpressionSet-class`],
-#' [`SummarizedExperiment-class`],
-#' [`SingleCellExperiment-class`],
-#' [`SpatialExperiment-class`]
+#' [`dgcMatrix`][Matrix::dgCMatrix-class],
+#' \code{\link[Biobase]{ExpressionSet}},
+### we are using the plain Rd above because
+###  #' [`ExpressionSet`][Biobase::ExpressionSet-class],
+### results in the following R CMD check NOTE:
+### Non-topic package-anchored link(s) in Rd file 'gsvaExprData-class.Rd':
+###  ‘[Biobase:class.ExpressionSet]{ExpressionSet}’
+#' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment-class],
+#' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class],
+#' [`SpatialExperiment`][SpatialExperiment::SpatialExperiment-class],
+#' [`HDF5Array`][HDF5Array::HDF5Array-class]
 #'
 #' @importClassesFrom Matrix dgCMatrix
 #' @importClassesFrom Biobase ExpressionSet
@@ -41,14 +47,17 @@ setIs("SpatialExperiment", "GsvaExprData")
 #'
 #' Virtual superclass of gene set classes supported by `GSVA`.
 #'
-#' `GSVA` supports gene sets in either a list of character vectors or an object
-#' of class `GSEABase::GeneSetCollection`.  This class union allows to store any
-#' of these in a slot of another class as well as defining common methods for
-#' them.
+#' `GSVA` supports gene sets consisting of gene identifiers as either a named
+#' list of character vectors or an object of class `GSEABase::GeneSetCollection`.
+#' Alternatively, gene sets may be specified as a named list of integer vectors
+#' in the range of 1:nrow(X) that are indices to the rows of the corresponding
+#' expression data matrix X.
+#' This class union allows to store any of these in a slot of another class as
+#' well as defining common methods for them.
 #'
 #' @seealso
 #' [`list`], 
-#' [`GeneSetCollection`]
+#' [`GeneSetCollection`][GSEABase::GeneSetCollection-class]
 #'
 #' @importClassesFrom GSEABase GeneSetCollection GeneSet GeneIdentifierType
 #'
@@ -73,20 +82,20 @@ setClassUnion("GsvaGeneSets",
 #' and serves as the parent class for all `GSVA` method parameter classes.
 #'
 #' @slot exprData The expression data set.  Must be one of the classes
-#' supported by [`GsvaExprData-class`].  For a list of these classes, see its
+#' supported by `GsvaExprData`.  For a list of these classes, see its
 #' help page using `help(GsvaExprData)`.
 #'
 #' @slot geneSets The gene sets.  Must be one of the classes supported by
-#' [`GsvaGeneSets-class`].  For a list of these classes, see its help page using
+#' `GsvaGeneSets`.  For a list of these classes, see its help page using
 #' `help(GsvaGeneSets)`.
 #' 
 #' @slot assay Character vector of length 1.  The name of the assay to use in
 #' case `exprData` is a multi-assay container, otherwise ignored.  By default,
 #' the first assay is used.
 #' 
-#' @slot annotation An object of class [`GeneIdentifierType-class`] from package
+#' @slot annotation An object of class `GeneIdentifierType` from package
 #' `GSEABase` describing the gene identifiers used as the row names of the
-#' expression data set.  See [`GeneIdentifierType`] for help on available gene
+#' expression data set.  See `GeneIdentifierType` for help on available gene
 #' identifier types and how to construct them.  This
 #' information can be used to map gene identifiers occurring in the gene sets.
 #' By default, this slot has value `NullIdentifier` and gene identifiers used in
@@ -106,8 +115,7 @@ setClassUnion("GsvaGeneSets",
 #' [`plageParam-class`], 
 #' [`ssgseaParam-class`], 
 #' [`gsvaParam-class`],
-#' [`GeneIdentifierType-class`]
-#' [`GeneIdentifierType`]
+#' [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class]
 #'
 #' @name GsvaMethodParam-class
 #' @rdname GsvaMethodParam-class
@@ -130,7 +138,7 @@ setClass("GsvaMethodParam",
 #' 
 #' Since method PLAGE does not take any method-specific parameters, this
 #' class does not add any slots to the common slots inherited from
-#' [`GsvaMethodParam-class`].
+#' `GsvaMethodParam`.
 #'
 #' @seealso
 #' [`GsvaExprData-class`],
@@ -161,7 +169,7 @@ setClass("plageParam",
 #' 
 #' Since the combined z-scores method does not take any method-specific
 #' parameters, this class does not add any slots to the common slots inherited
-#' from [`GsvaMethodParam-class`].
+#' from `GsvaMethodParam`.
 #'
 #' @seealso
 #' [`GsvaExprData-class`],
@@ -218,7 +226,7 @@ setClass("zscoreParam",
 #' @slot use Character vector of length 1. One of the strings `"everything"`
 #' (default), `"all.obs"`, or `"na.rm"`, which refer to three different policies
 #' to apply in the presence of missing values in the input expression data; see
-#' [`ssgseaParam`].
+#' `ssgseaParam`.
 #'
 #' @seealso
 #' [`GsvaExprData-class`],
@@ -321,7 +329,7 @@ setClass("ssgseaParam",
 #' @slot use Character vector of length 1. One of the strings `"everything"`
 #' (default), `"all.obs"`, or `"na.rm"`, which refer to three different policies
 #' to apply in the presence of missing values in the input expression data; see
-#' [`ssgseaParam`].
+#' `ssgseaParam`.
 #'
 #' @seealso
 #' [`GsvaExprData-class`],

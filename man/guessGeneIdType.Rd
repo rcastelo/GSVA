@@ -11,7 +11,7 @@ guessGeneIdType(geneIdsList)
 by \code{geneIds()}.}
 }
 \value{
-An object of a subclass of \code{\link{GeneIdentifierType}} derived from the
+An object of a subclass of \code{GeneIdentifierType} derived from the
 input.
 }
 \description{
@@ -26,5 +26,5 @@ starting with 'ENS' an ENSEMBL identifier and anything else a HuGO gene
 symbol.
 }
 \seealso{
-\code{\link{GeneIdentifierType}}
+\code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}}
 }

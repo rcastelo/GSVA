@@ -15,9 +15,10 @@ of another class as well as defining common methods for all of them.
 }
 \seealso{
 \code{\link{matrix}},
-\code{\linkS4class{dgCMatrix}},
-\code{\linkS4class{ExpressionSet}},
-\code{\linkS4class{SummarizedExperiment}},
-\code{\linkS4class{SingleCellExperiment}},
-\code{\linkS4class{SpatialExperiment}}
+\code{\link[Matrix:dgCMatrix-class]{dgcMatrix}},
+\code{\link[Biobase]{ExpressionSet}},
+\code{\link[SummarizedExperiment:SummarizedExperiment-class]{SummarizedExperiment}},
+\code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}},
+\code{\link[SpatialExperiment:SpatialExperiment]{SpatialExperiment}},
+\code{\link[HDF5Array:HDF5Array-class]{HDF5Array}}
 }

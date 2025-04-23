@@ -1,3 +1,31 @@
+CHANGES IN VERSION 2.20
+-----------------------
+
+USER VISIBLE CHANGES
+
+  o When the input expression data is provided as either a 'SummarizedExperiment', 'SingleCellExperiment' or a 'SpatialExperiment' object, the default assay is now either one called 'logcounts' or the first one, otherwise.
+
+  o Added a method called 'spatCor()' to efficiently compute spatial autocorrelation using Moran's I statistic for an input 'SpatialExperiment' object, using an inverse squared distance weight matrix as default, or an inverse distance weight matrix as an alternative. It also tests for spatial autocorrelation assuming normality. This functionality is added to help detecting autocorrelated gene sets using GSVA enrichment scores.
+
+  o After one cycle of deprecation and two cycles of being defunct, the classical non-object-oriented way of calling the function 'gsva()' has been completely removed. Now 'gsva()' can only be used by constructing first a parameter object.
+
+  o Fixed URLs in vignette and DOI refs in documentation.
+
+  o The vignette has been updated with a new section illustrating how to import gene sets from GMT files with the function 'readGMT()' and the section on "Differential expression at pathway level" has been updated using the bulk RNA-seq data from Costa et. al (2021).
+
+BUG FIXES
+
+  o Bugfix in gsvaEnrichment() when input data contains missing values.
+
+  o Bugfix in checking and detecting missing values in input expression data.
+
+  o Bugfix in the PLAGE method when using the argument BPPARAM with a value other than Serial
+Param(). It resolves issue #220.
+
+  o Bugfix when tau is not double for the GSVA method.
+
+  o Bugfix in the C code to avoid potential memory leaks.
+
 CHANGES IN VERSION 2.00
 -----------------------
 

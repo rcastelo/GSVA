@@ -8,12 +8,15 @@
 Virtual superclass of gene set classes supported by \code{GSVA}.
 }
 \details{
-\code{GSVA} supports gene sets in either a list of character vectors or an object
-of class \code{GSEABase::GeneSetCollection}.  This class union allows to store any
-of these in a slot of another class as well as defining common methods for
-them.
+\code{GSVA} supports gene sets consisting of gene identifiers as either a named
+list of character vectors or an object of class \code{GSEABase::GeneSetCollection}.
+Alternatively, gene sets may be specified as a named list of integer vectors
+in the range of 1:nrow(X) that are indices to the rows of the corresponding
+expression data matrix X.
+This class union allows to store any of these in a slot of another class as
+well as defining common methods for them.
 }
 \seealso{
 \code{\link{list}},
-\code{\link{GeneSetCollection}}
+\code{\link[GSEABase:GeneSetCollection-class]{GeneSetCollection}}
 }
