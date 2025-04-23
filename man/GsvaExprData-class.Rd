@@ -19,5 +19,6 @@ of another class as well as defining common methods for all of them.
 \code{\link[Biobase]{ExpressionSet}},
 \code{\link[SummarizedExperiment:SummarizedExperiment-class]{SummarizedExperiment}},
 \code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}},
-\code{\link[SpatialExperiment:SpatialExperiment]{SpatialExperiment}}
+\code{\link[SpatialExperiment:SpatialExperiment]{SpatialExperiment}},
+\code{\link[HDF5Array:HDF5Array-class]{HDF5Array}}
 }
