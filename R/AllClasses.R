@@ -20,7 +20,8 @@
 ###  ‘[Biobase:class.ExpressionSet]{ExpressionSet}’
 #' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment-class],
 #' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class],
-#' [`SpatialExperiment`][SpatialExperiment::SpatialExperiment-class]
+#' [`SpatialExperiment`][SpatialExperiment::SpatialExperiment-class],
+#' [`HDF5Array`][HDF5Array::HDF5Array-class]
 #'
 #' @importClassesFrom Matrix dgCMatrix
 #' @importClassesFrom Biobase ExpressionSet
@@ -43,10 +44,13 @@ setClassUnion("GsvaExprData",
 #'
 #' Virtual superclass of gene set classes supported by `GSVA`.
 #'
-#' `GSVA` supports gene sets in either a list of character vectors or an object
-#' of class `GSEABase::GeneSetCollection`.  This class union allows to store any
-#' of these in a slot of another class as well as defining common methods for
-#' them.
+#' `GSVA` supports gene sets consisting of gene identifiers as either a named
+#' list of character vectors or an object of class `GSEABase::GeneSetCollection`.
+#' Alternatively, gene sets may be specified as a named list of integer vectors
+#' in the range of 1:nrow(X) that are indices to the rows of the corresponding
+#' expression data matrix X.
+#' This class union allows to store any of these in a slot of another class as
+#' well as defining common methods for them.
 #'
 #' @seealso
 #' [`list`], 
