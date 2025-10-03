@@ -217,8 +217,11 @@
     } else { # not a list of index vectors, i.e., as before
         ## note that the method for 'GeneSetCollection' calls geneIds(), i.e., 
         ## whatever the input, from here on we have a list of character vectors
+        anno <- get_annotation(param)
+        if (identical(anno, NullIdentifier()))
+            anno <- NULL
         geneSets <- mapGeneSetsToAnno(geneSets=geneSets,
-                                      anno=get_annotation(param),
+                                      anno=anno,
                                       verbose=verbose)
         
         ## map to the actual features for which expression data is available
