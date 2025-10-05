@@ -1140,25 +1140,25 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
                                     (max(x) + 1) * 1.1))))
     ggplot2::ggplot(data=edata$stats) +
         ggplot2::scale_x_continuous(breaks=fintticks) +
-        ggplot2::geom_line(ggplot2::aes_string(x="rank", y="stat"), color="green") +
+        ggplot2::geom_line(ggplot2::aes(x=.data$rank, y=.data$stat), color="green") +
         ggplot2::geom_segment(data=gsetticks,
-                     mapping=ggplot2::aes_string(x="gsetrnk", y=-hgsetticks/2,
-                                 xend="gsetrnk", yend=hgsetticks/2),
+                     mapping=ggplot2::aes(x=.data$gsetrnk, y=-hgsetticks/2,
+                                 xend=.data$gsetrnk, yend=hgsetticks/2),
                      linewidth=1) +
         ggplot2::geom_hline(yintercept=0, colour="grey", linetype="dashed") +
         { if (!is.na(edata$whichMaxPos) &&
               (edata$maxDiff || edata$maxPos >= abs(edata$maxNeg)))
               ggplot2::geom_segment(data=data.frame(whichMaxPos=edata$whichMaxPos,
                                            maxPos=edata$maxPos),
-                           mapping=ggplot2::aes_string(x="whichMaxPos", y=0,
-                                       xend="whichMaxPos", yend="maxPos"),
+                           mapping=ggplot2::aes(x=.data$whichMaxPos, y=0,
+                                       xend=.data$whichMaxPos, yend=.data$maxPos),
                            colour="darkred", linetype="dashed") } +
         { if (!is.na(edata$whichMaxPos) &&
               (edata$maxDiff || edata$maxPos < abs(edata$maxNeg)))
               ggplot2::geom_segment(data=data.frame(whichMaxNeg=edata$whichMaxNeg,
                                            maxNeg=edata$maxNeg),
-                           mapping=ggplot2::aes_string(x="whichMaxNeg", y=0,
-                                       xend="whichMaxNeg", yend="maxNeg"),
+                           mapping=ggplot2::aes(x=.data$whichMaxNeg, y=0,
+                                       xend=.data$whichMaxNeg, yend=.data$maxNeg),
                            colour="darkred", linetype="dashed") } +
         ggplot2::theme(panel.background=ggplot2::element_blank(),
               panel.grid.major=ggplot2::element_line(colour="grey", linetype="dotted"),
