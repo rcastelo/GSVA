@@ -1223,7 +1223,7 @@ setMethod("mapGeneSetsToAnno",
 setMethod("mapGeneSetsToAnno",
           signature(geneSets="GeneSetCollection", anno="NULL"),
           function(geneSets, anno, verbose=FALSE) {
-              return(geneSets)
+              return(geneIds(geneSets))
           })
 
 #' @importFrom cli cli_alert_info cli_alert_warning

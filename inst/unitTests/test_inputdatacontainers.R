@@ -7,9 +7,9 @@ test_inputdatacontainers <- function() {
     nGrp2 <- n - nGrp1 ## number of samples in group 2
 
     ## consider three disjoint gene sets
-    geneSets <- list(set1=paste("g", 1:3, sep=""),
-                     set2=paste("g", 4:6, sep=""),
-                     set3=paste("g", 7:10, sep=""))
+    gsets <- list(set1=paste("g", 1:3, sep=""),
+                  set2=paste("g", 4:6, sep=""),
+                  set3=paste("g", 7:10, sep=""))
 
     ## sample data from a normal distribution with mean 0 and st.dev. 1
     ## seeding the random number generator for the purpose of this test
@@ -18,10 +18,10 @@ test_inputdatacontainers <- function() {
                 dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
 
     ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
-    y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
+    y[gsets$set1, (nGrp1+1):n] <- y[gsets$set1, (nGrp1+1):n] + 2
 
     ## estimate GSVA enrichment scores with input as a matrix
-    es.mat <- gsva(gsvaParam(y, geneSets), verbose=FALSE)
+    es.mat <- gsva(gsvaParam(y, gsets), verbose=FALSE)
 
     ## estimate GSVA enrichment scores with input as an ExpressionSet object
     y2 <- y
@@ -33,7 +33,7 @@ test_inputdatacontainers <- function() {
                                    featureData=as(data.frame(dummy=1:nrow(y),
                                                              row.names=rownames(y)),
                                                   "AnnotatedDataFrame"))
-    es.eset <- gsva(gsvaParam(eset, geneSets), verbose=FALSE)
+    es.eset <- gsva(gsvaParam(eset, gsets), verbose=FALSE)
 
     ## as of 1.51.9, gene sets will be returned as attributes for containers not
     ## inheriting from SummarizedExperiment and interfere with the check
@@ -48,14 +48,14 @@ test_inputdatacontainers <- function() {
                                                                                              row.names=rownames(y))),
                                                      colData=S4Vectors::DataFrame(data.frame(dummy=1:ncol(y),
                                                                                              row.names=colnames(y))))
-    es.se <- gsva(gsvaParam(se, geneSets), verbose=FALSE)
+    es.se <- gsva(gsvaParam(se, gsets), verbose=FALSE)
 
     checkTrue(identical(es.mat2, SummarizedExperiment::assays(es.se)[[1]]))
 
     ## estimate GSVA enrichment scores with input as a dgCMatrix object
     yMat <- Matrix::Matrix(y, sparse=TRUE)
 
-    es.dgCMat <- gsva(gsvaParam(yMat, geneSets), verbose=FALSE)
+    es.dgCMat <- gsva(gsvaParam(yMat, gsets), verbose=FALSE)
 
     checkTrue(identical(es.mat, es.dgCMat))
 }
