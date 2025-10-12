@@ -36,6 +36,9 @@ SEXP
 order_rankstat_R(SEXP xR);
 
 SEXP
+ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR);
+
+SEXP
 gsva_score_genesets_R(SEXP genesetsidxR, SEXP decordstatR, SEXP symrnkstatR,
                       SEXP maxdiffR, SEXP absrnkR, SEXP tauR, SEXP anynaR,
                       SEXP nauseR, SEXP minsizeR);
@@ -46,6 +49,9 @@ order_rankstat_sparse_to_dense_R(SEXP XCspR, SEXP jR);
 SEXP
 order_rankstat_sparse_to_sparse_R(SEXP XCspR, SEXP jR);
 
+SEXP
+fetch_row_nzvals(SEXP svt, int i, int itypevals);
+
 /* registration of C-entry points */
 
 static R_CallMethodDef callMethods[] = {
@@ -55,11 +61,13 @@ static R_CallMethodDef callMethods[] = {
   {"kcdfvals_sparse_to_dense_R", (DL_FUNC) &kcdfvals_sparse_to_dense_R, 4},
   {"ecdfvals_sparse_to_sparse_R", (DL_FUNC) &ecdfvals_sparse_to_sparse_R, 3},
   {"ecdfvals_sparse_to_dense_R", (DL_FUNC) &ecdfvals_sparse_to_dense_R, 3},
+  {"ecdfvals_svt_to_dense_R", (DL_FUNC) &ecdfvals_svt_to_dense_R, 2},
   {"ecdfvals_dense_to_dense_R", (DL_FUNC) &ecdfvals_dense_to_dense_R, 2},
   {"ecdfvals_dense_to_dense_nas_R", (DL_FUNC) &ecdfvals_dense_to_dense_nas_R, 2},
   {"gsva_scores_genesets_R", (DL_FUNC) &gsva_score_genesets_R, 9},
   {"order_rankstat_sparse_to_dense_R", (DL_FUNC) &order_rankstat_sparse_to_dense_R, 2},
   {"order_rankstat_sparse_to_sparse_R", (DL_FUNC) &order_rankstat_sparse_to_sparse_R, 2},
+  {"fetch_row_nzvals", (DL_FUNC) &fetch_row_nzvals, 3},
   {NULL, NULL, 0}
 };
 
@@ -69,7 +77,11 @@ SEXP Matrix_DimNamesSym,
      Matrix_xSym,
      Matrix_iSym,
      Matrix_jSym,
-     Matrix_pSym;
+     Matrix_pSym,
+     SVT_SparseArray_typeSym,
+     SVT_SparseArray_dimNamesSym,
+     SVT_SparseArray_dimSym,
+     SVT_SparseArray_svtSym;
 
 void
 R_init_GSVA(DllInfo *info) {
@@ -83,6 +95,11 @@ R_init_GSVA(DllInfo *info) {
   Matrix_iSym = install("i");
   Matrix_jSym = install("j");
   Matrix_pSym = install("p");
+
+  SVT_SparseArray_typeSym = install("type");
+  SVT_SparseArray_dimNamesSym = install("dimnames");
+  SVT_SparseArray_dimSym = install("dim");
+  SVT_SparseArray_svtSym = install("SVT");
 
   R_useDynamicSymbols(info, TRUE);
 

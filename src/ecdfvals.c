@@ -21,7 +21,18 @@ extern SEXP Matrix_DimNamesSym,
             Matrix_xSym,
             Matrix_iSym,
             Matrix_jSym,
-            Matrix_pSym;
+            Matrix_pSym,
+            SVT_SparseArray_typeSym,
+            SVT_SparseArray_dimNamesSym,
+            SVT_SparseArray_dimSym,
+            SVT_SparseArray_svtSym;
+
+void
+fetch_row_nzvals(SEXP svt, int i, int itypevals, int* inzvals,
+                 double* dnzvals, int* nzcols, int* nnzvals);
+
+SEXP
+ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR);
 
 SEXP
 ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP verboseR);
@@ -57,6 +68,261 @@ dbl_cmp(const void* a, const void* b) {
 
   return 0;
 }
+
+/* fetch the non-zero values from given 0-based (i) row of an input
+ * SVT_SparseArray object (svt). Depending on whether the input values
+ * are integer or double (itypevals), the non-zero values are returned
+ * by reference into inzvals (integer) or dnzvals (double). the columns
+ * of svt having non-zero values for the row i are returned by reference
+ * in nzcols and nnzvals contains the returned number of non-zero values
+ */
+SEXP
+fetch_row_nzvals(SEXP svt, int i, int itypevals) {
+  int     nc=length(svt);
+  int*    inzvals = NULL;
+  double* dnzvals = NULL;
+  int     nnzvals;
+  SEXP    ansR, nzcR, nzvR;
+
+  PROTECT(ansR = allocVector(VECSXP, 2));
+  PROTECT(nzcR = allocVector(INTSXP, nc));
+
+  if (itypevals) {
+    PROTECT(nzvR = allocVector(INTSXP, nc));
+    inzvals = INTEGER(nzvR);
+  } else {
+    PROTECT(nzvR = allocVector(REALSXP, nc));
+    dnzvals = REAL(nzvR);
+  }
+
+  nnzvals = 0;
+  for (int j=0; j < nc; j++) {
+    SEXP offsetsR = VECTOR_ELT(VECTOR_ELT(svt, i), 2);
+    int* offsets = INTEGER(VECTOR_ELT(VECTOR_ELT(svt, i), 2));
+    int* ivals;
+    double* dvals;
+    int  nzvals = length(offsetsR);
+
+    if (itypevals)
+      ivals = INTEGER(VECTOR_ELT(VECTOR_ELT(svt, i), 1));
+    else
+      dvals = REAL(VECTOR_ELT(VECTOR_ELT(svt, i), 1));
+    
+    for (int k=0; k < nzvals; k++) {
+      if (offsets[k] == i) {
+        if (itypevals)
+          inzvals[nnzvals] = ivals[k];
+        else
+          dnzvals[nnzvals] = dvals[k];
+        nzcols[nnzvals++] = j;
+      }
+    }
+  }
+
+  SETLENGTH(nzcR, nnzvals);
+  SETLENGTH(nzvR, nnzvals);
+  SET_VECTOR_ELT(ansR, 0, nzvR);
+  SET_VECTOR_ELT(ansR, 1, nzcR);
+
+  UNPROTECT(3); /* ansR nzvR nzcR */
+
+  return(ansR);
+}
+
+/* calculate empirical cumulative distribution function values
+ * on the zero and nonzero entries from the input sparse matrix,
+ * provided as an SVT_SparseMatrix object.
+ * the returned value is a dense matrix.
+ */
+SEXP
+ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
+  SEXP ecdfRobj;
+  double* ecdf_vals;
+  int* Xsvt_dim;
+  VECSXP Xsvt_SVT;
+  Rboolean verbose=asLogical(verboseR);
+  double* Xsvt_x;
+  char*   Xsvt_type;
+  int  itypevals;
+  int* Xsvt_x;
+  int  nr, nc;
+  SEXP pb = R_NilValue;
+  int  nunprotect=0;
+
+  PROTECT(XsvtR); nunprotect++;
+
+  Xsvt_dim = INTEGER(GET_SLOT(XsvtR, SVT_SparseArray_dimSym));
+  nr = Xsvt_dim[0]; /* number of rows */
+  nc = Xsvt_dim[1]; /* number of columns */
+
+  Xsvt_type = CHAR(GET_SLOT(XRspR, SVT_SparseArray_typeSym));
+  Xsvt_SVT = GET_SLOT(XRspR, SVT_SparseArray_svtSym);
+
+  itypevals = 0;
+  if (strcmp(Xsvt_type, "integer"))
+    itypevals = 1;
+
+  /* create a new dense matrix object to store the result,
+   * if nr * nc > INT_MAX and LONG_VECTOR_SUPPORT is not
+   * available, the function allocMatrix() will prompt an error */
+  ecdfRobj = PROTECT(allocMatrix(REALSXP, nr, nc)); nunprotect++;
+
+  if (verbose) {
+    pb = PROTECT(cli_progress_bar(nr, NULL));
+    cli_progress_set_name(pb, "Estimating ECDFs");
+    nunprotect++;
+  }
+
+  nzcols = R_Calloc(nc, int);
+
+  for (int i=0; i < nr; i++) {
+    SEXP          xR, uniqvR;
+    SEXP          nzrowR;
+    int           nv, nuniqv;
+    int*          inzvals = NULL;
+    double*       dnzvals = NULL;
+    int*          nzcols;
+    double*       x;
+    double*       uniqv;
+    double*       ecdfuniqv;
+    int           sum;
+    double*       e1_p;
+    const double* e2_p;
+    int*          mt;
+    int*          tab;
+    Rboolean      zeroes=FALSE;
+    int           whz, icz;
+
+    if (verbose) { /* show progress */
+      if (i % 100 == 0 && CLI_SHOULD_TICK)
+        cli_progress_set(pb, i);
+    }
+
+    /* fetch nonzero values in the i-th row */
+    PROTECT(nzrowR = fetch_row_nzvals(Xsvt_SVT, i, itypevals, nzcols));
+    nv = length(VECTOR_ELT(nzrowR, 1));
+
+    if (nv < nc) { /* if there is at least one zero in the row */
+      nv++;        /* add that zero as an extra possible value */
+      zeroes=TRUE;
+    }
+
+    /* remove consecutive repeated elements */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    PROTECT(uniqvR = allocVector(REALSXP, nv));
+    PROTECT(xR = allocVector(REALSXP, zeroes ? nv-1 : nv));
+    uniqv = REAL(uniqvR);
+    x = REAL(xR);
+    if (zeroes) {   /* if there is at least one zero in the row */
+      uniqv[0] = 0; /* add that zero as an extra possible value */
+      for (int j=XRsp_p[i]; j < XRsp_p[i+1]; j++) {
+        int k = j - XRsp_p[i];
+        uniqv[k+1] = XRsp_x[j];
+        x[k] = XRsp_x[j];
+      }
+    } else {
+      for (int j=XRsp_p[i]; j < XRsp_p[i+1]; j++) {
+        int k = j - XRsp_p[i];
+        uniqv[k] = x[k] = XRsp_x[j];
+      }
+    }
+
+    /* qsort(uniqv, nv, sizeof(double), dbl_cmp); */
+    R_qsort(uniqv, (size_t) 1, (size_t) nv);
+    e1_p = uniqv;
+    e2_p = e1_p + 1;
+    nuniqv = 0;
+    if (nv > 0)
+      nuniqv = 1;
+    for (int j=0; j < nv-1; j++) { /* -1 for e2_p = e1_p + 1 */
+      if (*e2_p != *e1_p) {
+        *(++e1_p) = *e2_p;
+        nuniqv++;
+      }
+      e2_p++;
+    }
+
+    /* match original values to sorted unique values */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    mt = INTEGER(match_int(xR, uniqvR)); /* 1-based! */
+
+    /* tabulate matches */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    tab = R_Calloc(nuniqv, int); /* assuming zeroes are set */
+    for (int j=XRsp_p[i]; j < XRsp_p[i+1]; j++) {
+      int k = j - XRsp_p[i];
+      if (mt[k] > 0 && mt[k] <= nuniqv)
+        tab[mt[k] - 1]++;
+    }
+    whz = -1;
+    if (zeroes) { /* if there is at least one zero in the row */
+      int j = 0;
+      while (j < nuniqv && tab[j] != 0)
+        j++;
+      if (j < nuniqv && tab[j] == 0) {  /* add the number of zeroes */
+        tab[j] = nc - nv + 1; /* +1 b/c one zero is in nv */
+        whz = j;
+      }
+    }
+
+    /* cumulative sum to calculate ecdf values */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    ecdfuniqv = R_Calloc(nuniqv, double); /* assuming zeroes are set */
+    sum = 0;
+    for (int j=0; j < nuniqv; j++) {
+      sum = sum + tab[j];
+      ecdfuniqv[j] = ((double) sum) / ((double) nc);
+    }
+
+    /* set ecdf values on the corresponding positions
+     * of the output dense matrix */
+    ecdf_vals = REAL(ecdfRobj);
+    icz = 0; /* zero-based index of the columns at zeroes */
+    for (int j=XRsp_p[i]; j < XRsp_p[i+1]; j++) {
+      int k = j - XRsp_p[i];          /* index value at ecdf */
+      int col = XRsp_j[j];            /* zero-based col index */
+#ifdef LONG_VECTOR_SUPPORT
+      R_xlen_t idx = nr * col + i;
+#else
+      int idx = nr * col + i;
+#endif
+      while (icz < col) {   /* fill up the zero columns */
+#ifdef LONG_VECTOR_SUPPORT
+        R_xlen_t idxz = nr * icz + i;
+#else
+        int idxz = nr * icz + i;
+#endif
+        ecdf_vals[idxz] = ecdfuniqv[whz];
+        icz++;
+      }
+      icz = col+1;
+      ecdf_vals[idx] = ecdfuniqv[mt[k]-1];
+    }
+    for (int j=icz; j < nc; j++) { /* fill up remaining zero columns */
+#ifdef LONG_VECTOR_SUPPORT
+        R_xlen_t idxz = nr * j + i;
+#else
+        int idxz = nr * j + i;
+#endif
+        ecdf_vals[idxz] = ecdfuniqv[whz];
+    }
+
+    R_Free(ecdfuniqv);
+    R_Free(tab);
+
+    UNPROTECT(3); /* xR uniqvR nzrowR */
+  }
+
+  R_Free(nzcols);
+
+  if (verbose)
+    cli_progress_done(pb);
+
+  UNPROTECT(nunprotect); /* XsvtR ecdfRobj pb */
+
+  return(ecdfRobj);
+}
+
 
 /* calculate empirical cumulative distribution function values
  * on the nonzero entries (only) from the input sparse matrix,

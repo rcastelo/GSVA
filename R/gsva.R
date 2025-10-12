@@ -1173,6 +1173,10 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 ## functions interfacing C code
 ##
 
+.fetch_row_nzvals <- function(X, i) {
+  .Call("fetch_row_nzvals", X@SVT, i, X@type == "integer")
+}
+
 .ecdfvals_sparse_to_sparse <- function(X, verbose) {
   stopifnot(is(X, "CsparseMatrix")) ## QC
   Xrsp <- as(X, "RsparseMatrix")
