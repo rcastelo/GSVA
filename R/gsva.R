@@ -1178,6 +1178,12 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
   .Call("fetch_row_nzvals_R", X, as.integer(i))
 }
 
+.ecdfvals_svt_to_dense <- function(X, verbose) {
+  stopifnot(is(X, "SVT_SparseArray")) ## QC
+  stopifnot(is.logical(verbose)) ## QC
+  .Call("ecdfvals_svt_to_dense_R", X, verbose)
+}
+
 .ecdfvals_sparse_to_sparse <- function(X, verbose) {
   stopifnot(is(X, "CsparseMatrix")) ## QC
   Xrsp <- as(X, "RsparseMatrix")

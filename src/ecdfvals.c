@@ -175,19 +175,19 @@ fetch_row_nzvals(SEXP svtR, int i, int itypevals, int* inzvals,
  */
 SEXP
 ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
-  SEXP ecdfRobj;
-  double* ecdf_vals;
-  int* Xsvt_dim;
-  SEXP Xsvt_SVT;
-  const char*   Xsvt_type;
-  Rboolean verbose=asLogical(verboseR);
-  int     itypevals;
-  int*    nzcols;
-  int*    inzvals = NULL;
-  double* dnzvals = NULL;
-  int  nr, nc;
-  SEXP pb = R_NilValue;
-  int  nunprotect=0;
+  SEXP        ecdfRobj;
+  double*     ecdf_vals;
+  int*        Xsvt_dim;
+  SEXP        Xsvt_SVT;
+  const char* Xsvt_type;
+  Rboolean    verbose=asLogical(verboseR);
+  int         itypevals;
+  int*        nzcols;
+  int*        inzvals = NULL;
+  double*     dnzvals = NULL;
+  int         nr, nc;
+  SEXP        pb=R_NilValue;
+  int         nunprotect=0;
 
   PROTECT(XsvtR); nunprotect++;
 
@@ -249,21 +249,21 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
     /* consider adding LONG_VECTOR_SUPPORT */
     PROTECT(uniqvR = allocVector(REALSXP, nv));
     uniqv = REAL(uniqvR);
-    /** integer case missing, maybe x could be direcly dnzvals? **/
-    PROTECT(xR = allocVector(REALSXP, zeroes ? nv-1 : nv)); /** only double!!! **/
-    x = REAL(xR); /** only double!!! **/
-    Memcpy(x, dnzvals, (size_t) (zeroes ? nv - 1 : nv));
+    PROTECT(xR = allocVector(REALSXP, zeroes ? nv-1 : nv));
+    x = REAL(xR);
+
     if (zeroes) {   /* if there is at least one zero in the row */
       uniqv[0] = 0; /* add that zero as an extra possible value */
-      for (int j=1; j < nv; j++)
-        uniqv[j] = x[j];
+      for (int j=1; j < nv; j++) {
+        x[j-1] = itypevals ? ((double) inzvals[j-1]) : dnzvals[j-1];
+        uniqv[j] = x[j-1];
+      }
     } else {
       for (int j=0; j < nv; j++) {
-        uniqv[j] = x[j];
+        uniqv[j] = x[j] = itypevals ? ((double) inzvals[j]) : dnzvals[j];
       }
     }
 
-    /* qsort(uniqv, nv, sizeof(double), dbl_cmp); */
     R_qsort(uniqv, (size_t) 1, (size_t) nv);
     e1_p = uniqv;
     e2_p = e1_p + 1;
@@ -285,10 +285,11 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
     /* tabulate matches */
     /* consider adding LONG_VECTOR_SUPPORT */
     tab = R_Calloc(nuniqv, int); /* assuming zeroes are set */
-    for (int j=0; j < nv; j++) {
+    for (int j=0; j < length(xR); j++) {
       if (mt[j] > 0 && mt[j] <= nuniqv)
         tab[mt[j] - 1]++;
     }
+
     whz = -1;
     if (zeroes) { /* if there is at least one zero in the row */
       int j = 0;
@@ -313,7 +314,7 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
      * of the output dense matrix */
     ecdf_vals = REAL(ecdfRobj);
     icz = 0; /* zero-based index of the columns at zeroes */
-    for (int j=0; j < nv; j++) {
+    for (int j=0; j < length(xR); j++) {
       int col = nzcols[j];            /* zero-based col index */
 #ifdef LONG_VECTOR_SUPPORT
       R_xlen_t idx = nr * col + i;
@@ -332,6 +333,7 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
       icz = col+1;
       ecdf_vals[idx] = ecdfuniqv[mt[j]-1];
     }
+
     for (int j=icz; j < nc; j++) { /* fill up remaining zero columns */
 #ifdef LONG_VECTOR_SUPPORT
         R_xlen_t idxz = nr * j + i;
