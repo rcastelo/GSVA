@@ -1174,7 +1174,8 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 ##
 
 .fetch_row_nzvals <- function(X, i) {
-  .Call("fetch_row_nzvals", X@SVT, i, X@type == "integer")
+  stopifnot(is(X, "SVT_SparseArray")) ## QC
+  .Call("fetch_row_nzvals_R", X, as.integer(i))
 }
 
 .ecdfvals_sparse_to_sparse <- function(X, verbose) {

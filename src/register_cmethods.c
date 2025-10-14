@@ -50,7 +50,8 @@ SEXP
 order_rankstat_sparse_to_sparse_R(SEXP XCspR, SEXP jR);
 
 SEXP
-fetch_row_nzvals(SEXP svt, int i, int itypevals);
+fetch_row_nzvals_R(SEXP svtR, SEXP iR);
+
 
 /* registration of C-entry points */
 
@@ -67,7 +68,7 @@ static R_CallMethodDef callMethods[] = {
   {"gsva_scores_genesets_R", (DL_FUNC) &gsva_score_genesets_R, 9},
   {"order_rankstat_sparse_to_dense_R", (DL_FUNC) &order_rankstat_sparse_to_dense_R, 2},
   {"order_rankstat_sparse_to_sparse_R", (DL_FUNC) &order_rankstat_sparse_to_sparse_R, 2},
-  {"fetch_row_nzvals", (DL_FUNC) &fetch_row_nzvals, 3},
+  {"fetch_row_nzvals_R", (DL_FUNC) &fetch_row_nzvals_R, 2},
   {NULL, NULL, 0}
 };
 

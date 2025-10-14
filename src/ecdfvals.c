@@ -27,9 +27,12 @@ extern SEXP Matrix_DimNamesSym,
             SVT_SparseArray_dimSym,
             SVT_SparseArray_svtSym;
 
-void
-fetch_row_nzvals(SEXP svt, int i, int itypevals, int* inzvals,
-                 double* dnzvals, int* nzcols, int* nnzvals);
+SEXP
+fetch_row_nzvals_R(SEXP svtR, SEXP iR);
+
+int
+fetch_row_nzvals(SEXP svtR, int i, int itypevals, int* inzvals,
+                 double* dnzvals, int* nzcols);
 
 SEXP
 ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR);
@@ -69,20 +72,35 @@ dbl_cmp(const void* a, const void* b) {
   return 0;
 }
 
-/* fetch the non-zero values from given 0-based (i) row of an input
- * SVT_SparseArray object (svt). Depending on whether the input values
- * are integer or double (itypevals), the non-zero values are returned
- * by reference into inzvals (integer) or dnzvals (double). the columns
- * of svt having non-zero values for the row i are returned by reference
- * in nzcols and nnzvals contains the returned number of non-zero values
- */
+/* this is a wrapper to call fetch_row_nzvals() directly from R,
+ * mostly for testing purposes (i.e., it is not exported) */
 SEXP
-fetch_row_nzvals(SEXP svt, int i, int itypevals) {
-  int     nc=length(svt);
+fetch_row_nzvals_R(SEXP XsvtR, SEXP iR) {
+  int     nr, nc;
+  int*    Xsvt_dim;
+  const char*   Xsvt_type;
+  SEXP    Xsvt_SVT;
+  int     i = INTEGER(iR)[0];
+  int     itypevals;
   int*    inzvals = NULL;
   double* dnzvals = NULL;
+  int*    nzcols;
   int     nnzvals;
   SEXP    ansR, nzcR, nzvR;
+
+  Xsvt_dim = INTEGER(GET_SLOT(XsvtR, SVT_SparseArray_dimSym));
+  nr = Xsvt_dim[0]; /* number of rows */
+  nc = Xsvt_dim[1]; /* number of columns */
+  Xsvt_type = CHAR(STRING_ELT(getAttrib(XsvtR, SVT_SparseArray_typeSym), 0));
+
+  if (i < 1 || i > nr)
+    error("i (%d) should be a number between 1 and the number of rows in the input SVT_SparseArray matrix (%d)", i, nr);
+
+  itypevals = 0;
+  if (!strcmp(Xsvt_type, "integer"))
+    itypevals = 1;
+
+  Xsvt_SVT = GET_SLOT(XsvtR, SVT_SparseArray_svtSym);
 
   PROTECT(ansR = allocVector(VECSXP, 2));
   PROTECT(nzcR = allocVector(INTSXP, nc));
@@ -94,21 +112,49 @@ fetch_row_nzvals(SEXP svt, int i, int itypevals) {
     PROTECT(nzvR = allocVector(REALSXP, nc));
     dnzvals = REAL(nzvR);
   }
+  nzcols = INTEGER(nzcR);
+
+  nnzvals = fetch_row_nzvals(Xsvt_SVT, i-1, itypevals,  /* input  */
+                             inzvals, dnzvals, nzcols); /* output */
+
+  SETLENGTH(nzcR, nnzvals);
+  SETLENGTH(nzvR, nnzvals);
+  SET_VECTOR_ELT(ansR, 0, nzvR);
+  SET_VECTOR_ELT(ansR, 1, nzcR);
+
+  UNPROTECT(3); /* ansR nzvR nzcR */
+
+  return(ansR);
+}
+
+/* fetch the non-zero values from given 0-based (i) row of an input
+ * SVT_SparseArray slot @SVT list object (svtR). Depending on whether
+ * the input values * are integer or double (itypevals), the non-zero
+ * values are returned by reference into inzvals (integer) or dnzvals
+ * (double). the columns of svtR having non-zero values for the row i
+ * are returned by reference * in nzcols, and the function returns the
+ * value of nnzvals containing the number of non-zero values in row i
+ */
+int
+fetch_row_nzvals(SEXP svtR, int i, int itypevals, int* inzvals,
+                 double* dnzvals, int* nzcols) {
+  int     nc=length(svtR);
+  int     nnzvals;
 
   nnzvals = 0;
   for (int j=0; j < nc; j++) {
-    SEXP offsetsR = VECTOR_ELT(VECTOR_ELT(svt, i), 2);
-    int* offsets = INTEGER(VECTOR_ELT(VECTOR_ELT(svt, i), 2));
+    SEXP offsetsR = VECTOR_ELT(VECTOR_ELT(svtR, j), 1);
+    int* offsets = INTEGER(offsetsR);
     int* ivals;
     double* dvals;
-    int  nzvals = length(offsetsR);
+    int  noffsets = length(offsetsR);
 
     if (itypevals)
-      ivals = INTEGER(VECTOR_ELT(VECTOR_ELT(svt, i), 1));
+      ivals = INTEGER(VECTOR_ELT(VECTOR_ELT(svtR, j), 0));
     else
-      dvals = REAL(VECTOR_ELT(VECTOR_ELT(svt, i), 1));
+      dvals = REAL(VECTOR_ELT(VECTOR_ELT(svtR, j), 0));
     
-    for (int k=0; k < nzvals; k++) {
+    for (int k=0; k < noffsets; k++) {
       if (offsets[k] == i) {
         if (itypevals)
           inzvals[nnzvals] = ivals[k];
@@ -119,14 +165,7 @@ fetch_row_nzvals(SEXP svt, int i, int itypevals) {
     }
   }
 
-  SETLENGTH(nzcR, nnzvals);
-  SETLENGTH(nzvR, nnzvals);
-  SET_VECTOR_ELT(ansR, 0, nzvR);
-  SET_VECTOR_ELT(ansR, 1, nzcR);
-
-  UNPROTECT(3); /* ansR nzvR nzcR */
-
-  return(ansR);
+  return(nnzvals);
 }
 
 /* calculate empirical cumulative distribution function values
@@ -139,12 +178,13 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
   SEXP ecdfRobj;
   double* ecdf_vals;
   int* Xsvt_dim;
-  VECSXP Xsvt_SVT;
+  SEXP Xsvt_SVT;
+  const char*   Xsvt_type;
   Rboolean verbose=asLogical(verboseR);
-  double* Xsvt_x;
-  char*   Xsvt_type;
-  int  itypevals;
-  int* Xsvt_x;
+  int     itypevals;
+  int*    nzcols;
+  int*    inzvals = NULL;
+  double* dnzvals = NULL;
   int  nr, nc;
   SEXP pb = R_NilValue;
   int  nunprotect=0;
@@ -155,12 +195,16 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
   nr = Xsvt_dim[0]; /* number of rows */
   nc = Xsvt_dim[1]; /* number of columns */
 
-  Xsvt_type = CHAR(GET_SLOT(XRspR, SVT_SparseArray_typeSym));
-  Xsvt_SVT = GET_SLOT(XRspR, SVT_SparseArray_svtSym);
+  Xsvt_type = CHAR(STRING_ELT(getAttrib(XsvtR, SVT_SparseArray_typeSym), 0));
+  Xsvt_SVT = GET_SLOT(XsvtR, SVT_SparseArray_svtSym);
 
+  nzcols = R_Calloc(nc, int);
   itypevals = 0;
-  if (strcmp(Xsvt_type, "integer"))
+  if (!strcmp(Xsvt_type, "integer")) {
     itypevals = 1;
+    inzvals = R_Calloc(nc, int);
+  } else
+    dnzvals = R_Calloc(nc, double);
 
   /* create a new dense matrix object to store the result,
    * if nr * nc > INT_MAX and LONG_VECTOR_SUPPORT is not
@@ -173,15 +217,10 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
     nunprotect++;
   }
 
-  nzcols = R_Calloc(nc, int);
-
   for (int i=0; i < nr; i++) {
-    SEXP          xR, uniqvR;
-    SEXP          nzrowR;
+    SEXP          uniqvR;
     int           nv, nuniqv;
-    int*          inzvals = NULL;
-    double*       dnzvals = NULL;
-    int*          nzcols;
+    SEXP          xR;
     double*       x;
     double*       uniqv;
     double*       ecdfuniqv;
@@ -199,8 +238,7 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
     }
 
     /* fetch nonzero values in the i-th row */
-    PROTECT(nzrowR = fetch_row_nzvals(Xsvt_SVT, i, itypevals, nzcols));
-    nv = length(VECTOR_ELT(nzrowR, 1));
+    nv = fetch_row_nzvals(Xsvt_SVT, i, itypevals, inzvals, dnzvals, nzcols);
 
     if (nv < nc) { /* if there is at least one zero in the row */
       nv++;        /* add that zero as an extra possible value */
@@ -210,20 +248,18 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
     /* remove consecutive repeated elements */
     /* consider adding LONG_VECTOR_SUPPORT */
     PROTECT(uniqvR = allocVector(REALSXP, nv));
-    PROTECT(xR = allocVector(REALSXP, zeroes ? nv-1 : nv));
     uniqv = REAL(uniqvR);
-    x = REAL(xR);
+    /** integer case missing, maybe x could be direcly dnzvals? **/
+    PROTECT(xR = allocVector(REALSXP, zeroes ? nv-1 : nv)); /** only double!!! **/
+    x = REAL(xR); /** only double!!! **/
+    Memcpy(x, dnzvals, (size_t) (zeroes ? nv - 1 : nv));
     if (zeroes) {   /* if there is at least one zero in the row */
       uniqv[0] = 0; /* add that zero as an extra possible value */
-      for (int j=XRsp_p[i]; j < XRsp_p[i+1]; j++) {
-        int k = j - XRsp_p[i];
-        uniqv[k+1] = XRsp_x[j];
-        x[k] = XRsp_x[j];
-      }
+      for (int j=1; j < nv; j++)
+        uniqv[j] = x[j];
     } else {
-      for (int j=XRsp_p[i]; j < XRsp_p[i+1]; j++) {
-        int k = j - XRsp_p[i];
-        uniqv[k] = x[k] = XRsp_x[j];
+      for (int j=0; j < nv; j++) {
+        uniqv[j] = x[j];
       }
     }
 
@@ -249,10 +285,9 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
     /* tabulate matches */
     /* consider adding LONG_VECTOR_SUPPORT */
     tab = R_Calloc(nuniqv, int); /* assuming zeroes are set */
-    for (int j=XRsp_p[i]; j < XRsp_p[i+1]; j++) {
-      int k = j - XRsp_p[i];
-      if (mt[k] > 0 && mt[k] <= nuniqv)
-        tab[mt[k] - 1]++;
+    for (int j=0; j < nv; j++) {
+      if (mt[j] > 0 && mt[j] <= nuniqv)
+        tab[mt[j] - 1]++;
     }
     whz = -1;
     if (zeroes) { /* if there is at least one zero in the row */
@@ -278,9 +313,8 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
      * of the output dense matrix */
     ecdf_vals = REAL(ecdfRobj);
     icz = 0; /* zero-based index of the columns at zeroes */
-    for (int j=XRsp_p[i]; j < XRsp_p[i+1]; j++) {
-      int k = j - XRsp_p[i];          /* index value at ecdf */
-      int col = XRsp_j[j];            /* zero-based col index */
+    for (int j=0; j < nv; j++) {
+      int col = nzcols[j];            /* zero-based col index */
 #ifdef LONG_VECTOR_SUPPORT
       R_xlen_t idx = nr * col + i;
 #else
@@ -296,7 +330,7 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
         icz++;
       }
       icz = col+1;
-      ecdf_vals[idx] = ecdfuniqv[mt[k]-1];
+      ecdf_vals[idx] = ecdfuniqv[mt[j]-1];
     }
     for (int j=icz; j < nc; j++) { /* fill up remaining zero columns */
 #ifdef LONG_VECTOR_SUPPORT
@@ -310,10 +344,14 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
     R_Free(ecdfuniqv);
     R_Free(tab);
 
-    UNPROTECT(3); /* xR uniqvR nzrowR */
+    UNPROTECT(2); /* xR uniqvR */
   }
 
   R_Free(nzcols);
+  if (itypevals)
+    R_Free(inzvals);
+  else
+    R_Free(dnzvals);
 
   if (verbose)
     cli_progress_done(pb);
