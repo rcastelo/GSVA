@@ -1,4 +1,4 @@
-
+#' @importFrom S4Arrays is_sparse
 compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
                              sparse=FALSE, any_na=FALSE,
                              na_use=c("everything", "all.obs", "na.rm"),
@@ -14,6 +14,12 @@ compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
         cli_abort(c("x"=msg))
     }
     
+    if (is(expr, "DelayedMatrix") && is_sparse(expr)) { ## by now read into main memory
+        cli_alert_info("Selected assay is a DelayedMatrix object,")
+        cli_alert_info("reading it into main memory as a dgCMatrix object")
+        expr <- as(expr, "dgCMatrix")
+    }
+
     gene.cdf <- NA
     if (kernel) {
         if (is(expr, "dgCMatrix")) {
@@ -47,6 +53,13 @@ compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
             else
                 gene.cdf <- .ecdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE],
                                                       verbose)
+        } else if (is(expr, "SVT_SparseArray")) {
+            if (sparse)
+                gene.cdf <- .ecdfvals_svt_to_sparse(expr[, sample.idxs, drop=FALSE],
+                                                    verbose)
+            else
+                gene.cdf <- .ecdfvals_svt_to_dense(expr[, sample.idxs, drop=FALSE],
+                                                   verbose)
         } else if (is.matrix(expr)) {
             if (any_na)
                 gene.cdf <- .ecdfvals_dense_to_dense_nas(expr[, sample.idxs, drop=FALSE],
@@ -96,9 +109,9 @@ zorder_rankstat <- function(z, p) {
 
 #' @importFrom Matrix nnzero
 .sufficient_ssize <- function(expr, kcdf.min.ssize) {
-  ## in the sparse case stored in a 'dgCMatrix', by now,
-  ## use the average nonzero values per row
-  if (is(expr, "dgCMatrix"))
+  ## in the sparse case stored in a 'dgCMatrix' or a 'SVT_SparseArray',
+  ## by now, use the average nonzero values per row
+  if (is(expr, "dgCMatrix") || is(expr, "SVT_SparseArray"))
     return((nnzero(expr) / nrow(expr)) >= kcdf.min.ssize)
 
   ## in every other case, including the dense case, by now,
@@ -106,6 +119,7 @@ zorder_rankstat <- function(z, p) {
   return(ncol(expr) >= kcdf.min.ssize)
 }
 
+#' @importFrom S4Arrays is_sparse
 .parse_kcdf_param <- function(expr, kcdf, kcdf.min.ssize, sparse, verbose) {
     kernel <- FALSE
     Gaussk <- TRUE  ## default (TRUE) is a Gaussian kernel, Poisson otherwise (FALSE)
@@ -134,7 +148,10 @@ zorder_rankstat <- function(z, p) {
     }
 
     if (verbose) {
-        if (is(expr, "dgCMatrix") && sparse)
+        is_sparse_matrix <- is(expr, "dgCMatrix") ||
+                            is(expr, "SVT_SparseArray") ||
+                            (is(expr, "DelayedMatrix") && is_sparse(expr))
+        if (is_sparse_matrix && sparse)
             cli_alert_info("GSVA sparse algorithm")
         else
             cli_alert_info("GSVA dense (classical) algorithm")
