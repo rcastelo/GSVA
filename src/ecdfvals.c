@@ -27,6 +27,14 @@ extern SEXP Matrix_DimNamesSym,
             SVT_SparseArray_dimSym,
             SVT_SparseArray_svtSym;
 
+#ifdef LONG_VECTOR_SUPPORT
+R_xlen_t
+nzcount_intCSCp_SVT(SEXP SVT, int* CSCp);
+#else
+int
+nzcount_intCSCp_SVT(SEXP SVT, int* CSCp);
+#endif
+
 SEXP
 fetch_row_nzvals_R(SEXP svtR, SEXP iR);
 
@@ -36,6 +44,9 @@ fetch_row_nzvals(SEXP svtR, int i, int itypevals, int* inzvals,
 
 SEXP
 ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR);
+
+SEXP
+ecdfvals_svt_to_sparse_R(SEXP XsvtR, SEXP verboseR);
 
 SEXP
 ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP verboseR);
@@ -177,6 +188,7 @@ SEXP
 ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
   SEXP        ecdfRobj;
   double*     ecdf_vals;
+  SEXP        Xsvt_dimR;
   int*        Xsvt_dim;
   SEXP        Xsvt_SVT;
   const char* Xsvt_type;
@@ -191,7 +203,10 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
 
   PROTECT(XsvtR); nunprotect++;
 
-  Xsvt_dim = INTEGER(GET_SLOT(XsvtR, SVT_SparseArray_dimSym));
+  Xsvt_dimR = GET_SLOT(XsvtR, SVT_SparseArray_dimSym);
+  if (length(Xsvt_dimR) > 2)
+    error("the input SVT_SparseMatrix object can only have two dimensions and has %d", length(Xsvt_dimR));
+  Xsvt_dim = INTEGER(Xsvt_dimR);
   nr = Xsvt_dim[0]; /* number of rows */
   nc = Xsvt_dim[1]; /* number of columns */
 
@@ -357,6 +372,209 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
 
   if (verbose)
     cli_progress_done(pb);
+
+  UNPROTECT(nunprotect); /* XsvtR ecdfRobj pb */
+
+  return(ecdfRobj);
+}
+
+/* counts the total number of nonzero values in a 2-dimensional SVT_SparseArray
+ * object, as well as its running sum returned by reference in CSCp */
+#ifdef LONG_VECTOR_SUPPORT
+R_xlen_t
+nzcount_intCSCp_SVT(SEXP SVT, int* CSCp) {
+   R_xlen_t nzcount = 0;
+#else
+int
+nzcount_intCSCp_SVT(SEXP SVT, int* CSCp) {
+  int nzcount = 0;
+#endif
+  int SVT_len = length(SVT);
+  CSCp[0] = 0;
+  for (int i=0; i < SVT_len; i++) {
+    SEXP subSVT = VECTOR_ELT(SVT, i);
+
+#ifdef LONG_VECTOR_SUPPORT
+    nzcount = nzcount + XLENGTH(VECTOR_ELT(subSVT, 1));
+#else
+    nzcount = nzcount + length(VECTOR_ELT(subSVT, 1));
+#endif
+    CSCp[i+1] = (int) nzcount;
+  }
+
+  return(nzcount);
+}
+
+/* calculate empirical cumulative distribution function values
+ * on the nonzero entries (only) from the input sparse matrix,
+ * which should be provided as a SVT_SparseArray object.
+ * the returned value is a sparse (CSC) matrix.
+ */
+SEXP
+ecdfvals_svt_to_sparse_R(SEXP XsvtR, SEXP verboseR) {
+  SEXP        Xsvt_dimR;
+  int*        Xsvt_dim;
+#ifdef LONG_VECTOR_SUPPORT
+  R_xlen_t    nnz;
+#else
+  int         nnz;
+#endif
+  SEXP        ecdfRobj;
+  SEXP        Xsvt_SVT;
+  const char* Xsvt_type;
+  Rboolean    verbose=asLogical(verboseR);
+  int*        ecdfRobj_dim;
+  int*        ecdfRobj_i;
+  int*        nnzcols; /* counter of nonzero values as they get filled up */
+  int*        ecdfRobj_p;
+  double*     ecdfRobj_x;
+  int         itypevals;
+  int*        nzcols; /* 0-based index of the columns with nonzero values */
+  int*        inzvals = NULL;
+  double*     dnzvals = NULL;
+  int         nr, nc;
+  SEXP        pb=R_NilValue;
+  int         nunprotect=0;
+
+  PROTECT(XsvtR); nunprotect++;
+
+  Xsvt_dimR = GET_SLOT(XsvtR, SVT_SparseArray_dimSym);
+  if (length(Xsvt_dimR) > 2)
+    error("the input SVT_SparseMatrix object can only have two dimensions and has %d", length(Xsvt_dimR));
+  Xsvt_dim = INTEGER(Xsvt_dimR);
+  nr = Xsvt_dim[0]; /* number of rows */
+  nc = Xsvt_dim[1]; /* number of columns */
+
+  Xsvt_SVT = GET_SLOT(XsvtR, SVT_SparseArray_svtSym);
+
+  /* create a new dgCMatrix object (CSC) to store the result */
+  ecdfRobj = PROTECT(NEW_OBJECT(MAKE_CLASS("dgCMatrix"))); nunprotect++;
+  ecdfRobj_dim = INTEGER(ALLOC_SLOT(ecdfRobj, Matrix_DimSym, INTSXP, 2));
+  ecdfRobj_dim[0] = nr;
+  ecdfRobj_dim[1] = nc;
+  ecdfRobj_p = INTEGER(ALLOC_SLOT(ecdfRobj, Matrix_pSym, INTSXP, nc+1));
+
+  nnz = nzcount_intCSCp_SVT(Xsvt_SVT, ecdfRobj_p);
+
+  if (nnz > INT_MAX) {
+    UNPROTECT(nunprotect);
+
+    error("input SVT_SparseArray matrix has more non-zero values than a dgCMatrix object can store");
+  }
+
+  Xsvt_type = CHAR(STRING_ELT(getAttrib(XsvtR, SVT_SparseArray_typeSym), 0));
+  Xsvt_SVT = GET_SLOT(XsvtR, SVT_SparseArray_svtSym);
+
+  nnzcols = R_Calloc(nc, int); /* assuming values are initialized to 0 */
+  nzcols = R_Calloc(nc, int);
+  itypevals = 0;
+  if (!strcmp(Xsvt_type, "integer")) {
+    itypevals = 1;
+    inzvals = R_Calloc(nc, int);
+  } else
+    dnzvals = R_Calloc(nc, double);
+
+  /* create a new dgCMatrix object (CSC) to store the result (cont'ed) */
+  ecdfRobj_i = INTEGER(ALLOC_SLOT(ecdfRobj, Matrix_iSym, INTSXP, nnz));
+  ecdfRobj_x = REAL(ALLOC_SLOT(ecdfRobj, Matrix_xSym, REALSXP, nnz));
+
+  if (verbose) {
+    pb = PROTECT(cli_progress_bar(nr, NULL));
+    cli_progress_set_name(pb, "Estimating ECDFs");
+    nunprotect++;
+  }
+
+  for (int i=0; i < nr; i++) {
+    SEXP          xR, uniqvR;
+    int           nv, nuniqv;
+    double*       x;
+    double*       uniqv;
+    double*       ecdfuniqv;
+    int           sum;
+    double*       e1_p;
+    const double* e2_p;
+    int*          mt;
+    int*          tab;
+
+    if (verbose) { /* show progress */
+      if (i % 100 == 0 && CLI_SHOULD_TICK)
+        cli_progress_set(pb, i);
+    }
+
+    /* fetch nonzero values in the i-th row */
+    nv = fetch_row_nzvals(Xsvt_SVT, i, itypevals, inzvals, dnzvals, nzcols);
+
+    /* remove consecutive repeated elements */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    PROTECT(uniqvR = allocVector(REALSXP, nv));
+    uniqv = REAL(uniqvR);
+    PROTECT(xR = allocVector(REALSXP, nv));
+    x = REAL(xR);
+    for (int j=0; j < nv; j++) {
+      uniqv[j] = x[j] = itypevals ? ((double) inzvals[j]) : dnzvals[j];
+    }
+
+    R_qsort(uniqv, (size_t) 1, (size_t) nv);
+    e1_p = uniqv;
+    e2_p = e1_p + 1;
+    nuniqv = 0;
+    if (nv > 0)
+      nuniqv = 1;
+    for (int j=0; j < nv-1; j++) { /* -1 for e2_p = e1_p + 1 */
+      if (*e2_p != *e1_p) {
+        *(++e1_p) = *e2_p;
+        nuniqv++;
+      }
+      e2_p++;
+    }
+
+    /* match original values to sorted unique values */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    mt = INTEGER(match_int(xR, uniqvR)); /* 1-based! */
+
+    /* tabulate matches */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    tab = R_Calloc(nuniqv, int); /* assuming zeroes are set */
+    for (int j=0; j < length(xR); j++) {
+      if (mt[j] > 0 && mt[j] <= nuniqv)
+        tab[mt[j] - 1]++;
+    }
+
+    /* cumulative sum to calculate ecdf values */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    ecdfuniqv = R_Calloc(nuniqv, double); /* assuming zeroes are set */
+    sum = 0;
+    for (int j=0; j < nuniqv; j++) {
+      sum = sum + tab[j];
+      ecdfuniqv[j] = ((double) sum) / ((double) nv);
+    }
+
+    /* set ecdf values on the corresponding positions
+     * of the output CSC matrix */
+    for (int j=0; j < nv; j++) {
+      int col = nzcols[j];                      /* zero-based col index */
+      int idx = ecdfRobj_p[col] + nnzcols[col];
+    
+      ecdfRobj_i[idx] = i;
+      ecdfRobj_x[idx] = ecdfuniqv[mt[j]-1];
+      nnzcols[col]++;
+    }
+
+    R_Free(ecdfuniqv);
+    R_Free(tab);
+
+    UNPROTECT(2); /* xR uniqvR */
+  }
+
+  if (verbose)
+    cli_progress_done(pb);
+
+  R_Free(nzcols);
+  R_Free(nnzcols);
+  if (itypevals)
+    R_Free(inzvals);
+  else
+    R_Free(dnzvals);
 
   UNPROTECT(nunprotect); /* XsvtR ecdfRobj pb */
 
