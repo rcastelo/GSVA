@@ -128,8 +128,10 @@ fetch_row_nzvals_R(SEXP XsvtR, SEXP iR) {
   nnzvals = fetch_row_nzvals(Xsvt_SVT, i-1, itypevals,  /* input  */
                              inzvals, dnzvals, nzcols); /* output */
 
-  SETLENGTH(nzcR, nnzvals);
-  SETLENGTH(nzvR, nnzvals);
+  /* following advice in https://stat.ethz.ch/pipermail/r-package-devel/2025q1/011366.html */
+  nzcR = Rf_lengthgets(nzcR, nnzvals);
+  nzvR = Rf_lengthgets(nzvR, nnzvals);
+  
   SET_VECTOR_ELT(ansR, 0, nzvR);
   SET_VECTOR_ELT(ansR, 1, nzcR);
 
