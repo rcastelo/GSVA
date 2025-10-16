@@ -51,7 +51,7 @@ Duplicated gene set names are explicitly forbidden by the
 but can nevertheless be encountered in the wild.
 The available choices are:
 \itemize{
-\item \code{first} (the default): drops all gene sets whose names are \code{\link{duplicated}}
+\item \code{first} (the default): drops all gene sets whose names are duplicated
 according to the base R function and retains only the first occurence of a
 gene set name.
 \item \code{drop}:  removes \emph{all} gene sets that have a duplicated name, including its

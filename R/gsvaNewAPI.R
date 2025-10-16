@@ -638,7 +638,7 @@ setMethod("geneSetSizes", signature("GsvaExprData"),
 #' [GMT file format specification](https://software.broadinstitute.org/cancer/software/gsea/wiki/index.php/Data_formats)
 #' but can nevertheless be encountered in the wild.
 #' The available choices are:
-#' * `first` (the default): drops all gene sets whose names are [`duplicated`]
+#' * `first` (the default): drops all gene sets whose names are duplicated
 #' according to the base R function and retains only the first occurence of a
 #' gene set name.
 #' * `drop`:  removes *all* gene sets that have a duplicated name, including its
@@ -892,7 +892,7 @@ geneIdsToGeneSetCollection <- function(geneIdsList,
 #' [GMT file format specification](https://software.broadinstitute.org/cancer/software/gsea/wiki/index.php/Data_formats)
 #' but can nevertheless be encountered in the wild.
 #' The available choices are:
-#' * `first` (the default): drops all gene sets whose names are [`duplicated`]
+#' * `first` (the default): drops all gene sets whose names are duplicated
 #' according to the base R function and retains only the first occurence of a
 #' gene set name.
 #' * `drop`:  removes *all* gene sets that have a duplicated name, including its
