@@ -42,6 +42,9 @@ SEXP
 ecdfvals_svt_to_sparse_R(SEXP XsvtR, SEXP verboseR);
 
 SEXP
+ecdfvals_svt_to_svt_R(SEXP XsvtR, SEXP verboseR);
+
+SEXP
 gsva_score_genesets_R(SEXP genesetsidxR, SEXP decordstatR, SEXP symrnkstatR,
                       SEXP maxdiffR, SEXP absrnkR, SEXP tauR, SEXP anynaR,
                       SEXP nauseR, SEXP minsizeR);
@@ -67,6 +70,7 @@ static R_CallMethodDef callMethods[] = {
   {"ecdfvals_sparse_to_dense_R", (DL_FUNC) &ecdfvals_sparse_to_dense_R, 3},
   {"ecdfvals_svt_to_dense_R", (DL_FUNC) &ecdfvals_svt_to_dense_R, 2},
   {"ecdfvals_svt_to_sparse_R", (DL_FUNC) &ecdfvals_svt_to_sparse_R, 2},
+  {"ecdfvals_svt_to_svt_R", (DL_FUNC) &ecdfvals_svt_to_svt_R, 2},
   {"ecdfvals_dense_to_dense_R", (DL_FUNC) &ecdfvals_dense_to_dense_R, 2},
   {"ecdfvals_dense_to_dense_nas_R", (DL_FUNC) &ecdfvals_dense_to_dense_nas_R, 2},
   {"gsva_scores_genesets_R", (DL_FUNC) &gsva_score_genesets_R, 9},

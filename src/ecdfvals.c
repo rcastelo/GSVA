@@ -49,6 +49,9 @@ SEXP
 ecdfvals_svt_to_sparse_R(SEXP XsvtR, SEXP verboseR);
 
 SEXP
+ecdfvals_svt_to_svt_R(SEXP XsvtR, SEXP verboseR);
+
+SEXP
 ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP verboseR);
 
 SEXP
@@ -410,7 +413,7 @@ nzcount_intCSCp_SVT(SEXP SVT, int* CSCp) {
 /* calculate empirical cumulative distribution function values
  * on the nonzero entries (only) from the input sparse matrix,
  * which should be provided as a SVT_SparseArray object.
- * the returned value is a sparse (CSC) matrix.
+ * the returned value is a sparse (CSC) dgCMatrix object.
  */
 SEXP
 ecdfvals_svt_to_sparse_R(SEXP XsvtR, SEXP verboseR) {
@@ -559,6 +562,187 @@ ecdfvals_svt_to_sparse_R(SEXP XsvtR, SEXP verboseR) {
     
       ecdfRobj_i[idx] = i;
       ecdfRobj_x[idx] = ecdfuniqv[mt[j]-1];
+      nnzcols[col]++;
+    }
+
+    R_Free(ecdfuniqv);
+    R_Free(tab);
+
+    UNPROTECT(2); /* xR uniqvR */
+  }
+
+  if (verbose)
+    cli_progress_done(pb);
+
+  R_Free(nzcols);
+  R_Free(nnzcols);
+  if (itypevals)
+    R_Free(inzvals);
+  else
+    R_Free(dnzvals);
+
+  UNPROTECT(nunprotect); /* XsvtR ecdfRobj pb */
+
+  return(ecdfRobj);
+}
+
+
+/* calculate empirical cumulative distribution function values
+ * on the nonzero entries (only) from the input sparse matrix,
+ * which should be provided as a SVT_SparseArray object.
+ * the returned value is a SVT_SparseArray object.
+ */
+SEXP
+ecdfvals_svt_to_svt_R(SEXP XsvtR, SEXP verboseR) {
+  SEXP        Xsvt_dimR;
+  int*        Xsvt_dim;
+#ifdef LONG_VECTOR_SUPPORT
+  R_xlen_t    nnz;
+#else
+  int         nnz;
+#endif
+  SEXP        ecdfRobj;
+  SEXP        Xsvt_SVT;
+  const char* Xsvt_type;
+  Rboolean    verbose=asLogical(verboseR);
+  int*        ecdfRobj_dim;
+  int*        nnzcols; /* counter of nonzero values as they get filled up */
+  int*        ecdfRobj_type;
+  SEXP        ecdfRobj_SVT;
+  int         itypevals;
+  int*        nzcols; /* 0-based index of the columns with nonzero values */
+  int*        inzvals = NULL;
+  double*     dnzvals = NULL;
+  int         nr, nc;
+  SEXP        pb=R_NilValue;
+  int         nunprotect=0;
+
+  PROTECT(XsvtR); nunprotect++;
+
+  Xsvt_dimR = GET_SLOT(XsvtR, SVT_SparseArray_dimSym);
+  if (length(Xsvt_dimR) > 2)
+    error("the input SVT_SparseMatrix object can only have two dimensions and has %d", length(Xsvt_dimR));
+  Xsvt_dim = INTEGER(Xsvt_dimR);
+  nr = Xsvt_dim[0]; /* number of rows */
+  nc = Xsvt_dim[1]; /* number of columns */
+  Xsvt_type = CHAR(STRING_ELT(getAttrib(XsvtR, SVT_SparseArray_typeSym), 0));
+  Xsvt_SVT = GET_SLOT(XsvtR, SVT_SparseArray_svtSym);
+
+  itypevals = 0;
+  if (!strcmp(Xsvt_type, "integer")) {
+    itypevals = 1;
+    inzvals = R_Calloc(nc, int);
+  } else
+    dnzvals = R_Calloc(nc, double);
+
+  /* create a new dgCMatrix object (CSC) to store the result */
+  ecdfRobj = PROTECT(NEW_OBJECT(MAKE_CLASS("SVT_SparseMatrix"))); nunprotect++;
+  ecdfRobj_dim = INTEGER(ALLOC_SLOT(ecdfRobj, SVT_SparseArray_dimSym, INTSXP, 2));
+  ecdfRobj_dim[0] = nr;
+  ecdfRobj_dim[1] = nc;
+  SET_STRING_ELT(ALLOC_SLOT(ecdfRobj, SVT_SparseArray_typeSym, STRSXP, 1), 0,
+                 mkChar("double"));
+  SET_SLOT(ecdfRobj, SVT_SparseArray_svtSym, duplicate(Xsvt_SVT));
+  ecdfRobj_SVT = GET_SLOT(ecdfRobj, SVT_SparseArray_svtSym);
+  if (itypevals) { /* if input is integer then replace integer values by double */
+    for (int i=0; i < nc; i++)
+      SET_VECTOR_ELT(VECTOR_ELT(ecdfRobj_SVT, i), 0,
+                     coerceVector(VECTOR_ELT(VECTOR_ELT(ecdfRobj_SVT, i), 0),
+                                  REALSXP));
+  }
+
+  /*
+  nnz = nzcount_intCSCp_SVT(Xsvt_SVT, ecdfRobj_p);
+
+  if (nnz > INT_MAX) {
+    UNPROTECT(nunprotect);
+
+    error("input SVT_SparseArray matrix has more non-zero values than a dgCMatrix object can store");
+  }
+
+  */
+
+  nnzcols = R_Calloc(nc, int); /* assuming values are initialized to 0 */
+ 
+  nzcols = R_Calloc(nc, int);
+  if (verbose) {
+    pb = PROTECT(cli_progress_bar(nr, NULL));
+    cli_progress_set_name(pb, "Estimating ECDFs");
+    nunprotect++;
+  }
+
+  for (int i=0; i < nr; i++) {
+    SEXP          xR, uniqvR;
+    int           nv, nuniqv;
+    double*       x;
+    double*       uniqv;
+    double*       ecdfuniqv;
+    int           sum;
+    double*       e1_p;
+    const double* e2_p;
+    int*          mt;
+    int*          tab;
+
+    if (verbose) { /* show progress */
+      if (i % 100 == 0 && CLI_SHOULD_TICK) cli_progress_set(pb, i);
+    }
+
+    /* fetch nonzero values in the i-th row */
+    nv = fetch_row_nzvals(Xsvt_SVT, i, itypevals, inzvals, dnzvals, nzcols);
+
+    /* remove consecutive repeated elements */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    PROTECT(uniqvR = allocVector(REALSXP, nv));
+    uniqv = REAL(uniqvR);
+    PROTECT(xR = allocVector(REALSXP, nv));
+    x = REAL(xR);
+    for (int j=0; j < nv; j++) {
+      uniqv[j] = x[j] = itypevals ? ((double) inzvals[j]) : dnzvals[j];
+    }
+
+    R_qsort(uniqv, (size_t) 1, (size_t) nv);
+    e1_p = uniqv;
+    e2_p = e1_p + 1;
+    nuniqv = 0;
+    if (nv > 0)
+      nuniqv = 1;
+    for (int j=0; j < nv-1; j++) { /* -1 for e2_p = e1_p + 1 */
+      if (*e2_p != *e1_p) {
+        *(++e1_p) = *e2_p;
+        nuniqv++;
+      }
+      e2_p++;
+    }
+
+    /* match original values to sorted unique values */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    mt = INTEGER(match_int(xR, uniqvR)); /* 1-based! */
+
+    /* tabulate matches */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    tab = R_Calloc(nuniqv, int); /* assuming zeroes are set */
+    for (int j=0; j < length(xR); j++) {
+      if (mt[j] > 0 && mt[j] <= nuniqv)
+        tab[mt[j] - 1]++;
+    }
+
+    /* cumulative sum to calculate ecdf values */
+    /* consider adding LONG_VECTOR_SUPPORT */
+    ecdfuniqv = R_Calloc(nuniqv, double); /* assuming zeroes are set */
+    sum = 0;
+    for (int j=0; j < nuniqv; j++) {
+      sum = sum + tab[j];
+      ecdfuniqv[j] = ((double) sum) / ((double) nv);
+    }
+
+    /* set ecdf values on the corresponding positions
+     * of the output SVT_SparseArray object */
+
+    for (int j=0; j < nv; j++) {
+      int col = nzcols[j];                       /* zero-based col index */
+      double* x = REAL(VECTOR_ELT(VECTOR_ELT(ecdfRobj_SVT, col), 0));
+
+      x[nnzcols[col]] = ecdfuniqv[mt[j]-1];
       nnzcols[col]++;
     }
 
