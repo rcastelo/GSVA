@@ -596,18 +596,12 @@ SEXP
 ecdfvals_svt_to_svt_R(SEXP XsvtR, SEXP verboseR) {
   SEXP        Xsvt_dimR;
   int*        Xsvt_dim;
-#ifdef LONG_VECTOR_SUPPORT
-  R_xlen_t    nnz;
-#else
-  int         nnz;
-#endif
   SEXP        ecdfRobj;
   SEXP        Xsvt_SVT;
   const char* Xsvt_type;
   Rboolean    verbose=asLogical(verboseR);
   int*        ecdfRobj_dim;
   int*        nnzcols; /* counter of nonzero values as they get filled up */
-  int*        ecdfRobj_type;
   SEXP        ecdfRobj_SVT;
   int         itypevals;
   int*        nzcols; /* 0-based index of the columns with nonzero values */
@@ -650,17 +644,6 @@ ecdfvals_svt_to_svt_R(SEXP XsvtR, SEXP verboseR) {
                      coerceVector(VECTOR_ELT(VECTOR_ELT(ecdfRobj_SVT, i), 0),
                                   REALSXP));
   }
-
-  /*
-  nnz = nzcount_intCSCp_SVT(Xsvt_SVT, ecdfRobj_p);
-
-  if (nnz > INT_MAX) {
-    UNPROTECT(nunprotect);
-
-    error("input SVT_SparseArray matrix has more non-zero values than a dgCMatrix object can store");
-  }
-
-  */
 
   nnzcols = R_Calloc(nc, int); /* assuming values are initialized to 0 */
  

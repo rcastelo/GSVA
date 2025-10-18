@@ -15,9 +15,14 @@ compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
     }
     
     if (is(expr, "DelayedMatrix") && is_sparse(expr)) { ## by now read into main memory
-        cli_alert_info("Selected assay is a DelayedMatrix object,")
-        cli_alert_info("reading it into main memory as a dgCMatrix object")
-        expr <- as(expr, "dgCMatrix")
+        cli_alert_info("Selected assay is a sparse DelayedMatrix object,")
+        if (kernel) {
+          cli_alert_info("reading it into main memory as a dgCMatrix object")
+          expr <- as(expr, "dgCMatrix")
+        } else {
+          cli_alert_info("reading it into main memory as a SVT_SparseArray object")
+          expr <- as(expr, "SVT_SparseArray")
+        }
     }
 
     gene.cdf <- NA
@@ -771,11 +776,12 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
         R <- Z
         ## open parallelism only if ranks have to be calculated for
         ## more than 10000 genes on more than 1000 samples
-        if (bpnworkers(BPPARAM) > 1 && nrow(Z) > 10000 && ncol(Z) > 1000) {
+        if (bpnworkers(BPPARAM) > 1 && nrow(Z) > 10000 && ncol(Z) > 1000)
           rnks <- bplapply(sapply(Z@SVT, "[[", 1), rank, ties.method="last",
                            BPPARAM=BPPARAM)
         else
           rnks <- lapply(sapply(Z@SVT, "[[", 1), rank, ties.method="last")
+        R@type <- "integer" ## rank() w/ ties.method="last" returns integer
         R@SVT <- mapply(list, rnks, sapply(Z@SVT, "[[", 2), SIMPLIFY=FALSE)
     } else {
         ## open parallelism only if ranks have to be calculated for
@@ -979,7 +985,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
                                  BPPARAM=SerialParam(progressbar=verbose)) {
     n <- ncol(R)
     es <- NULL
-    if (!is(R, "dgCMatrix"))
+    if (!is(R, "dgCMatrix") && !is(R, "SVT_SparseArray"))
         sparse <- FALSE
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
@@ -1042,7 +1048,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
                                   na_use, minSize) {
     n <- ncol(R)
     es <- NULL
-    if (!is(R, "dgCMatrix"))
+    if (!is(R, "dgCMatrix") && !is(R, "SVT_SparseArray"))
         sparse <- FALSE
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
