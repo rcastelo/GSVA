@@ -55,8 +55,8 @@ compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
                                                       verbose)
         } else if (is(expr, "SVT_SparseArray")) {
             if (sparse)
-                gene.cdf <- .ecdfvals_svt_to_sparse(expr[, sample.idxs, drop=FALSE],
-                                                    verbose)
+                gene.cdf <- .ecdfvals_svt_to_svt(expr[, sample.idxs, drop=FALSE],
+                                                 verbose)
             else
                 gene.cdf <- .ecdfvals_svt_to_dense(expr[, sample.idxs, drop=FALSE],
                                                    verbose)
@@ -765,6 +765,18 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
         if (verbose)
             cli_alert_info("Calculating GSVA column ranks")
         R <- .sparseColumnApplyAndReplace(Z, rank, ties.method="last")
+    } else if (is(Z, "SVT_SparseArray")) {
+        if (verbose)
+            cli_alert_info("Calculating GSVA column ranks")
+        R <- Z
+        ## open parallelism only if ranks have to be calculated for
+        ## more than 10000 genes on more than 1000 samples
+        if (bpnworkers(BPPARAM) > 1 && nrow(Z) > 10000 && ncol(Z) > 1000) {
+          rnks <- bplapply(sapply(Z@SVT, "[[", 1), rank, ties.method="last",
+                           BPPARAM=BPPARAM)
+        else
+          rnks <- lapply(sapply(Z@SVT, "[[", 1), rank, ties.method="last")
+        R@SVT <- mapply(list, rnks, sapply(Z@SVT, "[[", 2), SIMPLIFY=FALSE)
     } else {
         ## open parallelism only if ranks have to be calculated for
         ## more than 10000 genes on more than 1000 samples
