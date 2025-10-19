@@ -159,24 +159,28 @@ fetch_row_nzvals(SEXP svtR, int i, int itypevals, int* inzvals,
 
   nnzvals = 0;
   for (int j=0; j < nc; j++) {
-    SEXP offsetsR = VECTOR_ELT(VECTOR_ELT(svtR, j), 1);
-    int* offsets = INTEGER(offsetsR);
-    int* ivals;
-    double* dvals;
-    int  noffsets = length(offsetsR);
+    SEXP svtLeaf = VECTOR_ELT(svtR, j);
 
-    if (itypevals)
-      ivals = INTEGER(VECTOR_ELT(VECTOR_ELT(svtR, j), 0));
-    else
-      dvals = REAL(VECTOR_ELT(VECTOR_ELT(svtR, j), 0));
-    
-    for (int k=0; k < noffsets; k++) {
-      if (offsets[k] == i) {
-        if (itypevals)
-          inzvals[nnzvals] = ivals[k];
-        else
-          dnzvals[nnzvals] = dvals[k];
-        nzcols[nnzvals++] = j;
+    if (svtLeaf != R_NilValue) {
+      SEXP offsetsR = VECTOR_ELT(svtLeaf, 1);
+      int* offsets = INTEGER(offsetsR);
+      int  noffsets = length(offsetsR);
+      int* ivals;
+      double* dvals;
+
+      if (itypevals)
+        ivals = INTEGER(VECTOR_ELT(VECTOR_ELT(svtR, j), 0));
+      else
+        dvals = REAL(VECTOR_ELT(VECTOR_ELT(svtR, j), 0));
+
+      for (int k=0; k < noffsets; k++) {
+        if (offsets[k] == i) {
+          if (itypevals)
+            inzvals[nnzvals] = ivals[k];
+          else
+            dnzvals[nnzvals] = dvals[k];
+          nzcols[nnzvals++] = j;
+        }
       }
     }
   }
@@ -639,10 +643,12 @@ ecdfvals_svt_to_svt_R(SEXP XsvtR, SEXP verboseR) {
   SET_SLOT(ecdfRobj, SVT_SparseArray_svtSym, duplicate(Xsvt_SVT));
   ecdfRobj_SVT = GET_SLOT(ecdfRobj, SVT_SparseArray_svtSym);
   if (itypevals) { /* if input is integer then replace integer values by double */
-    for (int i=0; i < nc; i++)
-      SET_VECTOR_ELT(VECTOR_ELT(ecdfRobj_SVT, i), 0,
-                     coerceVector(VECTOR_ELT(VECTOR_ELT(ecdfRobj_SVT, i), 0),
-                                  REALSXP));
+    for (int i=0; i < nc; i++) {
+      if (VECTOR_ELT(ecdfRobj_SVT, i) != R_NilValue)
+        SET_VECTOR_ELT(VECTOR_ELT(ecdfRobj_SVT, i), 0,
+                       coerceVector(VECTOR_ELT(VECTOR_ELT(ecdfRobj_SVT, i), 0),
+                                    REALSXP));
+    }
   }
 
   nnzcols = R_Calloc(nc, int); /* assuming values are initialized to 0 */
