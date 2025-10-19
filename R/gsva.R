@@ -926,7 +926,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 .ranks2stats <- function(r, sparse) {
     mask <- r == 0
     p <- length(r)
-    mode(r_dense) <- as.integer(r)    ## assume ranks are integer
+    r_dense <- as.integer(r)          ## assume ranks are integer
 
     if (any(mask)) {                  ## sparse ranks into dense ranks
         nzs <- sum(mask)
