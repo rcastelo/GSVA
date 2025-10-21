@@ -29,9 +29,8 @@ test_gsvaCcode <- function() {
                                                 filteredDataMatrix=R,
                                                 verbose=FALSE)
 
-    rnkstats <- GSVA:::.ranks2stats(R[, 1], sparse=FALSE)
-
     lapply(as.list(1:ncol(R)), function(j, R) {
+        rnkstats <- GSVA:::.ranks2stats(R[, j], sparse=FALSE)
         ## calculate GSVA scores using the R implementation
         sco_R <- GSVA:::.gsva_score_genesets_Rimp(geneSetsIdx,
                                                   decOrdStat=rnkstats$dos,
