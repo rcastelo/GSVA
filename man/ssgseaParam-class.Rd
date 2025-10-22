@@ -20,7 +20,8 @@ ssgseaParam(
   alpha = 0.25,
   normalize = TRUE,
   checkNA = c("auto", "yes", "no"),
-  use = c("everything", "all.obs", "na.rm")
+  use = c("everything", "all.obs", "na.rm"),
+  verbose = TRUE
 )
 
 \S4method{anyNA}{ssgseaParam}(x, recursive = FALSE)
@@ -97,6 +98,10 @@ produce an error. Finally, when \code{use="na.rm"}, \code{NA} values in the inpu
 expression data will be removed from calculations, giving a warning when that
 happens, and giving an error if no values are left after removing the \code{NA}
 values.}
+
+\item{verbose}{Logical vector of length 1. It gives information about some
+decisions made by the software during parameter object construction when
+\code{verbose=TRUE} (default) and remains silent otherwise.}
 }
 \value{
 A new \code{\linkS4class{ssgseaParam}} object.

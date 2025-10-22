@@ -113,6 +113,20 @@
 #' happens, and giving an error if no values are left after removing the `NA`
 #' values.
 #'
+#' @param ondisk Character vector of length 1 denoting whether an on-disk backend
+#' should be used to reduce the memory footprint. The default value
+#' `ondisk="auto"` will attempt to load all the data in main memory when the
+#' number of nonzero values is equal or smaller than 2^31, otherwise it will
+#' attempt working with an on-disk data structure that reduces de memory
+#' footprint. When `ondisk="yes"` it will attempt to work with an on-disk data
+#' structure, while when `ondisk="no"` it will attempt to load all the data in
+#' main memory, irrespective of whether the number of nonzero values is larger,
+#' equal, or smaller than 2^31.
+#'
+#' @param verbose Logical vector of length 1. It gives information about some
+#' decisions made by the software during parameter object construction when
+#' `verbose=TRUE` (default) and remains silent otherwise.
+#'
 #' @return A new [`gsvaParam-class`] object.
 #'
 #' @seealso [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class],
@@ -156,17 +170,20 @@ gsvaParam <- function(exprData, geneSets,
                       kcdfNoneMinSampleSize=200, tau=1, maxDiff=TRUE,
                       absRanking=FALSE, sparse=TRUE,
                       checkNA=c("auto", "yes", "no"),
-                      use=c("everything", "all.obs", "na.rm")) {
+                      use=c("everything", "all.obs", "na.rm"),
+                      ondisk=c("auto", "yes", "no"),
+                      verbose=TRUE) {
     kcdf <- match.arg(kcdf)
     kcdfNoneMinSampleSize <- as.integer(kcdfNoneMinSampleSize)
     checkNA <- match.arg(checkNA)
     use <- match.arg(use)
+    ondisk <- match.arg(ondisk)
 
     ## check assay parameter and assay names
-    assay <- .check_assayNames(assay, exprData)
+    assay <- .check_assayNames(assay, exprData, verbose)
 
     ## check for presence of valid row/feature names
-    exprData <- .check_rownames(exprData)
+    exprData <- .check_rowNames(exprData, verbose)
 
     xa <- gsvaAnnotation(exprData)
     if(is.null(xa)) {
@@ -184,10 +201,16 @@ gsvaParam <- function(exprData, geneSets,
         }
     }
 
-    nzc <- .estimate_nzcount(exprData=exprData, assay=assay)
-
     naparam <- .check_for_na_values(exprData=exprData, assay=assay,
                                     checkNA=checkNA, use=use)
+
+    nzc <- .estimate_nzcount(exprData, assay, verbose)
+    if (ondisk == "auto") {
+      if (nzc >= .Machine$integer.max) {
+        ondisk <- "yes"
+      } else
+        ondisk <- "no"
+    }
 
     new("gsvaParam",
         exprData=exprData, geneSets=geneSets,
@@ -196,7 +219,7 @@ gsvaParam <- function(exprData, geneSets,
         kcdf=kcdf, kcdfNoneMinSampleSize=kcdfNoneMinSampleSize,
         tau=as.double(tau), maxDiff=maxDiff, absRanking=absRanking,
         sparse=sparse, checkNA=checkNA, didCheckNA=naparam$didCheckNA,
-        anyNA=naparam$any_na, use=use, nzcount=nzc)
+        anyNA=naparam$any_na, use=use, nzcount=nzc, ondisk=ondisk)
 }
 
 
@@ -341,6 +364,12 @@ get_sparse <- function(object) {
   return(object@sparse)
 }
 
+#' @noRd
+get_ondisk <- function(object) {
+  stopifnot(inherits(object, "gsvaParam"))
+  return(object@ondisk)
+}
+
 ## getters for 'checkNA', 'didCheckNA' and 'use' are
 ## currently in ssgsea.R
 
@@ -388,6 +417,7 @@ setMethod("show",
               nzcmsg <- sprintf("nonzero values: %s than 2^31 (INT_MAX)\n",
                                 ifelse(nzcount(object) > .Machine$integer.max,
                                        "more", "less"))
+              cat("ondisk: ", get_ondisk(object), "\n")
               cat(nzcmsg)
           })
 

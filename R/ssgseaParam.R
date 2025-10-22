@@ -76,6 +76,10 @@
 #' happens, and giving an error if no values are left after removing the `NA`
 #' values.
 #'
+#' @param verbose Logical vector of length 1. It gives information about some
+#' decisions made by the software during parameter object construction when
+#' `verbose=TRUE` (default) and remains silent otherwise.
+#'
 #' @return A new [`ssgseaParam-class`] object.
 #'
 #' @seealso [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class],
@@ -116,15 +120,16 @@ ssgseaParam <- function(exprData, geneSets,
                         minSize=1,maxSize=Inf,
                         alpha=0.25, normalize=TRUE,
                         checkNA=c("auto", "yes", "no"),
-                        use=c("everything", "all.obs", "na.rm")) {
+                        use=c("everything", "all.obs", "na.rm"),
+                        verbose=TRUE) {
     checkNA <- match.arg(checkNA)
     use <- match.arg(use)
 
     ## check assay parameter and assay names
-    assay <- .check_assayNames(assay, exprData)
+    assay <- .check_assayNames(assay, exprData, verbose)
 
     ## check for presence of valid row/feature names
-    exprData <- .check_rownames(exprData)
+    exprData <- .check_rowNames(exprData, verbose)
 
     xa <- gsvaAnnotation(exprData)
     if(is.null(xa)) {
@@ -134,7 +139,7 @@ ssgseaParam <- function(exprData, geneSets,
     } else {
         if(is.null(annotation)) {
             annotation <- xa
-        } else {
+        } else if (verbose) {
             msg <- sprintf(paste0("using argument annotation='%s' and ",
                                   "ignoring exprData annotation ('%s')"),
                            capture.output(annotation), capture.output(xa))

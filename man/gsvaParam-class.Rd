@@ -23,7 +23,9 @@ gsvaParam(
   absRanking = FALSE,
   sparse = TRUE,
   checkNA = c("auto", "yes", "no"),
-  use = c("everything", "all.obs", "na.rm")
+  use = c("everything", "all.obs", "na.rm"),
+  ondisk = c("auto", "yes", "no"),
+  verbose = TRUE
 )
 
 \S4method{geneSets}{gsvaRanksParam,GsvaGeneSets}(object) <- value
@@ -136,6 +138,20 @@ expression data will be removed from calculations, giving a warning when that
 happens, and giving an error if no values are left after removing the \code{NA}
 values.}
 
+\item{ondisk}{Character vector of length 1 denoting whether an on-disk backend
+should be used to reduce the memory footprint. The default value
+\code{ondisk="auto"} will attempt to load all the data in main memory when the
+number of nonzero values is equal or smaller than 2^31, otherwise it will
+attempt working with an on-disk data structure that reduces de memory
+footprint. When \code{ondisk="yes"} it will attempt to work with an on-disk data
+structure, while when \code{ondisk="no"} it will attempt to load all the data in
+main memory, irrespective of whether the number of nonzero values is larger,
+equal, or smaller than 2^31.}
+
+\item{verbose}{Logical vector of length 1. It gives information about some
+decisions made by the software during parameter object construction when
+\code{verbose=TRUE} (default) and remains silent otherwise.}
+
 \item{object}{For the replacement method, an object of class
 \code{\linkS4class{gsvaRanksParam}}.}
 
@@ -227,6 +243,16 @@ to apply in the presence of missing values in the input expression data; see
 
 \item{\code{nzcount}}{Integer vector of length 1. Number of non-zero values in the
 selected assay, if there is more than one, of the 'exprData' slot.}
+
+\item{\code{ondisk}}{Character vector of length 1 denoting whether an on-disk backend
+should be used to reduce the memory footprint. The default value
+\code{ondisk="auto"} will attempt to load all the data in main memory when the
+number of nonzero values is equal or smaller than 2^31, otherwise it will
+attempt working with an on-disk data structure that reduces de memory
+footprint. When \code{ondisk="yes"} it will attempt to work with an on-disk data
+structure, while when \code{ondisk="no"} it will attempt to load all the data in
+main memory, irrespective of whether the number of nonzero values is larger,
+equal, or smaller than 2^31.}
 }}
 
 \examples{

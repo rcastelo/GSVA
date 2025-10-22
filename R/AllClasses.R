@@ -331,6 +331,16 @@ setClass("ssgseaParam",
 #' @slot nzcount Integer vector of length 1. Number of non-zero values in the
 #' selected assay, if there is more than one, of the 'exprData' slot.
 #'
+#' @slot ondisk Character vector of length 1 denoting whether an on-disk backend
+#' should be used to reduce the memory footprint. The default value
+#' `ondisk="auto"` will attempt to load all the data in main memory when the
+#' number of nonzero values is equal or smaller than 2^31, otherwise it will
+#' attempt working with an on-disk data structure that reduces de memory
+#' footprint. When `ondisk="yes"` it will attempt to work with an on-disk data
+#' structure, while when `ondisk="no"` it will attempt to load all the data in
+#' main memory, irrespective of whether the number of nonzero values is larger,
+#' equal, or smaller than 2^31.
+#'
 #' @seealso
 #' [`GsvaExprData-class`],
 #' [`GsvaGeneSets-class`],
@@ -353,7 +363,8 @@ setClass("gsvaParam",
                  didCheckNA="logical",
                  anyNA="logical",
                  use="character",
-                 nzcount="integer"),
+                 nzcount="integer",
+                 ondisk="character"),
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
@@ -371,7 +382,8 @@ setClass("gsvaParam",
                         didCheckNA=NA,
                         anyNA=NA,
                         use=NA_character_,
-                        nzcount=NA_integer_))
+                        nzcount=NA_integer_,
+                        ondisk=NA_character_))
 
 #' @name gsvaRanksParam-class
 #' @rdname gsvaParam-class
@@ -394,4 +406,5 @@ setClass("gsvaRanksParam",
                         didCheckNA=NA,
                         anyNA=NA,
                         use=NA_character_,
-                        nzcount=NA_integer_))
+                        nzcount=NA_integer_,
+                        ondisk=NA_character_))

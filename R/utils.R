@@ -7,13 +7,15 @@
 ## check for presence of valid row/feature names
 ##   and abort or generate dummy names
 ## #' @importFrom Biobase featureNames
-.check_rownames <- function(expr, useDummyNames=TRUE) {
+.check_rowNames <- function(expr, useDummyNames=TRUE, verbose) {
     ## CHECK: is this the right place to check this?
     ## 21/10/24: let's do it at parameter constructor
     if (is.null(rownames(expr))) {
         if (useDummyNames) {
-            cli_alert_info("Using dummy rownames for the input assay object.")
-            rownames(expr) <- .dummyNames(expr)
+            if (verbose) {
+                cli_alert_info("Using dummy rownames for the input assay object.")
+                rownames(expr) <- .dummyNames(expr)
+            }
         } else {
             cli_abort(c("x"="The input assay object doesn't have rownames"))
         }
@@ -51,7 +53,7 @@
 ## 2025-03-12  axel: as an afterthought, if we have a multi-assay container with
 ##   assay names AND no assay is selected AND one of the assay names happens to
 ##   be 'logcounts' --> use this one by default rather than the first in list.
-.check_assayNames <- function(a, xd) {
+.check_assayNames <- function(a, xd, verbose) {
     an <- gsvaAssayNames(xd)
 
     if(length(a) != 1) {
@@ -67,9 +69,11 @@
             ## if unavailable, just select the first available assay name
             def <- grep("logcounts", an, fixed=TRUE, value=TRUE)
             assay <- if(length(def) > 0) head(def, 1) else head(an, 1)
-            msg <- sprintf("No assay name provided; using default assay '%s'",
-                           assay)
-            cli_alert_info(msg)
+            if (verbose) {
+                msg <- sprintf("No assay name provided; using default assay '%s'",
+                               assay)
+                cli_alert_info(msg)
+            }
         } else {                # check the provided assay name before using it
             if(a %in% an) {
                 assay <- a      # found it: OK!
@@ -84,8 +88,8 @@
             msg <- sprintf("exprData object of class '%s' has no assay names.",
                            class(xd))
             cli_abort(msg)
-        } else {                # i.e. there is exactly one unnamed assay
-            if(!is.na(a)) {     # and the provided name is useless but harmless
+        } else {                       # i.e. there is exactly one unnamed assay
+            if(verbose && !is.na(a)) { # and the provided name is useless but harmless
                 msg <- sprintf(paste0("argument assay='%s' ignored since exprData ",
                                       "has no assay names."), a)
                 cli_alert_info(msg)
@@ -351,7 +355,7 @@
 #' @importFrom S4Arrays is_sparse
 #' @importFrom SparseArray nzcount
 #' @importFrom cli cli_alert_info
-.estimate_nzcount <- function(exprData, assay) {
+.estimate_nzcount <- function(exprData, assay, verbose) {
     X <- unwrapData(exprData, assay)
     nr <- nrow(X)
     nc <- ncol(X)
@@ -363,7 +367,8 @@
             if (nc < 2000)
                 nzc <- nzcount(as(X, "dgCMatrix"))
             else {
-                cli_alert_info("Largish on-disk sparse assay, estimating number of nonzero values")
+                if (verbose)
+                    cli_alert_info("Largish on-disk sparse assay, estimating number of nonzero values")
                 idx <- sample(1:nc, size=20, replace=FALSE) ## sample 20 columns
                 nzc <- as.integer(mean(sapply(idx, function(i) nzcount(X[, i]))))
             }

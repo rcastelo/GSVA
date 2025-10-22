@@ -317,7 +317,8 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                           absRanking=get_absRanking(param),
                           sparse=get_sparse(param), checkNA=get_checkNA(param),
                           didCheckNA=get_didCheckNA(param), anyNA=anyNA(param),
-                          use=get_NAuse(param), nzcount=nzcount(param))
+                          use=get_NAuse(param), nzcount=nzcount(param),
+                          ondisk=get_ondisk(param))
 
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")
