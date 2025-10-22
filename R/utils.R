@@ -319,7 +319,7 @@
     return(m)
 }
 
-#' @importFrom cli cli_abort cli_alert_danger
+#' @importFrom cli cli_abort cli_alert_warning
 .check_for_na_values <- function(exprData, assay, checkNA, use) {
     autonaclasseswocheck <- c("matrix", "ExpressionSet",
                               "SummarizedExperiment",
@@ -337,15 +337,40 @@
             else if (use == "everything")
                 cli_alert_warning(paste("Input expression data has NA values,",
                                        "which will be propagated through",
-                                       "calculations."))
+                                       "calculations"))
             else ## na.rm
                 cli_alert_warning(paste("Input expression data has NA values,",
                                        "which will be discarded from",
-                                       "calculations."))
+                                       "calculations"))
         }
     }
 
     list(any_na=any_na, didCheckNA=didCheckNA)
+}
+
+#' @importFrom S4Arrays is_sparse
+#' @importFrom SparseArray nzcount
+#' @importFrom cli cli_alert_info
+.estimate_nzcount <- function(exprData, assay) {
+    X <- unwrapData(exprData, assay)
+    nr <- nrow(X)
+    nc <- ncol(X)
+    nzc <- nr*nc
+    if (is_sparse(X)) {
+        if (is(X, "dgCMatrix") || is(X, "SVT_SparseArray"))
+            nzc <- nzcount(X)
+        else if (is(X, "DelayedMatrix")) {
+            if (nc < 2000)
+                nzc <- nzcount(as(X, "dgCMatrix"))
+            else {
+                cli_alert_info("Largish on-disk sparse assay, estimating number of nonzero values")
+                idx <- sample(1:nc, size=20, replace=FALSE) ## sample 20 columns
+                nzc <- as.integer(mean(sapply(idx, function(i) nzcount(X[, i]))))
+            }
+        }
+    }
+
+    return(nzc)
 }
 
 ## transforms a dgCMatrix into a list of its

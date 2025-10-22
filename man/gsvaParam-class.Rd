@@ -224,6 +224,9 @@ expression data contains missing (\code{NA}) values.}
 (default), \code{"all.obs"}, or \code{"na.rm"}, which refer to three different policies
 to apply in the presence of missing values in the input expression data; see
 \code{ssgseaParam}.}
+
+\item{\code{nzcount}}{Integer vector of length 1. Number of non-zero values in the
+selected assay, if there is more than one, of the 'exprData' slot.}
 }}
 
 \examples{

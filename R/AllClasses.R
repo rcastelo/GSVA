@@ -328,6 +328,9 @@ setClass("ssgseaParam",
 #' to apply in the presence of missing values in the input expression data; see
 #' `ssgseaParam`.
 #'
+#' @slot nzcount Integer vector of length 1. Number of non-zero values in the
+#' selected assay, if there is more than one, of the 'exprData' slot.
+#'
 #' @seealso
 #' [`GsvaExprData-class`],
 #' [`GsvaGeneSets-class`],
@@ -349,7 +352,8 @@ setClass("gsvaParam",
                  checkNA="character",
                  didCheckNA="logical",
                  anyNA="logical",
-                 use="character"),
+                 use="character",
+                 nzcount="integer"),
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
@@ -366,7 +370,8 @@ setClass("gsvaParam",
                         checkNA=NA_character_,
                         didCheckNA=NA,
                         anyNA=NA,
-                        use=NA_character_))
+                        use=NA_character_,
+                        nzcount=NA_integer_))
 
 #' @name gsvaRanksParam-class
 #' @rdname gsvaParam-class
@@ -388,4 +393,5 @@ setClass("gsvaRanksParam",
                         checkNA=NA_character_,
                         didCheckNA=NA,
                         anyNA=NA,
-                        use=NA_character_))
+                        use=NA_character_,
+                        nzcount=NA_integer_))

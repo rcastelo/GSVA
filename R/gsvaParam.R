@@ -184,6 +184,8 @@ gsvaParam <- function(exprData, geneSets,
         }
     }
 
+    nzc <- .estimate_nzcount(exprData=exprData, assay=assay)
+
     naparam <- .check_for_na_values(exprData=exprData, assay=assay,
                                     checkNA=checkNA, use=use)
 
@@ -194,7 +196,7 @@ gsvaParam <- function(exprData, geneSets,
         kcdf=kcdf, kcdfNoneMinSampleSize=kcdfNoneMinSampleSize,
         tau=as.double(tau), maxDiff=maxDiff, absRanking=absRanking,
         sparse=sparse, checkNA=checkNA, didCheckNA=naparam$didCheckNA,
-        anyNA=naparam$any_na, use=use)
+        anyNA=naparam$any_na, use=use, nzcount=nzc)
 }
 
 
@@ -291,6 +293,12 @@ setValidity("gsvaParam", function(object) {
     if(!.isCharLength1(object@use)) {
         inv <- c(inv, "@use must be a single character string")
     }
+    if(length(object@nzcount) != 1) {
+        inv <- c(inv, "@nzcount must be of length 1")
+    }
+    if(is.na(object@nzcount)) {
+        inv <- c(inv, "@nzcount must not be NA")
+    }
     return(if(length(inv) == 0) TRUE else inv)
 })
 
@@ -347,6 +355,12 @@ setMethod("anyNA", signature=c("gsvaParam"),
           function(x, recursive=FALSE)
             return(x@anyNA))
 
+#' @importFrom SparseArray nzcount
+#' @aliases nzcount,gsvaParam-method
+setMethod("nzcount", signature=c("gsvaParam"),
+          function(x)
+            return(x@nzcount))
+
 
 ## ----- show -----
 
@@ -371,6 +385,10 @@ setMethod("show",
                       cat("missing data: no\n")
               } else
                   cat("missing data: didn't check\n")
+              nzcmsg <- sprintf("nonzero values: %s than 2^31 (INT_MAX)\n",
+                                ifelse(nzcount(object) > .Machine$integer.max,
+                                       "more", "less"))
+              cat(nzcmsg)
           })
 
 ## ----- setters for gsvaRanksParam -----
