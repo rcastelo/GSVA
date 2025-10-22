@@ -45,7 +45,7 @@ test_gsvaCcode <- function() {
         ## calculate GSVA scores using the C implementation
         wna_env <- new.env()
         assign("w", FALSE, envir=wna_env)
-        sco_C <- GSVA:::.gsva_score_genesets(geneSetsIdx, decOrdStat=rnkstats$dos,
+        sco_C <- GSVA:::.gsva_score_genesets(NULL, geneSetsIdx, decOrdStat=rnkstats$dos,
                                              symRnkStat=rnkstats$srs,
                                              maxDiff=GSVA:::get_maxDiff(gsvarankspar),
                                              absRanking=GSVA:::get_absRanking(gsvarankspar),
@@ -53,7 +53,7 @@ test_gsvaCcode <- function() {
                                              any_na=anyNA(gsvarankspar),
                                              na_use=GSVA:::get_NAuse(gsvarankspar),
                                              minSize=GSVA:::get_minSize(gsvarankspar),
-                                             wna_env=wna_env)
+                                             wna_env=wna_env, verbose=FALSE)
         ## both approaches to calculate GSVA scores must give
         ## the same result
 
@@ -98,7 +98,7 @@ test_gsvaCcode <- function() {
         ## calculate GSVA scores using the C implementation
         wna_env <- new.env()
         assign("w", FALSE, envir=wna_env)
-        sco_C <- GSVA:::.gsva_score_genesets(geneSetsIdx, decOrdStat=rnkstats$dos,
+        sco_C <- GSVA:::.gsva_score_genesets(NULL, geneSetsIdx, decOrdStat=rnkstats$dos,
                                              symRnkStat=rnkstats$srs,
                                              maxDiff=GSVA:::get_maxDiff(gsvarankspar),
                                              absRanking=GSVA:::get_absRanking(gsvarankspar),
@@ -106,7 +106,7 @@ test_gsvaCcode <- function() {
                                              any_na=anyNA(gsvarankspar),
                                              na_use=GSVA:::get_NAuse(gsvarankspar),
                                              minSize=GSVA:::get_minSize(gsvarankspar),
-                                             wna_env=wna_env)
+                                             wna_env=wna_env, verbose=FALSE)
         ## both approaches to calculate GSVA scores must give
         ## the same result
 

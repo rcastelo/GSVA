@@ -182,110 +182,6 @@ zorder_rankstat <- function(z, p) {
     list(kernel=kernel, Gaussk=Gaussk)
 }
 
-#' @importFrom parallel splitIndices
-#' @importFrom IRanges IntegerList match
-#' @importFrom BiocParallel bpnworkers
-#' @importFrom cli cli_alert_info cli_progress_bar
-#' @importFrom cli cli_progress_update cli_progress_done
-compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
-                               kcdf.min.ssize, abs.ranking,
-                               mx.diff=TRUE, tau=1, sparse=FALSE,
-                               verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose)) {
-
-    kcdfparam <- .parse_kcdf_param(expr, kcdf, kcdf.min.ssize, sparse, verbose)
-    kernel <- kcdfparam$kernel
-    Gaussk <- kcdfparam$Gaussk
-
-    ## open parallelism only if ECDFs have to be estimated for
-    ## more than 100 genes on more than 100 samples
-    if (bpnworkers(BPPARAM) > 1 && length(sample.idxs) > 100 &&
-        nrow(expr) > 100) {
-        iter <- function(Y, idpb, n_chunks=bpnworkers(BPPARAM)) {
-            idx <- splitIndices(nrow(Y), min(nrow(Y), n_chunks))
-            i <- 0L
-            function() {
-                if (i == length(idx))
-                    return(NULL)
-                i <<- i + 1L
-                if (!is.null(idpb))
-                    cli_progress_update(id=idpb, set=i)
-                Y[idx[[i]], , drop=FALSE]
-            }
-        }
-        if (verbose) {
-            msg <- sprintf("Estimating ECDFs with %d cores",
-                           as.integer(bpnworkers(BPPARAM)))
-            idpb <- cli_progress_bar(msg, total=100)
-        }
-        gene.density <- bpiterate(iter(expr, idpb, 100),
-                                  compute.gene.cdf,
-                                  sample.idxs=sample.idxs,
-                                  Gaussk=Gaussk, kernel=kernel,
-                                  sparse=sparse, any_na=FALSE,
-                                  na_use="everything", verbose=FALSE,
-                                  REDUCE=rbind, reduce.in.order=TRUE,
-                                  BPPARAM=BPPARAM)
-        if (verbose)
-            cli_progress_done(idpb)
-    } else
-        gene.density <- compute.gene.cdf(expr, sample.idxs, Gaussk, kernel,
-                                         sparse, any_na=FALSE,
-                                         na_use="everything", verbose)
-    
-    gset.idx.list <- IntegerList(gset.idx.list)
-    n <- ncol(expr)
-    es <- NULL
-    if (n > 10 && bpnworkers(BPPARAM) > 1) {
-        if (verbose) {
-            msg <- sprintf("Calculating GSVA scores with %d cores",
-                           as.integer(bpnworkers(BPPARAM)))
-            cli_alert_info(msg)
-        }
-        es <- bplapply(as.list(1:n), function(j, Z) {
-            gene_ord_rnkstat <- list()
-            if (is(Z, "dgCMatrix"))
-                gene_ord_rnkstat <- .order_rankstat_sparse_to_sparse(Z, j)
-            else
-                gene_ord_rnkstat <- .order_rankstat(Z[, j])
-            geneRanking <- gene_ord_rnkstat[[1]]
-            rankStat <- gene_ord_rnkstat[[2]]
-
-            geneSetsRankIdx <- match(gset.idx.list, geneRanking)
-            .gsva_score_genesets(as.list(geneSetsRankIdx), geneRanking, rankStat,
-                                 mx.diff, abs.ranking, tau)
-        }, Z=gene.density, BPPARAM=BPPARAM)
-    } else {
-        idpb <- NULL
-        if (verbose)
-            idpb <- cli_progress_bar("Calculating GSVA scores", total=n)
-        es <- lapply(as.list(1:n), function(j, Z) {
-            gene_ord_rnkstat <- list()
-            if (is(Z, "dgCMatrix"))
-                gene_ord_rnkstat <- .order_rankstat_sparse_to_sparse(Z, j)
-            else
-                gene_ord_rnkstat <- .order_rankstat(Z[, j])
-            geneRanking <- gene_ord_rnkstat[[1]]
-            rankStat <- gene_ord_rnkstat[[2]]
-
-            geneSetsRankIdx <- match(gset.idx.list, geneRanking)
-            sco <- .gsva_score_genesets(as.list(geneSetsRankIdx), geneRanking, rankStat,
-                                        mx.diff, abs.ranking, tau)
-            if (verbose)
-                cli_progress_update(id=idpb)
-            sco
-        }, Z=gene.density)
-        if (verbose)
-            cli_progress_done(idpb)
-    }
-    es <- do.call("cbind", es)
-
-    return(es)
-}
-
-##
-## implement calculations separating ranks from random walks
-##
-
 ## BEGIN exported methods (to be moved to 'gsvaNewAPI.R')
 
 #' @title GSVA ranks and scores
@@ -737,6 +633,21 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     }
 }
 
+#' @importFrom cli cli_progress_update
+#' @importFrom parallel splitIndices
+.col_iter_idx <- function(X, idpb, n_chunks) {
+    idx <- splitIndices(ncol(X), min(ncol(X), n_chunks))
+    i <- 0L
+    function() {
+        if (i == length(idx))
+            return(NULL)
+        i <<- i + 1L
+        if (!is.null(idpb))
+            cli_progress_update(id=idpb, set=i)
+        idx[[i]]
+    }
+}
+
 #' @importFrom IRanges IntegerList match
 #' @importFrom BiocParallel bpnworkers
 #' @importFrom cli cli_alert_info cli_progress_bar
@@ -1077,6 +988,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
                                  sparse, any_na, na_use, minSize, verbose,
                                  gridncol=1000,
                                  BPPARAM=SerialParam(progressbar=verbose)) {
+    p <- nrow(R)
     n <- ncol(R)
     es <- NULL
     if (sparse && !is_sparse(R))
@@ -1108,10 +1020,12 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
                 rnkstats <- .ranks2stats_nas_block(block, sparse)
             else
                 rnkstats <- .ranks2stats_block(block, sparse)
-            block <- .gsva_score_genesets(geneSetsIdx, decOrdStat=rnkstats$dos,
-                                          symRnkStat=rnkstats$srs, maxDiff,
-                                          absRanking, tau, any_na, na_use,
-                                          minSize)
+            block <- .gsva_score_genesets(NULL, geneSetsIdx,
+                                          decOrdStat=rnkstats$dos,
+                                          symRnkStat=rnkstats$srs,
+                                          maxDiff, absRanking, tau,
+                                          any_na, na_use, minSize,
+                                          wna_env, verbose=FALSE)
             write_block(sink, avp_es, block)
         }
 
@@ -1123,47 +1037,37 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 
     } else {
 
-        if (n > 10 && bpnworkers(BPPARAM) > 1) {
+        ## open parallelism only if scores have to be calculated for
+        ## more than 1000 features/genes on more than 1000 samples/columns
+        if (bpnworkers(BPPARAM) > 1 && p > 1000 && n > 1000) {
+            n_chunks <- 100 ## 100 chunks of (ncol(R) / 100) columns
+            idpb <- NULL
             if (verbose) {
                 msg <- sprintf("Calculating GSVA scores with %d cores",
                                as.integer(bpnworkers(BPPARAM)))
-                idpb <- cli_alert_info(msg)
+                idpb <- cli_progress_bar(msg)
             }
-            es <- bplapply(as.list(1:n), function(j, R) {
-                rnkstats <- NULL
-                if (any_na)
-                    rnkstats <- .ranks2stats_nas(R[, j], sparse)
-                else
-                    rnkstats <- .ranks2stats(R[, j], sparse)
-                sco <- .gsva_score_genesets(geneSetsIdx, decOrdStat=rnkstats$dos,
-                                            symRnkStat=rnkstats$srs, maxDiff,
-                                            absRanking, tau, any_na, na_use, minSize,
-                                            wna_env)
-                sco
-            }, R=R, BPPARAM=BPPARAM)
-            es
+            es <- bpiterate(.col_iter_idx(R, idpb, n_chunks),
+                            .gsva_score_genesets, geneSetsIdx=geneSetsIdx,
+                            decOrdStat=rnkstats$dos, symRnkStat=rnkstats$srs,
+                            maxDiff=maxDiff, absRanking=absRanking, tau=tau,
+                            any_na=any_na, na_use=na_use, minSize=minSize,
+                            wna_env=wna_env, verbose=FALSE, preserveShape=TRUE,
+                            REDUCE=cbind, reduce.in.order=TRUE, BPPARAM=BPPARAM)
+            if (verbose)
+                cli_progress_done(idpb)
         } else {
-            idpb <- NULL
-            if (verbose)
-              idpb <- cli_progress_bar("Calculating GSVA scores", total=n)
-            es <- lapply(as.list(1:n), function(j, R, idpb) {
-                rnkstats <- NULL
-                if (any_na)
-                    rnkstats <- .ranks2stats_nas(R[, j], sparse)
-                else
-                    rnkstats <- .ranks2stats(R[, j], sparse)
-                sco <- .gsva_score_genesets(geneSetsIdx, decOrdStat=rnkstats$dos,
-                                            symRnkStat=rnkstats$srs, maxDiff,
-                                            absRanking, tau, any_na, na_use, minSize,
-                                            wna_env)
-                if (verbose)
-                    cli_progress_update(id=idpb)
-                sco
-            }, R=R, idpb=idpb)
-            if (verbose)
-                cli_progress_done(id=idpb)
+            rnkstats <- NULL
+            if (any_na)
+                rnkstats <- .ranks2stats_nas_block(R, sparse)
+            else
+                rnkstats <- .ranks2stats_block(R, sparse)
+            es <- .gsva_score_genesets(NULL, geneSetsIdx,
+                                       decOrdStat=rnkstats$dos,
+                                       symRnkStat=rnkstats$srs,
+                                       maxDiff, absRanking, tau, any_na,
+                                       na_use, minSize, wna_env, verbose)
         }
-        es <- do.call("cbind", es)
     }
 
     if (any_na && na_use == "na.rm")
@@ -1461,10 +1365,11 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 }
 
 #' @importFrom cli cli_abort
-.gsva_score_genesets <- function(geneSetsIdx, decOrdStat, symRnkStat,
+.gsva_score_genesets <- function(colIdx, geneSetsIdx, decOrdStat, symRnkStat,
                                  maxDiff, absRanking, tau, any_na, na_use,
-                                 minSize, wna_env) {
+                                 minSize, wna_env, verbose) {
   minSize <- as.integer(minSize)
+  stopifnot(is.null(colIdx) || is.integer(colIdx)) ## QC
   stopifnot(is.list(geneSetsIdx)) ## QC
   stopifnot(length(geneSetsIdx) > 0) ## QC
   stopifnot(is.integer(geneSetsIdx[[1]])) ## QC
@@ -1477,14 +1382,21 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
   stopifnot(is.logical(any_na)) ## QC
   stopifnot(is.character(na_use)) ## QC
   stopifnot(is.integer(minSize)) ## QC
+  stopifnot(is.logical(verbose)) ## QC
   na_use <- as.integer(factor(na_use, levels=c("everything", "all.obs",
                                                "na.rm")))
-  if (is.null(dim(decOrdStat)))
-    decOrdStat <- matrix(decOrdStat, ncol=1)
-  if (is.null(dim(symRnkStat)))
-    symRnkStat <- matrix(symRnkStat, ncol=1)
+  if (is.null(colIdx)) {
+    if (is.null(dim(decOrdStat)))
+      decOrdStat <- matrix(decOrdStat, ncol=1)
+    if (is.null(dim(symRnkStat)))
+      symRnkStat <- matrix(symRnkStat, ncol=1)
+  } else {
+    decOrdStat <- decOrdStat[, colIdx]
+    symRnkStat <- symRnkStat[, colIdx]
+  }
   sco <- .Call("gsva_score_genesets_R", geneSetsIdx, decOrdStat, symRnkStat,
-               maxDiff, absRanking, as.double(tau), any_na, na_use, minSize)
+               maxDiff, absRanking, as.double(tau), any_na, na_use, minSize,
+               verbose)
   if (any_na) {
     if (na_use == 2 && !is.null(attr(sco, "class")))
         cli_abort(c("x"="Input GSVA ranks have NA values."))

@@ -4,6 +4,7 @@
 #include <math.h>
 #include <R.h>
 #include <Rdefines.h>
+#include <cli/progress.h>
 
 /* to add attributes to R objects from C code */
 static SEXP
@@ -281,7 +282,7 @@ gsva_rnd_walk_nas(int* gsetidx, int k, int* decordstat, double* symrnkstat, int 
 SEXP
 gsva_score_genesets_R(SEXP genesetsidxR, SEXP decordstatR, SEXP symrnkstatR,
                       SEXP maxdiffR, SEXP absrnkR, SEXP tauR, SEXP anynaR,
-                      SEXP nauseR, SEXP minsizeR) {
+                      SEXP nauseR, SEXP minsizeR, SEXP verboseR) {
   SEXP     dimInput;
   int      m = length(genesetsidxR);
   int      p, n;
@@ -297,10 +298,9 @@ gsva_score_genesets_R(SEXP genesetsidxR, SEXP decordstatR, SEXP symrnkstatR,
   double*  es;
   int      wna=0;
   Rboolean abort=FALSE;
-
-  PROTECT(genesetsidxR);
-  PROTECT(decordstatR);
-  PROTECT(symrnkstatR);
+  Rboolean verbose=asLogical(verboseR);
+  SEXP     pb=R_NilValue;
+  int      nunprotect=0;
 
   dimInput = getAttrib(decordstatR, R_DimSymbol);
   p = INTEGER(dimInput)[0]; /* number of genes/features */
@@ -309,14 +309,22 @@ gsva_score_genesets_R(SEXP genesetsidxR, SEXP decordstatR, SEXP symrnkstatR,
   decordstat = INTEGER(decordstatR);
   symrnkstat = REAL(symrnkstatR);
 
-  PROTECT(esR = allocMatrix(REALSXP, m, n));
+  PROTECT(esR = allocMatrix(REALSXP, m, n)); nunprotect++;
   es = REAL(esR);
+
+  if (verbose) {
+    pb = PROTECT(cli_progress_bar(p, NULL)); nunprotect++;
+    cli_progress_set_name(pb, "Calculating GSVA scores");
+  }
 
   for (int i=0; i < n; i++) {
     int*     decordstat_col = decordstat + i * p;
     double*  symrnkstat_col = symrnkstat + i * p;
-    /* int*     decordstat_col = &decordstat[i * p];
-    double*  symrnkstat_col = &symrnkstat[i * p]; */
+
+    if (verbose) { /* show progress */
+      if (i % 100 == 0 && CLI_SHOULD_TICK)
+        cli_progress_set(pb, i);
+    }
 
     for (int j=0; j < m; j++) {
       SEXP    gsetidxR=VECTOR_ELT(genesetsidxR, j);
@@ -372,7 +380,10 @@ gsva_score_genesets_R(SEXP genesetsidxR, SEXP decordstatR, SEXP symrnkstatR,
     }
   }
 
-  UNPROTECT(4); /* genesetsidxR decordstatR symrnkstatR esR */
+  if (verbose)
+    cli_progress_done(pb);
+
+  UNPROTECT(nunprotect); /* esR pb */
 
   return(esR);
 }
