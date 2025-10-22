@@ -282,8 +282,9 @@ SEXP
 gsva_score_genesets_R(SEXP genesetsidxR, SEXP decordstatR, SEXP symrnkstatR,
                       SEXP maxdiffR, SEXP absrnkR, SEXP tauR, SEXP anynaR,
                       SEXP nauseR, SEXP minsizeR) {
+  SEXP     dimInput;
   int      m = length(genesetsidxR);
-  int      n = length(decordstatR);
+  int      p, n;
   Rboolean maxdiff=asLogical(maxdiffR);
   Rboolean absrnk=asLogical(absrnkR);
   double   tau=REAL(tauR)[0];
@@ -300,42 +301,59 @@ gsva_score_genesets_R(SEXP genesetsidxR, SEXP decordstatR, SEXP symrnkstatR,
   PROTECT(genesetsidxR);
   PROTECT(decordstatR);
   PROTECT(symrnkstatR);
-  PROTECT(esR = allocVector(REALSXP, m));
+
+  dimInput = getAttrib(decordstatR, R_DimSymbol);
+  p = INTEGER(dimInput)[0]; /* number of genes/features */
+  n = INTEGER(dimInput)[1]; /* number of samples/cells */
 
   decordstat = INTEGER(decordstatR);
   symrnkstat = REAL(symrnkstatR);
+
+  PROTECT(esR = allocMatrix(REALSXP, m, n));
   es = REAL(esR);
 
-  for (int i=0; i < m; i++) {
-     SEXP    gsetidxR=VECTOR_ELT(genesetsidxR, i);
-     int*    gsetidx;
-     int     k = length(gsetidxR);
-     double  walkstatpos, walkstatneg;
+  for (int i=0; i < n; i++) {
+    int*     decordstat_col = decordstat + i * p;
+    double*  symrnkstat_col = symrnkstat + i * p;
+    /* int*     decordstat_col = &decordstat[i * p];
+    double*  symrnkstat_col = &symrnkstat[i * p]; */
 
-     gsetidx = INTEGER(gsetidxR);
-     if (anyna)
-       gsva_rnd_walk_nas(gsetidx, k, decordstat, symrnkstat, n, tau,
-                         nause, minsize, NULL, &walkstatpos, &walkstatneg,
-                         &wna);
-     else
-       gsva_rnd_walk(gsetidx, k, decordstat, symrnkstat, n, tau,
-                     NULL, &walkstatpos, &walkstatneg);
+    for (int j=0; j < m; j++) {
+      SEXP    gsetidxR=VECTOR_ELT(genesetsidxR, j);
+      int*    gsetidx;
+      int     k = length(gsetidxR);
+#ifdef LONG_VECTOR_SUPPORT
+      R_xlen_t idx = m * i + j;
+#else
+      int idx = m * i + j;
+#endif
+      double  walkstatpos, walkstatneg;
 
-     es[i] = NA_REAL;
-     if (!anyna || (!ISNA(walkstatpos) && !ISNA(walkstatneg))) {
-	     if (maxdiff) {
-		     es[i] = walkstatpos + walkstatneg;
-         if (absrnk)
-           es[i] = walkstatpos - walkstatneg;
-	     } else {
-		       es[i] = (walkstatpos > fabs(walkstatneg)) ? walkstatpos : walkstatneg;
-	     }
-     } else {
-       if (anyna && (ISNA(walkstatpos) || ISNA(walkstatneg)) && nause == 2) { /* all.obs */
-         abort=TRUE;
-         break;
-       }
-     }
+      gsetidx = INTEGER(gsetidxR);
+      if (anyna)
+        gsva_rnd_walk_nas(gsetidx, k, decordstat_col, symrnkstat_col, p, tau,
+                          nause, minsize, NULL, &walkstatpos, &walkstatneg,
+                          &wna);
+      else
+        gsva_rnd_walk(gsetidx, k, decordstat_col, symrnkstat_col, p, tau,
+                      NULL, &walkstatpos, &walkstatneg);
+
+      es[idx] = NA_REAL;
+      if (!anyna || (!ISNA(walkstatpos) && !ISNA(walkstatneg))) {
+	      if (maxdiff) {
+		      es[idx] = walkstatpos + walkstatneg;
+          if (absrnk)
+            es[idx] = walkstatpos - walkstatneg;
+	      } else {
+		        es[idx] = (walkstatpos > fabs(walkstatneg)) ? walkstatpos : walkstatneg;
+	      }
+      } else {
+        if (anyna && (ISNA(walkstatpos) || ISNA(walkstatneg)) && nause == 2) { /* all.obs */
+          abort=TRUE;
+          break;
+        }
+      }
+    }
   }
 
   if (anyna) {

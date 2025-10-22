@@ -1094,7 +1094,8 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     es <- NULL
     if (is(R, "DelayedMatrix") && is(seed(R), "HDF5ArraySeed")) {
         cli_alert_info("Calculating GSVA scores on disk")
-        sink <- HDF5RealizationSink(c(length(geneSetsIdx), ncol(R)), as.sparse=sparse)
+        sink <- HDF5RealizationSink(c(length(geneSetsIdx), ncol(R)),
+                                    as.sparse=FALSE) ## GSVA scores are dense
         grid <- colAutoGrid(R, ncol=gridncol)
         grid_es <- colAutoGrid(sink, ncol=gridncol)
 
@@ -1107,14 +1108,10 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
                 rnkstats <- .ranks2stats_nas_block(block, sparse)
             else
                 rnkstats <- .ranks2stats_block(block, sparse)
-            n <- ncol(block)
-            block <- lapply(as.list(1:n), function(j, R) {
-                sco <- .gsva_score_genesets(geneSetsIdx, decOrdStat=rnkstats$dos[, j],
-                                            symRnkStat=rnkstats$srs[, j], maxDiff,
-                                            absRanking, tau, any_na, na_use, minSize)
-                sco
-            }, R=block)
-            block <- do.call("cbind", block)
+            block <- .gsva_score_genesets(geneSetsIdx, decOrdStat=rnkstats$dos,
+                                          symRnkStat=rnkstats$srs, maxDiff,
+                                          absRanking, tau, any_na, na_use,
+                                          minSize)
             write_block(sink, avp_es, block)
         }
 
@@ -1310,6 +1307,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     ## from https://stackoverflow.com/a/39877048
     fintticks <- function(x) unique(floor(pretty(seq(min(x),
                                     (max(x) + 1) * 1.1))))
+    .data <- get(".data")
     ggplot2::ggplot(data=edata$stats) +
         ggplot2::scale_x_continuous(breaks=fintticks) +
         ggplot2::geom_line(ggplot2::aes(x=.data$rank, y=.data$stat), color="green") +
@@ -1472,6 +1470,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
   stopifnot(is.integer(geneSetsIdx[[1]])) ## QC
   stopifnot(is.integer(decOrdStat)) ## QC
   stopifnot(is.numeric(symRnkStat)) ## QC
+  stopifnot(all(dim(decOrdStat) == dim(symRnkStat))) ## QC
   stopifnot(is.logical(maxDiff)) ## QC
   stopifnot(is.logical(absRanking)) ## QC
   stopifnot(is.numeric(tau)) ## QC but it still might be an integer!!
@@ -1480,6 +1479,10 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
   stopifnot(is.integer(minSize)) ## QC
   na_use <- as.integer(factor(na_use, levels=c("everything", "all.obs",
                                                "na.rm")))
+  if (is.null(dim(decOrdStat)))
+    decOrdStat <- matrix(decOrdStat, ncol=1)
+  if (is.null(dim(symRnkStat)))
+    symRnkStat <- matrix(symRnkStat, ncol=1)
   sco <- .Call("gsva_score_genesets_R", geneSetsIdx, decOrdStat, symRnkStat,
                maxDiff, absRanking, as.double(tau), any_na, na_use, minSize)
   if (any_na) {
