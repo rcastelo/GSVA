@@ -68,7 +68,7 @@ compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
                                                    verbose)
         } else if (is(expr, "DelayedArray")) {
             if (!is(seed(expr), "HDF5ArraySeed"))
-              stop(sprintf("On-disk backend %s cannot be handled yet.", seed(expr)))
+              stop(sprintf("On-disk backend %s cannot be handled yet.", class(seed(expr))))
             if (sparse)
                 gene.cdf <- .ecdfvals_sparseh5_to_sparseh5(expr[, sample.idxs, drop=FALSE],
                                                            gridnrow=1000, verbose)
@@ -282,7 +282,22 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
               filteredDataMatrix <- .filterGenes(dataMatrix, removeConstant=TRUE,
-                                                 removeNzConstant=TRUE)
+                                                 removeNzConstant=TRUE, gridnrow=1000,
+                                                 verbose)
+              
+              if (is(filteredDataMatrix, "DelayedArray") &&
+                  is(seed(filteredDataMatrix), "HDF5ArraySeed") &&
+                  get_ondisk(param) == "no") {
+                  if (verbose)
+                      cli_alert_info("Loading input expression data into main memory")
+                  if (is_sparse(filteredDataMatrix)) {
+                      if (nzcount(param) < .Machine$integer.max)
+                          filteredDataMatrix <- as(filteredDataMatrix, "dgCMatrix")
+                      else
+                          filteredDataMatrix <- as(filteredDataMatrix, "SVT_SparseArray")
+                  } else
+                      filteredDataMatrix <- as.matrix(filteredDataMatrix)
+              }
 
               if (!inherits(BPPARAM, "SerialParam") && verbose) {
                   msg <- sprintf("Using a %s parallel back-end with %d workers",
@@ -1082,12 +1097,13 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     return(es)
 }
 
+#' @importFrom S4Arrays is_sparse
 .gsva_enrichment_data <- function(R, column, geneSetIdx, maxDiff,
                                   absRanking, tau, sparse, any_na,
                                   na_use, minSize) {
     n <- ncol(R)
     es <- NULL
-    if (!is(R, "dgCMatrix") && !is(R, "SVT_SparseArray"))
+    if (!is_sparse(R))
         sparse <- FALSE
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)

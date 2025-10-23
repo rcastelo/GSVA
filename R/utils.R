@@ -125,35 +125,57 @@
 ##  values of genes: genes that are constant in their non-zero values will have
 ##  an SD of 0 and therefore scaling them will result in division by 0.
 
+#' @importFrom S4Arrays is_sparse
 #' @importFrom sparseMatrixStats rowRanges
-#' @importFrom cli cli_alert_warning cli_abort
-.filterGenes <- function(expr, removeConstant=TRUE, removeNzConstant=TRUE) {
+#' @importFrom DelayedArray blockApply
+#' @importFrom cli cli_alert_warning cli_abort cli_alert_info
+.filterGenes <- function(expr, removeConstant=TRUE, removeNzConstant=TRUE,
+                         gridnrow=1000, verbose=TRUE) {
+    if (verbose)
+        cli_alert_info("Searching for genes/features with constant values")
+
     geneRanges <- rowRanges(expr, na.rm=TRUE, useNames=FALSE)
     constantGenes <- (geneRanges[, 1] == geneRanges[, 2])
 
     if (any(constantGenes) || anyNA(constantGenes)) {
         invalidGenes <- (constantGenes | is.na(constantGenes))
-        msg <- sprintf("%d genes with constant values throughout the samples",
+        msg <- sprintf("%d genes/features with constant values throughout the samples",
                        sum(invalidGenes))
         cli_alert_warning(msg)
         if (removeConstant) {
-            cli_alert_warning("Genes with constant values are discarded")
+            cli_alert_warning("Genes/features with constant values are discarded")
             expr <- expr[!invalidGenes, ]
         }
     }
 
-    if (is(expr, "dgCMatrix")) {
-        nzGeneList <- .sparse2columnList(t(expr))
+    if (is_sparse(expr)) {
+        nzGeneList <- list()
+        if (is(expr, "DelayedMatrix") && is(seed(expr), "HDF5ArraySeed")) {
+            grid <- rowAutoGrid(expr, nrow=min(c(gridnrow, nrow(expr))))
+            rowNonzeroRanges_byBlock <- function(block) {
+                lapply(t(block)@SVT, "[[", 1)
+            }
+            nzGeneList <- blockApply(expr, rowNonzeroRanges_byBlock, grid=grid,
+                                     as.sparse=TRUE)
+            if (length(nzGeneList) < nrow(expr))
+                nzGeneList <- unlist(nzGeneList, recursive=FALSE)
+        } else if (is(expr, "dgCMatrix"))
+            nzGeneList <- .sparse2columnList(t(expr))
+        else if (is(expr, "SVT_SparseArray"))
+            nzGeneList <- lapply(t(expr)@SVT, "[[", 1)
+        else
+            cli_abort("x"="Uknown sparse matrix class")
+
         nzGeneRanges <- vapply(nzGeneList, FUN=range, FUN.VALUE=double(2))
         constantNzGenes <- (nzGeneRanges[1,] == nzGeneRanges[2,])
 
         if (any(constantNzGenes) || anyNA(constantNzGenes)) {
             invalidNzGenes <- (constantNzGenes | is.na(constantNzGenes))
-            msg <- sprintf("%d genes with constant non-zero values throughout the samples",
+            msg <- sprintf("%d genes/features with constant nonzero values throughout the samples",
                            sum(invalidNzGenes))
             cli_alert_warning(msg)
             if (removeNzConstant) {
-                cli_alert_warning("Genes with constant non-zero values are discarded")
+                cli_alert_warning("Genes/features with constant nonzero values are discarded")
                 expr <- expr[!invalidNzGenes, ]
             }
         }
@@ -272,7 +294,9 @@
     ## e.g., constant expression
     filteredDataMatrix <- .filterGenes(dataMatrix,
                                        removeConstant=removeConstant,
-                                       removeNzConstant=removeNzConstant)
+                                       removeNzConstant=removeNzConstant,
+                                       gridnrow=1000,
+                                       verbose)
 
     filteredMappedGeneSets <- .filterAndMapGeneSets(param=param,
                                                     filteredDataMatrix=filteredDataMatrix,
