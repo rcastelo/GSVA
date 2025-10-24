@@ -66,7 +66,7 @@ compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
             else
                 gene.cdf <- .ecdfvals_svt_to_dense(expr[, sample.idxs, drop=FALSE],
                                                    verbose)
-        } else if (is(expr, "DelayedArray")) {
+        } else if (is(expr, "DelayedMatrix")) {
             if (!is(seed(expr), "HDF5ArraySeed"))
               stop(sprintf("On-disk backend %s cannot be handled yet.", class(seed(expr))))
             if (sparse)
@@ -1290,8 +1290,8 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 #' @importFrom HDF5Array HDF5RealizationSink
 #' @importFrom DelayedArray seed rowAutoGrid blockReduce
 .ecdfvals_sparseh5_to_sparseh5 <- function(X, gridnrow=1000, verbose) {
-  stopifnot(is(X, "DelayedArray") || is(X, "HDF5Matrix")) ## QC
-  if (is(X, "DelayedArray"))
+  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
+  if (is(X, "DelayedMatrix"))
     stopifnot(is(seed(X), "HDF5ArraySeed")) ## QC
 
   sink <- HDF5RealizationSink(dim(X), as.sparse=TRUE)
@@ -1311,8 +1311,8 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 #' @importFrom HDF5Array HDF5RealizationSink
 #' @importFrom DelayedArray seed rowAutoGrid blockReduce
 .ecdfvals_sparseh5_to_dense <- function(X, gridnrow=1000, verbose) {
-  stopifnot(is(X, "DelayedArray") || is(X, "HDF5Matrix")) ## QC
-  if (is(X, "DelayedArray"))
+  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
+  if (is(X, "DelayedMatrix"))
     stopifnot(is(seed(X), "HDF5ArraySeed")) ## QC
 
   sink <- HDF5RealizationSink(dim(X), as.sparse=FALSE)
