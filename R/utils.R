@@ -378,6 +378,9 @@
 
 ## calculate number of nonzero values in an on-disk DelayedArray
 .nzcountDA <- function(X) {
+    ## coerce to double to ensure we can deal with numbers larger than 2^31
+    nr <- as.numeric(nrow(X))
+    nc <- as.numeric(ncol(X))
     block_dim <- chunkdim(X)
     grid_dim <- dim(chunkGrid(X))
     nzc <- 0
@@ -394,8 +397,8 @@
 }
 
 #' @importFrom IRanges IRanges
-#' @importFrom S4Arrays is_sparse ArrayViewPort
-#' @importFrom DelayedArray chunkdim
+#' @importFrom S4Arrays is_sparse ArrayViewport
+#' @importFrom DelayedArray chunkdim chunkGrid
 #' @importFrom SparseArray nzcount
 #' @importFrom cli cli_alert_info cli_abort
 .estimate_nzcount <- function(exprData, assay, verbose) {

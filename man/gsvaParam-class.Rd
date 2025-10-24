@@ -241,7 +241,7 @@ expression data contains missing (\code{NA}) values.}
 to apply in the presence of missing values in the input expression data; see
 \code{ssgseaParam}.}
 
-\item{\code{nzcount}}{Integer vector of length 1. Number of non-zero values in the
+\item{\code{nzcount}}{Numeric vector of length 1. Number of non-zero values in the
 selected assay, if there is more than one, of the 'exprData' slot.}
 
 \item{\code{ondisk}}{Character vector of length 1 denoting whether an on-disk backend
