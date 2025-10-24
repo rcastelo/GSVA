@@ -717,7 +717,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
             stop(sprintf("On-disk backend %s cannot be handled yet.", seed(expr)))
         if (verbose)
             cli_alert_info("Calculating GSVA column ranks")
-        R <- .colRanksHDF5(Z, gridnrow=1000, BPPARAM=BPPARAM)
+        R <- .colRanksHDF5(Z, gridnrow=1000)
     } else {
         ## open parallelism only if ranks have to be calculated for
         ## more than 10000 genes on more than 1000 samples
@@ -1455,14 +1455,14 @@ colRanks_SVT_SparseArray <- function(X, BPPARAM=SerialParam()) {
 
 #' @importFrom MatrixGenerics colRanks
 #' @importFrom BiocParallel SerialParam
-.colRanksHDF5 <- function(X, gridnrow=1000, BPPARAM=SerialParam()) {
+.colRanksHDF5 <- function(X, gridnrow=1000) {
     stopifnot(is(seed(X), "HDF5ArraySeed")) ## QC
     sink <- HDF5RealizationSink(dim(X), as.sparse=is_sparse(X))
     grid <- colAutoGrid(sink, ncol=min(c(gridnrow, ncol(X))))
 
     colRanks_byBlock <- function(grid, sink) {
         block <- read_block(X, grid)
-        if (is_sparse(X)) {
+        if (is_sparse(X) && is(X, "SVT_SparseArray")) {
             block <- colRanks_SVT_SparseArray(block)
         } else {
             block <- colRanks(block, ties.method="last", preserveShape=TRUE)

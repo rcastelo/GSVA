@@ -376,27 +376,59 @@
     list(any_na=any_na, didCheckNA=didCheckNA)
 }
 
-#' @importFrom S4Arrays is_sparse
+## calculate number of nonzero values in an on-disk DelayedArray
+.nzcountDA <- function(X) {
+    block_dim <- chunkdim(X)
+    grid_dim <- dim(chunkGrid(X))
+    nzc <- 0
+    for (i in 1:grid_dim[1])
+        for (j in 1:grid_dim[2]) {
+            icoord <- (i-1)*block_dim[1]+1
+            jcoord <- (j-1)*block_dim[2]+1
+            bdim <- c(min(c(nr, i*block_dim[1]))-icoord+1, min(c(nc, j*block_dim[2]))-jcoord+1)
+            vp <- ArrayViewport(dim(X), IRanges(c(icoord, jcoord), width=bdim))
+            block <- read_block(X, vp)
+            nzc <- nzc + as.numeric(nzcount(block))
+        }
+    nzc
+}
+
+#' @importFrom IRanges IRanges
+#' @importFrom S4Arrays is_sparse ArrayViewPort
+#' @importFrom DelayedArray chunkdim
 #' @importFrom SparseArray nzcount
-#' @importFrom cli cli_alert_info
+#' @importFrom cli cli_alert_info cli_abort
 .estimate_nzcount <- function(exprData, assay, verbose) {
     X <- unwrapData(exprData, assay)
     ## coerce to double to ensure we can deal with numbers larger than 2^31
     nr <- as.numeric(nrow(X))
     nc <- as.numeric(ncol(X))
-    nzc <- nr*nc
+    nzc <- tot <- nr*nc
     if (is_sparse(X)) {
+        estimated_flag <- FALSE
         if (is(X, "dgCMatrix") || is(X, "SVT_SparseArray"))
             nzc <- nzcount(X)
         else if (is(X, "DelayedMatrix")) {
             if (nc < 2000)
                 nzc <- nzcount(as(X, "dgCMatrix"))
             else {
-                if (verbose)
-                    cli_alert_info("Largish on-disk sparse assay, estimating number of nonzero values")
-                idx <- sample(1:nc, size=20, replace=FALSE) ## sample 20 columns
-                nzc <- as.integer(mean(sapply(idx, function(i) nzcount(X[, i]))))
+                block_dim <- chunkdim(X)
+                block_dim <- c(min(c(nr, block_dim[1])), min(c(nc, block_dim[2]))) ## just in case there's only one block
+                vp <- ArrayViewport(dim(X), IRanges(c(1, 1), width=block_dim))     ## just use the first block
+                block <- read_block(X, vp)
+                nzc <- ceiling(tot * as.numeric(nzcount(block)) / prod(block_dim))
+                estimated_flag <- TRUE
             }
+        } else
+            cli_abort("x"=sprintf("%s sparse matrix class cannot be handled", class(X)))
+
+        if (verbose) {
+            estmsg <- ""
+            if (estimated_flag)
+                estmsg <- " (estimated)"
+            cli_alert_info(sprintf("%.0f nonzeros (%s than 2^31) and %.2f%% sparsity%s",
+                                   nzc, ifelse(nzc > .Machine$integer.max, "more", "less"),
+                                   100 - (100 * nzc / tot), estmsg))
         }
     }
 
