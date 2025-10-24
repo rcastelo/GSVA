@@ -328,7 +328,7 @@ setClass("ssgseaParam",
 #' to apply in the presence of missing values in the input expression data; see
 #' `ssgseaParam`.
 #'
-#' @slot nzcount Integer vector of length 1. Number of non-zero values in the
+#' @slot nzcount Numeric vector of length 1. Number of non-zero values in the
 #' selected assay, if there is more than one, of the 'exprData' slot.
 #'
 #' @slot ondisk Character vector of length 1 denoting whether an on-disk backend
@@ -363,7 +363,7 @@ setClass("gsvaParam",
                  didCheckNA="logical",
                  anyNA="logical",
                  use="character",
-                 nzcount="integer",
+                 nzcount="numeric",
                  ondisk="character"),
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
@@ -382,7 +382,7 @@ setClass("gsvaParam",
                         didCheckNA=NA,
                         anyNA=NA,
                         use=NA_character_,
-                        nzcount=NA_integer_,
+                        nzcount=NA_real_,
                         ondisk=NA_character_))
 
 #' @name gsvaRanksParam-class
@@ -406,5 +406,5 @@ setClass("gsvaRanksParam",
                         didCheckNA=NA,
                         anyNA=NA,
                         use=NA_character_,
-                        nzcount=NA_integer_,
+                        nzcount=NA_real_,
                         ondisk=NA_character_))

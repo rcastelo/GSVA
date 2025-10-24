@@ -1035,6 +1035,16 @@ setMethod("unwrapData", signature("dgCMatrix"),
               return(container)
           })
 
+setMethod("unwrapData", signature("SVT_SparseArray"),
+          function(container, assay) {
+              return(container)
+          })
+
+setMethod("unwrapData", signature("DelayedMatrix"),
+          function(container, assay) {
+              return(container)
+          })
+
 setMethod("unwrapData", signature("ExpressionSet"),
           function(container, assay) {
               return(exprs(container))
@@ -1110,6 +1120,20 @@ setMethod("wrapData", signature(container="matrix"),
           })
 
 setMethod("wrapData", signature(container="dgCMatrix"),
+          function(container, dataMatrix, geneSets) {
+              if (!missing(geneSets))
+                  attr(dataMatrix, "geneSets") <- geneSets
+              return(dataMatrix)
+          })
+
+setMethod("wrapData", signature(container="SVT_SparseArray"),
+          function(container, dataMatrix, geneSets) {
+              if (!missing(geneSets))
+                  attr(dataMatrix, "geneSets") <- geneSets
+              return(dataMatrix)
+          })
+
+setMethod("wrapData", signature(container="DelayedMatrix"),
           function(container, dataMatrix, geneSets) {
               if (!missing(geneSets))
                   attr(dataMatrix, "geneSets") <- geneSets
