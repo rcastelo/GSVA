@@ -381,8 +381,9 @@
 #' @importFrom cli cli_alert_info
 .estimate_nzcount <- function(exprData, assay, verbose) {
     X <- unwrapData(exprData, assay)
-    nr <- nrow(X)
-    nc <- ncol(X)
+    ## coerce to double to ensure we can deal with numbers larger than 2^31
+    nr <- as.numeric(nrow(X))
+    nc <- as.numeric(ncol(X))
     nzc <- nr*nc
     if (is_sparse(X)) {
         if (is(X, "dgCMatrix") || is(X, "SVT_SparseArray"))
