@@ -1,4 +1,5 @@
-
+#' @importFrom S4Arrays is_sparse
+#' @importFrom DelayedArray seed
 compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
                              sparse=FALSE, any_na=FALSE,
                              na_use=c("everything", "all.obs", "na.rm"),
@@ -14,6 +15,17 @@ compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
         cli_abort(c("x"=msg))
     }
     
+    if (is(expr, "DelayedMatrix") && is_sparse(expr)) { ## by now read into main memory
+        cli_alert_info("Selected assay is a sparse DelayedMatrix object")
+        if (kernel) {
+          cli_alert_info("Reading it into main memory as a dgCMatrix object")
+          expr <- as(expr, "dgCMatrix")
+        } ## else {
+          ## cli_alert_info("reading it into main memory as a SVT_SparseArray object")
+          ## expr <- as(expr, "SVT_SparseArray")
+        ## }
+    }
+
     gene.cdf <- NA
     if (kernel) {
         if (is(expr, "dgCMatrix")) {
@@ -47,6 +59,22 @@ compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
             else
                 gene.cdf <- .ecdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE],
                                                       verbose)
+        } else if (is(expr, "SVT_SparseArray")) {
+            if (sparse)
+                gene.cdf <- .ecdfvals_svt_to_svt(expr[, sample.idxs, drop=FALSE],
+                                                 verbose)
+            else
+                gene.cdf <- .ecdfvals_svt_to_dense(expr[, sample.idxs, drop=FALSE],
+                                                   verbose)
+        } else if (is(expr, "DelayedMatrix")) {
+            if (!is(seed(expr), "HDF5ArraySeed"))
+              stop(sprintf("On-disk backend %s cannot be handled yet.", class(seed(expr))))
+            if (sparse)
+                gene.cdf <- .ecdfvals_sparseh5_to_sparseh5(expr[, sample.idxs, drop=FALSE],
+                                                           gridnrow=1000, verbose)
+            else
+                geen.cdf <- .ecdfvals_sparseh5_to_dense(expr[, sample.idxs, drop=FALSE],
+                                                        gridnrow=1000, verbose)
         } else if (is.matrix(expr)) {
             if (any_na)
                 gene.cdf <- .ecdfvals_dense_to_dense_nas(expr[, sample.idxs, drop=FALSE],
@@ -55,7 +83,7 @@ compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
                 gene.cdf <- .ecdfvals_dense_to_dense(expr[, sample.idxs, drop=FALSE],
                                                  verbose)
         } else
-            stop(sprintf("Matrix class %s cannot be handled yet.", class(expr)))
+            stop(sprintf("Input container class %s cannot be handled yet.", class(expr)))
     }
 
     return(gene.cdf)	
@@ -96,9 +124,9 @@ zorder_rankstat <- function(z, p) {
 
 #' @importFrom Matrix nnzero
 .sufficient_ssize <- function(expr, kcdf.min.ssize) {
-  ## in the sparse case stored in a 'dgCMatrix', by now,
-  ## use the average nonzero values per row
-  if (is(expr, "dgCMatrix"))
+  ## in the sparse case stored in a 'dgCMatrix' or a 'SVT_SparseArray',
+  ## by now, use the average nonzero values per row
+  if (is(expr, "dgCMatrix") || is(expr, "SVT_SparseArray"))
     return((nnzero(expr) / nrow(expr)) >= kcdf.min.ssize)
 
   ## in every other case, including the dense case, by now,
@@ -106,6 +134,7 @@ zorder_rankstat <- function(z, p) {
   return(ncol(expr) >= kcdf.min.ssize)
 }
 
+#' @importFrom S4Arrays is_sparse
 .parse_kcdf_param <- function(expr, kcdf, kcdf.min.ssize, sparse, verbose) {
     kernel <- FALSE
     Gaussk <- TRUE  ## default (TRUE) is a Gaussian kernel, Poisson otherwise (FALSE)
@@ -134,7 +163,10 @@ zorder_rankstat <- function(z, p) {
     }
 
     if (verbose) {
-        if (is(expr, "dgCMatrix") && sparse)
+        is_sparse_matrix <- is(expr, "dgCMatrix") ||
+                            is(expr, "SVT_SparseArray") ||
+                            (is(expr, "DelayedMatrix") && is_sparse(expr))
+        if (is_sparse_matrix && sparse)
             cli_alert_info("GSVA sparse algorithm")
         else
             cli_alert_info("GSVA dense (classical) algorithm")
@@ -149,110 +181,6 @@ zorder_rankstat <- function(z, p) {
 
     list(kernel=kernel, Gaussk=Gaussk)
 }
-
-#' @importFrom parallel splitIndices
-#' @importFrom IRanges IntegerList match
-#' @importFrom BiocParallel bpnworkers
-#' @importFrom cli cli_alert_info cli_progress_bar
-#' @importFrom cli cli_progress_update cli_progress_done
-compute.geneset.es <- function(expr, gset.idx.list, sample.idxs, kcdf,
-                               kcdf.min.ssize, abs.ranking,
-                               mx.diff=TRUE, tau=1, sparse=FALSE,
-                               verbose=TRUE, BPPARAM=SerialParam(progressbar=verbose)) {
-
-    kcdfparam <- .parse_kcdf_param(expr, kcdf, kcdf.min.ssize, sparse, verbose)
-    kernel <- kcdfparam$kernel
-    Gaussk <- kcdfparam$Gaussk
-
-    ## open parallelism only if ECDFs have to be estimated for
-    ## more than 100 genes on more than 100 samples
-    if (bpnworkers(BPPARAM) > 1 && length(sample.idxs) > 100 &&
-        nrow(expr) > 100) {
-        iter <- function(Y, idpb, n_chunks=bpnworkers(BPPARAM)) {
-            idx <- splitIndices(nrow(Y), min(nrow(Y), n_chunks))
-            i <- 0L
-            function() {
-                if (i == length(idx))
-                    return(NULL)
-                i <<- i + 1L
-                if (!is.null(idpb))
-                    cli_progress_update(id=idpb, set=i)
-                Y[idx[[i]], , drop=FALSE]
-            }
-        }
-        if (verbose) {
-            msg <- sprintf("Estimating ECDFs with %d cores",
-                           as.integer(bpnworkers(BPPARAM)))
-            idpb <- cli_progress_bar(msg, total=100)
-        }
-        gene.density <- bpiterate(iter(expr, idpb, 100),
-                                  compute.gene.cdf,
-                                  sample.idxs=sample.idxs,
-                                  Gaussk=Gaussk, kernel=kernel,
-                                  sparse=sparse, any_na=FALSE,
-                                  na_use="everything", verbose=FALSE,
-                                  REDUCE=rbind, reduce.in.order=TRUE,
-                                  BPPARAM=BPPARAM)
-        if (verbose)
-            cli_progress_done(idpb)
-    } else
-        gene.density <- compute.gene.cdf(expr, sample.idxs, Gaussk, kernel,
-                                         sparse, any_na=FALSE,
-                                         na_use="everything", verbose)
-    
-    gset.idx.list <- IntegerList(gset.idx.list)
-    n <- ncol(expr)
-    es <- NULL
-    if (n > 10 && bpnworkers(BPPARAM) > 1) {
-        if (verbose) {
-            msg <- sprintf("Calculating GSVA scores with %d cores",
-                           as.integer(bpnworkers(BPPARAM)))
-            cli_alert_info(msg)
-        }
-        es <- bplapply(as.list(1:n), function(j, Z) {
-            gene_ord_rnkstat <- list()
-            if (is(Z, "dgCMatrix"))
-                gene_ord_rnkstat <- .order_rankstat_sparse_to_sparse(Z, j)
-            else
-                gene_ord_rnkstat <- .order_rankstat(Z[, j])
-            geneRanking <- gene_ord_rnkstat[[1]]
-            rankStat <- gene_ord_rnkstat[[2]]
-
-            geneSetsRankIdx <- match(gset.idx.list, geneRanking)
-            .gsva_score_genesets(as.list(geneSetsRankIdx), geneRanking, rankStat,
-                                 mx.diff, abs.ranking, tau)
-        }, Z=gene.density, BPPARAM=BPPARAM)
-    } else {
-        idpb <- NULL
-        if (verbose)
-            idpb <- cli_progress_bar("Calculating GSVA scores", total=n)
-        es <- lapply(as.list(1:n), function(j, Z) {
-            gene_ord_rnkstat <- list()
-            if (is(Z, "dgCMatrix"))
-                gene_ord_rnkstat <- .order_rankstat_sparse_to_sparse(Z, j)
-            else
-                gene_ord_rnkstat <- .order_rankstat(Z[, j])
-            geneRanking <- gene_ord_rnkstat[[1]]
-            rankStat <- gene_ord_rnkstat[[2]]
-
-            geneSetsRankIdx <- match(gset.idx.list, geneRanking)
-            sco <- .gsva_score_genesets(as.list(geneSetsRankIdx), geneRanking, rankStat,
-                                        mx.diff, abs.ranking, tau)
-            if (verbose)
-                cli_progress_update(id=idpb)
-            sco
-        }, Z=gene.density)
-        if (verbose)
-            cli_progress_done(idpb)
-    }
-    es <- do.call("cbind", es)
-
-    return(es)
-}
-
-##
-## implement calculations separating ranks from random walks
-##
 
 ## BEGIN exported methods (to be moved to 'gsvaNewAPI.R')
 
@@ -354,7 +282,22 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
               filteredDataMatrix <- .filterGenes(dataMatrix, removeConstant=TRUE,
-                                                 removeNzConstant=TRUE)
+                                                 removeNzConstant=TRUE, gridnrow=1000,
+                                                 verbose)
+              
+              if (is(filteredDataMatrix, "DelayedArray") &&
+                  is(seed(filteredDataMatrix), "HDF5ArraySeed") &&
+                  get_ondisk(param) == "no") {
+                  if (verbose)
+                      cli_alert_info("Loading input expression data into main memory")
+                  if (is_sparse(filteredDataMatrix)) {
+                      if (nzcount(param) < .Machine$integer.max)
+                          filteredDataMatrix <- as(filteredDataMatrix, "dgCMatrix")
+                      else
+                          filteredDataMatrix <- as(filteredDataMatrix, "SVT_SparseArray")
+                  } else
+                      filteredDataMatrix <- as.matrix(filteredDataMatrix)
+              }
 
               if (!inherits(BPPARAM, "SerialParam") && verbose) {
                   msg <- sprintf("Using a %s parallel back-end with %d workers",
@@ -389,7 +332,8 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                           absRanking=get_absRanking(param),
                           sparse=get_sparse(param), checkNA=get_checkNA(param),
                           didCheckNA=get_didCheckNA(param), anyNA=anyNA(param),
-                          use=get_NAuse(param))
+                          use=get_NAuse(param), nzcount=nzcount(param),
+                          ondisk=get_ondisk(param))
 
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")
@@ -513,7 +457,8 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                                               any_na=anyNA(param),
                                               na_use=get_NAuse(param),
                                               minSize=get_minSize(param),
-                                              verbose=verbose, BPPARAM=BPPARAM)
+                                              verbose=verbose, gridncol=1000,
+                                              BPPARAM=BPPARAM)
 
               rownames(gsva_es) <- names(filteredMappedGeneSets)
               colnames(gsva_es) <- colnames(filteredDataMatrix)
@@ -704,6 +649,21 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     }
 }
 
+#' @importFrom cli cli_progress_update
+#' @importFrom parallel splitIndices
+.col_iter_idx <- function(X, idpb, n_chunks) {
+    idx <- splitIndices(ncol(X), min(ncol(X), n_chunks))
+    i <- 0L
+    function() {
+        if (i == length(idx))
+            return(NULL)
+        i <<- i + 1L
+        if (!is.null(idpb))
+            cli_progress_update(id=idpb, set=i)
+        idx[[i]]
+    }
+}
+
 #' @importFrom IRanges IntegerList match
 #' @importFrom BiocParallel bpnworkers
 #' @importFrom cli cli_alert_info cli_progress_bar
@@ -748,6 +708,16 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
         if (verbose)
             cli_alert_info("Calculating GSVA column ranks")
         R <- .sparseColumnApplyAndReplace(Z, rank, ties.method="last")
+    } else if (is(Z, "SVT_SparseArray")) {
+        if (verbose)
+            cli_alert_info("Calculating GSVA column ranks")
+        R <- colRanks_SVT_SparseArray(Z, BPPARAM=BPPARAM)
+    } else if (is(Z, "DelayedArray")) {
+        if (!is(seed(Z), "HDF5ArraySeed"))
+            stop(sprintf("On-disk backend %s cannot be handled yet.", seed(expr)))
+        if (verbose)
+            cli_alert_info("Calculating GSVA column ranks")
+        R <- .colRanksHDF5(Z, gridnrow=1000)
     } else {
         ## open parallelism only if ranks have to be calculated for
         ## more than 10000 genes on more than 1000 samples
@@ -911,6 +881,90 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 }
 
 ## convert ranks into decreasing order statistics and symmetric rank statistics
+## r is a matrix of features x samples/cells
+
+#' @importFrom MatrixGenerics colMaxs
+#' @importFrom BiocGenerics which
+.ranks2stats_block <- function(r, sparse) {
+    stopifnot(length(dim(r)) == 2) ## QC
+    mask <- unname(as.matrix(r)) == 0L
+    p <- nrow(r)
+    r_dense <- as.matrix(unname(r))           ## convert to dense
+    mode(r_dense) <- "integer"                ## assume ranks are integer
+    wh <- NULL
+
+    if (any(mask)) {                          ## sparse ranks into dense ranks
+        nzs <- colSums(mask)
+        mode(nzs) <- "integer"
+        nzsmat <- matrix(nzs, nrow=nrow(r), ncol=ncol(r), byrow=TRUE)
+        wh <- which(mask, arr.ind=TRUE)
+        nzsmat[wh] <- 0L
+        r_dense <- r_dense + nzsmat           ## shift ranks of nonzero values
+        r_dense[wh] <- unlist(sapply(nzs,     ## zeros get increasing ranks
+                                     seq.int))
+    }
+
+    dos <- p - r_dense + 1L                   ## dense ranks into
+                                              ## decreasing order stats
+    srs <- NULL
+    if (any(mask) && sparse) {
+        r[wh] <- 1L                   ## all zeros get the same first rank
+        wh <- which(!mask, arr.ind=TRUE)
+        r[wh] <- r[wh] + 1L       ## shift ranks of nonzero values by one
+        maxrmat <- matrix(colMaxs(r)/2, nrow=nrow(r), ncol=ncol(r), byrow=TRUE)
+        srs <- as.matrix(abs(maxrmat - r))
+    } else
+        srs <- abs(p/2 - r_dense)
+
+    list(dos=dos, srs=srs)
+}
+
+## convert ranks into decreasing order statistics and symmetric rank statistics
+## skipping NA values, r is a matrix of features x samples/cells
+.ranks2stats_nas_block <- function(r, sparse) {
+    stopifnot(length(dim(r)) == 2) ## QC
+    mask <- unname(as.matrix(r)) == 0L
+    na_mask <- is.na(mask)
+
+    if (all(na_mask))
+        return(list(dos=matrix(NA_integer_, nrow(r), ncol(r)),
+                    srs=matrix(NA, nrow(r), ncol(r))))
+
+    n_nas <- colSums(na_mask)
+    mask <- !na_mask & mask
+    p <- nrow(r)
+    r_dense <- as.matrix(r)
+    mode(r_dense) <- "integer"          ## assume ranks are integer
+
+    if (any(mask)) {                    ## sparse ranks into dense ranks
+        nzs <- colSums(mask)
+        mode(nzs) <- "integer"
+        nzsmat <- matrix(nzs, nrow=nrow(r), ncol=ncol(r), byrow=TRUE)
+        nzsmat[mask] <- 0L
+        r_dense <- r_dense + nzsmat            ## shift ranks of nonzero values
+        r_dense[!mask] <- r_dense[!mask] + nzs ## shift ranks of nonzero values
+        r_dense[mask] <- unlist(sapply(nzs,    ## zeros get increasing ranks
+                                       seq.int))
+    }
+
+    n_nasmat <-  matrix(n_nas, nrow=nrow(r), ncol=ncol(r), byrow=TRUE)
+    dos <- p - n_nasmat - r_dense + 1L   ## dense ranks into decreasing order stats
+
+    srs <- NULL
+    if (any(mask) && sparse) {
+        r[!mask] <- r[!mask] + 1L     ## shift ranks of nonzero values by one
+        r[mask] <- 1L                 ## all zeros get the same first rank
+        maxrmat <- matrix(colMaxs(r, na.rm=TRUE)/2, nrow=nrow(r), ncol=ncol(r),
+                          byrow=TRUE)
+        srs <- abs(maxrmat - r)
+    } else
+        srs <- abs((p - n_nasmat)/2 - r_dense)
+
+    list(dos=dos, srs=srs)
+}
+
+
+## convert ranks into decreasing order statistics and symmetric rank statistics
 ## skipping NA values
 .ranks2stats_nas <- function(r, sparse) {
     na_mask <- is.na(r)
@@ -943,59 +997,94 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 }
 
 
-#' @importFrom cli cli_alert_warning
+#' @importFrom cli cli_alert_info cli_alert_warning
 #' @importFrom BiocParallel bpnworkers
+#' @importFrom S4Arrays is_sparse
 .compute_gsva_scores <- function(R, geneSetsIdx, tau, maxDiff, absRanking,
                                  sparse, any_na, na_use, minSize, verbose,
+                                 gridncol=1000,
                                  BPPARAM=SerialParam(progressbar=verbose)) {
+    p <- nrow(R)
     n <- ncol(R)
     es <- NULL
-    if (!is(R, "dgCMatrix"))
+    if (sparse && !is_sparse(R))
         sparse <- FALSE
+
+    if (verbose) {
+      if (sparse)
+          cli_alert_info("GSVA sparse algorithm")
+        else
+          cli_alert_info("GSVA dense (classical) algorithm")
+    }
+
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
+    es <- NULL
+    if (is(R, "DelayedMatrix") && is(seed(R), "HDF5ArraySeed")) {
+        cli_alert_info("Calculating GSVA scores on disk")
+        sink <- HDF5RealizationSink(c(length(geneSetsIdx), ncol(R)),
+                                    as.sparse=FALSE) ## GSVA scores are dense
+        grid <- colAutoGrid(R, ncol=gridncol)
+        grid_es <- colAutoGrid(sink, ncol=gridncol)
 
-    if (n > 10 && bpnworkers(BPPARAM) > 1) {
-        if (verbose) {
-            msg <- sprintf("Calculating GSVA scores with %d cores",
-                           as.integer(bpnworkers(BPPARAM)))
-            idpb <- cli_alert_info(msg)
+        ## avp - ArrayViewport for reaching the (possibly sparse) rank matrix
+        ## avp_es - ArrayViewport for writing the enrichment dense scores matrix
+        colScores_byBlock <- function(avp, avp_es, sink) {
+            block <- read_block(R, avp)
+            rnkstats <- NULL
+            if (any_na)
+                rnkstats <- .ranks2stats_nas_block(block, sparse)
+            else
+                rnkstats <- .ranks2stats_block(block, sparse)
+            block <- .gsva_score_genesets(NULL, geneSetsIdx,
+                                          decOrdStat=rnkstats$dos,
+                                          symRnkStat=rnkstats$srs,
+                                          maxDiff, absRanking, tau,
+                                          any_na, na_use, minSize,
+                                          wna_env, verbose=FALSE)
+            write_block(sink, avp_es, block)
         }
-        es <- bplapply(as.list(1:n), function(j, R) {
-            rnkstats <- NULL
-            if (any_na)
-                rnkstats <- .ranks2stats_nas(R[, j], sparse)
-            else
-                rnkstats <- .ranks2stats(R[, j], sparse)
-            sco <- .gsva_score_genesets(geneSetsIdx, decOrdStat=rnkstats$dos,
-                                        symRnkStat=rnkstats$srs, maxDiff,
-                                        absRanking, tau, any_na, na_use, minSize,
-                                        wna_env)
-            sco
-        }, R=R, BPPARAM=BPPARAM)
-        es
+
+        nblock <- length(grid)
+        for (bid in seq_len(nblock))
+            sink <- colScores_byBlock(grid[[bid]], grid_es[[bid]], sink)
+        close(sink)
+        es <- as(sink, "DelayedArray")
+
     } else {
-        idpb <- NULL
-        if (verbose)
-          idpb <- cli_progress_bar("Calculating GSVA scores", total=n)
-        es <- lapply(as.list(1:n), function(j, R, idpb) {
+
+        ## open parallelism only if scores have to be calculated for
+        ## more than 1000 features/genes on more than 1000 samples/columns
+        if (bpnworkers(BPPARAM) > 1 && p > 1000 && n > 1000) {
+            n_chunks <- 100 ## 100 chunks of (ncol(R) / 100) columns
+            idpb <- NULL
+            if (verbose) {
+                msg <- sprintf("Calculating GSVA scores with %d cores",
+                               as.integer(bpnworkers(BPPARAM)))
+                idpb <- cli_progress_bar(msg)
+            }
+            es <- bpiterate(.col_iter_idx(R, idpb, n_chunks),
+                            .gsva_score_genesets, geneSetsIdx=geneSetsIdx,
+                            decOrdStat=rnkstats$dos, symRnkStat=rnkstats$srs,
+                            maxDiff=maxDiff, absRanking=absRanking, tau=tau,
+                            any_na=any_na, na_use=na_use, minSize=minSize,
+                            wna_env=wna_env, verbose=FALSE, preserveShape=TRUE,
+                            REDUCE=cbind, reduce.in.order=TRUE, BPPARAM=BPPARAM)
+            if (verbose)
+                cli_progress_done(idpb)
+        } else {
             rnkstats <- NULL
             if (any_na)
-                rnkstats <- .ranks2stats_nas(R[, j], sparse)
+                rnkstats <- .ranks2stats_nas_block(R, sparse)
             else
-                rnkstats <- .ranks2stats(R[, j], sparse)
-            sco <- .gsva_score_genesets(geneSetsIdx, decOrdStat=rnkstats$dos,
-                                        symRnkStat=rnkstats$srs, maxDiff,
-                                        absRanking, tau, any_na, na_use, minSize,
-                                        wna_env)
-            if (verbose)
-                cli_progress_update(id=idpb)
-            sco
-        }, R=R, idpb=idpb)
-        if (verbose)
-            cli_progress_done(id=idpb)
+                rnkstats <- .ranks2stats_block(R, sparse)
+            es <- .gsva_score_genesets(NULL, geneSetsIdx,
+                                       decOrdStat=rnkstats$dos,
+                                       symRnkStat=rnkstats$srs,
+                                       maxDiff, absRanking, tau, any_na,
+                                       na_use, minSize, wna_env, verbose)
+        }
     }
-    es <- do.call("cbind", es)
 
     if (any_na && na_use == "na.rm")
         if (get("w", envir=wna_env)) {
@@ -1008,12 +1097,13 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     return(es)
 }
 
+#' @importFrom S4Arrays is_sparse
 .gsva_enrichment_data <- function(R, column, geneSetIdx, maxDiff,
                                   absRanking, tau, sparse, any_na,
                                   na_use, minSize) {
     n <- ncol(R)
     es <- NULL
-    if (!is(R, "dgCMatrix"))
+    if (!is_sparse(R))
         sparse <- FALSE
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
@@ -1138,6 +1228,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     ## from https://stackoverflow.com/a/39877048
     fintticks <- function(x) unique(floor(pretty(seq(min(x),
                                     (max(x) + 1) * 1.1))))
+    .data <- get(".data")
     ggplot2::ggplot(data=edata$stats) +
         ggplot2::scale_x_continuous(breaks=fintticks) +
         ggplot2::geom_line(ggplot2::aes(x=.data$rank, y=.data$stat), color="green") +
@@ -1172,6 +1263,71 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 ##
 ## functions interfacing C code
 ##
+
+.fetch_row_nzvals <- function(X, i) {
+  stopifnot(is(X, "SVT_SparseArray")) ## QC
+  .Call("fetch_row_nzvals_R", X, as.integer(i))
+}
+
+.ecdfvals_svt_to_dense <- function(X, verbose) {
+  stopifnot(is(X, "SVT_SparseArray")) ## QC
+  stopifnot(is.logical(verbose)) ## QC
+  .Call("ecdfvals_svt_to_dense_R", X, verbose)
+}
+
+.ecdfvals_svt_to_sparse <- function(X, verbose) {
+  stopifnot(is(X, "SVT_SparseArray")) ## QC
+  stopifnot(is.logical(verbose)) ## QC
+  .Call("ecdfvals_svt_to_sparse_R", X, verbose)
+}
+
+.ecdfvals_svt_to_svt <- function(X, verbose) {
+  stopifnot(is(X, "SVT_SparseArray")) ## QC
+  stopifnot(is.logical(verbose)) ## QC
+  .Call("ecdfvals_svt_to_svt_R", X, verbose)
+}
+
+#' @importFrom HDF5Array HDF5RealizationSink
+#' @importFrom DelayedArray seed rowAutoGrid blockReduce
+.ecdfvals_sparseh5_to_sparseh5 <- function(X, gridnrow=1000, verbose) {
+  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
+  if (is(X, "DelayedMatrix"))
+    stopifnot(is(seed(X), "HDF5ArraySeed")) ## QC
+
+  sink <- HDF5RealizationSink(dim(X), as.sparse=TRUE)
+  grid <- rowAutoGrid(sink, nrow=min(c(gridnrow, nrow(X))))
+
+  rowEcdf_byBlock <- function(grid, sink) {
+    block <- read_block(X, grid)
+    block <- .ecdfvals_svt_to_svt(block, verbose=verbose)
+    write_block(sink, grid, block)
+  }
+  sink <- gridReduce(rowEcdf_byBlock, grid, sink)
+  close(sink)
+  res <- as(sink, "DelayedArray")
+  res
+}
+
+#' @importFrom HDF5Array HDF5RealizationSink
+#' @importFrom DelayedArray seed rowAutoGrid blockReduce
+.ecdfvals_sparseh5_to_dense <- function(X, gridnrow=1000, verbose) {
+  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
+  if (is(X, "DelayedMatrix"))
+    stopifnot(is(seed(X), "HDF5ArraySeed")) ## QC
+
+  sink <- HDF5RealizationSink(dim(X), as.sparse=FALSE)
+  grid <- rowAutoGrid(sink, nrow=min(c(gridnrow, nrow(X))))
+
+  rowEcdf_byBlock <- function(grid, sink) {
+    block <- read_block(X, grid)
+    block <- .ecdfvals_svt_to_dense(block, verbose=verbose)
+    write_block(sink, grid, block)
+  }
+  sink <- gridReduce(rowEcdf_byBlock, grid, sink)
+  close(sink)
+  res <- as(sink, "DelayedArray")
+  res
+}
 
 .ecdfvals_sparse_to_sparse <- function(X, verbose) {
   stopifnot(is(X, "CsparseMatrix")) ## QC
@@ -1226,25 +1382,38 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 }
 
 #' @importFrom cli cli_abort
-.gsva_score_genesets <- function(geneSetsIdx, decOrdStat, symRnkStat,
+.gsva_score_genesets <- function(colIdx, geneSetsIdx, decOrdStat, symRnkStat,
                                  maxDiff, absRanking, tau, any_na, na_use,
-                                 minSize, wna_env) {
+                                 minSize, wna_env, verbose) {
   minSize <- as.integer(minSize)
+  stopifnot(is.null(colIdx) || is.integer(colIdx)) ## QC
   stopifnot(is.list(geneSetsIdx)) ## QC
   stopifnot(length(geneSetsIdx) > 0) ## QC
   stopifnot(is.integer(geneSetsIdx[[1]])) ## QC
   stopifnot(is.integer(decOrdStat)) ## QC
   stopifnot(is.numeric(symRnkStat)) ## QC
+  stopifnot(all(dim(decOrdStat) == dim(symRnkStat))) ## QC
   stopifnot(is.logical(maxDiff)) ## QC
   stopifnot(is.logical(absRanking)) ## QC
-  stopifnot(is.numeric(tau)) ## QC but it still migth be an integer!!
+  stopifnot(is.numeric(tau)) ## QC but it still might be an integer!!
   stopifnot(is.logical(any_na)) ## QC
   stopifnot(is.character(na_use)) ## QC
   stopifnot(is.integer(minSize)) ## QC
+  stopifnot(is.logical(verbose)) ## QC
   na_use <- as.integer(factor(na_use, levels=c("everything", "all.obs",
                                                "na.rm")))
+  if (is.null(colIdx)) {
+    if (is.null(dim(decOrdStat)))
+      decOrdStat <- matrix(decOrdStat, ncol=1)
+    if (is.null(dim(symRnkStat)))
+      symRnkStat <- matrix(symRnkStat, ncol=1)
+  } else {
+    decOrdStat <- decOrdStat[, colIdx]
+    symRnkStat <- symRnkStat[, colIdx]
+  }
   sco <- .Call("gsva_score_genesets_R", geneSetsIdx, decOrdStat, symRnkStat,
-               maxDiff, absRanking, as.double(tau), any_na, na_use, minSize)
+               maxDiff, absRanking, as.double(tau), any_na, na_use, minSize,
+               verbose)
   if (any_na) {
     if (na_use == 2 && !is.null(attr(sco, "class")))
         cli_abort(c("x"="Input GSVA ranks have NA values."))
@@ -1266,6 +1435,47 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
   .Call("order_rankstat_sparse_to_sparse_R", X, j)
 }
 
+## calculate ranks using an HDF5 backend
+
+#' @importFrom BiocParallel SerialParam
+colRanks_SVT_SparseArray <- function(X, BPPARAM=SerialParam()) {
+    R <- X
+    rnks <- NULL
+    ## open parallelism only if ranks have to be calculated for
+    ## more than 10000 genes on more than 1000 samples
+    if (bpnworkers(BPPARAM) > 1 && nrow(X) > 10000 && ncol(X) > 1000)
+        rnks <- bplapply(sapply(X@SVT, "[[", 1), rank, ties.method="last",
+                         BPPARAM=BPPARAM)
+    else
+        rnks <- lapply(sapply(X@SVT, "[[", 1), rank, ties.method="last")
+    R@type <- "integer" ## rank() w/ ties.method="last" returns integer
+    R@SVT <- mapply(list, rnks, sapply(X@SVT, "[[", 2), SIMPLIFY=FALSE)
+    R
+}
+
+#' @importFrom MatrixGenerics colRanks
+#' @importFrom BiocParallel SerialParam
+.colRanksHDF5 <- function(X, gridnrow=1000) {
+    stopifnot(is(seed(X), "HDF5ArraySeed")) ## QC
+    sink <- HDF5RealizationSink(dim(X), as.sparse=is_sparse(X))
+    grid <- colAutoGrid(sink, ncol=min(c(gridnrow, ncol(X))))
+
+    colRanks_byBlock <- function(grid, sink) {
+        block <- read_block(X, grid)
+        if (is_sparse(X) && is(X, "SVT_SparseArray")) {
+            block <- colRanks_SVT_SparseArray(block)
+        } else {
+            block <- colRanks(block, ties.method="last", preserveShape=TRUE)
+            mode(block) <- "integer"
+        }
+        write_block(sink, grid, block)
+    }
+
+    sink <- gridReduce(colRanks_byBlock, grid, sink)
+    close(sink)
+  res <- as(sink, "DelayedArray")
+  res
+}
 
 
 ##

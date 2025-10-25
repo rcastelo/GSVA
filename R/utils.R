@@ -7,13 +7,15 @@
 ## check for presence of valid row/feature names
 ##   and abort or generate dummy names
 ## #' @importFrom Biobase featureNames
-.check_rownames <- function(expr, useDummyNames=TRUE) {
+.check_rowNames <- function(expr, useDummyNames=TRUE, verbose) {
     ## CHECK: is this the right place to check this?
     ## 21/10/24: let's do it at parameter constructor
     if (is.null(rownames(expr))) {
         if (useDummyNames) {
-            cli_alert_info("Using dummy rownames for the input assay object.")
-            rownames(expr) <- .dummyNames(expr)
+            if (verbose) {
+                cli_alert_info("Using dummy rownames for the input assay object.")
+                rownames(expr) <- .dummyNames(expr)
+            }
         } else {
             cli_abort(c("x"="The input assay object doesn't have rownames"))
         }
@@ -51,7 +53,7 @@
 ## 2025-03-12  axel: as an afterthought, if we have a multi-assay container with
 ##   assay names AND no assay is selected AND one of the assay names happens to
 ##   be 'logcounts' --> use this one by default rather than the first in list.
-.check_assayNames <- function(a, xd) {
+.check_assayNames <- function(a, xd, verbose) {
     an <- gsvaAssayNames(xd)
 
     if(length(a) != 1) {
@@ -67,9 +69,11 @@
             ## if unavailable, just select the first available assay name
             def <- grep("logcounts", an, fixed=TRUE, value=TRUE)
             assay <- if(length(def) > 0) head(def, 1) else head(an, 1)
-            msg <- sprintf("No assay name provided; using default assay '%s'",
-                           assay)
-            cli_alert_info(msg)
+            if (verbose) {
+                msg <- sprintf("No assay name provided; using default assay '%s'",
+                               assay)
+                cli_alert_info(msg)
+            }
         } else {                # check the provided assay name before using it
             if(a %in% an) {
                 assay <- a      # found it: OK!
@@ -84,8 +88,8 @@
             msg <- sprintf("exprData object of class '%s' has no assay names.",
                            class(xd))
             cli_abort(msg)
-        } else {                # i.e. there is exactly one unnamed assay
-            if(!is.na(a)) {     # and the provided name is useless but harmless
+        } else {                       # i.e. there is exactly one unnamed assay
+            if(verbose && !is.na(a)) { # and the provided name is useless but harmless
                 msg <- sprintf(paste0("argument assay='%s' ignored since exprData ",
                                       "has no assay names."), a)
                 cli_alert_info(msg)
@@ -121,35 +125,57 @@
 ##  values of genes: genes that are constant in their non-zero values will have
 ##  an SD of 0 and therefore scaling them will result in division by 0.
 
+#' @importFrom S4Arrays is_sparse
 #' @importFrom sparseMatrixStats rowRanges
-#' @importFrom cli cli_alert_warning cli_abort
-.filterGenes <- function(expr, removeConstant=TRUE, removeNzConstant=TRUE) {
+#' @importFrom DelayedArray blockApply
+#' @importFrom cli cli_alert_warning cli_abort cli_alert_info
+.filterGenes <- function(expr, removeConstant=TRUE, removeNzConstant=TRUE,
+                         gridnrow=1000, verbose=TRUE) {
+    if (verbose)
+        cli_alert_info("Searching for genes/features with constant values")
+
     geneRanges <- rowRanges(expr, na.rm=TRUE, useNames=FALSE)
     constantGenes <- (geneRanges[, 1] == geneRanges[, 2])
 
     if (any(constantGenes) || anyNA(constantGenes)) {
         invalidGenes <- (constantGenes | is.na(constantGenes))
-        msg <- sprintf("%d genes with constant values throughout the samples",
+        msg <- sprintf("%d genes/features with constant values throughout the samples",
                        sum(invalidGenes))
         cli_alert_warning(msg)
         if (removeConstant) {
-            cli_alert_warning("Genes with constant values are discarded")
+            cli_alert_warning("Genes/features with constant values are discarded")
             expr <- expr[!invalidGenes, ]
         }
     }
 
-    if (is(expr, "dgCMatrix")) {
-        nzGeneList <- .sparse2columnList(t(expr))
+    if (is_sparse(expr)) {
+        nzGeneList <- list()
+        if (is(expr, "DelayedMatrix") && is(seed(expr), "HDF5ArraySeed")) {
+            grid <- rowAutoGrid(expr, nrow=min(c(gridnrow, nrow(expr))))
+            rowNonzeroRanges_byBlock <- function(block) {
+                lapply(t(block)@SVT, "[[", 1)
+            }
+            nzGeneList <- blockApply(expr, rowNonzeroRanges_byBlock, grid=grid,
+                                     as.sparse=TRUE)
+            if (length(nzGeneList) < nrow(expr))
+                nzGeneList <- unlist(nzGeneList, recursive=FALSE)
+        } else if (is(expr, "dgCMatrix"))
+            nzGeneList <- .sparse2columnList(t(expr))
+        else if (is(expr, "SVT_SparseArray"))
+            nzGeneList <- lapply(t(expr)@SVT, "[[", 1)
+        else
+            cli_abort("x"="Uknown sparse matrix class")
+
         nzGeneRanges <- vapply(nzGeneList, FUN=range, FUN.VALUE=double(2))
         constantNzGenes <- (nzGeneRanges[1,] == nzGeneRanges[2,])
 
         if (any(constantNzGenes) || anyNA(constantNzGenes)) {
             invalidNzGenes <- (constantNzGenes | is.na(constantNzGenes))
-            msg <- sprintf("%d genes with constant non-zero values throughout the samples",
+            msg <- sprintf("%d genes/features with constant nonzero values throughout the samples",
                            sum(invalidNzGenes))
             cli_alert_warning(msg)
             if (removeNzConstant) {
-                cli_alert_warning("Genes with constant non-zero values are discarded")
+                cli_alert_warning("Genes/features with constant nonzero values are discarded")
                 expr <- expr[!invalidNzGenes, ]
             }
         }
@@ -268,7 +294,9 @@
     ## e.g., constant expression
     filteredDataMatrix <- .filterGenes(dataMatrix,
                                        removeConstant=removeConstant,
-                                       removeNzConstant=removeNzConstant)
+                                       removeNzConstant=removeNzConstant,
+                                       gridnrow=1000,
+                                       verbose)
 
     filteredMappedGeneSets <- .filterAndMapGeneSets(param=param,
                                                     filteredDataMatrix=filteredDataMatrix,
@@ -319,7 +347,7 @@
     return(m)
 }
 
-#' @importFrom cli cli_abort cli_alert_danger
+#' @importFrom cli cli_abort cli_alert_warning
 .check_for_na_values <- function(exprData, assay, checkNA, use) {
     autonaclasseswocheck <- c("matrix", "ExpressionSet",
                               "SummarizedExperiment",
@@ -337,15 +365,77 @@
             else if (use == "everything")
                 cli_alert_warning(paste("Input expression data has NA values,",
                                        "which will be propagated through",
-                                       "calculations."))
+                                       "calculations"))
             else ## na.rm
                 cli_alert_warning(paste("Input expression data has NA values,",
                                        "which will be discarded from",
-                                       "calculations."))
+                                       "calculations"))
         }
     }
 
     list(any_na=any_na, didCheckNA=didCheckNA)
+}
+
+## calculate number of nonzero values in an on-disk DelayedArray
+.nzcountDA <- function(X) {
+    ## coerce to double to ensure we can deal with numbers larger than 2^31
+    nr <- as.numeric(nrow(X))
+    nc <- as.numeric(ncol(X))
+    block_dim <- chunkdim(X)
+    grid_dim <- dim(chunkGrid(X))
+    nzc <- 0
+    for (i in 1:grid_dim[1])
+        for (j in 1:grid_dim[2]) {
+            icoord <- (i-1)*block_dim[1]+1
+            jcoord <- (j-1)*block_dim[2]+1
+            bdim <- c(min(c(nr, i*block_dim[1]))-icoord+1, min(c(nc, j*block_dim[2]))-jcoord+1)
+            vp <- ArrayViewport(dim(X), IRanges(c(icoord, jcoord), width=bdim))
+            block <- read_block(X, vp)
+            nzc <- nzc + as.numeric(nzcount(block))
+        }
+    nzc
+}
+
+#' @importFrom IRanges IRanges
+#' @importFrom S4Arrays is_sparse ArrayViewport
+#' @importFrom DelayedArray chunkdim chunkGrid
+#' @importFrom SparseArray nzcount
+#' @importFrom cli cli_alert_info cli_abort
+.estimate_nzcount <- function(exprData, assay, verbose) {
+    X <- unwrapData(exprData, assay)
+    ## coerce to double to ensure we can deal with numbers larger than 2^31
+    nr <- as.numeric(nrow(X))
+    nc <- as.numeric(ncol(X))
+    nzc <- tot <- nr*nc
+    if (is_sparse(X)) {
+        estimated_flag <- FALSE
+        if (is(X, "dgCMatrix") || is(X, "SVT_SparseArray"))
+            nzc <- nzcount(X)
+        else if (is(X, "DelayedMatrix")) {
+            if (nc < 2000)
+                nzc <- nzcount(as(X, "dgCMatrix"))
+            else {
+                block_dim <- chunkdim(X)
+                block_dim <- c(min(c(nr, block_dim[1])), min(c(nc, block_dim[2]))) ## just in case there's only one block
+                vp <- ArrayViewport(dim(X), IRanges(c(1, 1), width=block_dim))     ## just use the first block
+                block <- read_block(X, vp)
+                nzc <- ceiling(tot * as.numeric(nzcount(block)) / prod(block_dim))
+                estimated_flag <- TRUE
+            }
+        } else
+            cli_abort("x"=sprintf("%s sparse matrix class cannot be handled", class(X)))
+
+        if (verbose) {
+            estmsg <- ""
+            if (estimated_flag)
+                estmsg <- " (estimated)"
+            cli_alert_info(sprintf("%.0f nonzeros (%s than 2^31) and %.2f%% sparsity%s",
+                                   nzc, ifelse(nzc > .Machine$integer.max, "more", "less"),
+                                   100 - (100 * nzc / tot), estmsg))
+        }
+    }
+
+    return(nzc)
 }
 
 ## transforms a dgCMatrix into a list of its

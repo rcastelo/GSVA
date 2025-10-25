@@ -12,7 +12,8 @@ plageParam(
   assay = NA_character_,
   annotation = NULL,
   minSize = 1,
-  maxSize = Inf
+  maxSize = Inf,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -47,6 +48,10 @@ sets after gene identifier mapping. By default, the minimum size is 1.}
 
 \item{maxSize}{Numeric vector of length 1.  Maximum size of the resulting gene
 sets after gene identifier mapping. By default, the maximum size is \code{Inf}.}
+
+\item{verbose}{Logical vector of length 1. It gives information about some
+decisions made by the software during parameter object construction when
+\code{verbose=TRUE} (default) and remains silent otherwise.}
 }
 \value{
 A new \code{\linkS4class{plageParam}} object.

@@ -41,6 +41,10 @@
 #' @param maxSize Numeric vector of length 1.  Maximum size of the resulting gene
 #' sets after gene identifier mapping. By default, the maximum size is `Inf`.
 #' 
+#' @param verbose Logical vector of length 1. It gives information about some
+#' decisions made by the software during parameter object construction when
+#' `verbose=TRUE` (default) and remains silent otherwise.
+#'
 #' @return A new [`zscoreParam-class`] object.
 #'
 #' @seealso [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class]
@@ -70,12 +74,12 @@
 #' @export
 zscoreParam <- function(exprData, geneSets,
                         assay=NA_character_, annotation=NULL,
-                        minSize=1,maxSize=Inf) {
+                        minSize=1,maxSize=Inf, verbose=TRUE) {
     ## check assay parameter and assay names
-    assay <- .check_assayNames(assay, exprData)
+    assay <- .check_assayNames(assay, exprData, verbose)
 
     ## check for presence of valid row/feature names
-    exprData <- .check_rownames(exprData)
+    exprData <- .check_rowNames(exprData, verbose)
 
     xa <- gsvaAnnotation(exprData)
     if(is.null(xa)) {
@@ -85,7 +89,7 @@ zscoreParam <- function(exprData, geneSets,
     } else {
         if(is.null(annotation)) {
             annotation <- xa
-        } else {
+        } else if (verbose) {
             msg <- sprintf(paste0("using argument annotation='%s' and ",
                                   "ignoring exprData annotation ('%s')"),
                            capture.output(annotation), capture.output(xa))
