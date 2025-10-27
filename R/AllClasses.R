@@ -28,16 +28,18 @@
 #' @importClassesFrom SummarizedExperiment SummarizedExperiment
 #' @importClassesFrom SingleCellExperiment SingleCellExperiment
 #' @importClassesFrom SpatialExperiment SpatialExperiment
-#' @importClassesFrom DelayedArray DelayedArray
-#' @importClassesFrom HDF5Array HDF5Array
+#' @importClassesFrom DelayedArray DelayedArray DelayedMatrix
+#' @importClassesFrom HDF5Array HDF5Array HDF5Matrix
+#' @importClassesFrom SparseArray SVT_SparseArray
 #'
 #' @aliases GsvaExprData
 #' @name GsvaExprData-class
 #' @rdname GsvaExprData-class
 #' @exportClass GsvaExprData
 setClassUnion("GsvaExprData",
-              c("matrix", "dgCMatrix", "ExpressionSet",
-                "SummarizedExperiment", "SingleCellExperiment", "SpatialExperiment", "HDF5Array"))
+              c("matrix", "dgCMatrix", "SVT_SparseArray", "DelayedMatrix",
+                "ExpressionSet", "SummarizedExperiment", "SingleCellExperiment",
+                "SpatialExperiment", "HDF5Matrix"))
 
 
 #' `GsvaGeneSets` class

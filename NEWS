@@ -1,3 +1,18 @@
+CHANGES IN VERSION 2.40
+-----------------------
+
+USER VISIBLE CHANGES
+
+  o Input needs not row/feature/gene names in the expression data anymore, and gene sets can be directly integer values indexing rows in the expression data. This is mostly useful for quick testing purposes.
+
+  o gsvaEnrichment(plot="ggplot") outputs now ggplot2 4.0 compliant plots.
+
+  o Input (sparse) expression data for the GSVA method can be now also provided as a SVT_SparseMatrix object, defined in the SparseArray package, either directly or within a SingleCellExperiment object. This allows for analysing single-cell data sets with more than 2^31 nonzero values.
+
+  o Input expression data for the GSVA method can be now also provided as a DelayedArray matrix storing the values using an HDF5 on-disk backend, either directly or within a SingleCellExperiment object.
+
+  o Added a new vignette illustrating the use of the GSVA method with single-cell RNA-seq data.
+
 CHANGES IN VERSION 2.20
 -----------------------
 
@@ -19,8 +34,7 @@ BUG FIXES
 
   o Bugfix in checking and detecting missing values in input expression data.
 
-  o Bugfix in the PLAGE method when using the argument BPPARAM with a value other than Serial
-Param(). It resolves issue #220.
+  o Bugfix in the PLAGE method when using the argument BPPARAM with a value other than SerialParam(). It resolves issue #220.
 
   o Bugfix when tau is not double for the GSVA method.
 

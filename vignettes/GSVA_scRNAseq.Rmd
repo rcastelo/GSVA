@@ -1,0 +1,346 @@
+---
+title: "GSVA on single-cell RNA-seq data"
+author:
+- name: Robert Castelo
+  affiliation:
+  - &idupf Dept. of Medicine and Life Sciences, Universitat Pompeu Fabra, Barcelona, Spain
+  email: robert.castelo@upf.edu
+- name: Axel Klenk
+  affiliation: *idupf
+  email: axelvolker.klenk@upf.edu
+- name: Justin Guinney 
+  affiliation: 
+  - Tempus Labs, Inc.
+  email: justin.guinney@tempus.com
+abstract: >
+  Here we illustrate how to use GSVA with single-cell RNA sequencing (scRNA-seq)
+  data.
+date: "`r BiocStyle::doc_date()`"
+package: "`r pkg_ver('GSVA')`"
+vignette: >
+  %\VignetteIndexEntry{GSVA on single-cell RNA-seq data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteKeywords{GeneExpression, Microarray, RNAseq, GeneSetEnrichment, Pathway}
+output:
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    fig_captions: yes
+bibliography: GSVA.bib
+---
+
+**License**: `r packageDescription("GSVA")[["License"]]`
+
+```{r setup, include=FALSE}
+options(width=80)
+knitr::opts_chunk$set(collapse=TRUE,
+                      message=FALSE,
+                      warning=FALSE,
+                      comment="",
+                      fig.align="center",
+                      fig.wide=TRUE)
+```
+
+# Introduction
+
+GSVA provides now specific support for single-cell data in the algorithm
+that runs through the `gsvaParam()` parameter constructor, and originally
+described in the publication by @haenzelmann2013gsva. At the moment, this
+specific support consists of the following features:
+
+  * The input expression data can be stored in different types of data
+    containers prepared to store sparse single-cell data. These types of
+    sparse data containers can be broadly categorized in those that only
+    store the expression values, and those that may store additional row
+    and column metadata. The currently available value-only containers for
+    input are `dgCMatrix`, `SVT_SparseArray`, and `DelayedMatrix`.
+    The currently available container for single-cell data that allows one
+    to input additional row and column metadata is a `SingleCellExperiment`
+    object.
+  * While the input single-cell data is always sparse, the output of enrichment
+    scores will be always dense, and therefore, the container storing those
+    scores will be different from the input data, typically a `matrix` or a
+    dense `DelayedMatrix` object. The latter will be particularly used when the
+    total number of values exceeds 2^31, which is the largest 32-bit standard
+    integer value in R.
+  * By default, when the input expression data is stored in a sparse data
+    container, as it typically happens with single-cell data, then a slightly
+    a slightly modified GSVA algorithm will run, if GSVA is the choice of
+    algorithm, by which nonzero values are treated differently from zero values,
+    leading to slightly different results than those obtained by applying the
+    classical GSVA algorithm. If we set the parameter `sparse=FALSE` in the call
+    to `gsvaParam()`, the classical GSVA algorithm will be used, which for a
+    typical single-cell data set will result in longer running times and larger
+    memory consumption than running it in the default sparse regime for this
+    type of data.
+
+In what follows, we will illustrate the use of GSVA on a publicly available
+single-cell transcriptomics data set of peripheral blood mononuclear cells
+(PBMCs) published by @zheng2017massively.
+
+# Import data
+
+We import the PBMC data using the `r Biocpkg("TENxPBMCData")` package, as a
+`SingleCellExperiment` object, defined in the
+`r Biocpkg("SingleCellExperiment")` package.
+
+
+```{r, message=FALSE, warning=FALSE}
+library(SingleCellExperiment)
+library(TENxPBMCData)
+
+sce <- TENxPBMCData(dataset="pbmc4k")
+sce
+```
+
+# Quality assessment and pre-processing
+
+Here, we perform a quality assessment and pre-processing steps using the
+package `r Biocpkg("scuttle")` [@mccarthy2017scater]. We start identifying
+mitochondrial genes.
+
+```{r, message=FALSE, warning=FALSE}
+library(scuttle)
+
+is_mito <- grepl("^MT-", rowData(sce)$Symbol_TENx)
+table(is_mito)
+```
+Calculate quality control (QC) metrics and filter out low-quality cells.
+
+```{r}
+sce <- quickPerCellQC(sce, subsets=list(Mito=is_mito),
+                           sub.fields="subsets_Mito_percent")
+dim(sce)
+```
+Figure \@ref(fig:cntxgene) below shows the empirical cumulative distribution of
+counts per gene in logarithmic scale.
+
+```{r cntxgene, fig.width=5, fig.height=5, out.width="600px", fig.cap="Empirical cumulative distribution of UMI counts per gene. The red vertical bar indicates a cutoff value of 100 UMI counts per gene across all cells, below which genes will be filtered out."}
+cntxgene <- rowSums(assays(sce)$counts)+1
+plot.ecdf(cntxgene, xaxt="n", panel.first=grid(), xlab="UMI counts per gene",
+          log="x", main="", xlim=c(1, 1e5), las=1)
+axis(1, at=10^(0:5), labels=10^(0:5))
+abline(v=100, lwd=2, col="red")
+```
+We filter out lowly-expressed genes, by selecting those with at least 100 UMI
+counts across all cells for downstream analysis.
+
+```{r}
+sce <- sce[cntxgene >= 100, ]
+dim(sce)
+```
+Calculate library size factors and normalized units of expression in
+logarithmic scale.
+
+```{r}
+sce <- computeLibraryFactors(sce)
+sce <- logNormCounts(sce)
+assayNames(sce)
+```
+
+# Annotate cell types using GSVA
+
+Here, we illustrate how to annotate cell types in the PBMC data using GSVA.
+
+## Read gene sets in GMT format
+
+First, we fetch a collection of 22 leukocyte gene set signatures, containing
+a total 547 genes, which should help to distinguish among 22 mature human
+hematopoietic cell type populations isolated from peripheral blood or
+*in vitro* culture conditions, including seven T cell types: naïve and memory B
+cells, plasma cells, NK cell, and myeloid subsets. These gene sets have been
+used in the benchmarking publication by @diaz2019evaluation, and were
+originally compiled by the [CIBERSORT](https://cibersortx.stanford.edu)
+developers, where they called it the LM22 signature [@newman2015robust]. The
+LM22 signature is stored in the `r Biocpkg("GSVAdata")` experiment data
+package as a compressed text file in
+[GMT format](https://www.genepattern.org/file-formats-guide/#GMT), which can
+be read into R using the `readGMT()` function from the `r Biocpkg("GSVA")`
+package, and will return the gene sets into a `GeneSetCollection` object,
+defined in the `r Biocpkg("GSEABase")` package.
+
+```{r, message=FALSE, warning=FALSE}
+library(GSEABase)
+library(GSVA)
+
+fname <- file.path(system.file("extdata", package="GSVAdata"),
+                   "pbmc_cell_type_gene_set_signatures.gmt.gz")
+gsets <- readGMT(fname)
+gsets
+```
+
+## Add gene identifier type metadata
+
+Note that while gene identifers in the `sce` object correspond to
+[Ensembl stable identifiers](https://www.ensembl.org/info/genome/stable_ids/index.html)
+(`ENSG...`), the gene identifiers in the gene sets are
+[HGNC](https://www.genenames.org) gene symbols. This, in principle, precludes
+matching directly what gene in the single-cell data object `sce` corresponds to
+what gene set in the `GeneSetCollection` object `gsets`. However, the
+`r Biocpkg("GSVA")` package can do that matching as long as the appropriate
+metadata is present in both objects.
+
+In the case of a `GeneSetCollection` object, its `geneIdType` metadata slot
+stores the type of gene identifier. In the case of a `SingleCellExperiment`
+object, such as the previous `sce` object, such metadata is not present.
+However, using the function `gsvaAnnotation()` from the `r Biocpkg("GSVA")`
+package, and the helper function `ENSEMBLIdentifier()` from the
+`r Biocpkg("GSEABase")` package, we add such metadata to the `sce` object as
+follows.
+
+```{r}
+gsvaAnnotation(sce) <- ENSEMBLIdentifier("org.Hs.eg.db")
+gsvaAnnotation(sce)
+```
+
+## Build parameter object
+
+We first build a parameter object using the function `gsvaParam()`. By
+default, the expression values in the `logocounts` assay will be selected for
+downstream analysis.
+
+```{r}
+gsvapar <- gsvaParam(sce, gsets)
+gsvapar
+```
+
+## Calculate GSVA scores
+
+While at this point, we could already run the entire GSVA algorithm with a call
+to the `gsva(gsvapar)` function. We show here how to do it in two steps.
+First we calculate GSVA rank values using the function `gsvaRanks()`.
+
+```{r}
+gsvaranks <- gsvaRanks(gsvapar)
+gsvaranks
+```
+
+Second, we calculate the GSVA scores using the output of `gsvaRanks()` as input
+to the function `gsvaScores()`. By default, this function will calculate the
+scores for all gene sets specified in the input parameter object.
+
+```{r}
+es <- gsvaScores(gsvaranks)
+es
+```
+However, we could calculate the scores for another collection of gene sets by
+updating them in the `gsvaranks` object as follows.
+
+```{r, eval=FALSE}
+geneSets(gsvaranks) <- geneSets(gsvapar)[1:2]
+es2 <- gsvaScores(gsvaranks)
+```
+
+## Using GSVA scores to assign cell types
+
+Following @amezquita2020orchestrating, and some of the steps described in
+"Chapter 5 Clustering" of the first version of the
+[OSCA book](https://bioconductor.org/books/3.16/OSCA.basic/clustering.html),
+we use GSVA scores to build a nearest-neighbor graph of the cells using the
+function `buildSNNGraph()` from the `r Biocpkg("scran")`
+package [@lun2016step]. The parameter `k` in the call to `buildSNNGraph()`
+specifies the number of nearest neighbors to consider during graph
+construction, and here we set `k=20` because it leads to a number of clusters
+close to the expected number of cell types.
+
+```{r, message=FALSE, warning=FALSE}
+library(scran)
+
+g <- buildSNNGraph(es, k=20, assay.type="es")
+```
+Second, we use the function `cluster_walktrap()` from the `r CRANpkg("igraph")`
+package [@csardi2006igraph], to cluster cells by finding densely connected
+subgraphs. We store the resulting vector of cluster indicator values into the
+`sce` object using the function `colLabels()`.
+
+
+```{r, message=FALSE, warning=FALSE}
+library(igraph)
+
+colLabels(es) <- factor(cluster_walktrap(g)$membership)
+table(colLabels(es))
+```
+Similarly to @diaz2019evaluation, we apply a simple cell type assignment
+algorithm, which consists of selecting at each cell the gene set with highest
+GSVA score, tallying the selected gene sets per cluster, and assigning to the
+cluster the most frequent gene set, storing that assignment into the `sce`
+object with the function `colLabels()`.
+
+```{r}
+## whmax <- apply(assay(es), 2, which.max)
+whmax <- apply(assay(es), 2, function(x) which.max(as.vector(x)))
+gsxlab <- split(rownames(es)[whmax], colLabels(es))
+gsxlab <- names(sapply(sapply(gsxlab, table), which.max))
+colLabels(es) <- factor(gsub("[0-9]\\.", "", gsxlab))[colLabels(es)]
+table(colLabels(es))
+```
+We can visualize the cell type assignments by projecting cells dissimilarity in
+two dimensions with a principal components analysis (PCA) on the GSVA scores,
+and coloring cells using the previously assigned clusters.
+
+```{r scpcaclusters, echo=TRUE, message=FALSE, warning=FALSE, fig.height=5, fig.width=6, out.width="600px", fig.cap="Cell type assignments of PBMC scRNA-seq data, based on GSVA scores."}
+library(RColorBrewer)
+
+res <- prcomp(assay(es))
+varexp <- res$sdev^2 / sum(res$sdev^2)
+nclusters <- nlevels(colLabels(es))
+hmcol <- colorRampPalette(brewer.pal(nclusters, "Set1"))(nclusters)
+par(mar=c(4, 5, 1, 1))
+plot(res$rotation[, 1], res$rotation[, 2], col=hmcol[colLabels(es)], pch=19,
+     xlab=sprintf("PCA 1 (%.0f%%)", varexp[1]*100),
+     ylab=sprintf("PCA 2 (%.0f%%)", varexp[2]*100),
+     las=1, cex.axis=1.2, cex.lab=1.5)
+legend("topright", gsub("_", " ", levels(colLabels(es))), fill=hmcol, inset=0.01)
+```
+Finally, if we want to better understand why a specific cell type is annotated
+to a given cell, we can use the `gsvaEnrichment()` function, which will show
+a GSEA enrichment plot. This function takes as input the output of
+`gsvaRanks()`, a given column (cell) in the input singl-cell data, and a given
+gene set. In Figure \@ref(fig:gsvaenrichment) below, we show such a plot for the
+first cell annotated to the eosinophil cell type.
+
+```{r gsvaenrichment, echo=TRUE, fig.height=5, fig.width=5, out.width="600px", fig.cap="GSVA enrichment plot of the EOSINOPHILS gene set in the expression profile of the first cell annotated to that cell type."}
+firsteosinophilcell <- which(colLabels(es) == "EOSINOPHILS")[1]
+par(mar=c(4, 5, 1, 1))
+gsvaEnrichment(gsvaranks, column=firsteosinophilcell, geneSet="EOSINOPHILS",
+               cex.axis=1.2, cex.lab=1.5, plot="ggplot")
+```
+In the previous call to `gsvaEnrichment()` we used the argument `plot="ggplot"`
+to produce a plot with the [ggplot2](https://cran.r-project.org/package=ggplot2)
+package. By default, if we call `gsvaEnrichment()` interactively, it will
+produce a plot using "base R", but either when we do it non-interactively, or
+when we set `plot="no"` it will return a `data.frame` object with the enrichment
+data.
+
+# Forthcoming features
+
+These are features that we are working on and we expect to have them implemented
+in the near future (e.g., next release):
+
+* The parallelization for single-cell data stored using a `DelayedArray`
+backend, such as HDF5, is not yet implemented. If you have enough RAM, you can
+attempt converting the data set to an `SVT_SparseArray` in main memory (see
+subsection 8.2 of the vignette of the
+[SparseArray](https://bioconductor.org/packages/SVT_SparseArray) package
+for further information).
+
+* A specific implementation of the other methods ssGSEA, PLAGE and zscore to
+  work on large datasets stored using a `DelayedArray` backend, such as HDF5,
+  is not yet available.
+
+We are still benchmarking and testing this version of GSVA for single-cell
+data. If you encounter problems or have suggestions, do not hesitate to
+contact us by opening an [issue](https://github.com/rcastelo/GSVA/issues)
+in the GSVA GitHub repo.
+
+# Session information {.unnumbered}
+Here is the output of `sessionInfo()` on the system on which this document was
+compiled running pandoc `r rmarkdown::pandoc_version()`:
+
+```{r session_info, cache=FALSE}
+sessionInfo()
+```
+
+# References

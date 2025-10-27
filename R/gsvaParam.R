@@ -183,7 +183,8 @@ gsvaParam <- function(exprData, geneSets,
     assay <- .check_assayNames(assay, exprData, verbose)
 
     ## check for presence of valid row/feature names
-    exprData <- .check_rowNames(exprData, verbose)
+    exprData <- .check_rowNames(expr=exprData, useDummyNames=TRUE,
+                                verbose=verbose)
 
     xa <- gsvaAnnotation(exprData)
     if(is.null(xa)) {
@@ -211,6 +212,9 @@ gsvaParam <- function(exprData, geneSets,
       } else
         ondisk <- "no"
     }
+
+    if (!is_sparse(unwrapData(exprData, assay))) ## use sparse regime only
+        sparse <- FALSE                          ## when input is sparse
 
     new("gsvaParam",
         exprData=exprData, geneSets=geneSets,
@@ -403,8 +407,7 @@ setMethod("show",
                   "maxDiff: ", get_maxDiff(object), "\n",
                   "absRanking: ", get_absRanking(object), "\n",
                   sep="")
-              if ("dgCMatrix" %in% class(unwrapData(get_exprData(object), get_assay(object))))
-                  cat("sparse: ", get_sparse(object), "\n")
+              cat("sparse: ", get_sparse(object), "\n")
               cat("checkNA: ", get_checkNA(object), "\n", sep="")
               if (get_didCheckNA(object)) {
                   if (anyNA(object)) {

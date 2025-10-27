@@ -1,5 +1,5 @@
 Package: GSVA
-Version: 2.3.5
+Version: 2.3.6
 Title: Gene Set Variation Analysis for Microarray and RNA-Seq Data
 Authors@R: c(person("Robert", "Castelo", role=c("aut", "cre"), email="robert.castelo@upf.edu"),
              person("Justin", "Guinney", role="aut", email="jguinney@gmail.com"),
@@ -13,11 +13,12 @@ Imports: methods, stats, utils, graphics, BiocGenerics, MatrixGenerics,
          BiocParallel, SingleCellExperiment, SpatialExperiment,
          sparseMatrixStats, DelayedMatrixStats, BiocSingular, cli
 Suggests: RUnit, BiocStyle, knitr, rmarkdown, limma, RColorBrewer,
-          org.Hs.eg.db, genefilter, edgeR, GSVAdata, sva, shiny, shinydashboard,
+          org.Hs.eg.db, genefilter, edgeR, GSVAdata, sva, ggplot2,
+          TENxPBMCData, scuttle, scran, igraph, shiny, shinydashboard,
           ggplot2, data.table, plotly, future, promises, shinybusy, shinyjs
 LinkingTo: cli
 Description: Gene Set Variation Analysis (GSVA) is a non-parametric, unsupervised method for estimating variation of gene set enrichment through the samples of a expression data set. GSVA performs a change in coordinate systems, transforming the data from a gene by sample matrix to a gene-set by sample matrix, thereby allowing the evaluation of pathway enrichment for each sample. This new matrix of GSVA enrichment scores facilitates applying standard analytical methods like functional enrichment, survival analysis, clustering, CNV-pathway analysis or cross-tissue pathway analysis, in a pathway-centric manner.
-License: GPL (>= 2)
+License: Artistic-2.0
 VignetteBuilder: knitr
 URL: https://github.com/rcastelo/GSVA
 BugReports: https://github.com/rcastelo/GSVA/issues

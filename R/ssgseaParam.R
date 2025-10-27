@@ -129,7 +129,8 @@ ssgseaParam <- function(exprData, geneSets,
     assay <- .check_assayNames(assay, exprData, verbose)
 
     ## check for presence of valid row/feature names
-    exprData <- .check_rowNames(exprData, verbose)
+    exprData <- .check_rowNames(expr=exprData, useDummyNames=TRUE,
+                                verbose=verbose)
 
     xa <- gsvaAnnotation(exprData)
     if(is.null(xa)) {

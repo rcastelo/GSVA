@@ -1,13 +1,13 @@
 #' @importFrom S4Arrays is_sparse
 #' @importFrom DelayedArray seed
-compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
+compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                              sparse=FALSE, any_na=FALSE,
                              na_use=c("everything", "all.obs", "na.rm"),
                              verbose=TRUE) {
     na_use <- match.arg(na_use)
     n.test.samples <- ncol(expr)
     n.genes <- nrow(expr)
-    n.density.samples <- length(sample.idxs)
+    n.density.samples <- ncol(expr)
 
     if (any_na && na_use == "all.obs") {
         msg <- paste("missing values present in the input expression data and",
@@ -30,14 +30,12 @@ compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
     if (kernel) {
         if (is(expr, "dgCMatrix")) {
             if (sparse)
-                gene.cdf <- .kcdfvals_sparse_to_sparse(expr[, sample.idxs, drop=FALSE],
-                                                       Gaussk, verbose)
+                gene.cdf <- .kcdfvals_sparse_to_sparse(expr, Gaussk, verbose)
             else
-                gene.cdf <- .kcdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE],
-                                                      Gaussk, verbose)
+                gene.cdf <- .kcdfvals_sparse_to_dense(expr, Gaussk, verbose)
         } else if (is.matrix(expr)) {
             A = .Call("matrix_density_R",
-                      as.double(t(expr[ ,sample.idxs, drop=FALSE])),
+                      as.double(t(expr)),
                       as.double(t(expr)),
                       n.density.samples,
                       n.test.samples,
@@ -54,36 +52,39 @@ compute.gene.cdf <- function(expr, sample.idxs, Gaussk=TRUE, kernel=TRUE,
     } else {
         if (is(expr, "dgCMatrix")) {
             if (sparse)
-                gene.cdf <- .ecdfvals_sparse_to_sparse(expr[, sample.idxs, drop=FALSE],
-                                                       verbose)
+                gene.cdf <- .ecdfvals_sparse_to_sparse(expr, verbose)
             else
-                gene.cdf <- .ecdfvals_sparse_to_dense(expr[, sample.idxs, drop=FALSE],
-                                                      verbose)
+                gene.cdf <- .ecdfvals_sparse_to_dense(expr, verbose)
         } else if (is(expr, "SVT_SparseArray")) {
             if (sparse)
-                gene.cdf <- .ecdfvals_svt_to_svt(expr[, sample.idxs, drop=FALSE],
-                                                 verbose)
+                gene.cdf <- .ecdfvals_svt_to_svt(expr, verbose)
             else
-                gene.cdf <- .ecdfvals_svt_to_dense(expr[, sample.idxs, drop=FALSE],
-                                                   verbose)
+                gene.cdf <- .ecdfvals_svt_to_dense(expr, verbose)
         } else if (is(expr, "DelayedMatrix")) {
             if (!is(seed(expr), "HDF5ArraySeed"))
-              stop(sprintf("On-disk backend %s cannot be handled yet.", class(seed(expr))))
+              stop(sprintf("On-disk backend %s cannot be handled yet.",
+                           class(seed(expr))))
             if (sparse)
-                gene.cdf <- .ecdfvals_sparseh5_to_sparseh5(expr[, sample.idxs, drop=FALSE],
-                                                           gridnrow=1000, verbose)
-            else
-                geen.cdf <- .ecdfvals_sparseh5_to_dense(expr[, sample.idxs, drop=FALSE],
-                                                        gridnrow=1000, verbose)
+                gene.cdf <- .ecdfvals_sparseh5_to_sparseh5(expr, gridnrow=1000,
+                                                           verbose)
+            else {
+                if (is_sparse(expr)) ## input HDF5 may be sparse or not
+                    gene.cdf <- .ecdfvals_sparseh5_to_denseh5(expr,
+                                                              gridnrow=1000,
+                                                              verbose)
+                else
+                    gene.cdf <- .ecdfvals_denseh5_to_denseh5(expr,
+                                                             gridnrow=1000,
+                                                             verbose)
+            }
         } else if (is.matrix(expr)) {
             if (any_na)
-                gene.cdf <- .ecdfvals_dense_to_dense_nas(expr[, sample.idxs, drop=FALSE],
-                                                         verbose)
+                gene.cdf <- .ecdfvals_dense_to_dense_nas(expr, verbose)
             else
-                gene.cdf <- .ecdfvals_dense_to_dense(expr[, sample.idxs, drop=FALSE],
-                                                 verbose)
+                gene.cdf <- .ecdfvals_dense_to_dense(expr, verbose)
         } else
-            stop(sprintf("Input container class %s cannot be handled yet.", class(expr)))
+            stop(sprintf("Input container class %s cannot be handled yet.",
+                         class(expr)))
     }
 
     return(gene.cdf)	
@@ -285,7 +286,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                                                  removeNzConstant=TRUE, gridnrow=1000,
                                                  verbose)
               
-              if (is(filteredDataMatrix, "DelayedArray") &&
+              if (is(filteredDataMatrix, "DelayedMatrix") &&
                   is(seed(filteredDataMatrix), "HDF5ArraySeed") &&
                   get_ondisk(param) == "no") {
                   if (verbose)
@@ -448,6 +449,7 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
               if (verbose)
                   cli_alert_info(sprintf("Calculating GSVA scores"))
 
+              gridncol <- min(c(1000, ncol(filteredDataMatrix)))
               gsva_es <- .compute_gsva_scores(R=filteredDataMatrix,
                                               geneSetsIdx=filteredMappedGeneSets,
                                               tau=get_tau(param),
@@ -457,7 +459,8 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                                               any_na=anyNA(param),
                                               na_use=get_NAuse(param),
                                               minSize=get_minSize(param),
-                                              verbose=verbose, gridncol=1000,
+                                              verbose=verbose,
+                                              gridncol=gridncol,
                                               BPPARAM=BPPARAM)
 
               rownames(gsva_es) <- names(filteredMappedGeneSets)
@@ -689,7 +692,6 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
         }
         Z <- bpiterate(.row_iter(expr, idpb, n_chunks),
                        compute.gene.cdf,
-                       sample.idxs=seq.int(ncol(expr)),
                        Gaussk=Gaussk, kernel=kernel,
                        sparse=sparse, any_na=any_na,
                        na_use=na_use, verbose=FALSE,
@@ -698,8 +700,8 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
         if (verbose)
             cli_progress_done(idpb)
     } else
-        Z <- compute.gene.cdf(expr, seq.int(ncol(expr)), Gaussk, kernel,
-                              sparse, any_na=any_na, na_use=na_use, verbose)
+        Z <- compute.gene.cdf(expr, Gaussk, kernel, sparse,
+                              any_na=any_na, na_use=na_use, verbose)
 
     R <- NULL
     ## here 'ties.method="last"' allows one to obtain the result
@@ -711,8 +713,8 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     } else if (is(Z, "SVT_SparseArray")) {
         if (verbose)
             cli_alert_info("Calculating GSVA column ranks")
-        R <- colRanks_SVT_SparseArray(Z, BPPARAM=BPPARAM)
-    } else if (is(Z, "DelayedArray")) {
+        R <- .colRanks_SVT_SparseArray(Z, BPPARAM=BPPARAM)
+    } else if (is(Z, "DelayedMatrix")) {
         if (!is(seed(Z), "HDF5ArraySeed"))
             stop(sprintf("On-disk backend %s cannot be handled yet.", seed(expr)))
         if (verbose)
@@ -1002,7 +1004,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 #' @importFrom S4Arrays is_sparse
 .compute_gsva_scores <- function(R, geneSetsIdx, tau, maxDiff, absRanking,
                                  sparse, any_na, na_use, minSize, verbose,
-                                 gridncol=1000,
+                                 gridncol,
                                  BPPARAM=SerialParam(progressbar=verbose)) {
     p <- nrow(R)
     n <- ncol(R)
@@ -1310,7 +1312,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 
 #' @importFrom HDF5Array HDF5RealizationSink
 #' @importFrom DelayedArray seed rowAutoGrid blockReduce
-.ecdfvals_sparseh5_to_dense <- function(X, gridnrow=1000, verbose) {
+.ecdfvals_sparseh5_to_denseh5 <- function(X, gridnrow=1000, verbose) {
   stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
   if (is(X, "DelayedMatrix"))
     stopifnot(is(seed(X), "HDF5ArraySeed")) ## QC
@@ -1321,6 +1323,27 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
   rowEcdf_byBlock <- function(grid, sink) {
     block <- read_block(X, grid)
     block <- .ecdfvals_svt_to_dense(block, verbose=verbose)
+    write_block(sink, grid, block)
+  }
+  sink <- gridReduce(rowEcdf_byBlock, grid, sink)
+  close(sink)
+  res <- as(sink, "DelayedArray")
+  res
+}
+
+#' @importFrom HDF5Array HDF5RealizationSink
+#' @importFrom DelayedArray seed rowAutoGrid blockReduce
+.ecdfvals_denseh5_to_denseh5 <- function(X, gridnrow=1000, verbose) {
+  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
+  if (is(X, "DelayedMatrix"))
+    stopifnot(is(seed(X), "HDF5ArraySeed")) ## QC
+
+  sink <- HDF5RealizationSink(dim(X), as.sparse=FALSE)
+  grid <- rowAutoGrid(sink, nrow=min(c(gridnrow, nrow(X))))
+
+  rowEcdf_byBlock <- function(grid, sink) {
+    block <- read_block(X, grid)
+    block <- .ecdfvals_dense_to_dense(block, verbose=verbose)
     write_block(sink, grid, block)
   }
   sink <- gridReduce(rowEcdf_byBlock, grid, sink)
@@ -1435,23 +1458,25 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
   .Call("order_rankstat_sparse_to_sparse_R", X, j)
 }
 
-## calculate ranks using an HDF5 backend
+## calculate ranks using on an SVT_SparseArray object
 
 #' @importFrom BiocParallel SerialParam
-colRanks_SVT_SparseArray <- function(X, BPPARAM=SerialParam()) {
+.colRanks_SVT_SparseArray <- function(X, BPPARAM=SerialParam()) {
     R <- X
     rnks <- NULL
     ## open parallelism only if ranks have to be calculated for
     ## more than 10000 genes on more than 1000 samples
     if (bpnworkers(BPPARAM) > 1 && nrow(X) > 10000 && ncol(X) > 1000)
-        rnks <- bplapply(sapply(X@SVT, "[[", 1), rank, ties.method="last",
+        rnks <- bplapply(lapply(X@SVT, "[[", 1), rank, ties.method="last",
                          BPPARAM=BPPARAM)
     else
-        rnks <- lapply(sapply(X@SVT, "[[", 1), rank, ties.method="last")
+        rnks <- lapply(lapply(X@SVT, "[[", 1), rank, ties.method="last")
     R@type <- "integer" ## rank() w/ ties.method="last" returns integer
-    R@SVT <- mapply(list, rnks, sapply(X@SVT, "[[", 2), SIMPLIFY=FALSE)
+    R@SVT <- mapply(list, rnks, lapply(X@SVT, "[[", 2), SIMPLIFY=FALSE)
     R
 }
+
+## calculate ranks using an HDF5 backend
 
 #' @importFrom MatrixGenerics colRanks
 #' @importFrom BiocParallel SerialParam
@@ -1463,7 +1488,7 @@ colRanks_SVT_SparseArray <- function(X, BPPARAM=SerialParam()) {
     colRanks_byBlock <- function(grid, sink) {
         block <- read_block(X, grid)
         if (is_sparse(X) && is(X, "SVT_SparseArray")) {
-            block <- colRanks_SVT_SparseArray(block)
+            block <- .colRanks_SVT_SparseArray(block)
         } else {
             block <- colRanks(block, ties.method="last", preserveShape=TRUE)
             mode(block) <- "integer"
