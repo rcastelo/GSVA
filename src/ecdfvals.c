@@ -575,15 +575,15 @@ ecdfvals_svt_to_sparse_R(SEXP XsvtR, SEXP verboseR) {
     UNPROTECT(2); /* xR uniqvR */
   }
 
-  if (verbose)
-    cli_progress_done(pb);
-
   R_Free(nzcols);
   R_Free(nnzcols);
   if (itypevals)
     R_Free(inzvals);
   else
     R_Free(dnzvals);
+
+  if (verbose)
+    cli_progress_done(pb);
 
   UNPROTECT(nunprotect); /* XsvtR ecdfRobj pb */
 
@@ -633,7 +633,7 @@ ecdfvals_svt_to_svt_R(SEXP XsvtR, SEXP verboseR) {
   } else
     dnzvals = R_Calloc(nc, double);
 
-  /* create a new dgCMatrix object (CSC) to store the result */
+  /* create a new SVT_SparseMatrix object to store the result */
   ecdfRobj = PROTECT(NEW_OBJECT(MAKE_CLASS("SVT_SparseMatrix"))); nunprotect++;
   ecdfRobj_dim = INTEGER(ALLOC_SLOT(ecdfRobj, SVT_SparseArray_dimSym, INTSXP, 2));
   ecdfRobj_dim[0] = nr;
@@ -673,7 +673,8 @@ ecdfvals_svt_to_svt_R(SEXP XsvtR, SEXP verboseR) {
     int*          tab;
 
     if (verbose) { /* show progress */
-      if (i % 100 == 0 && CLI_SHOULD_TICK) cli_progress_set(pb, i);
+      if (i % 100 == 0 && CLI_SHOULD_TICK)
+        cli_progress_set(pb, i);
     }
 
     /* fetch nonzero values in the i-th row */
@@ -741,15 +742,15 @@ ecdfvals_svt_to_svt_R(SEXP XsvtR, SEXP verboseR) {
     UNPROTECT(2); /* xR uniqvR */
   }
 
-  if (verbose)
-    cli_progress_done(pb);
-
   R_Free(nzcols);
   R_Free(nnzcols);
   if (itypevals)
     R_Free(inzvals);
   else
     R_Free(dnzvals);
+
+  if (verbose)
+    cli_progress_done(pb);
 
   UNPROTECT(nunprotect); /* XsvtR ecdfRobj pb */
 

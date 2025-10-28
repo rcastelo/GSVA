@@ -39,7 +39,7 @@ row_d(double* x, double* y, double* r, int size_density_n,
 
   double bw = Gaussk ? (sd(x, size_density_n) / SIGMA_FACTOR) : 0.5;
 
-  if (bw == 0) /* just in case */
+  if (ISNA(bw) || bw == 0) /* just in case */
     bw = 0.001;
 
   if (Gaussk && is_precomputed == 0) {
@@ -138,7 +138,7 @@ row_d_nologodds(double* x, double* y, double* r, int size_density_n,
 
   double bw = Gaussk ? (sd(x, size_density_n) / SIGMA_FACTOR) : 0.5;
 
-  if (bw == 0) /* just in case */
+  if (ISNA(bw) || bw == 0) /* just in case */
     bw = 0.001;
 
   if (Gaussk && is_precomputed == 0) {

@@ -33,6 +33,11 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                 gene.cdf <- .kcdfvals_sparse_to_sparse(expr, Gaussk, verbose)
             else
                 gene.cdf <- .kcdfvals_sparse_to_dense(expr, Gaussk, verbose)
+        } else if (is(expr, "SVT_SparseArray")) {
+            if (sparse)
+                gene.cdf <- .kcdfvals_svt_to_svt(expr, verbose)
+            else
+                gene.cdf <- .kcdfvals_svt_to_dense(expr, verbose)
         } else if (is.matrix(expr)) {
             A = .Call("matrix_density_R",
                       as.double(t(expr)),
@@ -1378,9 +1383,24 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
   .Call("ecdfvals_dense_to_dense_nas_R", X, verbose)
 }
 
+.kcdfvals_svt_to_dense <- function(X, Gaussk, verbose) {
+  stopifnot(is(X, "SVT_SparseArray")) ## QC
+  stopifnot(is.logical(Gaussk)) ## QC
+  stopifnot(is.logical(verbose)) ## QC
+  .Call("kcdfvals_svt_to_dense_R", X, Gaussk, verbose)
+}
+
+.kcdfvals_svt_to_svt <- function(X, Gaussk, verbose) {
+  stopifnot(is(X, "SVT_SparseArray")) ## QC
+  stopifnot(is.logical(Gaussk)) ## QC
+  stopifnot(is.logical(verbose)) ## QC
+  .Call("kcdfvals_svt_to_svt_R", X, Gaussk, verbose)
+}
+
 .kcdfvals_sparse_to_sparse <- function(X, Gaussk, verbose) {
   stopifnot(is(X, "CsparseMatrix")) ## QC
   Xrsp <- as(X, "RsparseMatrix")
+  stopifnot(is.logical(Gaussk)) ## QC
   stopifnot(is.logical(verbose)) ## QC
   .Call("kcdfvals_sparse_to_sparse_R", X, Xrsp, Gaussk, verbose)
 }
@@ -1388,6 +1408,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 .kcdfvals_sparse_to_dense <- function(X, Gaussk, verbose) {
   stopifnot(is(X, "CsparseMatrix")) ## QC
   Xrsp <- as(X, "RsparseMatrix")
+  stopifnot(is.logical(Gaussk)) ## QC
   stopifnot(is.logical(verbose)) ## QC
   .Call("kcdfvals_sparse_to_dense_R", X, Xrsp, Gaussk, verbose)
 }

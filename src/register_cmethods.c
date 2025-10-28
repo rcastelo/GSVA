@@ -21,6 +21,12 @@ SEXP
 kcdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP GausskR, SEXP verboseR);
 
 SEXP
+kcdfvals_svt_to_dense_R(SEXP XsvtR, SEXP GausskR, SEXP verboseR);
+
+SEXP
+kcdfvals_svt_to_svt_R(SEXP XsvtR, SEXP GausskR, SEXP verboseR);
+
+SEXP
 ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP verboseR);
 
 SEXP
@@ -66,6 +72,8 @@ static R_CallMethodDef callMethods[] = {
   {"matrix_density_R", (DL_FUNC) &matrix_density_R, 9},
   {"kcdfvals_sparse_to_sparse_R", (DL_FUNC) &kcdfvals_sparse_to_sparse_R, 4},
   {"kcdfvals_sparse_to_dense_R", (DL_FUNC) &kcdfvals_sparse_to_dense_R, 4},
+  {"kcdfvals_svt_to_dense_R", (DL_FUNC) &kcdfvals_svt_to_dense_R, 3},
+  {"kcdfvals_svt_to_svt_R", (DL_FUNC) &kcdfvals_svt_to_svt_R, 3},
   {"ecdfvals_sparse_to_sparse_R", (DL_FUNC) &ecdfvals_sparse_to_sparse_R, 3},
   {"ecdfvals_sparse_to_dense_R", (DL_FUNC) &ecdfvals_sparse_to_dense_R, 3},
   {"ecdfvals_svt_to_dense_R", (DL_FUNC) &ecdfvals_svt_to_dense_R, 2},

@@ -36,6 +36,9 @@ sd(double* x, int n) {
   long double sum = 0.0;
   long double tmp;
 
+  if (n < 2)
+    return(NA_REAL);
+
   for (i=0; i < n; i++)
     sum += x[i];
   tmp = sum / n;
@@ -64,6 +67,9 @@ sd_naprop(double* x, int n) {
   double      mean, sd;
   long double sum = 0.0;
   long double tmp;
+
+  if (n < 2)
+    return(NA_REAL);
 
   for (i=0; i < n; i++) {
     if (!ISNA(x[i]))
