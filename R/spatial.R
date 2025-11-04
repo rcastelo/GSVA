@@ -43,7 +43,7 @@ setMethod("spatCor", signature("SpatialExperiment"),
 	    for(sample in unique(colData(spe)$sample_id)){
 		spe_Moran <- list()
 		logc <- assay(spe[,colData(spe)$sample_id == sample], assay)
-		logc <- .filterGenes(logc, gridnrow=1000, verbose=verbose)
+		logc <- .filterGenes(logc, verbose=verbose, BPPARAM=BPPARAM)
             	spe_Moran <- bplapply(rowns, function(x){
 	       			if(!(x %in% rownames(logc))) {
 		       			return(list(observed = NA, expected = NA, sd = NA, p.value = NA))

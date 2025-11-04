@@ -144,7 +144,7 @@ setMethod("gsva", signature(param="plageParam"),
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=TRUE,
                                                        removeNzConstant=TRUE,
-                                                       verbose)
+                                                       verbose, BPPARAM=BPPARAM)
               filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
               filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
@@ -194,7 +194,7 @@ setMethod("gsva", signature(param="zscoreParam"),
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=TRUE,
                                                        removeNzConstant=TRUE,
-                                                       verbose)
+                                                       verbose, BPPARAM=BPPARAM)
               filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
               filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
@@ -246,7 +246,7 @@ setMethod("gsva", signature(param="ssgseaParam"),
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=FALSE,
                                                        removeNzConstant=FALSE,
-                                                       verbose)
+                                                       verbose, BPPARAM=BPPARAM)
               filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
               filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 

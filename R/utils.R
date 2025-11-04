@@ -127,14 +127,54 @@
 
 #' @importFrom S4Arrays is_sparse
 #' @importFrom sparseMatrixStats rowRanges
-#' @importFrom DelayedArray blockApply
+#' @importFrom DelayedArray blockApply setAutoBPPARAM rowRanges
 #' @importFrom cli cli_alert_warning cli_abort cli_alert_info
+#' @importFrom cli cli_progress_bar cli_progress_done
+#' @importFrom BiocParallel SerialParam bpnworkers bpiterate bpprogressbar
 .filterGenes <- function(expr, removeConstant=TRUE, removeNzConstant=TRUE,
-                         gridnrow=1000, verbose=TRUE) {
-    if (verbose)
-        cli_alert_info("Searching for genes/features with constant values")
+                         verbose=TRUE, BPPARAM=NULL) {
+    geneRanges <- NULL
+    ## open parallelism only if filtering have to be done for
+    ## more than 100 genes on more than 100 samples
+    if (!is.null(BPPARAM) && bpnworkers(BPPARAM) > 1 &&
+        nrow(expr) > 100 && ncol(expr) > 100) {
 
-    geneRanges <- rowRanges(expr, na.rm=TRUE, useNames=FALSE)
+        if (is(expr, "DelayedArray")) {     ## DelayedArray::rowRanges() takes care of
+                                            ## grid layout with respect to parallelization
+            if (verbose) {
+                msg <- sprintf("Searching for genes/features with constant values using %d cores",
+                               as.integer(bpnworkers(BPPARAM)))
+                cli_alert_info(msg)
+                bpprogressbar(BPPARAM) <- TRUE
+            }
+            setAutoBPPARAM(BPPARAM=BPPARAM)
+            geneRanges <- rowRanges(expr)
+            setAutoBPPARAM(NULL)
+
+        } else {
+
+            n_chunks <- bpnworkers(BPPARAM)
+            if (verbose) {
+                msg <- sprintf("Searching for genes/features with constant values using %d cores",
+                               as.integer(bpnworkers(BPPARAM)))
+                cli_alert_info(msg)
+                idpb <- cli_progress_bar("Computing row ranges", total=n_chunks)
+            }
+            bpprogressbar(BPPARAM) <- FALSE
+            geneRanges <- bpiterate(.row_iter(expr, idpb, n_chunks),
+                                    rowRanges, na.rm=TRUE, useNames=FALSE,
+                                    REDUCE=rbind, reduce.in.order=TRUE, BPPARAM=BPPARAM)
+
+            if (verbose)
+                cli_progress_done(idpb)
+        }
+    } else {
+        BPPARAM <- NULL ## disable any other BPPARAM configuration
+        if (verbose)
+            cli_alert_info("Searching for genes/features with constant values")
+        geneRanges <- rowRanges(expr, na.rm=TRUE, useNames=FALSE)
+    }
+
     constantGenes <- (geneRanges[, 1] == geneRanges[, 2])
 
     if (any(constantGenes) || anyNA(constantGenes)) {
@@ -149,25 +189,65 @@
     }
 
     if (is_sparse(expr)) {
-        nzGeneList <- list()
-        if (is(expr, "DelayedMatrix") && is(seed(expr), "HDF5ArraySeed")) {
-            grid <- rowAutoGrid(expr, nrow=min(c(gridnrow, nrow(expr))))
-            rowNonzeroRanges_byBlock <- function(block) {
-                lapply(t(block)@SVT, "[[", 1)
+        if (!is.null(BPPARAM) && bpnworkers(BPPARAM) > 1 &&
+            nrow(expr) > 100 && ncol(expr) > 100) {
+
+            if (verbose) {
+                msg <- sprintf("Searching for genes/features with constant nonzero values using %d cores",
+                               as.integer(bpnworkers(BPPARAM)))
+                cli_alert_info(msg)
             }
-            nzGeneList <- blockApply(expr, rowNonzeroRanges_byBlock, grid=grid,
-                                     as.sparse=TRUE)
-            if (length(nzGeneList) < nrow(expr))
-                nzGeneList <- unlist(nzGeneList, recursive=FALSE)
-        } else if (is(expr, "dgCMatrix"))
-            nzGeneList <- .sparse2columnList(t(expr))
-        else if (is(expr, "SVT_SparseArray"))
-            nzGeneList <- lapply(t(expr)@SVT, "[[", 1)
-        else
+        } else if (verbose) {
+            BPPARAM <- NULL ## disable any other BPPARAM configuration
+            cli_alert_info("Searching for genes/features with constant nonzero values")
+        }
+
+        nzGeneRanges <- NULL
+        if (is(expr, "DelayedMatrix")) {
+            rowNonzeroRanges_byBlock <- function(block) {
+                t(sapply(t(block)@SVT, function(x) range(x[[1]])))
+            }
+            nworkers <- 1L
+            if (verbose && !is.null(BPPARAM) && bpnworkers(BPPARAM) > 1 &&
+                nrow(expr) > 100 && ncol(expr) > 100) {
+                bpprogressbar(BPPARAM) <- TRUE
+                nworkers <- bpnworkers(BPPARAM)
+            }
+            nzGeneRanges <- blockApply(expr, rowNonzeroRanges_byBlock,
+                                       grid=rowgridsize(expr, nworkers=nworkers),
+                                       as.sparse=is_sparse(expr), BPPARAM=BPPARAM)
+            nzGeneRanges <- do.call("rbind", nzGeneRanges)
+        } else if (is(expr, "dgCMatrix")) {
+            if (verbose && !is.null(BPPARAM) && bpnworkers(BPPARAM) > 1 &&
+                nrow(expr) > 100 && ncol(expr) > 100) {
+                bpprogressbar(BPPARAM) <- TRUE
+                nzGeneRanges <- do.call("rbind", bplapply(.sparse2columnList(t(expr)),
+                                                          FUN=range, BPPARAM=BPPARAM))
+            } else
+                nzGeneRanges <- do.call("rbind", lapply(.sparse2columnList(t(expr)),
+                                                        FUN=range))
+        } else if (is(expr, "SVT_SparseArray")) {
+            if (verbose && !is.null(BPPARAM) && bpnworkers(BPPARAM) > 1 &&
+                nrow(expr) > 100 && ncol(expr) > 100) {
+                bpprogressbar(BPPARAM) <- TRUE
+                nzGeneRanges <- do.call("rbind", bplapply(t(expr)@SVT,
+                                                          FUN=function(x) range[[1]],
+                                                          BPPARAM=BPPARAM))
+            } else
+                nzGeneRanges <- do.call("rbind", lapply(t(expr)@SVT,
+                                                        FUN=function(x) range(x[[1]])))
+        } else
             cli_abort("x"="Uknown sparse matrix class")
 
-        nzGeneRanges <- vapply(nzGeneList, FUN=range, FUN.VALUE=double(2))
-        constantNzGenes <- (nzGeneRanges[1,] == nzGeneRanges[2,])
+        stopifnot(is.matrix(nzGeneRanges)) ## QC
+        stopifnot(nrow(nzGeneRanges) == nrow(expr)) ## QC
+
+        ## nzGeneRanges <- NULL
+        ## if (bpnworkers(BPPARAM) > 1 && nrow(expr) > 100 && ncol(expr) > 100) {
+        ##   nzGeneRanges <- do.call("cbind", bplapply(nzGeneList, FUN=range, BPPARAM=BPPARAM))
+        ## } else
+        ##   nzGeneRanges <- vapply(nzGeneList, FUN=range, FUN.VALUE=double(2))
+        constantNzGenes <- (nzGeneRanges[, 1] == nzGeneRanges[, 2])
 
         if (any(constantNzGenes) || anyNA(constantNzGenes)) {
             invalidNzGenes <- (constantNzGenes | is.na(constantNzGenes))
@@ -283,10 +363,12 @@
 }
 
 #' @importFrom cli cli_alert_warning
+#' @importFrom BiocParallel SerialParam
 .filterAndMapGenesAndGeneSets <- function(param,
                                           removeConstant=TRUE,
                                           removeNzConstant=TRUE,
-                                          verbose=FALSE) {
+                                          verbose=FALSE,
+                                          BPPARAM=SerialParam()) {
     exprData <- get_exprData(param)
     dataMatrix <- unwrapData(exprData, get_assay(param))
     
@@ -295,8 +377,8 @@
     filteredDataMatrix <- .filterGenes(dataMatrix,
                                        removeConstant=removeConstant,
                                        removeNzConstant=removeNzConstant,
-                                       gridnrow=1000,
-                                       verbose)
+                                       verbose,
+                                       BPPARAM=BPPARAM)
 
     filteredMappedGeneSets <- .filterAndMapGeneSets(param=param,
                                                     filteredDataMatrix=filteredDataMatrix,
@@ -332,14 +414,17 @@
 ## on a dgCMatrix object.  if you need lists of rows, simply transpose before
 ## calling this function, t() is reasonably fast as is calling vapply() on its
 ## result
+#' @importFrom Matrix nnzero
 .sparse2columnList <- function(m) {
-    return(split(m@x, findInterval(seq_len(nnzero(m)), m@p, left.open=TRUE)))
+    return(unname(split(m@x, findInterval(seq_len(nnzero(m)), m@p, left.open=TRUE))))
 }
 
 ## actually, it's not just an apply() but also in-place modification
 ## ellipsis added for cases such as when FUN=rank where we may need
 ## to set the parameter 'ties.method' of the 'rank()' function
+#' @importFrom BiocParallel SerialParam bplapply
 .sparseColumnApplyAndReplace <- function(m, FUN, ...) {
+    x <- m@x
     x <- lapply(.sparse2columnList(m), FUN=FUN, ...)
     m@x <- unlist(x, use.names=FALSE)
     if (is.integer(m@x)) ## rank(ties.method="first") returns integers
@@ -374,6 +459,136 @@
     }
 
     list(any_na=any_na, didCheckNA=didCheckNA)
+}
+
+#' @importClassesFrom IRanges IRanges
+#' @importFrom IRanges ranges
+.splitRowsInRanges <- function(grid) {
+    rir <- lapply(grid, function(r) ranges(r)[1])
+    rir
+}
+
+#' @importClassesFrom IRanges IRanges
+#' @importFrom IRanges ranges
+.splitColsInRanges <- function(grid) {
+    cir <- lapply(grid, function(r) ranges(r)[2])
+    cir
+}
+
+
+## process the rows of a matrix with a given function FUN, opening parallelism
+## through a BiocParallelParam object BPPARAM, when different from NULL, and
+## reporting progress using the 'cli' package when possible
+
+#' @importFrom cli cli_abort cli_progress_bar
+#' @importFrom BiocParallel bplapply bpnworkers bpprogressbar
+#' @importClassesFrom IRanges IRanges
+#' @importFrom IRanges start end width
+.processMatrixRows <- function(X, FUN, ..., progressmsg="Progress",
+                               verbose=TRUE, minparrows=100, minparcols=100,
+                               BPPARAM=NULL) {
+    stopifnot(length(dim(X)) == 2) ## QC
+    FUN <- match.fun(FUN)
+    nworkers <- 1L
+    if (!is.null(BPPARAM) && nrow(X) > minparrows && ncol(X) > minparcols) {
+        if (!is(BPPARAM, "BiocParallelParam"))
+            cli_abort("x"="'BPPARAM' must be a BiocParallelParam derivative")
+        nworkers <- bpnworkers(BPPARAM)
+    }
+
+    grid <- DummyArrayGrid(dim(X))
+    if (nworkers > 1 || is(X, "DelayedMatrix"))
+        grid <- rowgridsize(X, nworkers)
+    rir <- .splitRowsInRanges(grid)
+    if (length(rir) == 1)                     ## serial execution in one single call
+        return(FUN(X, ..., verbose=verbose))
+
+    FUN_WRAPPER <- function(rowsrng, verbose, idpbe, WRAPPED_FUN, ...) {
+        rng <- rowsrng
+        if (!is(X, "DelayedMatrix"))
+            rng <- start(rowsrng):end(rowsrng)
+        res <- WRAPPED_FUN(X[rng, ], ..., verbose=FALSE)
+        if (verbose && is(idpbe, "environment"))
+            cli_progress_update(id=get("idpb", envir=idpbe), width(rowsrng))
+        return(res)
+    }
+        
+    totalnrows <- nrow(X)
+    res <- NULL
+    if (is.null(BPPARAM) || nworkers <= 1L) { ## serial execution in chunks
+        env <- NULL
+        if (verbose) {
+            env <- new.env(parent=globalenv())
+            assign("idpb", cli_progress_bar(progressmsg, total=totalnrows), envir=env)
+        }
+        res <- lapply(rir, FUN=FUN_WRAPPER, verbose=verbose,
+                      idpbe=env, WRAPPED_FUN=FUN, ...)
+        if (verbose)
+            cli_progress_done(get("idpb", envir=env))
+    } else {                                  ## parallel execution in chunks
+        if (verbose)
+            bpprogressbar(BPPARAM) <- TRUE    ## by now reporting progress wo/ cli
+        res <- bplapply(rir, FUN=FUN_WRAPPER, verbose=FALSE,
+                        idpbe=NULL, WRAPPED_FUN=FUN, ..., BPPARAM=BPPARAM)
+    }
+    res <- do.call("rbind", res)
+
+    return(res)
+}
+
+## process the columns of a matrix with a given function FUN, opening parallelism
+## through a BiocParallelParam object BPPARAM, when different from NULL, and
+## reporting progress using the 'cli' package when possible
+
+#' @importFrom cli cli_abort
+#' @importFrom BiocParallel bplapply bpnworkers
+#' @importClassesFrom IRanges IRanges
+#' @importFrom IRanges start end width
+.processMatrixCols <- function(X, FUN, ..., progressmsg="Progress",
+                               verbose=TRUE, minparrows=100, minparcols=100,
+                               BPPARAM=NULL) {
+    stopifnot(length(dim(X)) == 2) ## QC
+    FUN <- match.fun(FUN)
+    nworkers <- 1L
+    if (!is.null(BPPARAM) && nrow(X) > minparrows && ncol(X) > minparcols) {
+        if (!is(BPPARAM, "BiocParallelParam"))
+            cli_abort("x"="'BPPARAM' must be a BiocParallelParam derivative")
+        nworkers <- bpnworkers(BPPARAM)
+    }
+    grid <- DummyArrayGrid(dim(X))
+    if (nworkers > 1 || is(X, "DelayedMatrix"))
+        grid <- colgridsize(X, nworkers)
+    cir <- .splitColsInRanges(grid)
+    if (length(cir) == 1)                     ## serial execution in one single call
+        return(FUN(X, ..., verbose=verbose))
+
+    FUN_WRAPPER <- function(colsrng, verbose, idpbe, WRAPPED_FUN, ...) {
+        rng <- colsrng
+        if (!is(X, "DelayedMatrix"))
+            rng <- start(colsrng):end(colsrng)
+        res <- WRAPPED_FUN(X[, rng], ..., verbose=FALSE)
+        if (verbose && is(idpbe, "environment"))
+            cli_progress_update(id=get("idpb", envir=idpbe), width(colsrng))
+        return(res)
+    }
+        
+    totalncols <- ncol(X)
+    res <- NULL
+    if (is.null(BPPARAM) || nworkers <= 1L) { ## serial execution in chunks
+        env <- new.env(parent=globalenv())
+        assign("idpb", cli_progress_bar(progressmsg, total=totalncols), envir=env)
+        res <- lapply(cir, FUN=FUN_WRAPPER, verbose=verbose,
+                      idpbe=env, WRAPPED_FUN=FUN, ...)
+        cli_progress_done(get("idpb", envir=env))
+    } else {                                  ## parallel execution in chunks
+        if (verbose)
+            bpprogressbar(BPPARAM) <- TRUE    ## by now reporting progress wo/ cli
+        res <- bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
+                        idpbe=NULL, WRAPPED_FUN=FUN, ..., BPPARAM=BPPARAM)
+    }
+    res <- do.call("cbind", res)
+
+    return(res)
 }
 
 ## calculate number of nonzero values in an on-disk DelayedArray
@@ -416,6 +631,10 @@
                 nzc <- nzcount(as(X, "dgCMatrix"))
             else {
                 block_dim <- chunkdim(X)
+                if (is.null(block_dim)) {
+                    grid <- defaultAutoGrid(X)
+                    block_dim <- dim(grid[[1L]])
+                }
                 block_dim <- c(min(c(nr, block_dim[1])), min(c(nc, block_dim[2]))) ## just in case there's only one block
                 vp <- ArrayViewport(dim(X), IRanges(c(1, 1), width=block_dim))     ## just use the first block
                 block <- read_block(X, vp)
