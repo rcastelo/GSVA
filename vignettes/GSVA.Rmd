@@ -91,9 +91,9 @@ names(gs) <- paste0("gs", 1:length(gs))
 
 We can calculate GSVA enrichment scores as follows. First we should build
 a parameter object for the desired methodology. Here we illustrate it with
-the GSVA algorithm of @haenzelmann_castelo_guinney_2013 by calling the
-function `gsvaParam()`, but other parameter object constructor functions
-are available; see in the next section below.
+the GSVA algorithm of @haenzelmann2013gsva by calling the function
+`gsvaParam()`, but other parameter object constructor functions are available;
+see in the next section below.
 
 ```{r}
 gsvaPar <- gsvaParam(X, gs)
@@ -160,11 +160,12 @@ methods:
   step may be switched off using the argument `ssgsea.norm` in the call to the
   `gsva()` function; see below.
 
-* _gsva_ [@haenzelmann_castelo_guinney_2013]. This is the default method of
-  the package and similarly to ssGSEA, is a non-parametric method that
-  uses the empirical CDFs of gene expression ranks inside and outside the gene
-  set, but it starts by calculating an expression-level statistic that brings
-  gene expression profiles with different dynamic ranges to a common scale.
+* _gsva_ [@haenzelmann2013gsva]. This is the default method of the package and
+  similarly to ssGSEA, is a non-parametric method that uses the empirical CDFs
+  of gene expression ranks inside and outside the gene set, but it starts by
+  calculating an expression-level statistic that brings gene expression profiles
+  with different dynamic ranges to a common scale, and combines the information
+  of those empirical CDFs in a different way to provide an enrichment score.
 
 The interested user may find full technical details about how these methods
 work in their corresponding articles cited above. If you use any of them in a
@@ -229,10 +230,10 @@ map gene identifiers, is missing.
 The method employed by the `gsva()` function is determined by the class of the
 parameter object that it receives as an input. An object constructed using the
 `gsvaParam()` function runs the method described by
-@haenzelmann_castelo_guinney_2013, but this can be changed using the parameter
-constructor functions `plageParam()`, `zscoreParam()`, or `ssgseaParam()`,
-corresponding to the methods briefly described in the introduction; see also
-their corresponding help pages.
+@haenzelmann2013gsva, but this can be changed using the parameter constructor
+functions `plageParam()`, `zscoreParam()`, or `ssgseaParam()`, corresponding to
+the methods briefly described in the introduction; see also their corresponding
+help pages.
 
 When using `gsvaParam()`, the user can additionally tune the following
 parameters, whose default values cover most of the use cases:
@@ -458,7 +459,7 @@ activity in both microarray and RNA-seq data by using two such datasets that
 have been derived from the same biological samples. More concretely, we will
 use gene expression data of lymphoblastoid cell lines (LCL) from HapMap
 individuals that have been profiled using both technologies
-[@huang_genome-wide_2007, @pickrell_understanding_2010]. These data form part
+[@huang_genome-wide_2007,@pickrell_understanding_2010]. These data form part
 of the experimental package `r Biocpkg("GSVAdata")` and the corresponding help
 pages contain details on how the data were processed. We start loading these
 data and verifying that they indeed contain expression data for the same genes
