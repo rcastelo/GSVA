@@ -113,6 +113,16 @@
 #' happens, and giving an error if no values are left after removing the `NA`
 #' values.
 #'
+#' @param filterRows Logical vector of length 1, indicating whether the rows in,
+#' the input expression data, typically corresponding to transcripts, genes or
+#' proteins, should be filtered for constant expression across columns,
+#' typically corresponding to samples or cells, with respect to all available
+#' (nonmissing) values and to the non-zero values. By default, this slot is set
+#' to `TRUE` and the user may set it to `FALSE` when there is absolute certainty
+#' that no such rows exist in the input expression data, since this may save
+#' running time, especially with data sets with hundreds of thousands or
+#' millions of columns.
+#'
 #' @param ondisk Character vector of length 1 denoting whether an on-disk backend
 #' should be used to reduce the memory footprint. The default value
 #' `ondisk="auto"` will attempt to load all the data in main memory when the
@@ -160,6 +170,7 @@
 #'
 #'
 #' @importFrom methods new
+#' @importFrom cli cli_alert_warning
 #' @rdname gsvaParam-class
 #' 
 #' @export
@@ -171,6 +182,7 @@ gsvaParam <- function(exprData, geneSets,
                       absRanking=FALSE, sparse=TRUE,
                       checkNA=c("auto", "yes", "no"),
                       use=c("everything", "all.obs", "na.rm"),
+                      filterRows=TRUE,
                       ondisk=c("auto", "yes", "no"),
                       verbose=TRUE) {
     kcdf <- match.arg(kcdf)
@@ -216,6 +228,11 @@ gsvaParam <- function(exprData, geneSets,
     if (!is_sparse(unwrapData(exprData, assay))) ## use sparse regime only
         sparse <- FALSE                          ## when input is sparse
 
+    if (!filterRows) {
+        cli_alert_warning("filterRows=FALSE and rows with constant values will not be filtered out")
+        cli_alert_warning("Use it only if you are sure that such rows are not present in the input data")
+    }
+
     new("gsvaParam",
         exprData=exprData, geneSets=geneSets,
         assay=assay, annotation=annotation,
@@ -223,7 +240,8 @@ gsvaParam <- function(exprData, geneSets,
         kcdf=kcdf, kcdfNoneMinSampleSize=kcdfNoneMinSampleSize,
         tau=as.double(tau), maxDiff=maxDiff, absRanking=absRanking,
         sparse=sparse, checkNA=checkNA, didCheckNA=naparam$didCheckNA,
-        anyNA=naparam$any_na, use=use, nzcount=nzc, ondisk=ondisk)
+        anyNA=naparam$any_na, use=use, filterRows=filterRows, nzcount=nzc,
+        ondisk=ondisk)
 }
 
 
@@ -320,6 +338,12 @@ setValidity("gsvaParam", function(object) {
     if(!.isCharLength1(object@use)) {
         inv <- c(inv, "@use must be a single character string")
     }
+    if(length(object@filterRows) != 1) {
+        inv <- c(inv, "@filterRows must be of length 1")
+    }
+    if(is.na(object@filterRows)) {
+        inv <- c(inv, "@filterRows must not be NA")
+    }
     if(length(object@nzcount) != 1) {
         inv <- c(inv, "@nzcount must be of length 1")
     }
@@ -366,6 +390,12 @@ get_absRanking <- function(object) {
 get_sparse <- function(object) {
   stopifnot(inherits(object, "gsvaParam"))
   return(object@sparse)
+}
+
+#' @noRd
+get_filterRows <- function(object) {
+  stopifnot(inherits(object, "gsvaParam"))
+  return(object@filterRows)
 }
 
 #' @noRd
@@ -417,6 +447,7 @@ setMethod("show",
                       cat("missing data: no\n")
               } else
                   cat("missing data: didn't check\n")
+              cat("filterRows: ", get_filterRows(object), "\n")
               nzcmsg <- sprintf("nonzero values: %s than 2^31 (INT_MAX)\n",
                                 ifelse(nzcount(object) > .Machine$integer.max,
                                        "more", "less"))

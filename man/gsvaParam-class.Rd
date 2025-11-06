@@ -24,6 +24,7 @@ gsvaParam(
   sparse = TRUE,
   checkNA = c("auto", "yes", "no"),
   use = c("everything", "all.obs", "na.rm"),
+  filterRows = TRUE,
   ondisk = c("auto", "yes", "no"),
   verbose = TRUE
 )
@@ -138,6 +139,16 @@ expression data will be removed from calculations, giving a warning when that
 happens, and giving an error if no values are left after removing the \code{NA}
 values.}
 
+\item{filterRows}{Logical vector of length 1, indicating whether the rows in,
+the input expression data, typically corresponding to transcripts, genes or
+proteins, should be filtered for constant expression across columns,
+typically corresponding to samples or cells, with respect to all available
+(nonmissing) values and to the non-zero values. By default, this slot is set
+to \code{TRUE} and the user may set it to \code{FALSE} when there is absolute certainty
+that no such rows exist in the input expression data, since this may save
+running time, especially with data sets with hundreds of thousands or
+millions of columns.}
+
 \item{ondisk}{Character vector of length 1 denoting whether an on-disk backend
 should be used to reduce the memory footprint. The default value
 \code{ondisk="auto"} will attempt to load all the data in main memory when the
@@ -240,6 +251,16 @@ expression data contains missing (\code{NA}) values.}
 (default), \code{"all.obs"}, or \code{"na.rm"}, which refer to three different policies
 to apply in the presence of missing values in the input expression data; see
 \code{ssgseaParam}.}
+
+\item{\code{filterRows}}{Logical vector of length 1, indicating whether the rows in,
+the input expression data, typically corresponding to transcripts, genes or
+proteins, should be filtered for constant expression across columns,
+typically corresponding to samples or cells, with respect to all available
+(nonmissing) values and to the non-zero values. By default, this slot is set
+to \code{TRUE} and the user may set it to \code{FALSE} when there is absolute certainty
+that no such rows exist in the input expression data, since this may save
+running time, especially with data sets with hundreds of thousands or
+millions of columns.}
 
 \item{\code{nzcount}}{Numeric vector of length 1. Number of non-zero values in the
 selected assay, if there is more than one, of the 'exprData' slot.}
