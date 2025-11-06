@@ -330,6 +330,16 @@ setClass("ssgseaParam",
 #' to apply in the presence of missing values in the input expression data; see
 #' `ssgseaParam`.
 #'
+#' @slot filterRows Logical vector of length 1, indicating whether the rows in,
+#' the input expression data, typically corresponding to transcripts, genes or
+#' proteins, should be filtered for constant expression across columns,
+#' typically corresponding to samples or cells, with respect to all available
+#' (nonmissing) values and to the non-zero values. By default, this slot is set
+#' to `TRUE` and the user may set it to `FALSE` when there is absolute certainty
+#' that no such rows exist in the input expression data, since this may save
+#' running time, especially with data sets with hundreds of thousands or
+#' millions of columns.
+#'
 #' @slot nzcount Numeric vector of length 1. Number of non-zero values in the
 #' selected assay, if there is more than one, of the 'exprData' slot.
 #'
@@ -365,6 +375,7 @@ setClass("gsvaParam",
                  didCheckNA="logical",
                  anyNA="logical",
                  use="character",
+                 filterRows="logical",
                  nzcount="numeric",
                  ondisk="character"),
          contains="GsvaMethodParam",
@@ -384,6 +395,7 @@ setClass("gsvaParam",
                         didCheckNA=NA,
                         anyNA=NA,
                         use=NA_character_,
+                        filterRows=NA,
                         nzcount=NA_real_,
                         ondisk=NA_character_))
 
@@ -408,5 +420,6 @@ setClass("gsvaRanksParam",
                         didCheckNA=NA,
                         anyNA=NA,
                         use=NA_character_,
+                        filterRows=NA,
                         nzcount=NA_real_,
                         ondisk=NA_character_))
