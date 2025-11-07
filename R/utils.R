@@ -230,12 +230,14 @@
             if (verbose && !is.null(BPPARAM) && bpnworkers(BPPARAM) > 1 &&
                 nrow(expr) > 100 && ncol(expr) > 100) {
                 bpprogressbar(BPPARAM) <- TRUE
-                nzGeneRanges <- do.call("rbind", bplapply(t(expr)@SVT,
-                                                          FUN=function(x) range[[1]],
-                                                          BPPARAM=BPPARAM))
+                nzGeneRanges <- do.call("rbind",
+                                        bplapply(t(expr)@SVT,
+                                                 FUN=function(x) range(x[[1]]),
+                                                 BPPARAM=BPPARAM))
             } else
-                nzGeneRanges <- do.call("rbind", lapply(t(expr)@SVT,
-                                                        FUN=function(x) range(x[[1]])))
+                nzGeneRanges <- do.call("rbind",
+                                        lapply(t(expr)@SVT,
+                                               FUN=function(x) range(x[[1]])))
         } else
             cli_abort("x"="Uknown sparse matrix class")
 
