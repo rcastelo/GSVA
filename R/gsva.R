@@ -25,9 +25,9 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                 gene.cdf <- .kcdfvals_sparse_to_dense(expr, Gaussk, verbose)
         } else if (is(expr, "SVT_SparseArray")) {
             if (sparse)
-                gene.cdf <- .kcdfvals_svt_to_svt(expr, verbose)
+                gene.cdf <- .kcdfvals_svt_to_svt(expr, Gaussk, verbose)
             else
-                gene.cdf <- .kcdfvals_svt_to_dense(expr, verbose)
+                gene.cdf <- .kcdfvals_svt_to_dense(expr, Gaussk, verbose)
         } else if (is(expr, "DelayedMatrix")) {
             if (sparse)
                 gene.cdf <- .kcdfvals_sparseh5_to_sparseh5(expr, Gaussk=Gaussk,
@@ -1048,7 +1048,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
                                           symRnkStat=rnkstats$srs,
                                           maxDiff, absRanking, tau,
                                           any_na, na_use, minSize,
-                                          wna_env, verbose=FALSE)
+                                          wna_env, verbose=verbose)
             write_block(sink, avp_es, block)
         }
 
@@ -1069,7 +1069,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
                                     decOrdStat=rnkstats$dos,
                                     symRnkStat=rnkstats$srs,
                                     maxDiff, absRanking, tau, any_na,
-                                    na_use, minSize, wna_env, verbose=FALSE)
+                                    na_use, minSize, wna_env, verbose=verbose)
     }
 
     if (any_na && na_use == "na.rm")
@@ -1496,8 +1496,8 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     if (is.null(dim(symRnkStat)))
       symRnkStat <- matrix(symRnkStat, ncol=1)
   } else {
-    decOrdStat <- decOrdStat[, colIdx]
-    symRnkStat <- symRnkStat[, colIdx]
+    decOrdStat <- decOrdStat[, colIdx, drop=FALSE]
+    symRnkStat <- symRnkStat[, colIdx, drop=FALSE]
   }
   sco <- .Call("gsva_score_genesets_R", geneSetsIdx, decOrdStat, symRnkStat,
                maxDiff, absRanking, as.double(tau), any_na, na_use, minSize,
