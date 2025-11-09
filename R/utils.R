@@ -609,7 +609,7 @@
             cli_alert_warning(sprintf("%d execution thread(s) give an error, reporting the first one"))
             print(attr(res[[which(!bpokmask)]], "traceback"))
             cli_alert_warning("Trying to execute again the failing thread(s)")
-            bptry(res <- bplapply(rir, FUN=FUN_WRAPPER, verbose=FALSE,
+            bptry(res <- bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
                                   idpbe=NULL, WRAPPED_FUN=FUN, ...,
                                   BPREDO=res, BPPARAM=BPPARAM))
             if (any(!bpok(res))) {
