@@ -54,16 +54,19 @@
 #' \doi{10.1186/1471-2105-6-225}
 #'
 #' @examples
+#' suppressPackageStartupMessages({
+#' library(GSEABase)
 #' library(GSVA)
-#' suppressPackageStartupMessages(library(GSVAdata))
+#' library(GSVAdata)
+#' })
 #'
-#' data(leukemia)
+#' data(geneprotExpCostaEtAl2021)
 #' data(c2BroadSets)
-#'
+#' 
 #' ## for simplicity, use only a subset of the sample data
-#' ses <- leukemia_eset[1:1000, ]
+#' se <- geneExpCostaEtAl2021[1:1000, ]
 #' gsc <- c2BroadSets[1:100]
-#' pp1 <- plageParam(ses, gsc)
+#' pp1 <- plageParam(se, gsc)
 #' pp1
 #'
 #' @importFrom methods new

@@ -1,17 +1,13 @@
 
-## 2024-10-25 regression test script for method PLAGE
+## 2025-11-12 regression test script for method PLAGE
 
 suppressPackageStartupMessages(library(GSVAdata))
 suppressPackageStartupMessages(library(GSVA))
 
 data(c2BroadSets)
-data(commonPickrellHuang)
-data(genderGenesEntrez)
-data(gbm_VerhaakEtAl)
-data(brainTxDbSets)
-data(leukemia)
+data(geneprotExpCostaEtAl2021)
 
-set.seed(2024-10-25)
+set.seed(2025-11-12)
 options(width=1024)
 nRowsToPrint <- 25
 
@@ -29,43 +25,9 @@ plage.es <- gsva(plagePar, verbose=FALSE)
 dim(plage.es)
 plage.es[seq.int(min(nRowsToPrint, nrow(plage.es))),]
 
-stopifnot(identical(featureNames(huangArrayRMAnoBatchCommon_eset),
-                    featureNames(pickrellCountsArgonneCQNcommon_eset)))
-stopifnot(identical(sampleNames(huangArrayRMAnoBatchCommon_eset),
-                    sampleNames(pickrellCountsArgonneCQNcommon_eset)))
-## until the updated GSVAdata goes through the build system
-## remove duplicated rows
-fnames <- featureNames(huangArrayRMAnoBatchCommon_eset)
-mask <- duplicated(fnames)
-huangArrayRMAnoBatchCommon_eset <- huangArrayRMAnoBatchCommon_eset[!mask, ]
-pickrellCountsArgonneCQNcommon_eset <- pickrellCountsArgonneCQNcommon_eset[!mask, ]
-
-canonicalC2BroadSets <- c2BroadSets[c(grep("^KEGG", names(c2BroadSets)),
-                                      grep("^REACTOME", names(c2BroadSets)),
-                                      grep("^BIOCARTA", names(c2BroadSets)))]
-MSY <- GeneSet(msYgenesEntrez, geneIdType=EntrezIdentifier(),
-               collectionType=BroadCollection(category="c2"),
-               setName="MSY")
-XiE <- GeneSet(XiEgenesEntrez, geneIdType=EntrezIdentifier(),
-               collectionType=BroadCollection(category="c2"),
-               setName="XiE")
-canonicalC2BroadSets <- GeneSetCollection(c(canonicalC2BroadSets, MSY, XiE))
-huangPar <- plageParam(huangArrayRMAnoBatchCommon_eset, canonicalC2BroadSets,
-                      minSize=5, maxSize=500)
-esmicro <- gsva(huangPar, verbose=FALSE)
-exprs(esmicro)[seq.int(min(nRowsToPrint, nrow(esmicro))),]
-pickrellPar <- plageParam(pickrellCountsArgonneCQNcommon_eset,
-                         canonicalC2BroadSets, minSize=5, maxSize=500)
-esrnaseq <- gsva(pickrellPar, verbose=FALSE)
-exprs(esrnaseq[seq.int(min(nRowsToPrint, nrow(esrnaseq))),])
-
-gbmPar <- plageParam(gbm_eset, brainTxDbSets)
-gbm_es <- gsva(gbmPar, verbose=FALSE)
-exprs(gbm_es)[seq.int(min(nRowsToPrint, nrow(gbm_es))),]
-
-cgpC2BroadSets <- c2BroadSets[c(grep("_UP$", names(c2BroadSets)),
-                                grep("_DN$", names(c2BroadSets)))]
-leukPar <- plageParam(leukemia_eset, cgpC2BroadSets,
+c2BroadSets <- c2BroadSets[c(grep("_UP$", names(c2BroadSets)),
+                             grep("_DN$", names(c2BroadSets)))]
+firPar <- plageParam(geneExpCostaEtAl2021, c2BroadSets,
                      minSize=10, maxSize=500)
-leukemia_es <- gsva(leukPar, verbose=FALSE)
-exprs(leukemia_es)[seq.int(min(nRowsToPrint, nrow(leukemia_es))),]
+fir_es <- gsva(firPar, verbose=FALSE)
+assay(fir_es)[seq.int(min(nRowsToPrint, nrow(fir_es))),]
