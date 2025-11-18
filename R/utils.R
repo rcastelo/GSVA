@@ -125,6 +125,42 @@
 ##  values of genes: genes that are constant in their non-zero values will have
 ##  an SD of 0 and therefore scaling them will result in division by 0.
 
+.rowNzRanges_dgCMatrix <- function(X, verbose=FALSE) {
+  res <- .Call("row_rngs_nzrngs_RsparseMatrix_R", as(X, "RsparseMatrix"),
+               verbose=verbose)
+  res
+}
+
+.rowNzRanges_SVT_SparseArray <- function(X, verbose=FALSE) {
+  ## res <- .Call("row_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
+  res <- .Call("col_rngs_nzrngs_SVT_SparseMatrix_R", t(X), verbose=verbose)
+  res
+}
+
+#' @importFrom S4Arrays DummyArrayGrid read_block
+.rowNzRanges <- function(X, verbose=FALSE) {
+  res <- NULL
+  if (is.matrix(X))
+    res <- rowRanges(X, na.rm=TRUE)
+  else if (is(X, "dgCMatrix"))
+    res <- .rowNzRanges_dgCMatrix(X, verbose=verbose)
+  else if (is(X, "SVT_SparseArray"))
+    res <- .rowNzRanges_SVT_SparseArray(X, verbose=verbose)
+  else if (is(X, "DelayedArray")) {
+    grid <- DummyArrayGrid(dim(X))
+    block <- read_block(X, grid)
+    if (is_sparse(block)) ## input HDF5 may be sparse or not
+      res <- .rowNzRanges_SVT_SparseArray(block, verbose=verbose)
+    else
+      res <- rowRanges(X)
+  } else
+    cli_abort("x"=sprintf(".rowNzRanges: input object class %s not handled yet",
+                          class(X)))
+  res
+}
+
+
+
 #' @importFrom S4Arrays is_sparse
 #' @importFrom sparseMatrixStats rowRanges
 #' @importFrom DelayedArray blockApply setAutoBPPARAM rowRanges
@@ -133,140 +169,69 @@
 #' @importFrom BiocParallel SerialParam bpnworkers bpiterate bpprogressbar
 .filterGenes <- function(expr, removeConstant=TRUE, removeNzConstant=TRUE,
                          verbose=TRUE, BPPARAM=NULL) {
-    geneRanges <- NULL
-    ## open parallelism only if filtering have to be done for
-    ## more than 100 genes on more than 100 samples
-    if (!is.null(BPPARAM) && bpnworkers(BPPARAM) > 1 &&
-        nrow(expr) > 100 && ncol(expr) > 100) {
+  rowrngs <- NULL
 
-        if (is(expr, "DelayedArray")) {     ## DelayedArray::rowRanges() takes care of
-                                            ## grid layout with respect to parallelization
-            if (verbose) {
-                msg <- sprintf("Searching for genes/features with constant values using %d cores",
-                               as.integer(bpnworkers(BPPARAM)))
-                cli_alert_info(msg)
-                bpprogressbar(BPPARAM) <- TRUE
-            }
-            setAutoBPPARAM(BPPARAM=BPPARAM)
-            geneRanges <- rowRanges(expr)
-            setAutoBPPARAM(NULL)
+  if (verbose) {
+      if (!is_sparse(expr))
+          cli_alert_info("Searching for rows with constant values")
+      else
+          cli_alert_info("Searching for rows with constant (nonzero) values")
+  }
 
-        } else {
+  ## returns a matrix with as many rows as 'expr' and 2 columns if 'expr'
+  ## is dense, and 4 columns if it is sparse, where the first two columns
+  ## correspond to the minimum and maximum values of each row, while the
+  ## third and fourth columns, if they exist, they correspond to the
+  ## minimum and maximum nonzero values of each row, which will be NAs if
+  ## there are no nonzero values.
+  rowrngs <- .processMatrixRows(expr, .rowNzRanges, verbose=verbose,
+                                BPPARAM=BPPARAM)
 
-            n_chunks <- bpnworkers(BPPARAM)
-            if (verbose) {
-                msg <- sprintf("Searching for genes/features with constant values using %d cores",
-                               as.integer(bpnworkers(BPPARAM)))
-                cli_alert_info(msg)
-                idpb <- cli_progress_bar("Computing row ranges", total=n_chunks)
-            }
-            bpprogressbar(BPPARAM) <- FALSE
-            geneRanges <- bpiterate(.row_iter(expr, idpb, n_chunks),
-                                    rowRanges, na.rm=TRUE, useNames=FALSE,
-                                    REDUCE=rbind, reduce.in.order=TRUE, BPPARAM=BPPARAM)
+  constantRows <- (rowrngs[, 1] == rowrngs[, 2])
+  mask <- is.na(constantRows)
+  if (any(mask))
+      constantRows[mask] <- TRUE
 
-            if (verbose)
-                cli_progress_done(idpb)
-        }
-    } else {
-        BPPARAM <- NULL ## disable any other BPPARAM configuration
-        if (verbose)
-            cli_alert_info("Searching for genes/features with constant values")
-        geneRanges <- rowRanges(expr, na.rm=TRUE, useNames=FALSE)
-    }
+  constantNzRows <- invalidRows <- invalidNzRows <- rep(FALSE, nrow(expr))
+  if (ncol(rowrngs) > 2) { ## sparse input
+      constantNzRows <- (rowrngs[, 3] == rowrngs[, 4])
+      mask <- is.na(constantNzRows)
+      if (any(mask)) ## no nonzero values imply constant nonzero values
+          constantNzRows[mask] <- TRUE
+  }
 
-    constantGenes <- (geneRanges[, 1] == geneRanges[, 2])
+  if (verbose && any(constantRows)) {
+      msg <- sprintf("%d rows with constant values throughout the columns",
+                     sum(constantRows))
+      cli_alert_warning(msg)
+      if (removeConstant)
+         cli_alert_warning("Rows with constant values are discarded")
+  }
 
-    if (any(constantGenes) || anyNA(constantGenes)) {
-        invalidGenes <- (constantGenes | is.na(constantGenes))
-        msg <- sprintf("%d genes/features with constant values throughout the samples",
-                       sum(invalidGenes))
-        cli_alert_warning(msg)
-        if (removeConstant) {
-            cli_alert_warning("Genes/features with constant values are discarded")
-            expr <- expr[!invalidGenes, ]
-        }
-    }
+  nzmask <- constantNzRows & !constantRows
+  if (verbose && any(nzmask)) {
+      msg <- sprintf("%d rows with constant nonzero values throughout the samples",
+                     sum(nzmask))
+      cli_alert_warning(msg)
+      if (removeNzConstant)
+         cli_alert_warning("Rows with constant nonzero values are discarded")
+  }
 
-    if (is_sparse(expr)) {
-        if (!is.null(BPPARAM) && bpnworkers(BPPARAM) > 1 &&
-            nrow(expr) > 100 && ncol(expr) > 100) {
+  removemask <- rep(FALSE, nrow(expr))
+  if (removeConstant)
+       removemask <- constantRows
 
-            if (verbose) {
-                msg <- sprintf("Searching for genes/features with constant nonzero values using %d cores",
-                               as.integer(bpnworkers(BPPARAM)))
-                cli_alert_info(msg)
-            }
-        } else if (verbose) {
-            BPPARAM <- NULL ## disable any other BPPARAM configuration
-            cli_alert_info("Searching for genes/features with constant nonzero values")
-        }
+  if (removeNzConstant && any(nzmask))
+       removemask <- removemask | nzmask
 
-        nzGeneRanges <- NULL
-        if (is(expr, "DelayedMatrix")) {
-            rowNonzeroRanges_byBlock <- function(block) {
-                t(sapply(t(block)@SVT, function(x) range(x[[1]])))
-            }
-            nworkers <- 1L
-            if (verbose && !is.null(BPPARAM) && bpnworkers(BPPARAM) > 1 &&
-                nrow(expr) > 100 && ncol(expr) > 100) {
-                bpprogressbar(BPPARAM) <- TRUE
-                nworkers <- bpnworkers(BPPARAM)
-            }
-            nzGeneRanges <- blockApply(expr, rowNonzeroRanges_byBlock,
-                                       grid=rowgridsize(expr, nworkers=nworkers),
-                                       as.sparse=is_sparse(expr), BPPARAM=BPPARAM)
-            nzGeneRanges <- do.call("rbind", nzGeneRanges)
-        } else if (is(expr, "dgCMatrix")) {
-            if (verbose && !is.null(BPPARAM) && bpnworkers(BPPARAM) > 1 &&
-                nrow(expr) > 100 && ncol(expr) > 100) {
-                bpprogressbar(BPPARAM) <- TRUE
-                nzGeneRanges <- do.call("rbind", bplapply(.sparse2columnList(t(expr)),
-                                                          FUN=range, BPPARAM=BPPARAM))
-            } else
-                nzGeneRanges <- do.call("rbind", lapply(.sparse2columnList(t(expr)),
-                                                        FUN=range))
-        } else if (is(expr, "SVT_SparseArray")) {
-            if (verbose && !is.null(BPPARAM) && bpnworkers(BPPARAM) > 1 &&
-                nrow(expr) > 100 && ncol(expr) > 100) {
-                bpprogressbar(BPPARAM) <- TRUE
-                nzGeneRanges <- do.call("rbind",
-                                        bplapply(t(expr)@SVT,
-                                                 FUN=function(x) range(x[[1]]),
-                                                 BPPARAM=BPPARAM))
-            } else
-                nzGeneRanges <- do.call("rbind",
-                                        lapply(t(expr)@SVT,
-                                               FUN=function(x) range(x[[1]])))
-        } else
-            cli_abort("x"="Uknown sparse matrix class")
+  if (any(removemask)) {
+      if (nrow(expr) - sum(removemask) < 2)
+          cli_abort(c("x"="Less than two rows left in the input assay object"))
 
-        stopifnot(is.matrix(nzGeneRanges)) ## QC
-        stopifnot(nrow(nzGeneRanges) == nrow(expr)) ## QC
+      expr <- expr[!removemask, ]
+  }
 
-        ## nzGeneRanges <- NULL
-        ## if (bpnworkers(BPPARAM) > 1 && nrow(expr) > 100 && ncol(expr) > 100) {
-        ##   nzGeneRanges <- do.call("cbind", bplapply(nzGeneList, FUN=range, BPPARAM=BPPARAM))
-        ## } else
-        ##   nzGeneRanges <- vapply(nzGeneList, FUN=range, FUN.VALUE=double(2))
-        constantNzGenes <- (nzGeneRanges[, 1] == nzGeneRanges[, 2])
-
-        if (any(constantNzGenes) || anyNA(constantNzGenes)) {
-            invalidNzGenes <- (constantNzGenes | is.na(constantNzGenes))
-            msg <- sprintf("%d genes/features with constant nonzero values throughout the samples",
-                           sum(invalidNzGenes))
-            cli_alert_warning(msg)
-            if (removeNzConstant) {
-                cli_alert_warning("Genes/features with constant nonzero values are discarded")
-                expr <- expr[!invalidNzGenes, ]
-            }
-        }
-    }
-
-    if (nrow(expr) < 2)
-        cli_abort(c("x"="Less than two genes in the input assay object"))
-    
-    return(expr)
+  return(expr)
 }
 
 
@@ -486,9 +451,9 @@
 #' @importFrom BiocParallel bplapply bpnworkers bpprogressbar bptry bpok
 #' @importClassesFrom IRanges IRanges
 #' @importFrom IRanges start end width
-.processMatrixRows <- function(X, FUN, ..., progressmsg="Progress",
-                               verbose=TRUE, minparrows=100, minparcols=100,
-                               BPPARAM=NULL) {
+.processMatrixRows <- function(X, FUN, ..., verbose=TRUE,
+                               minparrows=100, minparcols=100,
+                               progressmsg="Progress", BPPARAM=NULL) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
@@ -562,9 +527,9 @@
 #' @importFrom BiocParallel bplapply bpnworkers
 #' @importClassesFrom IRanges IRanges
 #' @importFrom IRanges start end width
-.processMatrixCols <- function(X, FUN, ..., progressmsg="Progress",
-                               verbose=TRUE, minparrows=100, minparcols=100,
-                               BPPARAM=NULL) {
+.processMatrixCols <- function(X, FUN, ..., verbose=TRUE,
+                               minparrows=100, minparcols=100,
+                               progressmsg="Progress", BPPARAM=NULL) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L

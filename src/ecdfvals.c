@@ -158,28 +158,40 @@ fetch_row_nzvals(SEXP svtR, int i, int itypevals, int* inzvals,
   int     nnzvals;
 
   nnzvals = 0;
+  if (length(svtR) == 0) /* when matrix is empty, SVT is NULL */
+    return(nnzvals);
+
   for (int j=0; j < nc; j++) {
     SEXP svtLeaf = VECTOR_ELT(svtR, j);
 
     if (svtLeaf != R_NilValue) {
-      SEXP offsetsR = VECTOR_ELT(svtLeaf, 1);
-      int* offsets = INTEGER(offsetsR);
-      int  noffsets = length(offsetsR);
-      int* ivals;
+      SEXP    valsR = VECTOR_ELT(svtLeaf, 0);
+      SEXP    offsetsR = VECTOR_ELT(svtLeaf, 1);
+      int     noffsets = length(offsetsR);
+      int     nvals = length(valsR);
+      int*    offsets = INTEGER(offsetsR);
+      int*    ivals;
       double* dvals;
+      int     k;
 
       if (itypevals)
-        ivals = INTEGER(VECTOR_ELT(VECTOR_ELT(svtR, j), 0));
+        ivals = INTEGER(valsR);
       else
-        dvals = REAL(VECTOR_ELT(VECTOR_ELT(svtR, j), 0));
+        dvals = REAL(valsR);
 
-      for (int k=0; k < noffsets; k++) {
+      k=0;
+      while (k < noffsets && offsets[k] < i)
+        k++;
+
+      if (k < noffsets) {
         if (offsets[k] == i) {
           if (itypevals)
-            inzvals[nnzvals] = ivals[k];
+            inzvals[nnzvals] = nvals > 0 ? ivals[k] : 1;
           else
-            dnzvals[nnzvals] = dvals[k];
-          nzcols[nnzvals++] = j;
+            dnzvals[nnzvals] = nvals > 0 ? dvals[k] : 1;
+          if (nzcols != NULL)
+            nzcols[nnzvals] = j;
+          nnzvals++;
         }
       }
     }
@@ -609,8 +621,8 @@ ecdfvals_svt_to_svt_R(SEXP XsvtR, SEXP verboseR) {
   SEXP        ecdfRobj_SVT;
   int         itypevals;
   int*        nzcols; /* 0-based index of the columns with nonzero values */
-  int*        inzvals = NULL;
-  double*     dnzvals = NULL;
+  int*        inzvals=NULL;
+  double*     dnzvals=NULL;
   int         nr, nc;
   SEXP        pb=R_NilValue;
   int         nunprotect=0;

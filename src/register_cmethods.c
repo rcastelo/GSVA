@@ -64,6 +64,14 @@ order_rankstat_sparse_to_sparse_R(SEXP XCspR, SEXP jR);
 SEXP
 fetch_row_nzvals_R(SEXP svtR, SEXP iR);
 
+SEXP
+row_rngs_nzrngs_RsparseMatrix_R(SEXP XRspR, SEXP verboseR);
+
+SEXP
+row_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR);
+
+SEXP
+col_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR);
 
 /* registration of C-entry points */
 
@@ -85,6 +93,9 @@ static R_CallMethodDef callMethods[] = {
   {"order_rankstat_sparse_to_dense_R", (DL_FUNC) &order_rankstat_sparse_to_dense_R, 2},
   {"order_rankstat_sparse_to_sparse_R", (DL_FUNC) &order_rankstat_sparse_to_sparse_R, 2},
   {"fetch_row_nzvals_R", (DL_FUNC) &fetch_row_nzvals_R, 2},
+  {"row_rngs_nzrngs_RsparseMatrix_R", (DL_FUNC) &row_rngs_nzrngs_RsparseMatrix_R, 2},
+  {"row_rngs_nzrngs_SVT_SparseMatrix_R", (DL_FUNC) &row_rngs_nzrngs_SVT_SparseMatrix_R, 2},
+  {"col_rngs_nzrngs_SVT_SparseMatrix_R", (DL_FUNC) &col_rngs_nzrngs_SVT_SparseMatrix_R, 2},
   {NULL, NULL, 0}
 };
 
