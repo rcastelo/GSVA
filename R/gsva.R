@@ -1274,7 +1274,8 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 }
 
 #' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom DelayedArray seed DummyArrayGrid gridReduce
+#' @importFrom S4Arrays DummyArrayGrid
+#' @importFrom DelayedArray seed gridReduce
 .ecdfvals_sparseh5_to_sparseh5 <- function(X, grid=NULL, verbose=FALSE) {
   stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
 
@@ -1294,7 +1295,8 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 }
 
 #' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom DelayedArray seed DummyArrayGrid gridReduce
+#' @importFrom S4Arrays DummyArrayGrid
+#' @importFrom DelayedArray seed gridReduce
 .ecdfvals_sparseh5_to_denseh5 <- function(X, grid=NULL, verbose) {
   stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
 
