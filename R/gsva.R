@@ -321,7 +321,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 
               filteredDataMatrix <- dataMatrix
               if (get_filterRows(param))
-                  filteredDataMatrix <- .filterGenes(dataMatrix,
+                  filteredDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
                                                      removeConstant=TRUE,
                                                      removeNzConstant=TRUE,
                                                      verbose, BPPARAM=BPPARAM)

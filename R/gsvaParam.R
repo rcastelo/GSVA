@@ -415,8 +415,8 @@ get_ondisk <- function(object) {
 #' @param recursive Not used with `x` being an object of
 #' class [`gsvaParam-class`].
 #'
-#' @aliases anyNA,ssgseaParam-method
-#' @rdname ssgseaParam-class
+#' @aliases anyNA,gsvaParam-method
+#' @rdname gsvaParam-class
 setMethod("anyNA", signature=c("gsvaParam"),
           function(x, recursive=FALSE)
             return(x@anyNA))
