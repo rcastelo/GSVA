@@ -131,21 +131,54 @@
   res
 }
 
-.rowNzRanges_SVT_SparseArray <- function(X, verbose=FALSE) {
+.rowNzRanges_SVT_SparseArray_transpose_C <- function(X, verbose=FALSE) {
   ## res <- .Call("row_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
   res <- .Call("col_rngs_nzrngs_SVT_SparseMatrix_R", t(X), verbose=verbose)
   res
 }
 
+## from https://github.com/Bioconductor/SparseArray/issues/22
+
+#' @importFrom SparseArray NaArray
+.fast_replace_zeros_with_NAs <- function(x) {
+    stopifnot(is(x, "SparseArray"))
+    naa <- NaArray(dim=dim(x), type=type(x), dimnames=dimnames(x))
+    naa@NaSVT <- x@SVT ## ASSUMING x@SVT HAS NO NA VALUES!!
+    naa
+}
+
+#' @importFrom SparseArray NaArray nzwhich
+.safe_replace_zeros_with_NAs <- function(x) {
+    naa <- NaArray(dim=dim(x), type=type(x), dimnames=dimnames(x))
+    nzidx <- nzwhich(x)
+    naa[nzidx] <- x[nzidx]
+    naa
+}
+
+#' @importFrom MatrixGenerics rowMins rowMaxs
+.rowNzRanges_SVT_SparseArray <- function(X, anyna=FALSE, verbose=FALSE) {
+  naa <- NULL
+  if (anyna)
+      naa <- .safe_replace_zeros_with_NAs(X)
+  else
+      naa <- .fast_replace_zeros_with_NAs(X)  # only if 'X' is guaranteed to be NA-free!
+
+  ranges1 <- cbind(rowMins(X, na.rm=TRUE), rowMaxs(X, na.rm=TRUE))
+  ranges2 <- suppressWarnings(cbind(rowMins(naa, na.rm=TRUE), rowMaxs(naa, na.rm=TRUE)))
+  allzeros <- ranges1[ , 1L] == 0L & ranges1[ , 2L] == 0L
+  ranges2[allzeros] <- NA_integer_
+  cbind(ranges1, ranges2)
+}
+
 #' @importFrom S4Arrays DummyArrayGrid read_block
-.rowNzRanges <- function(X, verbose=FALSE) {
+.rowNzRanges <- function(X, anyna=FALSE, verbose=FALSE) {
   res <- NULL
   if (is.matrix(X))
     res <- rowRanges(X, na.rm=TRUE)
   else if (is(X, "dgCMatrix"))
     res <- .rowNzRanges_dgCMatrix(X, verbose=verbose)
   else if (is(X, "SVT_SparseArray"))
-    res <- .rowNzRanges_SVT_SparseArray(X, verbose=verbose)
+    res <- .rowNzRanges_SVT_SparseArray(X, anyna=anyna, verbose=verbose)
   else if (is(X, "DelayedArray")) {
     grid <- DummyArrayGrid(dim(X))
     block <- read_block(X, grid)
@@ -167,8 +200,8 @@
 #' @importFrom cli cli_alert_warning cli_abort cli_alert_info
 #' @importFrom cli cli_progress_bar cli_progress_done
 #' @importFrom BiocParallel SerialParam bpnworkers bpiterate bpprogressbar
-.filterGenes <- function(expr, removeConstant=TRUE, removeNzConstant=TRUE,
-                         verbose=TRUE, BPPARAM=NULL) {
+.filterGenes <- function(expr, anyna=FALSE, removeConstant=TRUE,
+                         removeNzConstant=TRUE, verbose=TRUE, BPPARAM=NULL) {
   rowrngs <- NULL
 
   if (verbose) {
@@ -184,8 +217,8 @@
   ## third and fourth columns, if they exist, they correspond to the
   ## minimum and maximum nonzero values of each row, which will be NAs if
   ## there are no nonzero values.
-  rowrngs <- .processMatrixRows(expr, .rowNzRanges, verbose=verbose,
-                                BPPARAM=BPPARAM)
+  rowrngs <- .processMatrixRows(expr, .rowNzRanges, anyna=anyna,
+                                verbose=verbose, BPPARAM=BPPARAM)
 
   constantRows <- (rowrngs[, 1] == rowrngs[, 2])
   mask <- is.na(constantRows)
@@ -341,7 +374,7 @@
     
     ## filter genes according to various criteria,
     ## e.g., constant expression
-    filteredDataMatrix <- .filterGenes(dataMatrix,
+    filteredDataMatrix <- .filterGenes(dataMatrix, anyna=anyNA(param),
                                        removeConstant=removeConstant,
                                        removeNzConstant=removeNzConstant,
                                        verbose,

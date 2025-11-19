@@ -5,6 +5,7 @@
 \alias{gsvaParam-class}
 \alias{gsvaRanksParam-class}
 \alias{gsvaParam}
+\alias{anyNA,gsvaParam-method}
 \alias{geneSets<-,gsvaRanksParam,GsvaGeneSets-method}
 \alias{geneSets<-}
 \title{\code{gsvaParam} class}
@@ -28,6 +29,8 @@ gsvaParam(
   ondisk = c("auto", "yes", "no"),
   verbose = TRUE
 )
+
+\S4method{anyNA}{gsvaParam}(x, recursive = FALSE)
 
 \S4method{geneSets}{gsvaRanksParam,GsvaGeneSets}(object) <- value
 }
@@ -162,6 +165,11 @@ equal, or smaller than 2^31.}
 \item{verbose}{Logical vector of length 1. It gives information about some
 decisions made by the software during parameter object construction when
 \code{verbose=TRUE} (default) and remains silent otherwise.}
+
+\item{x}{An object of class \code{\linkS4class{gsvaParam}}.}
+
+\item{recursive}{Not used with \code{x} being an object of
+class \code{\linkS4class{gsvaParam}}.}
 
 \item{object}{For the replacement method, an object of class
 \code{\linkS4class{gsvaRanksParam}}.}
