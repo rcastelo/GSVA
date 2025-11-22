@@ -126,15 +126,15 @@
 ##  an SD of 0 and therefore scaling them will result in division by 0.
 
 .rowNzRanges_dgCMatrix <- function(X, verbose=FALSE) {
-  res <- .Call("row_rngs_nzrngs_RsparseMatrix_R", as(X, "RsparseMatrix"),
-               verbose=verbose)
-  res
+    res <- .Call("row_rngs_nzrngs_RsparseMatrix_R", as(X, "RsparseMatrix"),
+                 verbose=verbose)
+    res
 }
 
 .rowNzRanges_SVT_SparseArray_transpose_C <- function(X, verbose=FALSE) {
-  ## res <- .Call("row_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
-  res <- .Call("col_rngs_nzrngs_SVT_SparseMatrix_R", t(X), verbose=verbose)
-  res
+    ## res <- .Call("row_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
+    res <- .Call("col_rngs_nzrngs_SVT_SparseMatrix_R", t(X), verbose=verbose)
+    res
 }
 
 ## from https://github.com/Bioconductor/SparseArray/issues/22
@@ -157,39 +157,39 @@
 
 #' @importFrom MatrixGenerics rowMins rowMaxs
 .rowNzRanges_SVT_SparseArray <- function(X, anyna=FALSE, verbose=FALSE) {
-  naa <- NULL
-  if (anyna)
-      naa <- .safe_replace_zeros_with_NAs(X)
-  else
-      naa <- .fast_replace_zeros_with_NAs(X)  # only if 'X' is guaranteed to be NA-free!
+    naa <- NULL
+    if (anyna)
+        naa <- .safe_replace_zeros_with_NAs(X)
+    else
+        naa <- .fast_replace_zeros_with_NAs(X)  # only if 'X' is guaranteed to be NA-free!
 
-  ranges1 <- cbind(rowMins(X, na.rm=TRUE), rowMaxs(X, na.rm=TRUE))
-  ranges2 <- suppressWarnings(cbind(rowMins(naa, na.rm=TRUE), rowMaxs(naa, na.rm=TRUE)))
-  allzeros <- ranges1[ , 1L] == 0L & ranges1[ , 2L] == 0L
-  ranges2[allzeros] <- NA_integer_
-  cbind(ranges1, ranges2)
+    ranges1 <- cbind(rowMins(X, na.rm=TRUE), rowMaxs(X, na.rm=TRUE))
+    ranges2 <- suppressWarnings(cbind(rowMins(naa, na.rm=TRUE), rowMaxs(naa, na.rm=TRUE)))
+    allzeros <- ranges1[ , 1L] == 0L & ranges1[ , 2L] == 0L
+    ranges2[allzeros] <- NA_integer_
+    cbind(ranges1, ranges2)
 }
 
 #' @importFrom S4Arrays DummyArrayGrid read_block
 .rowNzRanges <- function(X, anyna=FALSE, verbose=FALSE) {
-  res <- NULL
-  if (is.matrix(X))
-    res <- rowRanges(X, na.rm=TRUE)
-  else if (is(X, "dgCMatrix"))
-    res <- .rowNzRanges_dgCMatrix(X, verbose=verbose)
-  else if (is(X, "SVT_SparseArray"))
-    res <- .rowNzRanges_SVT_SparseArray(X, anyna=anyna, verbose=verbose)
-  else if (is(X, "DelayedArray")) {
-    grid <- DummyArrayGrid(dim(X))
-    block <- read_block(X, grid)
-    if (is_sparse(block)) ## input HDF5 may be sparse or not
-      res <- .rowNzRanges_SVT_SparseArray(block, verbose=verbose)
-    else
-      res <- rowRanges(X)
-  } else
-    cli_abort("x"=sprintf(".rowNzRanges: input object class %s not handled yet",
-                          class(X)))
-  res
+    res <- NULL
+    if (is.matrix(X))
+        res <- rowRanges(X, na.rm=TRUE)
+    else if (is(X, "dgCMatrix"))
+        res <- .rowNzRanges_dgCMatrix(X, verbose=verbose)
+    else if (is(X, "SVT_SparseArray"))
+        res <- .rowNzRanges_SVT_SparseArray(X, anyna=anyna, verbose=verbose)
+    else if (is(X, "DelayedArray")) {
+        grid <- DummyArrayGrid(dim(X))
+        block <- read_block(X, grid[[1L]])
+        if (is_sparse(block)) ## input HDF5 may be sparse or not
+            res <- .rowNzRanges_SVT_SparseArray(block, verbose=verbose)
+        else
+            res <- rowRanges(X)
+    } else
+        cli_abort(c("x"=sprintf(".rowNzRanges: input object class %s not handled yet",
+                                class(X))))
+    res
 }
 
 
@@ -201,70 +201,71 @@
 #' @importFrom cli cli_progress_bar cli_progress_done
 #' @importFrom BiocParallel SerialParam bpnworkers bpiterate bpprogressbar
 .filterGenes <- function(expr, anyna=FALSE, removeConstant=TRUE,
-                         removeNzConstant=TRUE, verbose=TRUE, BPPARAM=NULL) {
-  rowrngs <- NULL
+                         removeNzConstant=TRUE, verbose=TRUE, BPPARAM=NULL,
+                         maxmem=Inf) {
+    rowrngs <- NULL
 
-  if (verbose) {
-      if (!is_sparse(expr))
-          cli_alert_info("Searching for rows with constant values")
-      else
-          cli_alert_info("Searching for rows with constant (nonzero) values")
-  }
+    if (verbose) {
+        if (!is_sparse(expr))
+            cli_alert_info("Searching for rows with constant values")
+        else
+            cli_alert_info("Searching for rows with constant (nonzero) values")
+    }
 
-  ## returns a matrix with as many rows as 'expr' and 2 columns if 'expr'
-  ## is dense, and 4 columns if it is sparse, where the first two columns
-  ## correspond to the minimum and maximum values of each row, while the
-  ## third and fourth columns, if they exist, they correspond to the
-  ## minimum and maximum nonzero values of each row, which will be NAs if
-  ## there are no nonzero values.
-  rowrngs <- .processMatrixRows(expr, .rowNzRanges, anyna=anyna,
-                                verbose=verbose, BPPARAM=BPPARAM)
+    ## returns a matrix with as many rows as 'expr' and 2 columns if 'expr'
+    ## is dense, and 4 columns if it is sparse, where the first two columns
+    ## correspond to the minimum and maximum values of each row, while the
+    ## third and fourth columns, if they exist, they correspond to the
+    ## minimum and maximum nonzero values of each row, which will be NAs if
+    ## there are no nonzero values.
+    rowrngs <- .processMatrixRows(expr, .rowNzRanges, anyna=anyna,
+                                  verbose=verbose, BPPARAM=BPPARAM, maxmem=maxmem)
 
-  constantRows <- (rowrngs[, 1] == rowrngs[, 2])
-  mask <- is.na(constantRows)
-  if (any(mask))
-      constantRows[mask] <- TRUE
+    constantRows <- (rowrngs[, 1] == rowrngs[, 2])
+    mask <- is.na(constantRows)
+    if (any(mask))
+        constantRows[mask] <- TRUE
 
-  constantNzRows <- invalidRows <- invalidNzRows <- rep(FALSE, nrow(expr))
-  if (ncol(rowrngs) > 2) { ## sparse input
-      constantNzRows <- (rowrngs[, 3] == rowrngs[, 4])
-      mask <- is.na(constantNzRows)
-      if (any(mask)) ## no nonzero values imply constant nonzero values
-          constantNzRows[mask] <- TRUE
-  }
+    constantNzRows <- invalidRows <- invalidNzRows <- rep(FALSE, nrow(expr))
+    if (ncol(rowrngs) > 2) { ## sparse input
+        constantNzRows <- (rowrngs[, 3] == rowrngs[, 4])
+        mask <- is.na(constantNzRows)
+        if (any(mask)) ## no nonzero values imply constant nonzero values
+            constantNzRows[mask] <- TRUE
+    }
 
-  if (verbose && any(constantRows)) {
-      msg <- sprintf("%d rows with constant values throughout the columns",
-                     sum(constantRows))
-      cli_alert_warning(msg)
-      if (removeConstant)
-         cli_alert_warning("Rows with constant values are discarded")
-  }
+    if (verbose && any(constantRows)) {
+        msg <- sprintf("%d rows with constant values throughout the columns",
+                       sum(constantRows))
+        cli_alert_warning(msg)
+        if (removeConstant)
+           cli_alert_warning("Rows with constant values are discarded")
+    }
 
-  nzmask <- constantNzRows & !constantRows
-  if (verbose && any(nzmask)) {
-      msg <- sprintf("%d rows with constant nonzero values throughout the samples",
-                     sum(nzmask))
-      cli_alert_warning(msg)
-      if (removeNzConstant)
-         cli_alert_warning("Rows with constant nonzero values are discarded")
-  }
+    nzmask <- constantNzRows & !constantRows
+    if (verbose && any(nzmask)) {
+        msg <- sprintf("%d rows with constant nonzero values throughout the samples",
+                       sum(nzmask))
+        cli_alert_warning(msg)
+        if (removeNzConstant)
+           cli_alert_warning("Rows with constant nonzero values are discarded")
+    }
 
-  removemask <- rep(FALSE, nrow(expr))
-  if (removeConstant)
-       removemask <- constantRows
+    removemask <- rep(FALSE, nrow(expr))
+    if (removeConstant)
+         removemask <- constantRows
 
-  if (removeNzConstant && any(nzmask))
-       removemask <- removemask | nzmask
+    if (removeNzConstant && any(nzmask))
+         removemask <- removemask | nzmask
 
-  if (any(removemask)) {
-      if (nrow(expr) - sum(removemask) < 2)
-          cli_abort(c("x"="Less than two rows left in the input assay object"))
+    if (any(removemask)) {
+        if (nrow(expr) - sum(removemask) < 2)
+            cli_abort(c("x"="Less than two rows left in the input assay object"))
 
-      expr <- expr[!removemask, ]
-  }
+        expr <- expr[!removemask, ]
+    }
 
-  return(expr)
+    return(expr)
 }
 
 
@@ -374,18 +375,17 @@
     
     ## filter genes according to various criteria,
     ## e.g., constant expression
-    filteredDataMatrix <- .filterGenes(dataMatrix, anyna=anyNA(param),
-                                       removeConstant=removeConstant,
-                                       removeNzConstant=removeNzConstant,
-                                       verbose,
-                                       BPPARAM=BPPARAM)
+    filtDataMatrix <- .filterGenes(dataMatrix, anyna=anyNA(param),
+                                   removeConstant=removeConstant,
+                                   removeNzConstant=removeNzConstant,
+                                   verbose, BPPARAM=BPPARAM)
 
-    filteredMappedGeneSets <- .filterAndMapGeneSets(param=param,
-                                                    filteredDataMatrix=filteredDataMatrix,
-                                                    verbose=verbose)
+    filtMappedGeneSets <- .filterAndMapGeneSets(param=param,
+                                                filteredDataMatrix=filtDataMatrix,
+                                                verbose=verbose)
 
-    return(list(filteredDataMatrix=filteredDataMatrix,
-                filteredMappedGeneSets=filteredMappedGeneSets))
+    return(list(filteredDataMatrix=filtDataMatrix,
+                filteredMappedGeneSets=filtMappedGeneSets))
 }
 
 
@@ -461,6 +461,54 @@
     list(any_na=any_na, didCheckNA=didCheckNA)
 }
 
+## adapted from .define_multiworker_grid() in beachmat/R/colBlockApply.R
+#' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength type
+.rowgridsize <- function(X, nworkers=1, maxmem=Inf) {
+  typesze <- c("integer"=4, "double"=8) ## 4 bytes for integers, 8 bytes for doubles
+  grid <- DummyArrayGrid(dim(X))
+  if (!is.infinite(maxmem) || nworkers > 1 || is(X, "DelayedMatrix")) {
+      ## initially maximum block length is the maximum of the default auto block
+      ## length and the maximum available memory divided by the size of stored number
+      ## if no finite maximum available memory is specified, then it becomes the
+      ## default auto block length
+      max.block.length <- getAutoBlockLength(type(X))
+      if (!is.infinite(maxmem))
+          max.block.length <- max(max.block.length, ceiling(maxmem / typesze[type(X)]))
+      ## assuming all workers share memory, the maximum block length has to reduce
+      ## by the number of workers to avoid exceeding the maximum available memory
+      ## and, in any case, it cannot exceed .Machine$integer.max
+      max.block.length <- min(.Machine$integer.max, max.block.length / nworkers)
+      expected.block.length <- max(1, ceiling(nrow(X) / nworkers) * as.numeric(ncol(X)))
+      block.length <- min(max.block.length, expected.block.length)
+      grid <- rowAutoGrid(X, block.length=block.length)
+  }
+  grid
+}
+
+## adapted from .define_multiworker_grid() in beachmat/R/colBlockApply.R
+#' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength type
+.colgridsize <- function(X, nworkers=1, maxmem=Inf) {
+  typesze <- c("integer"=4, "double"=8) ## 4 bytes for integers, 8 bytes for doubles
+  grid <- DummyArrayGrid(dim(X))
+  if (!is.infinite(maxmem) || nworkers > 1 || is(X, "DelayedMatrix")) {
+      ## initially maximum block length is the maximum of the default auto block
+      ## length and the maximum available memory divided by the size of stored number
+      ## if no finite maximum available memory is specified, then it becomes the
+      ## default auto block length
+      max.block.length <- getAutoBlockLength(type(X))
+      if (!is.infinite(maxmem))
+          max.block.length <- max(max.block.length, ceiling(maxmem / typesze[type(X)]))
+      ## assuming all workers share memory, the maximum block length has to reduce
+      ## by the number of workers to avoid exceeding the maximum available memory
+      ## and, in any case, it cannot exceed .Machine$integer.max
+      max.block.length <- min(.Machine$integer.max, max.block.length / nworkers)
+      expected.block.length <- max(1, ceiling(nrow(X) / nworkers) * as.numeric(ncol(X)))
+      block.length <- min(max.block.length, expected.block.length)
+      grid <- colAutoGrid(X, block.length=block.length)
+  }
+  grid
+}
+
 #' @importClassesFrom IRanges IRanges
 #' @importFrom IRanges ranges
 .splitRowsInRanges <- function(grid) {
@@ -482,25 +530,30 @@
 
 #' @importFrom cli cli_abort cli_progress_bar cli_alert_warning
 #' @importFrom BiocParallel bplapply bpnworkers bpprogressbar bptry bpok
+#' @importFrom memuse howbig
 #' @importClassesFrom IRanges IRanges
 #' @importFrom IRanges start end width
 .processMatrixRows <- function(X, FUN, ..., verbose=TRUE,
                                minparrows=100, minparcols=100,
-                               progressmsg="Progress", BPPARAM=NULL) {
+                               progressmsg="Progress", BPPARAM=NULL, maxmem=Inf) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
     if (!is.null(BPPARAM) && nrow(X) > minparrows && ncol(X) > minparcols) {
         if (!is(BPPARAM, "BiocParallelParam"))
-            cli_abort("x"="'BPPARAM' must be a BiocParallelParam derivative")
+            cli_abort(c("x"="'BPPARAM' must be a BiocParallelParam derivative"))
         nworkers <- bpnworkers(BPPARAM)
     }
 
-    grid <- DummyArrayGrid(dim(X))
-    if (nworkers > 1 || is(X, "DelayedMatrix"))
-        grid <- rowgridsize(X, nworkers)
+    grid <- .rowgridsize(X, nworkers, maxmem)
     rir <- .splitRowsInRanges(grid)
-    if (length(rir) == 1)                     ## serial execution in one single call
+    if (length(rir) > 1 && verbose) {
+        typesze <- c("integer"=4, "double"=8) ## 4 bytes for integers, 8 bytes for doubles
+        sze <- howbig(as.numeric(width(rir[[1]])), as.numeric(ncol(X)),
+                      representation="dense", type=type(X))
+        cli_alert_info(sprintf("Splitting calculations in %d chunks of %s", length(rir),
+                               as.character(sze)))
+    } else if (length(rir) == 1)                     ## serial execution in one single call
         return(FUN(X, ..., verbose=verbose))
 
     FUN_WRAPPER <- function(rowsrng, verbose, idpbe, WRAPPED_FUN, ...) {
@@ -543,7 +596,7 @@
             if (any(!bpok(res))) {
                 cli_alert_warning(sprintf("%d execution thread(s) give an error, reporting the first one"))
                 print(attr(res[[which(!bpokmask)]], "traceback"))
-                cli_abort("x"="Cancelling execution")
+                cli_abort(c("x"="Cancelling execution"))
             }
         }
     }
@@ -562,20 +615,26 @@
 #' @importFrom IRanges start end width
 .processMatrixCols <- function(X, FUN, ..., verbose=TRUE,
                                minparrows=100, minparcols=100,
-                               progressmsg="Progress", BPPARAM=NULL) {
+                               progressmsg="Progress", BPPARAM=NULL, maxmem=Inf) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
     if (!is.null(BPPARAM) && nrow(X) > minparrows && ncol(X) > minparcols) {
         if (!is(BPPARAM, "BiocParallelParam"))
-            cli_abort("x"="'BPPARAM' must be a BiocParallelParam derivative")
+            cli_abort(c("x"="'BPPARAM' must be a BiocParallelParam derivative"))
         nworkers <- bpnworkers(BPPARAM)
     }
-    grid <- DummyArrayGrid(dim(X))
-    if (nworkers > 1 || is(X, "DelayedMatrix"))
-        grid <- colgridsize(X, nworkers)
+
+    grid <- .colgridsize(X, nworkers, maxmem)
     cir <- .splitColsInRanges(grid)
-    if (length(cir) == 1)                     ## serial execution in one single call
+
+    if (length(cir) > 1 && verbose) {
+        typesze <- c("integer"=4, "double"=8) ## 4 bytes for integers, 8 bytes for doubles
+        sze <- howbig(as.numeric(width(cir[[1]])), as.numeric(nrow(X)),
+                      representation="dense", type=type(X))
+        cli_alert_info(sprintf("Splitting calculations in %d chunks of %s", length(cir),
+                               as.character(sze)))
+    } else if (length(cir) == 1)              ## serial execution in one single call
         return(FUN(X, ..., verbose=verbose))
 
     FUN_WRAPPER <- function(colsrng, verbose, idpbe, WRAPPED_FUN, ...) {
@@ -613,7 +672,7 @@
             if (any(!bpok(res))) {
                 cli_alert_warning(sprintf("%d execution thread(s) give an error, reporting the first one"))
                 print(attr(res[[which(!bpokmask)]], "traceback"))
-                cli_abort("x"="Cancelling execution")
+                cli_abort(c("x"="Cancelling execution"))
             }
         }
     }
@@ -673,7 +732,7 @@
                 estimated_flag <- TRUE
             }
         } else
-            cli_abort("x"=sprintf("%s sparse matrix class cannot be handled", class(X)))
+            cli_abort(c("x"=sprintf("%s sparse matrix class cannot be handled", class(X))))
 
         if (verbose) {
             estmsg <- ""
@@ -687,6 +746,73 @@
 
     return(nzc)
 }
+
+#' @importFrom cli cli_abort
+.memtext2bytes <- function(x) {
+  if (is.numeric(x))
+      return(x)
+
+  x <- gsub(",", ".", x)
+  pat <- "(\\d*(.\\d+)*)(.*)"
+  num  <- as.numeric(sub(pat, "\\1", x))
+  unit <- sub(pat, "\\3", x)
+  unit[unit==""] <- "1"
+
+  fac <- c("1"=1, "K"=1024, "M"=1024^2, "G"=1024^3, "T"=1024^4)
+  if (!toupper(unit) %in% names(fac))
+      cli_abort(c("x"=sprintf("Unknown memory unit '%s', please use either K, M, G or T", unit)))
+
+  num * unname(fac[toupper(unit)])
+}
+
+#' @importFrom cli cli_abort cli_alert_info
+#' @importFrom memuse Sys.meminfo
+.check_maxmem <- function(x, verbose) {
+    if (length(x) > 1 || (!is.numeric(x) && !is.character(x)))
+        cli_abort(c("x"="'maxmem' should be a vector of length 1 of either a number in bytes or a character string"))
+
+    maxmem <- Inf
+    if (is.character(x) && x == "auto") {
+        totalram <- Sys.meminfo()$totalram
+        maxmem <- as.numeric(totalram * 0.9) ## auto takes 90% of RAM
+        if (verbose)
+            cli_alert_info(sprintf("Maximum available main memory: %s",
+                                   as.character(totalram * 0.9)))
+    }
+    maxmem <- .memtext2bytes(maxmem)
+    maxmem
+}
+
+#' @importFrom cli cli_abort cli_alert_info
+#' @importFrom S4Arrays is_sparse
+#' @importFrom memuse howbig
+.check_ondisk <- function(param, maxmem, verbose) {
+    ondisk <- get_ondisk(param)
+    if (ondisk == "auto") {
+        X <- unwrapData(get_exprData(param), get_assay(param))
+        tot <- as.numeric(nrow(X)) * as.numeric(ncol(X))
+        rep <- "dense"
+        spa <- 1
+        if (is_sparse(X)) {
+            rep <- "sparse"
+            spa <- nzcount(param) / tot
+        }
+        sze <- howbig(as.numeric(nrow(X)), as.numeric(ncol(X)),
+                      representation=rep, sparsity=spa, type=type(X))
+        ondisk <- "no"
+        if (as.numeric(sze) > maxmem) {
+            ondisk <- "yes"
+            if (is(X, "DelayedArray") && verbose)
+                cli_alert_info("On-disk input data does not fit in the maximum available main memory")
+        } else if (is(X, "DelayedArray") && verbose)
+            cli_alert_info("On-disk input data fits in the maximum available main memory")
+
+    } else if (ondisk != "yes" && ondisk != "no")
+        cli_abort(c("x"="'ondisk' should be either 'auto', 'yes' or 'no'"))
+
+    ondisk
+}
+
 
 ## transforms a dgCMatrix into a list of its
 ## non-zero values by MARGIN (1 for row, 2 for column)

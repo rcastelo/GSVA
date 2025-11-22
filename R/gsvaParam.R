@@ -221,12 +221,6 @@ gsvaParam <- function(exprData, geneSets,
                                     checkNA=checkNA, use=use)
 
     nzc <- .estimate_nzcount(exprData, assay, verbose)
-    if (ondisk == "auto") {
-      if (nzc >= .Machine$integer.max) {
-        ondisk <- "yes"
-      } else
-        ondisk <- "no"
-    }
 
     if (!is_sparse(unwrapData(exprData, assay))) ## use sparse regime only
         sparse <- FALSE                          ## when input is sparse
@@ -236,15 +230,20 @@ gsvaParam <- function(exprData, geneSets,
         cli_alert_warning("Use it only if you are sure that such rows are not present in the input data")
     }
 
-    new("gsvaParam",
-        exprData=exprData, geneSets=geneSets,
-        assay=assay, annotation=annotation,
-        minSize=minSize, maxSize=maxSize,
-        kcdf=kcdf, kcdfNoneMinSampleSize=kcdfNoneMinSampleSize,
-        tau=as.double(tau), maxDiff=maxDiff, absRanking=absRanking,
-        sparse=sparse, checkNA=checkNA, didCheckNA=naparam$didCheckNA,
-        anyNA=naparam$any_na, use=use, filterRows=filterRows, nzcount=nzc,
-        ondisk=ondisk)
+    param <- new("gsvaParam",
+                 exprData=exprData, geneSets=geneSets,
+                 assay=assay, annotation=annotation,
+                 minSize=minSize, maxSize=maxSize,
+                 kcdf=kcdf, kcdfNoneMinSampleSize=kcdfNoneMinSampleSize,
+                 tau=as.double(tau), maxDiff=maxDiff, absRanking=absRanking,
+                 sparse=sparse, checkNA=checkNA, didCheckNA=naparam$didCheckNA,
+                 anyNA=naparam$any_na, use=use, filterRows=filterRows,
+                 nzcount=nzc, ondisk=ondisk)
+
+    maxmem <- .check_maxmem("auto", verbose)
+    .check_ondisk(param, maxmem, verbose)
+
+    return(param)
 }
 
 

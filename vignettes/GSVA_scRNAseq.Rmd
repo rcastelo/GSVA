@@ -319,13 +319,6 @@ data.
 These are features that we are working on and we expect to have them implemented
 in the near future (e.g., next release):
 
-* The parallelization for single-cell data stored using a `DelayedArray`
-backend, such as HDF5, is not yet implemented. If you have enough RAM, you can
-attempt converting the data set to an `SVT_SparseArray` in main memory (see
-subsection 8.2 of the vignette of the
-[SparseArray](https://bioconductor.org/packages/SVT_SparseArray) package
-for further information).
-
 * A specific implementation of the other methods ssGSEA, PLAGE and zscore to
   work on large datasets stored using a `DelayedArray` backend, such as HDF5,
   is not yet available.

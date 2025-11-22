@@ -28,6 +28,6 @@ zscore.es[seq.int(min(nRowsToPrint, nrow(zscore.es))),]
 c2BroadSets <- c2BroadSets[c(grep("_UP$", names(c2BroadSets)),
                              grep("_DN$", names(c2BroadSets)))]
 firPar <- zscoreParam(geneExpCostaEtAl2021, c2BroadSets,
-                      minSize=10, maxSize=500)
+                      minSize=10, maxSize=500, verbose=FALSE)
 fir_es <- gsva(firPar, verbose=FALSE)
 assay(fir_es)[seq.int(min(nRowsToPrint, nrow(fir_es))),]

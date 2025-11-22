@@ -58,7 +58,8 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                       verbose)
             gene.cdf <- t(matrix(A, n.test.samples, n.genes))
         } else
-            cli_abort("x"=sprintf("Matrix class %s cannot be handled yet.", class(expr)))
+            cli_abort(c("x"=sprintf("Matrix class %s cannot be handled yet.",
+                                    class(expr))))
     } else { ## direct ECDF estimation
         if (is(expr, "dgCMatrix")) {
             if (sparse)
@@ -88,8 +89,8 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
             else
                 gene.cdf <- .ecdfvals_dense_to_dense(expr, verbose)
         } else
-            cli_abort("x"=sprintf("Input container class %s cannot be handled yet.",
-                         class(expr)))
+            cli_abort(c("x"=sprintf("Input container class %s cannot be handled yet.",
+                                    class(expr))))
     }
 
     return(gene.cdf)	
@@ -221,8 +222,19 @@ zorder_rankstat <- function(z, p) {
 #' @param verbose Gives information about each calculation step. Default: `TRUE`.
 #'
 #' @param BPPARAM An object of class `BiocParallelParam` specifying parameters
-#'   related to the parallel execution of some of the tasks and calculations
-#'   within this function.
+#' related to the parallel execution of some of the tasks and calculations
+#' within this function.
+#'
+#' @param maxmem A vector of length 1 either specifying a number in bytes, or
+#' a character string with either the word `auto` (default), or a number
+#' followed by a suffix indicating kilobytes (K), megabytes (M), gigabytes (G)
+#' or terabytes (T), which GSVA will use to attempt bounding the maximum amount
+#' of main memory used across all threads of execution to that given quantity.
+#' By default `maxmem="auto"`, indicating that the maximum memory will be the
+#' 90% of the total main memory, as calculated by [`Sys.meminfo()`][memuse::Sys.meminfo].
+#' To avoid setting any bound on the maximum memory, please use `maxmem=Inf`.
+#' Note that the amount of main memory used in an R session or script may depend
+#' on other commands and packages used in that same session or script.
 #'
 #' @return In the case of the `gsvaRanks()` method, an object of class
 #' [`gsvaRanksParam-class`].
@@ -297,7 +309,8 @@ zorder_rankstat <- function(z, p) {
 setMethod("gsvaRanks", signature(param="gsvaParam"),
           function(param,
                    verbose=TRUE,
-                   BPPARAM=SerialParam(progressbar=verbose))
+                   BPPARAM=SerialParam(progressbar=verbose),
+                   maxmem="auto")
           {
               if (verbose && gsva_global$show_start_and_end_messages) {
                   cli_alert_info(sprintf("GSVA version %s",
@@ -306,8 +319,10 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
+              maxmem <- .check_maxmem(maxmem, verbose)
+              ondisk <- .check_ondisk(param, maxmem, verbose)
 
-              if (is(dataMatrix, "DelayedMatrix") && get_ondisk(param) == "no") {
+              if (is(dataMatrix, "DelayedMatrix") && ondisk == "no") {
                   if (verbose)
                       cli_alert_info("Loading input expression data into main memory")
                   if (is_sparse(dataMatrix)) {
@@ -319,12 +334,13 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                       dataMatrix <- as.matrix(dataMatrix)
               }
 
-              filteredDataMatrix <- dataMatrix
+              filtDataMatrix <- dataMatrix
               if (get_filterRows(param))
-                  filteredDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
-                                                     removeConstant=TRUE,
-                                                     removeNzConstant=TRUE,
-                                                     verbose, BPPARAM=BPPARAM)
+                  filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
+                                                 removeConstant=TRUE,
+                                                 removeNzConstant=TRUE,
+                                                 verbose, BPPARAM=BPPARAM,
+                                                 maxmem=maxmem)
               else if (verbose)
                   cli_alert_warning("Skipping filtering of constant rows (filterRows=FALSE)")
               
@@ -332,17 +348,18 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                   cli_alert_info(sprintf("Calculating GSVA ranks"))
 
               kcdfminssize <-get_kcdfNoneMinSampleSize(param)
-              gsvarnks <- .compute_gsva_ranks(expr=filteredDataMatrix,
+              gsvarnks <- .compute_gsva_ranks(expr=filtDataMatrix,
                                               kcdf=get_kcdf(param),
                                               kcdf.min.ssize=kcdfminssize,
                                               sparse=get_sparse(param),
                                               any_na=anyNA(param),
                                               na_use=get_NAuse(param),
                                               verbose=verbose,
-                                              BPPARAM=BPPARAM)
+                                              BPPARAM=BPPARAM,
+                                              maxmem=maxmem)
 
-              rownames(gsvarnks) <- rownames(filteredDataMatrix)
-              colnames(gsvarnks) <- colnames(filteredDataMatrix)
+              rownames(gsvarnks) <- rownames(filtDataMatrix)
+              colnames(gsvarnks) <- colnames(filtDataMatrix)
 
               rnkcontainer <- wrapData(get_exprData(param), gsvarnks)
               rval <- new("gsvaRanksParam",
@@ -448,8 +465,8 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 #' @exportMethod gsvaScores
 setMethod("gsvaScores", signature(param="gsvaRanksParam"),
           function(param, verbose=TRUE,
-                   BPPARAM=SerialParam(progressbar=verbose))
-          {
+                   BPPARAM=SerialParam(progressbar=verbose),
+                   maxmem="auto") {
               if (verbose && gsva_global$show_start_and_end_messages) {
                   cli_alert_info(sprintf("GSVA version %s",
                                          packageDescription("GSVA")[["Version"]]))
@@ -457,13 +474,14 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
 
               ## assuming rows in the rank data have been already filtered
               exprData <- get_exprData(param)
-              filteredDataMatrix <- unwrapData(exprData, get_assay(param))
-              filteredMappedGeneSets <- .filterAndMapGeneSets(param=param,
-                                                              filteredDataMatrix=filteredDataMatrix,
-                                                              verbose=verbose)
+              filtDataMatrix <- unwrapData(exprData, get_assay(param))
+
+              filtMappedGeneSets <- .filterAndMapGeneSets(param=param,
+                                           filteredDataMatrix=filtDataMatrix,
+                                           verbose=verbose)
 
               sparse <- get_sparse(param)
-              if (sparse && !is_sparse(filteredDataMatrix))
+              if (sparse && !is_sparse(filtDataMatrix))
                   sparse <- FALSE
 
               if (verbose) {
@@ -473,8 +491,23 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                     cli_alert_info("GSVA dense (classical) algorithm")
               }
 
-              if (bpnworkers(BPPARAM) > 1 && nrow(filteredDataMatrix) > 100 &&
-                  ncol(filteredDataMatrix) > 100) {
+              maxmem <- .check_maxmem(maxmem, verbose)
+              ondisk <- .check_ondisk(param, maxmem, verbose)
+
+              if (is(filtDataMatrix, "DelayedMatrix") && ondisk == "no") {
+                  if (verbose)
+                      cli_alert_info("Loading input expression data into main memory")
+                  if (is_sparse(filtDataMatrix)) {
+                      if (nzcount(param) < .Machine$integer.max)
+                          filtDataMatrix <- as(filtDataMatrix, "dgCMatrix")
+                      else
+                          filtDataMatrix <- as(filtDataMatrix, "SVT_SparseArray")
+                  } else
+                      filtDataMatrix <- as.matrix(filtDataMatrix)
+              }
+
+              if (bpnworkers(BPPARAM) > 1 && nrow(filtDataMatrix) > 100 &&
+                  ncol(filtDataMatrix) > 100) {
                   if (verbose) {
                       msg <- sprintf("Calculating GSVA scores with %d cores",
                                      as.integer(bpnworkers(BPPARAM)))
@@ -486,23 +519,37 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                   BPPARAM <- NULL
               }
 
-              gsva_es <- .processMatrixCols(filteredDataMatrix,
+              ondisk <- FALSE
+              esreqmem <- as.numeric(length(filtMappedGeneSets)) *
+                          as.numeric(ncol(filtDataMatrix)) * 8 ## 8 bytes per double
+              if (esreqmem > maxmem) {
+                cli_alert_warning("The resulting matrix of enrichment scores will not fit")
+                cli_alert_warning("in the given maximum main memory size, the returned")
+                cli_alert_warning("object will use an on-disk data structure")
+                ondisk <- TRUE
+              }
+
+              gsva_es <- .processMatrixCols(filtDataMatrix,
                                             FUN=.compute_gsva_scores,
-                                            geneSetsIdx=filteredMappedGeneSets,
+                                            geneSetsIdx=filtMappedGeneSets,
                                             tau=get_tau(param),
                                             maxDiff=get_maxDiff(param),
                                             absRanking=get_absRanking(param),
                                             sparse=sparse, any_na=anyNA(param),
                                             na_use=get_NAuse(param),
                                             minSize=get_minSize(param),
-                                            verbose=verbose, minparrows=100,
-                                            minparcols=100, BPPARAM=BPPARAM)
+                                            ondisk=ondisk, verbose=verbose,
+                                            minparrows=100, minparcols=100,
+                                            BPPARAM=BPPARAM,
+                                            maxmem=ceiling(maxmem/100)) ## use
+                                            ## of memory increases here about
+                                            ## 10-fold over block size memory
 
-              rownames(gsva_es) <- names(filteredMappedGeneSets)
-              colnames(gsva_es) <- colnames(filteredDataMatrix)
+              rownames(gsva_es) <- names(filtMappedGeneSets)
+              colnames(gsva_es) <- colnames(filtDataMatrix)
 
-              gs <- .geneSetsIndices2Names(indices=filteredMappedGeneSets,
-                                           names=rownames(filteredDataMatrix))
+              gs <- .geneSetsIndices2Names(indices=filtMappedGeneSets,
+                                           names=rownames(filtDataMatrix))
               rval <- wrapData(get_exprData(param), gsva_es, gs)
 
               if (verbose && gsva_global$show_start_and_end_messages)
@@ -621,15 +668,16 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
               minsize <- get_minSize(param)
 
               exprData <- get_exprData(param)
-              filteredDataMatrix <- unwrapData(exprData, get_assay(param))
+              filtDataMatrix <- unwrapData(exprData, get_assay(param))
 
               ## no need for verbosity when mapping a single gene set
-              filteredMappedGeneSets <- .filterAndMapGeneSets(param, wgset=geneSet,
-                                                              filteredDataMatrix,
-                                                              verbose=FALSE)
+              filtMappedGeneSets <- .filterAndMapGeneSets(param,
+                                           wgset=geneSet,
+                                           filteredDataMatrix=filtDataMatrix,
+                                           verbose=FALSE)
 
-              geneSetIdx <- filteredMappedGeneSets[[1]]
-              edata <- .gsva_enrichment_data(R=filteredDataMatrix,
+              geneSetIdx <- filtMappedGeneSets[[1]]
+              edata <- .gsva_enrichment_data(R=filtDataMatrix,
                                              column=column,
                                              geneSetIdx=geneSetIdx,
                                              maxDiff=maxDiff,
@@ -710,7 +758,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 #' @importFrom sparseMatrixStats colRanks
 .compute_gsva_ranks <- function(expr, kcdf, kcdf.min.ssize,
                                 sparse, any_na, na_use, verbose,
-                                BPPARAM=NULL) {
+                                BPPARAM=NULL, maxmem=Inf) {
 
     kcdfparam <- .parse_kcdf_param(expr, kcdf, kcdf.min.ssize, sparse, verbose)
     kernel <- kcdfparam$kernel
@@ -731,7 +779,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     Z <- .processMatrixRows(expr, FUN=compute.gene.cdf, Gaussk=Gaussk,
                             kernel=kernel, sparse=sparse, any_na=any_na,
                             na_use=na_use, verbose=verbose, minparrows=100,
-                            minparcols=100, BPPARAM=BPPARAM)
+                            minparcols=100, BPPARAM=BPPARAM, maxmem=maxmem)
 
     if (!is.null(BPPARAM) && verbose) {
         msg <- sprintf("Calculating column ranks with %d cores",
@@ -744,7 +792,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     ## from 'order()' based on ranks
     R <- .processMatrixCols(Z, FUN=compute.col.ranks, ties.method="last",
                             verbose=verbose, minparrows=100, minparcols=100,
-                            BPPARAM=BPPARAM)
+                            BPPARAM=BPPARAM, maxmem=maxmem)
 
     return(R)
 }
@@ -1009,8 +1057,8 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 #' @importFrom BiocParallel bpnworkers
 #' @importFrom S4Arrays is_sparse refdim
 .compute_gsva_scores <- function(R, geneSetsIdx, tau, maxDiff, absRanking,
-                                 sparse, any_na, na_use, minSize,
-                                 grid=NULL, grid_es=NULL, verbose) {
+                                 sparse, any_na, na_use, minSize, ondisk,
+                                 verbose) {
     p <- nrow(R)
     n <- ncol(R)
     es <- NULL
@@ -1020,18 +1068,16 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
     es <- NULL
-    if (is(R, "DelayedMatrix")) {
+    if (is(R, "DelayedMatrix") || ondisk) {
         sink <- HDF5RealizationSink(c(length(geneSetsIdx), ncol(R)),
                                     as.sparse=FALSE) ## GSVA scores are dense
-        if (is.null(grid))
-            grid <- DummyArrayGrid(dim(R))
-        if (is.null(grid_es))
-            grid_es <- DummyArrayGrid(dim(sink))
+        grid <- DummyArrayGrid(dim(R))
+        grid_es <- DummyArrayGrid(dim(sink))
 
         if (length(grid) != length(grid_es) ||
             refdim(grid)[2] != refdim(grid_es)[2] ||
             dim(grid)[2] != dim(grid_es)[2]) {
-            cli_abort("x"="Grid column blocks for ranks should match grid column blocks for enrichment scores")
+            cli_abort(c("x"="Grid column blocks for ranks should match grid column blocks for enrichment scores"))
         }
 
         ## avp - ArrayViewport for reaching the (possibly sparse) rank matrix
@@ -1535,28 +1581,6 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 }
 
 ## calculate ranks using an HDF5 backend
-
-## adapted from .define_multiworker_grid() in beachmat/R/colBlockApply.R
-#' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength type
-rowgridsize <- function(X, nworkers) {
-  max.block.length <- getAutoBlockLength(type(X))
-  if (nworkers > 1)
-      max.block.length <- .Machine$integer.max
-  expected.block.length <- max(1, ceiling(nrow(X) / nworkers) * ncol(X))
-  block.length <- min(max.block.length, expected.block.length)
-  rowAutoGrid(X, block.length=block.length)
-}
-
-## adapted from .define_multiworker_grid() in beachmat/R/colBlockApply.R
-#' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength type
-colgridsize <- function(X, nworkers) {
-  max.block.length <- getAutoBlockLength(type(X))
-  if (nworkers > 1)
-      max.block.length <- .Machine$integer.max
-  expected.block.length <- max(1, ceiling(ncol(X) / nworkers) * nrow(X))
-  block.length <- min(max.block.length, expected.block.length)
-  colAutoGrid(X, block.length=block.length)
-}
 
 #' @importFrom MatrixGenerics colRanks
 #' @importFrom BiocParallel SerialParam

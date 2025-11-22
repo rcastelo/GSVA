@@ -7,9 +7,19 @@
 \alias{gsvaScores,gsvaRanksParam-method}
 \title{GSVA ranks and scores}
 \usage{
-\S4method{gsvaRanks}{gsvaParam}(param, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
+\S4method{gsvaRanks}{gsvaParam}(
+  param,
+  verbose = TRUE,
+  BPPARAM = SerialParam(progressbar = verbose),
+  maxmem = "auto"
+)
 
-\S4method{gsvaScores}{gsvaRanksParam}(param, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
+\S4method{gsvaScores}{gsvaRanksParam}(
+  param,
+  verbose = TRUE,
+  BPPARAM = SerialParam(progressbar = verbose),
+  maxmem = "auto"
+)
 }
 \arguments{
 \item{param}{A parameter object of the \code{\linkS4class{gsvaRanksParam}} class.}
@@ -19,6 +29,17 @@
 \item{BPPARAM}{An object of class \code{BiocParallelParam} specifying parameters
 related to the parallel execution of some of the tasks and calculations
 within this function.}
+
+\item{maxmem}{A vector of length 1 either specifying a number in bytes, or
+a character string with either the word \code{auto} (default), or a number
+followed by a suffix indicating kilobytes (K), megabytes (M), gigabytes (G)
+or terabytes (T), which GSVA will use to attempt bounding the maximum amount
+of main memory used across all threads of execution to that given quantity.
+By default \code{maxmem="auto"}, indicating that the maximum memory will be the
+90\% of the total main memory, as calculated by \code{\link[memuse:meminfo]{Sys.meminfo()}}.
+To avoid setting any bound on the maximum memory, please use \code{maxmem=Inf}.
+Note that the amount of main memory used in an R session or script may depend
+on other commands and packages used in that same session or script.}
 }
 \value{
 In the case of the \code{gsvaRanks()} method, an object of class
