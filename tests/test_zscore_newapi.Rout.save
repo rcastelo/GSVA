@@ -1,7 +1,7 @@
 
-R Under development (unstable) (2025-10-28 r88976) -- "Unsuffered Consequences"
+R Under development (unstable) (2025-11-14 r89020) -- "Unsuffered Consequences"
 Copyright (C) 2025 The R Foundation for Statistical Computing
-Platform: x86_64-apple-darwin24.6.0
+Platform: x86_64-pc-linux-gnu
 
 R is free software and comes with ABSOLUTELY NO WARRANTY.
 You are welcome to redistribute it under certain conditions.
@@ -80,8 +80,7 @@ gs25  0.979497199  0.75832032  0.80012048 -0.85072297  1.31738300 -0.66743305 -1
 > c2BroadSets <- c2BroadSets[c(grep("_UP$", names(c2BroadSets)),
 +                              grep("_DN$", names(c2BroadSets)))]
 > firPar <- zscoreParam(geneExpCostaEtAl2021, c2BroadSets,
-+                       minSize=10, maxSize=500)
-ℹ No assay name provided; using default assay 'logCPM'
++                       minSize=10, maxSize=500, verbose=FALSE)
 > fir_es <- gsva(firPar, verbose=FALSE)
 > assay(fir_es)[seq.int(min(nRowsToPrint, nrow(fir_es))),]
                                                         BS03       BS04       BS05        BS06         BS07       BS08        BS09        BS10       BS11         BS12        BS13        BS14       BS16        BS17        BS18         BS19        BS20        BS21        BS22       BS23       BS24

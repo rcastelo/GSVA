@@ -11,7 +11,7 @@ Imports: methods, stats, utils, graphics, BiocGenerics, MatrixGenerics,
          S4Vectors, S4Arrays, HDF5Array, SparseArray, DelayedArray, IRanges,
          Biobase, SummarizedExperiment, GSEABase, Matrix (>= 1.5-0), parallel,
          BiocParallel, SingleCellExperiment, SpatialExperiment,
-         sparseMatrixStats, DelayedMatrixStats, BiocSingular, cli
+         sparseMatrixStats, DelayedMatrixStats, BiocSingular, cli, memuse
 Suggests: RUnit, BiocStyle, knitr, rmarkdown, limma, RColorBrewer,
           org.Hs.eg.db, genefilter, edgeR, GSVAdata, sva, ggplot2,
           TENxPBMCData, scuttle, scran, igraph, shiny, shinydashboard,

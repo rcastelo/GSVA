@@ -1,3 +1,5 @@
 ^\.github$
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^docs$
+^\.covrignore
