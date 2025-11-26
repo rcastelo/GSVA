@@ -62,7 +62,7 @@ SEXP
 order_rankstat_sparse_to_sparse_R(SEXP XCspR, SEXP jR);
 
 SEXP
-fetch_row_nzvals_R(SEXP svtR, SEXP iR);
+fetch_row_nzvals_R(SEXP svtR, SEXP iR, SEXP whimin1R);
 
 SEXP
 row_rngs_nzrngs_RsparseMatrix_R(SEXP XRspR, SEXP verboseR);
@@ -92,7 +92,7 @@ static R_CallMethodDef callMethods[] = {
   {"gsva_scores_genesets_R", (DL_FUNC) &gsva_score_genesets_R, 10},
   {"order_rankstat_sparse_to_dense_R", (DL_FUNC) &order_rankstat_sparse_to_dense_R, 2},
   {"order_rankstat_sparse_to_sparse_R", (DL_FUNC) &order_rankstat_sparse_to_sparse_R, 2},
-  {"fetch_row_nzvals_R", (DL_FUNC) &fetch_row_nzvals_R, 2},
+  {"fetch_row_nzvals_R", (DL_FUNC) &fetch_row_nzvals_R, 3},
   {"row_rngs_nzrngs_RsparseMatrix_R", (DL_FUNC) &row_rngs_nzrngs_RsparseMatrix_R, 2},
   {"row_rngs_nzrngs_SVT_SparseMatrix_R", (DL_FUNC) &row_rngs_nzrngs_SVT_SparseMatrix_R, 2},
   {"col_rngs_nzrngs_SVT_SparseMatrix_R", (DL_FUNC) &col_rngs_nzrngs_SVT_SparseMatrix_R, 2},

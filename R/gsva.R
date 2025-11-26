@@ -1296,9 +1296,15 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 ## functions interfacing C code
 ##
 
-.fetch_row_nzvals <- function(X, i) {
+.fetch_row_nzvals <- function(X, i, whimin1=NULL) {
   stopifnot(is(X, "SVT_SparseArray")) ## QC
-  .Call("fetch_row_nzvals_R", X, as.integer(i))
+  stopifnot(is.numeric(i)) ## QC
+  if (!is.null(whimin1)) {
+      stopifnot(is.numeric(whimin1)) ## QC
+      whimin1 <- as.integer(whimin1)
+      stopifnot(length(whimin1) == ncol(X)) ## QC
+  }
+  .Call("fetch_row_nzvals_R", X, as.integer(i), whimin1)
 }
 
 .ecdfvals_svt_to_dense <- function(X, verbose) {

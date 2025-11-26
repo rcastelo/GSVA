@@ -551,8 +551,8 @@
         typesze <- c("integer"=4, "double"=8) ## 4 bytes for integers, 8 bytes for doubles
         sze <- howbig(as.numeric(width(rir[[1]])), as.numeric(ncol(X)),
                       representation="dense", type=type(X))
-        cli_alert_info(sprintf("Splitting calculations in %d chunks of %s", length(rir),
-                               as.character(sze)))
+        cli_alert_info(sprintf("Splitting calculations in %d chunks of [%d, %d] and %s",
+                               length(rir), width(rir[[1]]), ncol(X), as.character(sze)))
     } else if (length(rir) == 1)                     ## serial execution in one single call
         return(FUN(X, ..., verbose=verbose))
 
@@ -630,10 +630,10 @@
 
     if (length(cir) > 1 && verbose) {
         typesze <- c("integer"=4, "double"=8) ## 4 bytes for integers, 8 bytes for doubles
-        sze <- howbig(as.numeric(width(cir[[1]])), as.numeric(nrow(X)),
+        sze <- howbig(as.numeric(nrow(X)), as.numeric(width(cir[[1]])),
                       representation="dense", type=type(X))
-        cli_alert_info(sprintf("Splitting calculations in %d chunks of %s", length(cir),
-                               as.character(sze)))
+        cli_alert_info(sprintf("Splitting calculations in %d chunks of [%d, %d] and %s",
+                               length(cir), nrow(X), width(cir[[1]]), as.character(sze)))
     } else if (length(cir) == 1)              ## serial execution in one single call
         return(FUN(X, ..., verbose=verbose))
 

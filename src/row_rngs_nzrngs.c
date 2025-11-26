@@ -18,8 +18,8 @@ extern SEXP Matrix_DimNamesSym,
             SVT_SparseArray_svtSym;
 
 int
-fetch_row_nzvals(SEXP svtR, int i, int itypevals, int* inzvals,
-                 double* dnzvals, int* nzcols);
+fetch_row_nzvals(SEXP svtR, int i, int itypevals, int* whimin1,
+                 int* inzvals, double* dnzvals, int* nzcols);
 
 SEXP
 row_rngs_nzrngs_RsparseMatrix_R(SEXP XRspR, SEXP verboseR) {
@@ -106,6 +106,7 @@ row_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR) {
   int         itypevals;
   Rboolean    verbose=asLogical(verboseR);
   int         nr, nc;
+  int*        whimin1;
   int*        inzvals=NULL;
   double*     dnzvals=NULL;
   SEXP        pb=R_NilValue;
@@ -125,6 +126,8 @@ row_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR) {
 
   Xsvt_type = CHAR(STRING_ELT(getAttrib(XsvtR, SVT_SparseArray_typeSym), 0));
   Xsvt_SVT = GET_SLOT(XsvtR, SVT_SparseArray_svtSym);
+
+  whimin1 = R_Calloc(nc, int); /* assuming values are set to 0s */
 
   itypevals = 0;
   if (!strcmp(Xsvt_type, "integer")) {
@@ -156,7 +159,8 @@ row_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR) {
     }
 
     /* fetch nonzero values in the i-th row */
-    nv = fetch_row_nzvals(Xsvt_SVT, i, itypevals, inzvals, dnzvals, NULL);
+    nv = fetch_row_nzvals(Xsvt_SVT, i, itypevals, whimin1,
+                          inzvals, dnzvals, NULL);
 
     if (nv < nc)     /* if there is at least one zero in the row */
       min = max = 0; /* then we can use it to initialize min and max */
@@ -181,6 +185,7 @@ row_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR) {
     rng[nr * 3 + i] = nzmax;
   }
 
+  R_Free(whimin1);
   if (itypevals)
     R_Free(inzvals);
   else
