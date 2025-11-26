@@ -38,8 +38,8 @@ row_d_nologodds(double* x, double* y, double* r, int size_density_n,
                 int size_test_n, int Gaussk);
 
 int
-fetch_row_nzvals(SEXP svtR, int i, int itypevals, int* inzvals,
-                 double* dnzvals, int* nzcols);
+fetch_row_nzvals(SEXP svtR, int i, int itypevals, int* whimin1,
+                 int* inzvals, double* dnzvals, int* nzcols);
 
 SEXP
 kcdfvals_svt_to_dense_R(SEXP XsvtR, SEXP GausskR, SEXP verboseR);
@@ -295,6 +295,7 @@ kcdfvals_svt_to_dense_R(SEXP XsvtR, SEXP GausskR, SEXP verboseR) {
   Rboolean    verbose=asLogical(verboseR);
   int         itypevals;
   int*        nzcols;
+  int*        whimin1;
   int*        inzvals=NULL;
   double*     dnzvals=NULL;
   int         nr, nc;
@@ -314,6 +315,7 @@ kcdfvals_svt_to_dense_R(SEXP XsvtR, SEXP GausskR, SEXP verboseR) {
   Xsvt_SVT = GET_SLOT(XsvtR, SVT_SparseArray_svtSym);
 
   nzcols = R_Calloc(nc, int);
+  whimin1 = R_Calloc(nc, int);
   itypevals = 0;
   if (!strcmp(Xsvt_type, "integer")) {
     itypevals = 1;
@@ -344,7 +346,8 @@ kcdfvals_svt_to_dense_R(SEXP XsvtR, SEXP GausskR, SEXP verboseR) {
     }
 
     /* fetch nonzero values in the i-th row */
-    nv = fetch_row_nzvals(Xsvt_SVT, i, itypevals, inzvals, dnzvals, nzcols);
+    nv = fetch_row_nzvals(Xsvt_SVT, i, itypevals, whimin1,
+                          inzvals, dnzvals, nzcols);
 
     /* convert sparse row into a dense vector */
     for (int j=0; j < nv; j++)
@@ -369,6 +372,7 @@ kcdfvals_svt_to_dense_R(SEXP XsvtR, SEXP GausskR, SEXP verboseR) {
   }
 
   R_Free(nzcols);
+  R_Free(whimin1);
   if (itypevals)
     R_Free(inzvals);
   else
@@ -401,6 +405,7 @@ kcdfvals_svt_to_svt_R(SEXP XsvtR, SEXP GausskR, SEXP verboseR) {
   SEXP        kcdfRobj_SVT;
   int         itypevals;
   int*        nzcols; /* 0-based index of the columns with nonzero values */
+  int*        whimin1;
   int*        inzvals = NULL;
   double*     dnzvals = NULL;
   int         nr, nc;
@@ -446,6 +451,7 @@ kcdfvals_svt_to_svt_R(SEXP XsvtR, SEXP GausskR, SEXP verboseR) {
   nnzcols = R_Calloc(nc, int); /* assuming values are initialized to 0 */
 
   nzcols = R_Calloc(nc, int);
+  whimin1 = R_Calloc(nc, int);
   if (verbose) {
     pb = PROTECT(cli_progress_bar(nr, NULL));
     cli_progress_set_name(pb, "Estimating ECDFs");
@@ -461,7 +467,8 @@ kcdfvals_svt_to_svt_R(SEXP XsvtR, SEXP GausskR, SEXP verboseR) {
     }
 
     /* fetch nonzero values in the i-th row */
-    nv = fetch_row_nzvals(Xsvt_SVT, i, itypevals, inzvals, dnzvals, nzcols);
+    nv = fetch_row_nzvals(Xsvt_SVT, i, itypevals, whimin1,
+                          inzvals, dnzvals, nzcols);
 
     if (nv > 0) {
       double* x = dnzvals;
@@ -492,6 +499,7 @@ kcdfvals_svt_to_svt_R(SEXP XsvtR, SEXP GausskR, SEXP verboseR) {
 
   }
 
+  R_Free(whimin1);
   R_Free(nzcols);
   R_Free(nnzcols);
   if (itypevals)
@@ -506,4 +514,3 @@ kcdfvals_svt_to_svt_R(SEXP XsvtR, SEXP GausskR, SEXP verboseR) {
 
   return(kcdfRobj);
 }
-
