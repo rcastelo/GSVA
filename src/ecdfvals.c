@@ -178,14 +178,16 @@ fetch_row_nzvals(SEXP svtR, int i, int itypevals, int* whimin1,
       int     noffsets = length(offsetsR);
       int     nvals = length(valsR);
       int*    offsets = INTEGER(offsetsR);
-      int*    ivals;
-      double* dvals;
+      int*    ivals = NULL;
+      double* dvals = NULL;
       int     k = 0;
 
-      if (itypevals)
-        ivals = INTEGER(valsR);
-      else
-        dvals = REAL(valsR);
+      if (nvals > 0) {
+        if (itypevals)
+          ivals = INTEGER(valsR);
+        else
+          dvals = REAL(valsR);
+      }
 
       if (whimin1 != NULL)
         k=whimin1[j];

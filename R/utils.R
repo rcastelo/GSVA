@@ -131,13 +131,22 @@
     res
 }
 
+.rowNzRanges_SVT_SparseArray_byrow <- function(X, verbose=FALSE) {
+    res <- .Call("row_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
+    res
+}
+
 .rowNzRanges_SVT_SparseArray_transpose_C <- function(X, verbose=FALSE) {
-    ## res <- .Call("row_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
     res <- .Call("col_rngs_nzrngs_SVT_SparseMatrix_R", t(X), verbose=verbose)
     res
 }
 
-## from https://github.com/Bioconductor/SparseArray/issues/22
+## after discussions at from https://github.com/Bioconductor/SparseArray/issues/22
+
+.rowNzRanges_SVT_SparseArray <- function(X, verbose=FALSE) {
+    res <- .Call("rowbycols_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
+    res
+}
 
 #' @importFrom SparseArray NaArray
 .fast_replace_zeros_with_NAs <- function(x) {
@@ -156,7 +165,7 @@
 }
 
 #' @importFrom MatrixGenerics rowMins rowMaxs
-.rowNzRanges_SVT_SparseArray <- function(X, anyna=FALSE, verbose=FALSE) {
+.rowNzRanges_SVT_SparseArray_rowbycols_R <- function(X, anyna=FALSE, verbose=FALSE) {
     naa <- NULL
     if (anyna)
         naa <- .safe_replace_zeros_with_NAs(X)
@@ -178,7 +187,7 @@
     else if (is(X, "dgCMatrix"))
         res <- .rowNzRanges_dgCMatrix(X, verbose=verbose)
     else if (is(X, "SVT_SparseArray"))
-        res <- .rowNzRanges_SVT_SparseArray(X, anyna=anyna, verbose=verbose)
+        res <- .rowNzRanges_SVT_SparseArray(X, verbose=verbose)
     else if (is(X, "DelayedArray")) {
         grid <- DummyArrayGrid(dim(X))
         block <- read_block(X, grid[[1L]])
