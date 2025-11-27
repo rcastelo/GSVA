@@ -73,6 +73,9 @@ row_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR);
 SEXP
 col_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR);
 
+SEXP
+rowbycols_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR);
+
 /* registration of C-entry points */
 
 static R_CallMethodDef callMethods[] = {
@@ -96,6 +99,7 @@ static R_CallMethodDef callMethods[] = {
   {"row_rngs_nzrngs_RsparseMatrix_R", (DL_FUNC) &row_rngs_nzrngs_RsparseMatrix_R, 2},
   {"row_rngs_nzrngs_SVT_SparseMatrix_R", (DL_FUNC) &row_rngs_nzrngs_SVT_SparseMatrix_R, 2},
   {"col_rngs_nzrngs_SVT_SparseMatrix_R", (DL_FUNC) &col_rngs_nzrngs_SVT_SparseMatrix_R, 2},
+  {"rowbycols_rngs_nzrngs_SVT_SparseMatrix_R", (DL_FUNC) &rowbycols_rngs_nzrngs_SVT_SparseMatrix_R, 2},
   {NULL, NULL, 0}
 };
 
