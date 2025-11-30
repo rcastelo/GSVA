@@ -984,9 +984,10 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 
     if (all(na_mask))
         return(list(dos=matrix(NA_integer_, nrow(r), ncol(r)),
-                    srs=matrix(NA, nrow(r), ncol(r))))
+                    srs=matrix(NA_real_, nrow(r), ncol(r))))
 
     n_nas <- colSums(na_mask)
+    mode(n_nas) <- "integer"
     mask <- !na_mask & mask
     p <- nrow(r)
     r_dense <- as.matrix(r)
@@ -1029,12 +1030,14 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
         return(list(dos=rep(NA, length(r)), srs=rep(NA, length(r))))
 
     n_nas <- sum(na_mask)
+    mode(n_nas) <- "integer"
     mask <- !na_mask & r == 0
     p <- length(r)
     r_dense <- as.integer(r)          ## assume ranks are integer
 
     if (any(mask)) {                  ## sparse ranks into dense ranks
         nzs <- sum(mask)
+        mode(nzs) <- "integer"
         r_dense[!mask] <- r_dense[!mask] + nzs ## shift ranks of nonzero values
         r_dense[mask] <- seq.int(nzs)          ## zeros get increasing ranks
     }

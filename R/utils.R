@@ -784,7 +784,7 @@
     if (is.character(x) && x == "auto") {
         totalram <- Sys.meminfo()$totalram
         maxmem <- as.numeric(totalram * 0.9) ## auto takes 90% of RAM
-        if (verbose)
+        if (verbose && gsva_global$show_start_and_end_messages)
             cli_alert_info(sprintf("Maximum available main memory: %s",
                                    as.character(totalram * 0.9)))
     }
