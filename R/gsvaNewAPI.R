@@ -260,7 +260,7 @@ setMethod("gsva", signature(param="ssgseaParam"),
               }
 
               if(verbose)
-                  cli_alert_info(sprintf("Calculating  ssGSEA scores for %d gene sets",
+                  cli_alert_info(sprintf("Calculating ssGSEA scores for %d gene sets",
                                          length(filteredMappedGeneSets)))
 
               ssgsea_sco <- ssgsea(X=filteredDataMatrix,
