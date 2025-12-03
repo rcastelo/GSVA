@@ -11,10 +11,6 @@ matrix_density_R(SEXP density_dataR, SEXP test_dataR, SEXP n_density_samplesR,
                  SEXP any_naR, SEXP na_useR, SEXP verboseR);
 
 SEXP
-ks_matrix_R(SEXP XR, SEXP sidxsR, SEXP n_genesR, SEXP geneset_idxsR,
-            SEXP n_genesetR, SEXP tauR, SEXP n_samplesR, SEXP mx_diffR, SEXP abs_rnkR);
-
-SEXP
 kcdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP GausskR, SEXP verboseR);
 
 SEXP
@@ -51,9 +47,16 @@ SEXP
 ecdfvals_svt_to_svt_R(SEXP XsvtR, SEXP verboseR);
 
 SEXP
-gsva_score_genesets_R(SEXP genesetsidxR, SEXP decordstatR, SEXP symrnkstatR,
+old_gsva_score_genesets_R(SEXP genesetsidxR, SEXP decordstatR, SEXP symrnkstatR,
+                          SEXP maxdiffR, SEXP absrnkR, SEXP tauR, SEXP anynaR,
+                          SEXP nauseR, SEXP minsizeR, SEXP verboseR);
+SEXP
+gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP sparseR,
                       SEXP maxdiffR, SEXP absrnkR, SEXP tauR, SEXP anynaR,
                       SEXP nauseR, SEXP minsizeR, SEXP verboseR);
+
+SEXP
+ranks2stats_R(SEXP ranksR, SEXP jR, SEXP sparseR);
 
 SEXP
 order_rankstat_sparse_to_dense_R(SEXP XCspR, SEXP jR);
@@ -79,7 +82,6 @@ rowbycols_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR);
 /* registration of C-entry points */
 
 static R_CallMethodDef callMethods[] = {
-  {"ks_matrix_R", (DL_FUNC) &ks_matrix_R, 9},
   {"matrix_density_R", (DL_FUNC) &matrix_density_R, 9},
   {"kcdfvals_sparse_to_sparse_R", (DL_FUNC) &kcdfvals_sparse_to_sparse_R, 4},
   {"kcdfvals_sparse_to_dense_R", (DL_FUNC) &kcdfvals_sparse_to_dense_R, 4},
@@ -92,7 +94,9 @@ static R_CallMethodDef callMethods[] = {
   {"ecdfvals_svt_to_svt_R", (DL_FUNC) &ecdfvals_svt_to_svt_R, 2},
   {"ecdfvals_dense_to_dense_R", (DL_FUNC) &ecdfvals_dense_to_dense_R, 2},
   {"ecdfvals_dense_to_dense_nas_R", (DL_FUNC) &ecdfvals_dense_to_dense_nas_R, 2},
-  {"gsva_scores_genesets_R", (DL_FUNC) &gsva_score_genesets_R, 10},
+  {"old_gsva_scores_genesets_R", (DL_FUNC) &old_gsva_score_genesets_R, 10},
+  {"gsva_score_genesets_R", (DL_FUNC) &gsva_score_genesets_R, 10},
+  {"ranks2stats_R", (DL_FUNC) &ranks2stats_R, 4},
   {"order_rankstat_sparse_to_dense_R", (DL_FUNC) &order_rankstat_sparse_to_dense_R, 2},
   {"order_rankstat_sparse_to_sparse_R", (DL_FUNC) &order_rankstat_sparse_to_sparse_R, 2},
   {"fetch_row_nzvals_R", (DL_FUNC) &fetch_row_nzvals_R, 3},

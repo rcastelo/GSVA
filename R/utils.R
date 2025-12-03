@@ -619,7 +619,7 @@
 ## reporting progress using the 'cli' package when possible
 
 #' @importFrom cli cli_abort
-#' @importFrom BiocParallel bplapply bpnworkers
+#' @importFrom BiocParallel bplapply bpnworkers bptry bpok
 #' @importClassesFrom IRanges IRanges
 #' @importFrom IRanges start end width
 .processMatrixCols <- function(X, FUN, ..., verbose=TRUE,
@@ -780,14 +780,14 @@
     if (length(x) > 1 || (!is.numeric(x) && !is.character(x)))
         cli_abort(c("x"="'maxmem' should be a vector of length 1 of either a number in bytes or a character string"))
 
-    maxmem <- Inf
     if (is.character(x) && x == "auto") {
         totalram <- Sys.meminfo()$totalram
         maxmem <- as.numeric(totalram * 0.9) ## auto takes 90% of RAM
         if (verbose && gsva_global$show_start_and_end_messages)
-            cli_alert_info(sprintf("Maximum available main memory: %s",
+            cli_alert_info(sprintf("Maximum available main memory (90%%): %s",
                                    as.character(totalram * 0.9)))
-    }
+    } else if (is.numeric(x))
+        maxmem <- x
     maxmem <- .memtext2bytes(maxmem)
     maxmem
 }

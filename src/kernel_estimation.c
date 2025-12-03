@@ -78,16 +78,20 @@ row_d_naprop(double* x, double* y, double* r, int size_density_n,
 
     if (!ISNA(bw) && !ISNA(y[j])) {
       int i = 0;
-      while (!ISNA(x[i]) && i < size_density_n) {
-			    left_tail += Gaussk ? precomputedCdf(y[j]-x[i], bw) :
-                                ppois(y[j], x[i]+bw, TRUE, FALSE);
-          i++;
+      int noISNA = 1;
+      while (noISNA && i < size_density_n) {
+          noISNA = !ISNA(x[i]);
+          if (noISNA) {
+			      left_tail += Gaussk ? precomputedCdf(y[j]-x[i], bw) :
+                                  ppois(y[j], x[i]+bw, TRUE, FALSE);
+            i++;
+          }
 		  }
-      if (!ISNA(x[i])) {
+      r[j] = NA_REAL;
+      if (noISNA) {
 		    left_tail = left_tail / size_density_n;
 		    r[j] = -1.0 * log((1.0-left_tail)/left_tail);
-      } else
-        r[j] = NA_REAL;
+      }
     } else
       r[j] = NA_REAL;
 	}
@@ -245,5 +249,3 @@ void initCdfs(void){
     precomputed_cdf[i] = pnorm5(MAX_PRECOMPUTE * ((double) i) / divisor, 0.0, 1.0, TRUE, FALSE);
                          /* standard normal distribution function, lower.tail=TRUE, log.p=FALSE */
 }
-
-

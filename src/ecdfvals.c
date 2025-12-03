@@ -72,20 +72,6 @@ pending_interrupt(void);
 SEXP
 allocMatrix(SEXPTYPE mode, int nrow, int ncol);
 
-/* numerical (double) comparison for qsort() - not needed with R_qsort() */
-int
-dbl_cmp(const void* a, const void* b) {
-  const double *ad = (double*) a;
-  const double *bd = (double*) b;
-
-  if (*ad > *bd)
-    return 1;
-  if (*ad < *bd)
-    return -1;
-
-  return 0;
-}
-
 /* this is a wrapper to call fetch_row_nzvals() directly from R,
  * mostly for testing purposes (i.e., it is not exported) */
 SEXP
@@ -887,7 +873,6 @@ ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
       uniqv[k] = x[k] = XRsp_x[j];
     }
 
-    /* qsort(uniqv, nv, sizeof(double), dbl_cmp); */
     R_qsort(uniqv, (size_t) 1, (size_t) nv);
     e1_p = uniqv;
     e2_p = e1_p + 1;
@@ -1043,7 +1028,6 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
       }
     }
 
-    /* qsort(uniqv, nv, sizeof(double), dbl_cmp); */
     R_qsort(uniqv, (size_t) 1, (size_t) nv);
     e1_p = uniqv;
     e2_p = e1_p + 1;
@@ -1200,7 +1184,6 @@ ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR) {
       uniqv[j] = x[j] = X[idx];
     }
 
-    /* qsort(uniqv, nc, sizeof(double), dbl_cmp); */
     R_qsort(uniqv, (size_t) 1, (size_t) nc);
     e1_p = uniqv;
     e2_p = e1_p + 1;
@@ -1331,7 +1314,6 @@ ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR) {
       }
     }
 
-    /* qsort(uniqv, nnas, sizeof(double), dbl_cmp); */
     R_qsort(uniqv, (size_t) 1, (size_t) nnas);
     e1_p = uniqv;
     e2_p = e1_p + 1;
