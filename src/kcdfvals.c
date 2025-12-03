@@ -58,10 +58,6 @@ kcdfvals_dense_to_dense_R(SEXP XR);
 SEXP
 allocMatrix(SEXPTYPE mode, int nrow, int ncol);
 
-/* numerical (double) comparison for qsort() */
-extern int
-dbl_cmp(const void* a, const void* b);
-
 /* calculate the outer product of a vector with itself
  * using subtraction as the arithmetic operator, only
  * among values in different positions in 'x'. the output

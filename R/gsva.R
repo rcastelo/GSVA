@@ -326,10 +326,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                   if (verbose)
                       cli_alert_info("Loading input expression data into main memory")
                   if (is_sparse(dataMatrix)) {
-                      if (nzcount(param) < .Machine$integer.max)
-                          dataMatrix <- as(dataMatrix, "dgCMatrix")
-                      else
-                          dataMatrix <- as(dataMatrix, "SVT_SparseArray")
+                      dataMatrix <- as(dataMatrix, "SVT_SparseArray")
                   } else
                       dataMatrix <- as.matrix(dataMatrix)
               }
@@ -1087,14 +1084,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
         ## avp_es - ArrayViewport for writing the enrichment dense scores matrix
         colScores_byBlock <- function(avp, avp_es, sink) {
             block <- read_block(R, avp)
-            rnkstats <- NULL
-            if (any_na)
-                rnkstats <- .ranks2stats_nas_block(block, sparse)
-            else
-                rnkstats <- .ranks2stats_block(block, sparse)
-            block <- .gsva_score_genesets(NULL, geneSetsIdx,
-                                          decOrdStat=rnkstats$dos,
-                                          symRnkStat=rnkstats$srs,
+            block <- .gsva_score_genesets(block, geneSetsIdx, sparse,
                                           maxDiff, absRanking, tau,
                                           any_na, na_use, minSize,
                                           wna_env, verbose=verbose)
@@ -1108,17 +1098,9 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
         es <- as(sink, "DelayedArray")
 
     } else {
-        rnkstats <- NULL
-         if (any_na)
-             rnkstats <- .ranks2stats_nas_block(R, sparse)
-         else
-             rnkstats <- .ranks2stats_block(R, sparse)
-
-         es <- .gsva_score_genesets(NULL, geneSetsIdx,
-                                    decOrdStat=rnkstats$dos,
-                                    symRnkStat=rnkstats$srs,
-                                    maxDiff, absRanking, tau, any_na,
-                                    na_use, minSize, wna_env, verbose=verbose)
+        es <- .gsva_score_genesets(R, geneSetsIdx, sparse,
+                                   maxDiff, absRanking, tau, any_na,
+                                   na_use, minSize, wna_env, verbose=verbose)
     }
 
     if (any_na && na_use == "na.rm")
@@ -1527,9 +1509,9 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 }
 
 #' @importFrom cli cli_abort
-.gsva_score_genesets <- function(colIdx, geneSetsIdx, decOrdStat, symRnkStat,
-                                 maxDiff, absRanking, tau, any_na, na_use,
-                                 minSize, wna_env, verbose) {
+.old_gsva_score_genesets <- function(colIdx, geneSetsIdx, decOrdStat, symRnkStat,
+                                     maxDiff, absRanking, tau, any_na, na_use,
+                                     minSize, wna_env, verbose) {
   minSize <- as.integer(minSize)
   stopifnot(is.null(colIdx) || is.integer(colIdx)) ## QC
   stopifnot(is.list(geneSetsIdx)) ## QC
@@ -1556,7 +1538,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     decOrdStat <- decOrdStat[, colIdx, drop=FALSE]
     symRnkStat <- symRnkStat[, colIdx, drop=FALSE]
   }
-  sco <- .Call("gsva_score_genesets_R", geneSetsIdx, decOrdStat, symRnkStat,
+  sco <- .Call("old_gsva_score_genesets_R", geneSetsIdx, decOrdStat, symRnkStat,
                maxDiff, absRanking, as.double(tau), any_na, na_use, minSize,
                verbose)
   if (any_na) {
@@ -1569,6 +1551,46 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 
   sco
 }
+
+#' @importFrom cli cli_abort
+.gsva_score_genesets <- function(R, geneSetsIdx, sparse, maxDiff, absRanking,
+                                 tau, any_na, na_use, minSize, wna_env,
+                                 verbose) {
+    minSize <- as.integer(minSize)
+    stopifnot(is.list(geneSetsIdx)) ## QC
+    stopifnot(length(geneSetsIdx) > 0) ## QC
+    stopifnot(is.integer(geneSetsIdx[[1]])) ## QC
+    stopifnot(is.logical(sparse)) ## QC
+    stopifnot(is.logical(maxDiff)) ## QC
+    stopifnot(is.logical(absRanking)) ## QC
+    stopifnot(is.numeric(tau)) ## QC but it still might be an integer!!
+    stopifnot(is.logical(any_na)) ## QC
+    stopifnot(is.character(na_use)) ## QC
+    stopifnot(is.integer(minSize)) ## QC
+    stopifnot(is.logical(verbose)) ## QC
+    na_use <- as.integer(factor(na_use, levels=c("everything", "all.obs",
+                                                 "na.rm")))
+    sco <- .Call("gsva_score_genesets_R", R, geneSetsIdx, sparse, maxDiff,
+                 absRanking, as.double(tau), any_na, na_use, minSize, verbose)
+
+    if (any_na) {
+      if (na_use == 2 && !is.null(attr(sco, "class")))
+          cli_abort(c("x"="Input GSVA ranks have NA values."))
+
+      if (na_use == 3 && !is.null(attr(sco, "class")))
+          assign("w", TRUE, envir=wna_env)
+    }
+
+    sco
+}
+
+.ranks2stats_C <- function(R, j, sparse, anyna) {
+  stopifnot(is.numeric(j)) ## QC
+  stopifnot(is.logical(sparse)) ## QC
+  stopifnot(is.logical(anyna)) ## QC
+  .Call("ranks2stats_R", R, as.integer(j), sparse, anyna)
+}
+
 
 .order_rankstat_sparse_to_dense <- function(X, j) {
   stopifnot(is(X, "CsparseMatrix")) ## QC
@@ -1617,65 +1639,4 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     close(sink)
     res <- as(sink, "DelayedArray")
     res
-}
-
-
-##
-## we may not need anymore these two functions below
-##
-
-ks_test_m <- function(gset_idxs, gene.density, sort.idxs, mx.diff=TRUE,
-                      abs.ranking=FALSE, tau=1, verbose=TRUE){
-	
-	n.genes <- nrow(gene.density)
-	n.samples <- ncol(gene.density)
-	n.geneset <- length(gset_idxs)
-
-	geneset.sample.es <- .Call("ks_matrix_R",
-			                       as.double(gene.density),
-			                       as.integer(sort.idxs),
-			                       n.genes,
-			                       as.integer(gset_idxs),
-			                       n.geneset,
-			                       as.double(tau),
-			                       n.samples,
-			                       as.integer(mx.diff),
-                             as.integer(abs.ranking))
-
-	return(geneset.sample.es)
-}
-
-
-## ks-test in R code - testing only
-ks_test_Rcode <- function(gene.density, gset_idxs, tau=1, make.plot=FALSE){
-	
-	n.genes = length(gene.density)
-	n.gset = length(gset_idxs)
-	
-	sum.gset <- sum(abs(gene.density[gset_idxs])^tau)
-	
-	dec = 1 / (n.genes - n.gset)
-	
-	sort.idxs <- order(gene.density,decreasing=T)
-	offsets <- sort(match(gset_idxs, sort.idxs))
-	
-	last.idx = 0
-	values <- rep(NaN, length(gset_idxs))
-	current = 0
-	for(i in seq_along(offsets)){
-		current = current + abs(gene.density[sort.idxs[offsets[i]]])^tau / sum.gset - dec * (offsets[i]-last.idx-1)
-		
-		values[i] = current
-		last.idx = offsets[i]
-	}
-	check_zero = current - dec * (n.genes-last.idx)
-	#if(check_zero > 10^-15){ 
-	#	stop(paste=c("Expected zero sum for ks:", check_zero))
-	#}
-	if(make.plot){ plot(offsets, values,type="l") } 
-	
-	max.idx = order(abs(values),decreasing=T)[1]
-	mx.value <- values[max.idx]
-	
-	return (mx.value)
 }
