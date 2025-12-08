@@ -240,7 +240,7 @@ gsvaParam <- function(exprData, geneSets,
                  anyNA=naparam$any_na, use=use, filterRows=filterRows,
                  nzcount=nzc, ondisk=ondisk)
 
-    maxmem <- .check_maxmem("auto", verbose)
+    maxmem <- .check_maxmem(param, "auto", verbose)
     .check_ondisk(param, maxmem, verbose)
 
     return(param)

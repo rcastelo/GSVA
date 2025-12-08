@@ -319,7 +319,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
-              maxmem <- .check_maxmem(maxmem, verbose)
+              maxmem <- .check_maxmem(param, maxmem, verbose)
               ondisk <- .check_ondisk(param, maxmem, verbose)
 
               if (is(dataMatrix, "DelayedMatrix") && ondisk == "no") {
@@ -488,7 +488,7 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                     cli_alert_info("GSVA dense (classical) algorithm")
               }
 
-              maxmem <- .check_maxmem(maxmem, verbose)
+              maxmem <- .check_maxmem(param, maxmem, verbose)
               ondisk <- .check_ondisk(param, maxmem, verbose)
 
               if (is(filtDataMatrix, "DelayedMatrix") && ondisk == "no") {
