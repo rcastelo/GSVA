@@ -9,12 +9,29 @@ Virtual superclass of gene set classes supported by \code{GSVA}.
 }
 \details{
 \code{GSVA} supports gene sets consisting of gene identifiers as either a named
-list of character vectors or an object of class \code{GSEABase::GeneSetCollection}.
+list of character vectors or an object of class
+\code{\link[GSEABase:GeneSetCollection-class]{GeneSetCollection}}.
 Alternatively, gene sets may be specified as a named list of integer vectors
 in the range of 1:nrow(X) that are indices to the rows of the corresponding
-expression data matrix X.
-This class union allows to store any of these in a slot of another class as
-well as defining common methods for them.
+expression data matrix X. This class union allows to store any of these in a
+slot of another class as well as defining common methods for them.
+}
+\examples{
+
+library(GSVA)
+
+gsetslst <- list(INNATE_RESPONSE=c("AIM2", "ALPK1", "AP3B1"),
+                 ADAPTIVE_RESPONSE=c("CD27", "CD70", "EBAG9"))
+gsetslst
+gsetsgsc <- geneIdsToGeneSetCollection(gsetslst)
+gsetsgsc
+
+class(gsetslst)
+class(gsetsgsc)
+is(gsetslst, "GsvaGeneSets")
+is(gsetsgsc, "GsvaGeneSets")
+
+
 }
 \seealso{
 \code{\link{list}},

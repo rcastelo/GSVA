@@ -25,6 +25,18 @@ possible, we limit ourselves to the most common types of gene identifiers:
 starting with 'ENS' an ENSEMBL identifier and anything else a HuGO gene
 symbol.
 }
+\examples{
+
+library(GSVA)
+
+gsets <- list(INNATE_RESPONSE=c("AIM2", "ALPK1", "AP3B1"),
+              ADAPTIVE_RESPONSE=c("CD27", "CD70", "EBAG9"))
+
+idtype <- guessGeneIdType(gsets)
+idtype
+class(idtype)
+
+}
 \seealso{
 \code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}}
 }

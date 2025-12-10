@@ -2,10 +2,11 @@
 ## methods for the PLAGE method from Tomfohr et al. (2005)
 ##
 
+#' @importFrom BiocSingular runExactSVD
 #' @importFrom cli cli_progress_update
 rightsingularsvdvectorgset <- function(gSetIdx, Z, verbose, idpb) {
   if(is(Z, "dgCMatrix")){
-    s <- BiocSingular::runExactSVD(Z[gSetIdx, ])
+    s <- runExactSVD(Z[gSetIdx, ])
   } else {
     s <- svd(Z[gSetIdx, ])
   }

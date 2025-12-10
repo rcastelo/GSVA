@@ -40,7 +40,7 @@
 #' 
 #' @keywords GSVA shiny
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' res <- igsva() ## this will open your browser with the GSVA shiny web app
 #' }
 #'

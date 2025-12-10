@@ -41,6 +41,16 @@ This function is essentially the reverse of
 vectors representing gene sets and returns the corresponding
 GeneSetCollection object.
 }
+\examples{
+
+library(GSVA)
+
+gsets <- list(INNATE_RESPONSE=c("AIM2", "ALPK1", "AP3B1"),
+              ADAPTIVE_RESPONSE=c("CD27", "CD70", "EBAG9"))
+gsets
+geneIdsToGeneSetCollection(gsets)
+
+}
 \seealso{
 \code{\link[GSEABase:GeneSetCollection-class]{GeneSetCollection}},
 \code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}},

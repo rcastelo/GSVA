@@ -346,6 +346,20 @@ setMethod("gsva", signature(param="gsvaParam"),
 #' @return For the retrieval methods, the annotation metadata stored in the
 #' object or `NULL`.  For the replacement methods, the updated object.
 #'
+#' @examples
+#'
+#' library(GSEABase)
+#' library(GSVA)
+#' library(GSVAdata)
+#'
+#' data(geneprotExpCostaEtAl2021)
+#' se <- geneExpCostaEtAl2021
+#' se
+#'
+#' gsvaAnnotation(se)
+#' gsvaAnnotation(se) <- EntrezIdentifier("org.Hs.eg.db")
+#' gsvaAnnotation(se)
+#'
 #' @seealso
 #' \code{\link[Biobase]{ExpressionSet}},
 ### we are using the plain Rd above because
@@ -556,6 +570,30 @@ setMethod("gsvaAnnotation",
 #' gene sets returned by `geneSets()`.
 #'
 #' @aliases geneSets geneSetSizes
+#'
+#' @examples
+#'
+#' library(GSVA)
+#'
+#' p <- 10 ## number of genes
+#' n <- 30 ## number of samples
+#'
+#' gsets <- list(set1=paste0("g", 1:3),
+#'               set2=paste0("g", 4:6),
+#'               set3=paste0("g", 7:10),
+#'               set4=paste0("g", 10:13)) ## genes not in the expression data
+#' gsets
+#'
+#' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+#'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+#'
+#' gsvapar <- gsvaParam(y, gsets)
+#' geneSets(gsvapar)
+#'
+#' es <- gsva(gsvapar)
+#'
+#' geneSets(es)
+#'
 #' @name geneSets
 #' @rdname geneSets
 #' 
@@ -658,6 +696,28 @@ setMethod("geneSetSizes", signature("GsvaExprData"),
 #' @return A named list of gene sets represented as character vectors of
 #' gene IDs.
 #' 
+#' @examples
+#'
+#' library(GSVA)
+#'
+#' gsets <- list(gs1=LETTERS[1:3], gs2=LETTERS[4:6], gs2=LETTERS[5:8])
+#' gsets
+#'
+#' deduplicateGeneSets(gsets)
+#' deduplicateGeneSets(gsets, deduplUse="drop")
+#' deduplicateGeneSets(gsets, deduplUse="union")
+#' deduplicateGeneSets(gsets, deduplUse="smallest")
+#' deduplicateGeneSets(gsets, deduplUse="largest")
+#'
+#' fname <- system.file("extdata", "c2.subsetdups.v7.5.symbols.gmt.gz",
+#'                      package="GSVAdata")
+#'
+#' ## readGMT() calls internally deduplicateGeneSets() and it takes the
+#' ## parameter 'deduplUse' which is passed to the internal call
+#' c2.dupgenesets <- readGMT(fname, deduplUse="union")
+#' c2.dupgenesets
+#' any(duplicated(names(c2.dupgenesets)))
+#'
 #' @aliases deduplicateGeneSets
 #' @name deduplicateGeneSets
 #' @rdname deduplicateGeneSets
@@ -671,9 +731,9 @@ deduplicateGeneSets <- function(geneSets,
     duplicatedNames <- unique(names(geneSets[isNameDuplicated]))
 
     ## a nested list containing sublists of duplicated gene sets
-    duplicatedGeneSets <- sapply(duplicatedNames,
+    duplicatedGeneSets <- lapply(duplicatedNames,
                                  function(dn, gs) unname(gs[dn == names(gs)]),
-                                 gs = geneSets, simplify=FALSE)
+                                 gs = geneSets)
 
     ## transformation function operating on sublists of such nested lists,
     ## returning a single deduplicated gene set, i.e. character vector
@@ -684,7 +744,7 @@ deduplicateGeneSets <- function(geneSets,
 
     ## apply transformation function to deduplicate gene sets (if requested)
     if(!is.null(ddFunc))
-        dedupl <- sapply(duplicatedGeneSets, FUN=ddFunc, simplify=FALSE)
+        dedupl <- lapply(duplicatedGeneSets, FUN=ddFunc)
 
     ## drop all duplicate gene sets (sufficient for default of "first")
     geneSets[isNameDuplicated] <- NULL
@@ -704,7 +764,7 @@ deduplicateGmtLines <- function(geneSets,
                                 deduplUse = c("first", "drop", "union",
                                               "smallest", "largest")) {
     ddUse <- match.arg(deduplUse)
-    gsName <- sapply(geneSets, head, 1)
+    gsName <- vapply(X=geneSets, FUN="[", FUN.VALUE=character(1), 1)
     isNameDuplicated <- which(duplicated(gsName))
 
     if(length(isNameDuplicated) > 0) {
@@ -712,9 +772,9 @@ deduplicateGmtLines <- function(geneSets,
                 " using method: ", ddUse)
         duplicatedNames <- unique(gsName[isNameDuplicated])
         lIdxDuplGS <- lapply(duplicatedNames,
-                             function(DN, GSN) which(DN==GSN),
+                             function(DN, GSN) which(DN == GSN),
                              GSN = gsName)
-        idxReplace <- sapply(lIdxDuplGS, head, 1)
+        idxReplace <- vapply(X=lIdxDuplGS, FUN="[", FUN.VALUE=integer(1), 1)
         idxRemove <- unique(unlist(lapply(lIdxDuplGS, tail, -1)))
 
         ddFunc <- switch(ddUse,
@@ -766,6 +826,18 @@ deduplicateGmtLines <- function(geneSets,
 #' @seealso [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class]
 #'
 #' @aliases guessGeneIdType
+#'
+#' @examples
+#'
+#' library(GSVA)
+#'
+#' gsets <- list(INNATE_RESPONSE=c("AIM2", "ALPK1", "AP3B1"),
+#'               ADAPTIVE_RESPONSE=c("CD27", "CD70", "EBAG9"))
+#'
+#' idtype <- guessGeneIdType(gsets)
+#' idtype
+#' class(idtype)
+#'
 #' @name guessGeneIdType
 #' @rdname guessGeneIdType
 #' @export
@@ -823,6 +895,16 @@ guessGeneIdType <- function(geneIdsList) {
 #' [`GeneSet`][GSEABase::GeneSet-class]
 #'
 #' @aliases geneIdsToGeneSetCollection
+#'
+#' @examples
+#'
+#' library(GSVA)
+#'
+#' gsets <- list(INNATE_RESPONSE=c("AIM2", "ALPK1", "AP3B1"),
+#'               ADAPTIVE_RESPONSE=c("CD27", "CD70", "EBAG9"))
+#' gsets
+#' geneIdsToGeneSetCollection(gsets)
+#'
 #' @name geneIdsToGeneSetCollection
 #' @rdname geneIdsToGeneSetCollection
 #' @export
@@ -830,11 +912,12 @@ guessGeneIdType <- function(geneIdsList) {
 geneIdsToGeneSetCollection <- function(geneIdsList,
                                        geneIdType="auto",
                                        collectionType=NullCollection()) {
-    if(inherits(geneIdType, "character") && (geneIdType == "auto")) {
-        if(is.null(git <- gsvaAnnotation(geneIdsList))) {
+    if (inherits(geneIdType, "character") && (geneIdType == "auto")) {
+        git <- gsvaAnnotation(geneIdsList)
+        if (is.null(git)) {
             git <- guessGeneIdType(geneIdsList)
         }
-    } else if(inherits(geneIdType, "GeneIdentifierType")) {
+    } else if (inherits(geneIdType, "GeneIdentifierType")) {
         git <- geneIdType
     } else {
         git <- NullIdentifier()
@@ -915,7 +998,7 @@ geneIdsToGeneSetCollection <- function(geneIdsList,
 #' resolved according to argument `deduplUse` and in the format determined by
 #' argument `valueType`.
 #' 
-#' @seealso [`readLines`],
+#' @seealso [`deduplicateGeneSets`], [`readLines`],
 #' [`GeneSetCollection`][GSEABase::GeneSetCollection-class],
 #' [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class],
 #' \code{\link[GSEABase]{getGmt}},
@@ -974,15 +1057,16 @@ readGMT <- function (con,
     
     ## from GSEABase::getGmt()
     lines <- strsplit(readLines(con, ...), sep)
-    if (any(sapply(lines, length) < 2)) {
+    if (any(lengths(lines) < 2)) {
         txt <- paste("all records in the GMT file must have >= 2 fields", 
                      "\n  first invalid line:  %s\n", collapse = "")
-        .stopf(txt, lines[sapply(lines, length) < 2][[1]])
+        .stopf(txt, lines[lengths(lines) < 2][[1]])
     }
     dups <- new.env(parent = emptyenv())
     lines <- lapply(lines, function(elt, dups) {
-        if (any(d <- duplicated(elt[-(1:2)]))) {
-            dups[[elt[[1]]]] <- unique(elt[-(1:2)][d])
+        dmask <- duplicated(elt[-(1:2)])
+        if (any(dmask)) {
+            dups[[elt[[1]]]] <- unique(elt[-(1:2)][dmask])
             elt <- c(elt[1:2], unique(elt[-(1:2)]))
         }
         elt
@@ -1013,7 +1097,7 @@ readGMT <- function (con,
         })))
     } else if(valueType == "list") {
         gs <- lapply(lines, tail, -2)
-        names(gs) <- sapply(lines, head, 1)
+        names(gs) <- vapply(X=lines, FUN=head, FUN.VALUE=character(1), 1)
 
         ## even more thoughts, now that we make use of gene ID metadata in lists
         if(!is.null(geneIdType)) {

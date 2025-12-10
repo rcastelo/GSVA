@@ -7,7 +7,7 @@ author:
   email: robert.castelo@upf.edu
 - name: Axel Klenk
   affiliation: *idupf
-  email: axelvolker.klenk@upf.edu
+  email: axel.klenk@gmail.com
 - name: Justin Guinney 
   affiliation: 
   - Tempus Labs, Inc.

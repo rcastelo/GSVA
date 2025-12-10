@@ -45,17 +45,18 @@ NULL
 #' @rdname filterGeneSets
 #' @exportMethod filterGeneSets
 setMethod("filterGeneSets", signature(gSets="list"),
-          function(gSets, minSize=1, maxSize=Inf) {
-	gSetsLen <- lengths(gSets)
-	return (gSets[gSetsLen >= minSize & gSetsLen <= maxSize])	
+    function(gSets, minSize=1, maxSize=Inf) {
+        gSetsLen <- lengths(gSets)
+
+        return(gSets[gSetsLen >= minSize & gSetsLen <= maxSize])	
 })
 
 #' @aliases filterGeneSets,GeneSetCollection-method
 #' @rdname filterGeneSets
 #' @exportMethod filterGeneSets
 setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
-          function(gSets, minSize=1, maxSize=Inf) {
-  filterGeneSets(geneIds(gSets), minSize, maxSize)
+    function(gSets, minSize=1, maxSize=Inf) {
+        filterGeneSets(geneIds(gSets), minSize, maxSize)
 })
 
 
@@ -110,99 +111,113 @@ NULL
 #' @aliases computeGeneSetsOverlap,list,character-method
 #' @rdname computeGeneSetsOverlap
 #' @exportMethod computeGeneSetsOverlap
-setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="character"),
+setMethod("computeGeneSetsOverlap",
+          signature(gSets="list", uniqGenes="character"),
           function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
-  totalGenes <- length(uniqGenes)
+    totalGenes <- length(uniqGenes)
 
-  ## map to the actual features for which expression data is available
-  gSets <- .mapGeneSetsToFeatures(gSets, uniqGenes)
+    ## map to the actual features for which expression data is available
+    gSets <- .mapGeneSetsToFeatures(gSets, uniqGenes)
 
-  lenGsets <- lengths(gSets)
-  totalGsets <- length(gSets)
+    lenGsets <- lengths(gSets)
+    totalGsets <- length(gSets)
 
-  gSetsMembershipMatrix <- matrix(0, nrow=totalGenes, ncol=totalGsets,
-                                  dimnames=list(uniqGenes, names(gSets)))
-  members <- cbind(unlist(gSets, use.names=FALSE), rep(1:totalGsets, times=lenGsets))
-  gSetsMembershipMatrix[members] <- 1
+    gSetsMembershipMatrix <- matrix(0, nrow=totalGenes, ncol=totalGsets,
+                                    dimnames=list(uniqGenes, names(gSets)))
+    members <- cbind(unlist(gSets, use.names=FALSE),
+                     rep(seq_len(totalGsets), times=lenGsets))
+    gSetsMembershipMatrix[members] <- 1
 
-  .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
+    .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
 })
 
 #' @aliases computeGeneSetsOverlap,list,ExpressionSet-method
 #' @rdname computeGeneSetsOverlap
 #' @exportMethod computeGeneSetsOverlap
-setMethod("computeGeneSetsOverlap", signature(gSets="list", uniqGenes="ExpressionSet"),
+setMethod("computeGeneSetsOverlap",
+          signature(gSets="list", uniqGenes="ExpressionSet"),
           function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
-  uniqGenes <- featureNames(uniqGenes)
-  totalGenes <- length(uniqGenes)
+    uniqGenes <- featureNames(uniqGenes)
+    totalGenes <- length(uniqGenes)
 
-  ## map to the actual features for which expression data is available
-  gSets <- .mapGeneSetsToFeatures(gSets, uniqGenes)
+    ## map to the actual features for which expression data is available
+    gSets <- .mapGeneSetsToFeatures(gSets, uniqGenes)
 
-  lenGsets <- lengths(gSets)
-  totalGsets <- length(gSets)
+    lenGsets <- lengths(gSets)
+    totalGsets <- length(gSets)
 
-  gSetsMembershipMatrix <- matrix(0, nrow=totalGenes, ncol=totalGsets,
-                                  dimnames=list(uniqGenes, names(gSets)))
-  members <- cbind(unlist(gSets, use.names=FALSE), rep(1:totalGsets, times=lenGsets))
-  gSetsMembershipMatrix[members] <- 1
+    gSetsMembershipMatrix <- matrix(0, nrow=totalGenes, ncol=totalGsets,
+                                    dimnames=list(uniqGenes, names(gSets)))
+    members <- cbind(unlist(gSets, use.names=FALSE),
+                     rep(seq_len(totalGsets), times=lenGsets))
+    gSetsMembershipMatrix[members] <- 1
 
-  .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
+    .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
 })
 
 #' @aliases computeGeneSetsOverlap,GeneSetCollection,character-method
 #' @rdname computeGeneSetsOverlap
 #' @exportMethod computeGeneSetsOverlap
-setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGenes="character"),
+setMethod("computeGeneSetsOverlap",
+          signature(gSets="GeneSetCollection", uniqGenes="character"),
           function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
 
-  gSetsMembershipMatrix <- incidence(gSets)
-  gSetsMembershipMatrix <- t(gSetsMembershipMatrix[, colnames(gSetsMembershipMatrix) %in% uniqGenes])
+    gSetsMembershipMatrix <- incidence(gSets)
+    mask <- colnames(gSetsMembershipMatrix) %in% uniqGenes
+    gSetsMembershipMatrix <- t(gSetsMembershipMatrix[, mask])
 
-  .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
+    .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
 })
 
 #' @aliases computeGeneSetsOverlap,GeneSetCollection,ExpressionSet-method
 #' @rdname computeGeneSetsOverlap
+#' @importFrom GSEABase mapIdentifiers
+#' @importFrom Biobase featureNames
+#' @importFrom BiocGenerics annotation
 #' @exportMethod computeGeneSetsOverlap
-setMethod("computeGeneSetsOverlap", signature(gSets="GeneSetCollection", uniqGenes="ExpressionSet"),
+setMethod("computeGeneSetsOverlap",
+          signature(gSets="GeneSetCollection", uniqGenes="ExpressionSet"),
           function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
-  ## map gene identifiers of the gene sets to the features in the chip
-  ## Biobase::annotation() is necessary to disambiguate from the
-  ## 'annotation' argument
-  gSets <- mapIdentifiers(gSets, AnnoOrEntrezIdentifier(Biobase::annotation(uniqGenes)))
+    ## map gene identifiers of the gene sets to the features in the chip
+    ## Biobase::annotation() is necessary to disambiguate from the
+    ## 'annotation' argument
+    gSets <- mapIdentifiers(gSets,
+                            AnnoOrEntrezIdentifier(annotation(uniqGenes)))
   
-  uniqGenes <- featureNames(uniqGenes)
+    uniqGenes <- featureNames(uniqGenes)
 
-  gSetsMembershipMatrix <- incidence(gSets)
-  gSetsMembershipMatrix <- t(gSetsMembershipMatrix[, colnames(gSetsMembershipMatrix) %in% uniqGenes])
+    gSetsMembershipMatrix <- incidence(gSets)
+    mask <- colnames(gSetsMembershipMatrix) %in% uniqGenes
+    gSetsMembershipMatrix <- t(gSetsMembershipMatrix[, mask])
 
-  .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
+    .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
 })
 
-.computeGeneSetsOverlap <- function(gSetsMembershipMatrix, minSize=1, maxSize=Inf) {
-  ## gSetsMembershipMatrix should be a (genes x gene-sets) incidence matrix
+.computeGeneSetsOverlap <- function(gSetsMembershipMatrix,
+                                    minSize=1, maxSize=Inf) {
+    ## gSetsMembershipMatrix should be a (genes x gene-sets) incidence matrix
 
-  lenGsets <- colSums(gSetsMembershipMatrix)
+    lenGsets <- colSums(gSetsMembershipMatrix)
 
-  szFilterMask <- lenGsets >= max(1, minSize) & lenGsets <= maxSize
-  if (!any(szFilterMask))
-    stop("No gene set meets the minimum and maximum size filter\n")
+    szFilterMask <- lenGsets >= max(1, minSize) & lenGsets <= maxSize
+    if (!any(szFilterMask))
+        stop("No gene set meets the minimum and maximum size filter\n")
 
-  gSetsMembershipMatrix <- gSetsMembershipMatrix[, szFilterMask]
-  lenGsets <- lenGsets[szFilterMask]
+    gSetsMembershipMatrix <- gSetsMembershipMatrix[, szFilterMask]
+    lenGsets <- lenGsets[szFilterMask]
 
-  totalGsets <- ncol(gSetsMembershipMatrix)
+    totalGsets <- ncol(gSetsMembershipMatrix)
 
-  M <- t(gSetsMembershipMatrix) %*% gSetsMembershipMatrix
+    M <- t(gSetsMembershipMatrix) %*% gSetsMembershipMatrix
 
-  M1 <- matrix(lenGsets, nrow=totalGsets, ncol=totalGsets,
-               dimnames=list(colnames(gSetsMembershipMatrix), colnames(gSetsMembershipMatrix)))
-  M2 <- t(M1)
-  M.min <- matrix(0, nrow=totalGsets, ncol=totalGsets)
-  M.min[M1 < M2] <- M1[M1 < M2]
-  M.min[M2 <= M1] <- M2[M2 <= M1]
-  overlapMatrix <- M / M.min
+    M1 <- matrix(lenGsets, nrow=totalGsets, ncol=totalGsets,
+                 dimnames=list(colnames(gSetsMembershipMatrix),
+                               colnames(gSetsMembershipMatrix)))
+    M2 <- t(M1)
+    M.min <- matrix(0, nrow=totalGsets, ncol=totalGsets)
+    M.min[M1 < M2] <- M1[M1 < M2]
+    M.min[M2 <= M1] <- M2[M2 <= M1]
+    overlapMatrix <- M / M.min
 
-  return (overlapMatrix)
+    return(overlapMatrix)
 }
