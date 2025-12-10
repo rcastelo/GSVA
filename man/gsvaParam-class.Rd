@@ -223,9 +223,10 @@ method.}
 \item{\code{maxDiff}}{Logical vector of length 1 which offers two approaches to
 calculate the enrichment statistic (ES) from the KS random walk statistic.
 \itemize{
-\item \code{FALSE}: ES is calculated as the maximum distance of the random walk from 0.
-\item \code{TRUE}: ES is calculated as the magnitude difference between
-the largest positive and negative random walk deviations.
+\item \code{FALSE}: ES is calculated as the maximum distance from 0 of the random
+walk.
+\item \code{TRUE}: ES is calculated as the magnitude difference between the largest
+positive and negative random walk deviations.
 }}
 
 \item{\code{absRanking}}{Logical vector of length 1 used only when \code{maxDiff=TRUE}.

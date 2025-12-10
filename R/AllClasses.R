@@ -47,22 +47,38 @@ setClassUnion("GsvaExprData",
 #' Virtual superclass of gene set classes supported by `GSVA`.
 #'
 #' `GSVA` supports gene sets consisting of gene identifiers as either a named
-#' list of character vectors or an object of class `GSEABase::GeneSetCollection`.
+#' list of character vectors or an object of class
+#' [`GeneSetCollection`][GSEABase::GeneSetCollection-class].
 #' Alternatively, gene sets may be specified as a named list of integer vectors
 #' in the range of 1:nrow(X) that are indices to the rows of the corresponding
-#' expression data matrix X.
-#' This class union allows to store any of these in a slot of another class as
-#' well as defining common methods for them.
+#' expression data matrix X. This class union allows to store any of these in a
+#' slot of another class as well as defining common methods for them.
 #'
 #' @seealso
 #' [`list`], 
 #' [`GeneSetCollection`][GSEABase::GeneSetCollection-class]
 #'
-#' @importClassesFrom GSEABase GeneSetCollection GeneSet GeneIdentifierType
+#' @examples
+#'
+#' library(GSVA)
+#'
+#' gsetslst <- list(INNATE_RESPONSE=c("AIM2", "ALPK1", "AP3B1"),
+#'                  ADAPTIVE_RESPONSE=c("CD27", "CD70", "EBAG9"))
+#' gsetslst
+#' gsetsgsc <- geneIdsToGeneSetCollection(gsetslst)
+#' gsetsgsc
+#'
+#' class(gsetslst)
+#' class(gsetsgsc)
+#' is(gsetslst, "GsvaGeneSets")
+#' is(gsetsgsc, "GsvaGeneSets")
+#'
 #'
 #' @name GsvaGeneSets-class
 #' @rdname GsvaGeneSets-class
 #' @exportClass GsvaGeneSets
+#'
+#' @importClassesFrom GSEABase GeneSetCollection GeneSet GeneIdentifierType
 setClassUnion("GsvaGeneSets",
               c("list", "GeneSetCollection"))
 
@@ -115,6 +131,27 @@ setClassUnion("GsvaGeneSets",
 #' [`ssgseaParam-class`], 
 #' [`gsvaParam-class`],
 #' [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class]
+#'
+#' @examples
+#'
+#' library(GSVA)
+#'
+#' p <- 10 ## number of genes
+#' n <- 30 ## number of samples
+#'
+#' gsets <- list(set1=paste0("g", 1:3),
+#'               set2=paste0("g", 4:6),
+#'               set3=paste0("g", 7:10),
+#'               set4=paste0("g", 10:13)) ## genes not in the expression data
+#' gsets
+#'
+#' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+#'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+#'
+#' gsvapar <- gsvaParam(y, gsets)
+#'
+#' class(gsvapar)
+#' is(gsvapar, "GsvaMethodParam")
 #'
 #' @name GsvaMethodParam-class
 #' @rdname GsvaMethodParam-class
@@ -294,9 +331,10 @@ setClass("ssgseaParam",
 #'
 #' @slot maxDiff Logical vector of length 1 which offers two approaches to
 #' calculate the enrichment statistic (ES) from the KS random walk statistic.
-#' * `FALSE`: ES is calculated as the maximum distance of the random walk from 0.
-#' * `TRUE`: ES is calculated as the magnitude difference between
-#' the largest positive and negative random walk deviations.
+#' * `FALSE`: ES is calculated as the maximum distance from 0 of the random
+#'   walk.
+#' * `TRUE`: ES is calculated as the magnitude difference between the largest
+#'   positive and negative random walk deviations.
 #'
 #' @slot absRanking Logical vector of length 1 used only when `maxDiff=TRUE`.
 #' When `absRanking=FALSE` a modified Kuiper statistic is used to calculate

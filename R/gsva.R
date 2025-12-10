@@ -44,18 +44,18 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                                                              verbose)
             }
         } else if (is.matrix(expr)) {
-            A = .Call("matrix_density_R",
-                      as.double(t(expr)),
-                      as.double(t(expr)),
-                      n.density.samples,
-                      n.test.samples,
-                      n.genes,
-                      as.integer(Gaussk),
-                      any_na,
-                      as.integer(factor(na_use,
-                                        levels=c("everything", "all.obs",
-                                                 "na.rm"))),
-                      verbose)
+            A <- .Call("matrix_density_R",
+                       as.double(t(expr)),
+                       as.double(t(expr)),
+                       n.density.samples,
+                       n.test.samples,
+                       n.genes,
+                       as.integer(Gaussk),
+                       any_na,
+                       as.integer(factor(na_use,
+                                         levels=c("everything", "all.obs",
+                                                  "na.rm"))),
+                       verbose)
             gene.cdf <- t(matrix(A, n.test.samples, n.genes))
         } else
             cli_abort(c("x"=sprintf("Matrix class %s cannot be handled yet.",
@@ -310,8 +310,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
           function(param,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose),
-                   maxmem="auto")
-          {
+                   maxmem="auto") {
               if (verbose && gsva_global$show_start_and_end_messages) {
                   cli_alert_info(sprintf("GSVA version %s",
                                          packageDescription("GSVA")[["Version"]]))
@@ -643,7 +642,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
                                    "parameter object")
                       cli_abort(c("x"=sprintf(msg, geneSet)))
                   }
-              } else if (is.integer(geneSet) || is.numeric(geneSet)) {
+              } else if (is.numeric(geneSet)) {
                   if (geneSet < 1 || geneSet > length(geneSets)) {
                        msg <- paste("When 'geneSet' is numeric, it should be a",
                                     "number between 1 and the number of gene",
@@ -854,9 +853,9 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
    if (!maxDiff) {
        if (any_na) {
          mask <- is.na(sco)
-         sco[!mask] <- md[cbind(1:sum(!mask), ifelse(sco[!mask] > 0, 1, 2))]
+         sco[!mask] <- md[cbind(seq_len(sum(!mask)), ifelse(sco[!mask] > 0, 1, 2))]
        } else
-         sco <- md[cbind(1:length(sco), ifelse(sco > 0, 1, 2))]
+         sco <- md[cbind(seq_along(sco), ifelse(sco > 0, 1, 2))]
    }
    sco
 }
@@ -868,7 +867,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     n <- length(decOrderStat)
     gSetRnk <- decOrderStat[gSetIdx]
 
-    if (any(is.na(gSetRnk))) {
+    if (anyNA(gSetRnk)) {
         if (na_use == "everything")
             return(rep(NA_real_, n))
         else if (na_use == "all.obs")
@@ -953,7 +952,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
         wh <- which(mask, arr.ind=TRUE)
         nzsmat[wh] <- 0L
         r_dense <- r_dense + nzsmat           ## shift ranks of nonzero values
-        r_dense[wh] <- unlist(sapply(nzs,     ## zeros get increasing ranks
+        r_dense[wh] <- unlist(lapply(nzs,     ## zeros get increasing ranks
                                      seq.int))
     }
 
@@ -997,7 +996,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
         nzsmat[mask] <- 0L
         r_dense <- r_dense + nzsmat            ## shift ranks of nonzero values
         r_dense[!mask] <- r_dense[!mask] + nzs ## shift ranks of nonzero values
-        r_dense[mask] <- unlist(sapply(nzs,    ## zeros get increasing ranks
+        r_dense[mask] <- unlist(lapply(nzs,    ## zeros get increasing ranks
                                        seq.int))
     }
 

@@ -18,33 +18,68 @@
 \arguments{
 \item{spe}{An object of \code{SpatialExperiment} class.}
 
-\item{assay}{Character vector of length 1, specifying the name of the assay to use.
-By default, an assay called 'logcounts' will be used if present, otherwise the first
-assay is used.}
+\item{assay}{Character vector of length 1, specifying the name of the assay
+to use. By default, an assay called 'logcounts' will be used if present,
+otherwise the first assay is used.}
 
 \item{na.rm}{A logical indicating whether missing values should be removed.}
 
-\item{alternative}{A character string specifying the alternative hypothesis tested against the null hypothesis of no spatial autocorrelation;
-must be one of "two.sided", "less", or "greater", or any unambiguous abbreviation of these.}
+\item{alternative}{A character string specifying the alternative hypothesis
+tested against the null hypothesis of no spatial autocorrelation; must be
+one of "two.sided", "less", or "greater", or any unambiguous abbreviation of
+these.}
 
-\item{squared}{A logical indicating whether the inverse distance weight matrix should be squared or not.}
+\item{squared}{A logical indicating whether the inverse distance weight
+matrix should be squared or not.}
 
-\item{verbose}{Gives information about each calculation step. Default: \code{TRUE}.}
+\item{verbose}{Gives information about each calculation step. Default:
+\code{TRUE}.}
 
 \item{BPPARAM}{An object of class \code{BiocParallelParam} specifying parameters
 related to the parallel execution of some of the tasks and calculations
 within this function.}
 }
 \value{
-A \code{data.frame} with the same row names as the original \code{SpatialExperiment} object.
-Columns include the observed Moran's I statistic, the expected Moran's I statistic under no spatial autocorrelation, the expected
-standard deviation under no spatial autocorrelation, and the p-value of the test.
+A \code{data.frame} with the same row names as the original
+\code{SpatialExperiment} object. Columns include the observed Moran's I statistic,
+the expected Moran's I statistic under no spatial autocorrelation, the
+expected standard deviation under no spatial autocorrelation, and the
+p-value of the test.
 }
 \description{
 Computes spatial autocorrelation using Moran's I statistic
-for a \code{SpatialExperiment} object, using an inverse squared distance weight matrix as default,
-or an inverse distance weight matrix as an alternative. It also tests for spatial autocorrelation
-assuming normality.
+for a \code{SpatialExperiment} object, using an inverse squared distance
+weight matrix as default, or an inverse distance weight matrix as an
+alternative. It also tests for spatial autocorrelation assuming normality.
+}
+\examples{
+
+library(SpatialExperiment)
+library(TENxVisiumData)
+library(scuttle)
+library(GSVA)
+
+spe <- HumanCerebellum()
+
+is_mito <- grepl("(^MT-)|(^mt-)", rowData(spe)$symbol)
+spe <- addPerCellQC(spe, subsets=list(mito=is_mito))
+discardmask <- spe$sum < 250 | spe$detected < 200 | spe$subsets_mito_percent > 40
+spe <- spe[, !discardmask]
+spe <- spe[rowSums(assay(spe)) > 100, ]
+spe <- computeLibraryFactors(spe)
+spe <- logNormCounts(spe)
+
+set.seed(123) ## for reproducibility of the random markers
+## build two gene sets with 4 randomly chosen genes and one
+## third gene set with a few microglia marker genes
+gsets <- list(gset1=sample(rownames(spe), size=4, replace=FALSE),
+              gset2=sample(rownames(spe), size=4, replace=FALSE),
+              microglia=c("ENSG00000078808", "ENSG00000116251",
+                          "ENSG00000142583", "ENSG00000173372"))
+gsvapar <- gsvaParam(spe, gsets)
+es <- gsva(gsvapar, verbose=FALSE)
+spatCor(es, verbose=FALSE)
+
 }
 \seealso{
 \code{\link[BiocParallel:BiocParallelParam-class]{BiocParallelParam}}

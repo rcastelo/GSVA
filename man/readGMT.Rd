@@ -106,7 +106,7 @@ gsvaAnnotation(genesets)
 
 }
 \seealso{
-\code{\link{readLines}},
+\code{\link{deduplicateGeneSets}}, \code{\link{readLines}},
 \code{\link[GSEABase:GeneSetCollection-class]{GeneSetCollection}},
 \code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}},
 \code{\link[GSEABase]{getGmt}},

@@ -63,7 +63,7 @@
 #' @importFrom IRanges IntegerList match
 #' @importFrom BiocParallel bpnworkers
 #' @importFrom sparseMatrixStats colRanks
-#' @importFrom cli cli_alert_info cli_alert_warning
+#' @importFrom cli cli_alert_info cli_alert_warning cli_abort
 #' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
 ssgsea <- function(X, geneSets, alpha=0.25,
                    normalization=TRUE,
@@ -92,17 +92,19 @@ ssgsea <- function(X, geneSets, alpha=0.25,
   es <- NULL
   if (n > 10 && bpnworkers(BPPARAM) > 1) {
   
-    es <- bplapply(as.list(1:n), function(j) {
+    es <- bplapply(as.list(seq_len(n)), function(j) {
       if (any_na && na_use == "na.rm") {
         geneRanking <- order(R[, j], decreasing=TRUE, na.last=NA)
         geneSetsRankIdx <- match(geneSets, geneRanking)
-        es_sample <- sapply(geneSetsRankIdx, .fastRndWalkNArm,
+        es_sample <- vapply(X=geneSetsRankIdx, FUN=.fastRndWalkNArm,
+                            FUN.VALUE=numeric(1),
                             geneRanking, j, Ra, any_na, na_use,
                             minSize, wna_env, USE.NAMES=FALSE)
       } else {
         geneRanking <- order(R[, j], decreasing=TRUE)
         geneSetsRankIdx <- match(geneSets, geneRanking)
-        es_sample <- sapply(geneSetsRankIdx, .fastRndWalk,
+        es_sample <- vapply(X=geneSetsRankIdx, FUN=.fastRndWalk,
+                            FUN.VALUE=numeric(1),
                             geneRanking, j, Ra)
       }
       es_sample
@@ -111,17 +113,19 @@ ssgsea <- function(X, geneSets, alpha=0.25,
     idpb <- NULL
     if (verbose)
       idpb <- cli_progress_bar("Calculating ssGSEA scores", total=n)
-    es <- lapply(as.list(1:n), function(j) {
+    es <- lapply(as.list(seq_len(n)), function(j) {
       if (any_na && na_use == "na.rm") {
         geneRanking <- order(R[, j], decreasing=TRUE, na.last=NA)
         geneSetsRankIdx <- match(geneSets, geneRanking)
-        es_sample <- sapply(geneSetsRankIdx, .fastRndWalkNArm,
+        es_sample <- vapply(X=geneSetsRankIdx, FUN=.fastRndWalkNArm,
+                            FUN.VALUE=numeric(1),
                             geneRanking, j, Ra, any_na, na_use,
                             minSize, wna_env, USE.NAMES=FALSE)
       } else {
         geneRanking <- order(R[, j], decreasing=TRUE)
         geneSetsRankIdx <- match(geneSets, geneRanking)
-        es_sample <- sapply(geneSetsRankIdx, .fastRndWalk,
+        es_sample <- vapply(X=geneSetsRankIdx, FUN=.fastRndWalk,
+                            FUN.VALUE=numeric(1),
                             geneRanking, j, Ra)
       }
       if (verbose)
@@ -156,10 +160,12 @@ ssgsea <- function(X, geneSets, alpha=0.25,
     else
       rng <- range(es) ## na.rm increases execution time and memory consumption
 
-    if (any(is.na(rng) | !is.finite(rng)))
-      stop(paste("Cannot calculate normalizing factor for the enrichment scores in",
-                 "ssGSEA, likely due to NA values in the input expression data."))
-    es <- es[, 1:n, drop=FALSE] / (rng[2] - rng[1])
+    if (any(is.na(rng) | !is.finite(rng))) {
+      msg <- paste("Cannot calculate normalizing factor for the enrichment",
+                   "scores, most likely due to NA values in the input data.")
+      cli_abort(c("x"=msg))
+    }
+    es <- es[, seq_len(n), drop=FALSE] / (rng[2] - rng[1])
   }
   
   if (length(geneSets) == 1)

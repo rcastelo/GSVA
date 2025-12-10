@@ -30,7 +30,7 @@ The input data may be loaded from the users workspace or by selecting a CSV
 file for the expression data, and a GMT file for the gene sets data.
 }
 \examples{
-\dontrun{
+\donttest{
 res <- igsva() ## this will open your browser with the GSVA shiny web app
 }
 

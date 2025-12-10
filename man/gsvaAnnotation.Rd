@@ -75,6 +75,21 @@ expression data identifiers without manual user intervention, e.g. from
 an MSigDb gene set using ENTREZ IDs or gene symbols to an expression data
 set using ENSEMBL IDs.
 }
+\examples{
+
+library(GSEABase)
+library(GSVA)
+library(GSVAdata)
+
+data(geneprotExpCostaEtAl2021)
+se <- geneExpCostaEtAl2021
+se
+
+gsvaAnnotation(se)
+gsvaAnnotation(se) <- EntrezIdentifier("org.Hs.eg.db")
+gsvaAnnotation(se)
+
+}
 \seealso{
 \code{\link[Biobase]{ExpressionSet}},
 \code{\link[SummarizedExperiment:SummarizedExperiment-class]{SummarizedExperiment}},

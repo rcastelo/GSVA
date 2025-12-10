@@ -64,3 +64,27 @@ only be done if you do not intend to run an actual gene set analysis.
 \code{geneSetSizes()} is a convenience wrapper running \code{lengths()} on the list of
 gene sets returned by \code{geneSets()}.
 }
+\examples{
+
+library(GSVA)
+
+p <- 10 ## number of genes
+n <- 30 ## number of samples
+
+gsets <- list(set1=paste0("g", 1:3),
+              set2=paste0("g", 4:6),
+              set3=paste0("g", 7:10),
+              set4=paste0("g", 10:13)) ## genes not in the expression data
+gsets
+
+y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+            dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+
+gsvapar <- gsvaParam(y, gsets)
+geneSets(gsvapar)
+
+es <- gsva(gsvapar)
+
+geneSets(es)
+
+}

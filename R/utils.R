@@ -5,8 +5,7 @@
 }
 
 ## check for presence of valid row/feature names
-##   and abort or generate dummy names
-## #' @importFrom Biobase featureNames
+## and abort or generate dummy names
 .check_rowNames <- function(expr, useDummyNames=TRUE, verbose) {
     ## CHECK: is this the right place to check this?
     ## 21/10/24: let's do it at parameter constructor
@@ -19,7 +18,7 @@
         } else {
             cli_abort(c("x"="The input assay object doesn't have rownames"))
         }
-    } else if (any(duplicated(rownames(expr)))) {
+    } else if (anyDuplicated(rownames(expr))) {
         cli_abort(c("x"="The input assay object has duplicated rownames"))
     }
 
@@ -313,7 +312,7 @@
         geneSets <- geneSets[wgset]
 
     ## we'll try to handle index lists of numeric/integer vectors as gene sets
-    if(is(geneSets, "list") && all(sapply(geneSets, is.numeric))) {
+    if (is(geneSets, "list") && all(vapply(geneSets, is.numeric, logical(1)))) {
         mappedGeneSets <- lapply(geneSets, function(idx) {
             as.integer(idx[idx > 0 & idx <= nrow(filteredDataMatrix)])
         })
@@ -698,8 +697,8 @@
     block_dim <- chunkdim(X)
     grid_dim <- dim(chunkGrid(X))
     nzc <- 0
-    for (i in 1:grid_dim[1])
-        for (j in 1:grid_dim[2]) {
+    for (i in seq_len(grid_dim[1]))
+        for (j in seq_len(grid_dim[2])) {
             icoord <- (i-1)*block_dim[1]+1
             jcoord <- (j-1)*block_dim[2]+1
             bdim <- c(min(c(nr, i*block_dim[1]))-icoord+1, min(c(nc, j*block_dim[2]))-jcoord+1)

@@ -43,3 +43,26 @@ gene IDs.
 Offers a choice of ways for handling duplicated gene set names
 that may not be suitable as input to other gene set analysis functions.
 }
+\examples{
+
+library(GSVA)
+
+gsets <- list(gs1=LETTERS[1:3], gs2=LETTERS[4:6], gs2=LETTERS[5:8])
+gsets
+
+deduplicateGeneSets(gsets)
+deduplicateGeneSets(gsets, deduplUse="drop")
+deduplicateGeneSets(gsets, deduplUse="union")
+deduplicateGeneSets(gsets, deduplUse="smallest")
+deduplicateGeneSets(gsets, deduplUse="largest")
+
+fname <- system.file("extdata", "c2.subsetdups.v7.5.symbols.gmt.gz",
+                     package="GSVAdata")
+
+## readGMT() calls internally deduplicateGeneSets() and it takes the
+## parameter 'deduplUse' which is passed to the internal call
+c2.dupgenesets <- readGMT(fname, deduplUse="union")
+c2.dupgenesets
+any(duplicated(names(c2.dupgenesets)))
+
+}

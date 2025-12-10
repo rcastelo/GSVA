@@ -1,5 +1,5 @@
 test_genesets <- function() {
-  message("Running unit tests for input gene sets.")
+    message("Running unit tests for input gene sets.")
 
     p <- 10 ## number of genes
     n <- 30 ## number of samples
@@ -30,4 +30,16 @@ test_genesets <- function() {
     es.mat2 <- gsva(gsvaParam(y, gsc), verbose=FALSE)
 
     checkTrue(identical(es.mat, es.mat2))
+}
+
+test_geneSetDeDuplication <- function() {
+    message("Running unit tests for deduplicating gene sets.")
+
+    gsets <- list(gs1=LETTERS[1:3], gs2=LETTERS[4:6], gs2=LETTERS[5:8])
+
+    checkTrue(length(deduplicateGeneSets(gsets)) == 2)
+    checkTrue(length(deduplicateGeneSets(gsets, deduplUse="drop")) == 1)
+    checkTrue(all(lengths(deduplicateGeneSets(gsets, deduplUse="union")) == c(3, 5)))
+    checkTrue(all(lengths(deduplicateGeneSets(gsets, deduplUse="smallest")) == c(3, 3)))
+    checkTrue(all(lengths(deduplicateGeneSets(gsets, deduplUse="largest")) == c(3, 4)))
 }
