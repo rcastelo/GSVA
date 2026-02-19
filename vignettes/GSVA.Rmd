@@ -886,14 +886,14 @@ When this trend is present, we may improve the statistical power to detect
 differentially expressed (DE) pathways by using the limma-trend pipeline
 [@phipson2016robust]. More concretely, we should call the `eBayes()` function
 with the argument `trend=x`, where `x` is a vector of values corresponding to
-the sizes of the gene sets. As we have already seen, the values of these sizes
-can be easily obtained using GSVA's function `geneSetSizes()` on the output of
-the `gsva()` function. Here below, we call again `eBayes()` using the `trend`
-parameter. In this case, however, the change in the number of FIR DE pathways
-is negligible.
+the square root of the sizes of the gene sets. As we have already seen, the
+values of these sizes can be easily obtained using GSVA's function
+`geneSetSizes()` on the output of the `gsva()` function. Here below, we call
+again `eBayes()` using the `trend` parameter. In this case, however, the change
+in the number of FIR DE pathways is negligible.
 
 ```{r}
-fit.eb.trend <- eBayes(fit, robust=TRUE, trend=gssizes)
+fit.eb.trend <- eBayes(fit, robust=TRUE, trend=sqrt(gssizes))
 res <- decideTests(fit.eb.trend)
 summary(res)
 ```
