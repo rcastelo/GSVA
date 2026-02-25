@@ -1308,7 +1308,7 @@ ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR) {
       int idx = nr * j + i;
 #endif
       x[j] = X[idx];
-      if (!ISNA(x[j])) {
+      if (!ISNA(x[j]) && !ISNAN(x[j])) {
         uniqv[nnas] = x[j];
         nnas++;
       }
@@ -1358,7 +1358,7 @@ ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR) {
 #else
       int idx = nr * j + i;
 #endif
-      if (!ISNA(X[idx]))
+      if (!ISNA(X[idx]) && !ISNAN(X[idx]))
         ecdf_vals[idx] = ecdfuniqv[mt[j]-1];
       else
         ecdf_vals[idx] = NA_REAL;
