@@ -1541,11 +1541,13 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
                maxDiff, absRanking, as.double(tau), any_na, na_use, minSize,
                verbose)
   if (any_na) {
-    if (na_use == 2 && !is.null(attr(sco, "class")))
+    if (na_use == 2 && !is.null(attr(sco, "attrNAs")))
         cli_abort(c("x"="Input GSVA ranks have NA values."))
 
-    if (na_use == 3 && !is.null(attr(sco, "class")))
+    if (na_use == 3 && !is.null(attr(sco, "attrNAs")))
         assign("w", TRUE, envir=wna_env)
+
+    attr(sco, "attrNAs") <- NULL ## clean up the NA informing attribute
   }
 
   sco
@@ -1573,11 +1575,13 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
                  absRanking, as.double(tau), any_na, na_use, minSize, verbose)
 
     if (any_na) {
-      if (na_use == 2 && !is.null(attr(sco, "class")))
+      if (na_use == 2 && !is.null(attr(sco, "attrNAs")))
           cli_abort(c("x"="Input GSVA ranks have NA values."))
 
-      if (na_use == 3 && !is.null(attr(sco, "class")))
+      if (na_use == 3 && !is.null(attr(sco, "attrNAs")))
           assign("w", TRUE, envir=wna_env)
+
+      attr(sco, "attrNAs") <- NULL ## clean up the NA informing attribute
     }
 
     sco

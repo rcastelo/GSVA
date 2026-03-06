@@ -16,7 +16,8 @@ extern SEXP Matrix_DimNamesSym,
             SVT_SparseArray_typeSym,
             SVT_SparseArray_dimNamesSym,
             SVT_SparseArray_dimSym,
-            SVT_SparseArray_svtSym;
+            SVT_SparseArray_svtSym,
+            GSVA_attrNAsSym;
 
 /* to add attributes to R objects from C code */
 static SEXP
@@ -279,18 +280,18 @@ old_gsva_score_genesets_R(SEXP genesetsidxR, SEXP decordstatR, SEXP symrnkstatR,
   }
 
   if (anyna) {
-    SEXP class;
+    SEXP attr;
 
     if (nause == 2 && abort) {
-      PROTECT(class = allocVector(STRSXP, 1));
-      SET_STRING_ELT(class, 0, mkChar("abort"));
-      installAttrib(esR, R_ClassSymbol, class);
-      UNPROTECT(1); /* class */
+      PROTECT(attr = allocVector(STRSXP, 1));
+      SET_STRING_ELT(attr, 0, mkChar("abort"));
+      installAttrib(esR, GSVA_attrNAsSym, attr);
+      UNPROTECT(1); /* attr */
     } else if (nause == 3 && wna == 1) {
-      PROTECT(class = allocVector(STRSXP, 1));
-      SET_STRING_ELT(class, 0, mkChar("wna"));
-      installAttrib(esR, R_ClassSymbol, class);
-      UNPROTECT(1); /* class */
+      PROTECT(attr = allocVector(STRSXP, 1));
+      SET_STRING_ELT(attr, 0, mkChar("wna"));
+      installAttrib(esR, GSVA_attrNAsSym, attr);
+      UNPROTECT(1); /* attr */
     }
   }
 
@@ -505,18 +506,18 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP sparseR,
   R_Free(symrnkstat_col);
 
   if (anyna) {
-    SEXP class;
+    SEXP attr;
 
     if (nause == 2 && abort) {
-      PROTECT(class = allocVector(STRSXP, 1));
-      SET_STRING_ELT(class, 0, mkChar("abort"));
-      installAttrib(esR, R_ClassSymbol, class);
-      UNPROTECT(1); /* class */
+      PROTECT(attr = allocVector(STRSXP, 1));
+      SET_STRING_ELT(attr, 0, mkChar("abort"));
+      installAttrib(esR, GSVA_attrNAsSym, attr);
+      UNPROTECT(1); /* attr */
     } else if (nause == 3 && wna == 1) {
-      PROTECT(class = allocVector(STRSXP, 1));
-      SET_STRING_ELT(class, 0, mkChar("wna"));
-      installAttrib(esR, R_ClassSymbol, class);
-      UNPROTECT(1); /* class */
+      PROTECT(attr = allocVector(STRSXP, 1));
+      SET_STRING_ELT(attr, 0, mkChar("wna"));
+      installAttrib(esR, GSVA_attrNAsSym, attr);
+      UNPROTECT(1); /* attr */
     }
   }
 
