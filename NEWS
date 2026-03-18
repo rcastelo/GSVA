@@ -1,5 +1,5 @@
-CHANGES IN VERSION 2.40
------------------------
+CHANGES IN VERSION 2.4
+----------------------
 
 USER VISIBLE CHANGES
 
@@ -13,8 +13,8 @@ USER VISIBLE CHANGES
 
   o Added a new vignette illustrating the use of the GSVA method with single-cell RNA-seq data.
 
-CHANGES IN VERSION 2.20
------------------------
+CHANGES IN VERSION 2.2
+----------------------
 
 USER VISIBLE CHANGES
 
@@ -40,8 +40,8 @@ BUG FIXES
 
   o Bugfix in the C code to avoid potential memory leaks.
 
-CHANGES IN VERSION 2.00
------------------------
+CHANGES IN VERSION 2.0
+----------------------
 
 USER VISIBLE CHANGES
 
