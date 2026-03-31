@@ -66,6 +66,23 @@
 #' 
 NULL
 
+## (re-)extract a list of gene names from a list of indices
+## (indices resulting from the matching above)
+.geneSetsIndices2Names <- function(indices, names) {
+    return(lapply(indices, function(i, n) n[i], n=names))
+}
+
+
+## access to gene set attribute without explicit use of attributes
+.geneSets <- function(obj) {
+    gs <- attr(obj, "geneSets", exact=TRUE)
+
+    if (is.null(gs))
+        stop("The object does not contain information about gene sets.")
+
+    return(gs)
+}
+
 #' @aliases geneSets,GsvaMethodParam-method
 #' @rdname geneSets
 #' @exportMethod geneSets
@@ -129,7 +146,43 @@ setMethod("geneSetSizes", signature("GsvaExprData"),
           })
 
 
-## ----- helper functions for gene set I/O and preprocessing -----
+## ----- functions for gene set I/O and preprocessing -----
+
+
+### 2024-08-02  axel: the following three functions have been copied from
+### GSEABase/R/utilities.R (v. 1.66.0) as our implementation of readGMT()
+### is mostly based on (a copy of) GSEABase::getGmt() which is making use
+### of these utility functions.  Since we decided that GSVA::readGMT() may
+### return a list of gene sets as well as a GeneSetCollection, it should work
+### if a user doesn't have GSEABase installed at all.
+
+## Placeholder 'till something appropriate decided
+.uniqueIdentifier <- local({
+    node <- NULL
+    pid <- NULL
+    uid <- 0L
+    function() {
+        if (is.null(node)) {
+            node <<- Sys.info()['nodename']
+            pid <<- Sys.getpid()
+        }
+        uid <<- uid + 1L
+        base::paste(node, pid, date(), uid, sep=":")
+    }
+})
+
+.stopf <- function(...) {
+    call <- match.call(call=sys.call(sys.parent(1)))
+    msg <- paste(sprintf(...), collapse="\n")
+    stop(simpleError(msg, call=call))
+}
+
+.warningf <- function(...) {
+    call <- match.call(call=sys.call(sys.parent(1)))
+    msg <- paste(sprintf(...), collapse="\n")
+    warning(simpleWarning(msg, call=call))
+}
+### end of copy from GSEABase/R/utilities.R
 
 #' @title Handling of Duplicated Gene Set Names
 #' 
@@ -226,6 +279,7 @@ deduplicateGeneSets <- function(geneSets,
 }
 
 
+#' @importFrom utils head tail
 deduplicateGmtLines <- function(geneSets,
                                 deduplUse = c("first", "drop", "union",
                                               "smallest", "largest")) {
@@ -507,6 +561,7 @@ geneIdsToGeneSetCollection <- function(geneIdsList,
 #' @name readGMT
 #' @rdname readGMT
 #' @importFrom Biobase selectSome
+#' @importFrom utils head tail
 #' @export
 #' 
 readGMT <- function (con,
@@ -791,6 +846,7 @@ setReplaceMethod("gsvaAnnotation",
 
 #' @aliases gsvaAnnotation,GeneSetCollection-method
 #' @rdname gsvaAnnotation
+#' @importFrom GSEABase geneIdType
 #' @exportMethod gsvaAnnotation
 setMethod("gsvaAnnotation",
           signature=signature(object="GeneSetCollection"),
@@ -957,6 +1013,299 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
     function(gSets, minSize=1, maxSize=Inf) {
         filterGeneSets(geneIds(gSets), minSize, maxSize)
 })
+
+## 2024-02-06  axel: function .filterGenes() is intended to detect genes (rows)
+##  with constant expression (and, hence, no information), warn about them and
+##  optionally remove them (in particular, ssGSEA's choice is to keep them).
+##  the original approach tried to identify genes with a standard deviation of
+##  exactly 0 but failed in certain cases of all identical values due to the use
+##  of floating point arithmetic, see issues:
+## https://github.com/rcastelo/GSVA/issues/54
+## https://github.com/HenrikBengtsson/matrixStats/issues/204
+##  an improvement in matrixStats::rowSds() fixes the original issue but cannot
+##  guarantee that there won't be other problematic cases.
+##
+## We propose to detect cases of constant gene expression by comparing genewise
+##  min and max values rather than computing the SD, which *should* avoid using
+##  floating point arithmetic in favour of comparisons and scale linearly with
+##  the number of samples (columns) -- we'll of course have to check that. ;-)
+##
+## A related but different issue has recently surfaced when methods PLAGE and
+##  z-scores are applied to sparse matrices and attempt to scale the non-zero
+##  values of genes: genes that are constant in their non-zero values will have
+##  an SD of 0 and therefore scaling them will result in division by 0.
+
+.rowNzRanges_dgCMatrix <- function(X, verbose=FALSE) {
+    res <- .Call("row_rngs_nzrngs_RsparseMatrix_R", as(X, "RsparseMatrix"),
+                 verbose=verbose)
+    res
+}
+
+.rowNzRanges_SVT_SparseArray_byrow <- function(X, verbose=FALSE) {
+    res <- .Call("row_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
+    res
+}
+
+.rowNzRanges_SVT_SparseArray_transpose_C <- function(X, verbose=FALSE) {
+    res <- .Call("col_rngs_nzrngs_SVT_SparseMatrix_R", t(X), verbose=verbose)
+    res
+}
+
+## after discussions at https://github.com/Bioconductor/SparseArray/issues/22
+
+.rowNzRanges_SVT_SparseArray <- function(X, verbose=FALSE) {
+    res <- .Call("rowbycols_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
+    res
+}
+
+#' @importFrom SparseArray NaArray
+.fast_replace_zeros_with_NAs <- function(x) {
+    stopifnot(is(x, "SparseArray"))
+    naa <- NaArray(dim=dim(x), type=type(x), dimnames=dimnames(x))
+    naa@NaSVT <- x@SVT ## ASSUMING x@SVT HAS NO NA VALUES!!
+    naa
+}
+
+#' @importFrom SparseArray NaArray nzwhich
+.safe_replace_zeros_with_NAs <- function(x) {
+    naa <- NaArray(dim=dim(x), type=type(x), dimnames=dimnames(x))
+    nzidx <- nzwhich(x)
+    naa[nzidx] <- x[nzidx]
+    naa
+}
+
+#' @importFrom MatrixGenerics rowMins rowMaxs
+.rowNzRanges_SVT_SparseArray_rowbycols_R <- function(X, anyna=FALSE, verbose=FALSE) {
+    naa <- NULL
+    if (anyna)
+        naa <- .safe_replace_zeros_with_NAs(X)
+    else
+        naa <- .fast_replace_zeros_with_NAs(X)  # only if 'X' is guaranteed to be NA-free!
+
+    ranges1 <- cbind(rowMins(X, na.rm=TRUE), rowMaxs(X, na.rm=TRUE))
+    ranges2 <- suppressWarnings(cbind(rowMins(naa, na.rm=TRUE), rowMaxs(naa, na.rm=TRUE)))
+    allzeros <- ranges1[ , 1L] == 0L & ranges1[ , 2L] == 0L
+    ranges2[allzeros] <- NA_integer_
+    cbind(ranges1, ranges2)
+}
+
+#' @importFrom S4Arrays DummyArrayGrid read_block
+.rowNzRanges <- function(X, anyna=FALSE, verbose=FALSE) {
+    res <- NULL
+    if (is.matrix(X))
+        res <- rowRanges(X, na.rm=TRUE)
+    else if (is(X, "dgCMatrix"))
+        res <- .rowNzRanges_dgCMatrix(X, verbose=verbose)
+    else if (is(X, "SVT_SparseArray"))
+        res <- .rowNzRanges_SVT_SparseArray(X, verbose=verbose)
+    else if (is(X, "DelayedArray")) {
+        grid <- DummyArrayGrid(dim(X))
+        block <- read_block(X, grid[[1L]])
+        if (is_sparse(block)) ## input HDF5 may be sparse or not
+            res <- .rowNzRanges_SVT_SparseArray(block, verbose=verbose)
+        else
+            res <- rowRanges(X)
+    } else
+        cli_abort(c("x"=sprintf(".rowNzRanges: input object class %s not handled yet",
+                                class(X))))
+    res
+}
+
+#' @importFrom S4Arrays is_sparse
+#' @importFrom sparseMatrixStats rowRanges
+#' @importFrom DelayedArray blockApply setAutoBPPARAM rowRanges
+#' @importFrom cli cli_alert_warning cli_abort cli_alert_info
+#' @importFrom cli cli_progress_bar cli_progress_done
+#' @importFrom BiocParallel SerialParam bpnworkers bpiterate bpprogressbar
+.filterGenes <- function(expr, anyna=FALSE, removeConstant=TRUE,
+                         removeNzConstant=TRUE, verbose=TRUE, BPPARAM=NULL,
+                         maxmem=Inf) {
+    rowrngs <- NULL
+
+    if (verbose) {
+        if (!is_sparse(expr))
+            cli_alert_info("Searching for rows with constant values")
+        else
+            cli_alert_info("Searching for rows with constant (nonzero) values")
+    }
+
+    ## returns a matrix with as many rows as 'expr' and 2 columns if 'expr'
+    ## is dense, and 4 columns if it is sparse, where the first two columns
+    ## correspond to the minimum and maximum values of each row, while the
+    ## third and fourth columns, if they exist, they correspond to the
+    ## minimum and maximum nonzero values of each row, which will be NAs if
+    ## there are no nonzero values.
+    rowrngs <- .processMatrixRows(expr, .rowNzRanges, anyna=anyna,
+                                  verbose=verbose, BPPARAM=BPPARAM, maxmem=maxmem)
+
+    constantRows <- (rowrngs[, 1] == rowrngs[, 2])
+    mask <- is.na(constantRows)
+    if (any(mask))
+        constantRows[mask] <- TRUE
+
+    constantNzRows <- invalidRows <- invalidNzRows <- rep(FALSE, nrow(expr))
+    if (ncol(rowrngs) > 2) { ## sparse input
+        constantNzRows <- (rowrngs[, 3] == rowrngs[, 4])
+        mask <- is.na(constantNzRows)
+        if (any(mask)) ## no nonzero values imply constant nonzero values
+            constantNzRows[mask] <- TRUE
+    }
+
+    if (verbose && any(constantRows)) {
+        msg <- sprintf("%d rows with constant values throughout the columns",
+                       sum(constantRows))
+        cli_alert_warning(msg)
+        if (removeConstant)
+           cli_alert_warning("Rows with constant values are discarded")
+    }
+
+    nzmask <- constantNzRows & !constantRows
+    if (verbose && any(nzmask)) {
+        msg <- sprintf("%d rows with constant nonzero values throughout the samples",
+                       sum(nzmask))
+        cli_alert_warning(msg)
+        if (removeNzConstant)
+           cli_alert_warning("Rows with constant nonzero values are discarded")
+    }
+
+    removemask <- rep(FALSE, nrow(expr))
+    if (removeConstant)
+         removemask <- constantRows
+
+    if (removeNzConstant && any(nzmask))
+         removemask <- removemask | nzmask
+
+    if (any(removemask)) {
+        if (nrow(expr) - sum(removemask) < 2)
+            cli_abort(c("x"="Less than two rows left in the input assay object"))
+
+        expr <- expr[!removemask, ]
+    }
+
+    return(expr)
+}
+
+
+## maps gene sets content in 'gsets' to 'features', where 'gsets'
+## is a 'list' object with character string vectors as elements,
+## and 'features' is a character string vector object. it assumes
+## features in both input objects follow the same nomenclature,
+
+#' @importFrom cli cli_abort
+#' @importFrom IRanges CharacterList match
+.mapGeneSetsToFeatures <- function(gsets, features) {
+
+    ## Aaron Lun's suggestion at
+    ## https://github.com/rcastelo/GSVA/issues/39#issuecomment-765549620
+    gsets2 <- CharacterList(gsets)
+    mt <- match(gsets2, features)
+    mapdgenesets <- as.list(mt[!is.na(mt)])
+
+    if (length(unlist(mapdgenesets, use.names=FALSE)) == 0) {
+      msg <- paste("No identifiers in the gene sets could be matched to the",
+                   "identifiers in the expression data.")
+      cli_abort(c("x"=msg))
+    }
+
+    mapdgenesets
+}
+
+## it assumes that all arguments have been already checked for correctness
+#' @importFrom cli cli_abort cli_alert_warning
+.filterAndMapGeneSets <- function(param, wgset=NA, filteredDataMatrix, verbose) {
+
+    minSize <- get_minSize(param)
+    maxSize <- get_maxSize(param)
+
+    geneSets <- get_geneSets(param)
+    if (!is.na(wgset))
+        geneSets <- geneSets[wgset]
+
+    ## we'll try to handle index lists of numeric/integer vectors as gene sets
+    if (is(geneSets, "list") && all(vapply(geneSets, is.numeric, logical(1)))) {
+        mappedGeneSets <- lapply(geneSets, function(idx) {
+            as.integer(idx[idx > 0 & idx <= nrow(filteredDataMatrix)])
+        })
+
+        ## check and alert if we had to drop out-of-range indices
+        diffGs <- names(geneSets)[lengths(geneSets) != lengths(mappedGeneSets)]
+        if(length(diffGs) > 0) {
+            singular <- length(diffGs) == 1
+            msg <- sprintf(
+                paste0("Out-of-range indices from %d index gene %s (%s) ",
+                       "have been dropped."),
+                length(diffGs),
+                if(singular) "set" else "sets",
+                paste0(sQuote(diffGs, q=FALSE), collapse = ", "))
+            cli_alert_warning(msg)
+        }
+    } else { # not a list of index vectors, i.e., as before
+        ## note that the method for 'GeneSetCollection' calls geneIds(), i.e., 
+        ## whatever the input, from here on we have a list of character vectors
+        anno <- get_annotation(param)
+        if (identical(anno, NullIdentifier()))
+            anno <- NULL
+        geneSets <- mapGeneSetsToAnno(geneSets=geneSets,
+                                      anno=anno,
+                                      verbose=verbose)
+        
+        ## map to the actual features for which expression data is available
+        ## note that the result is a list of integer vectors (indices to
+        ## rownames) and not a list of character vector any longer
+        mappedGeneSets <- .mapGeneSetsToFeatures(geneSets,
+                                                 rownames(filteredDataMatrix))
+    }
+    
+    ## remove gene sets from the analysis for which no features are available
+    ## and meet the minimum and maximum gene-set size specified by the user
+    filteredMappedGeneSets <- filterGeneSets(mappedGeneSets,
+                                             minSize=minSize,
+                                             maxSize=maxSize)
+    
+    if (length(filteredMappedGeneSets) == 0) {
+        msg <- "No gene set left after mapping and filtering."
+        cli_abort(c("x"=msg))
+    }
+
+    ## this should NEVER happen -- just to make sure it doesn't...
+    if (anyDuplicated(names(filteredMappedGeneSets)) > 0) {
+        msg <- "The gene set list contains duplicated gene set names."
+        cli_abort(c("x"=msg))
+    }
+
+    if (any(lengths(filteredMappedGeneSets) == 1)) {
+        msg <- "Some gene sets have size one. Consider setting minSize > 1"
+        cli_alert_warning(msg)
+    }
+
+    return(filteredMappedGeneSets)
+}
+
+#' @importFrom cli cli_alert_warning
+#' @importFrom BiocParallel SerialParam
+.filterAndMapGenesAndGeneSets <- function(param,
+                                          removeConstant=TRUE,
+                                          removeNzConstant=TRUE,
+                                          verbose=FALSE,
+                                          BPPARAM=SerialParam()) {
+    exprData <- get_exprData(param)
+    dataMatrix <- unwrapData(exprData, get_assay(param))
+    
+    ## filter genes according to various criteria,
+    ## e.g., constant expression
+    filtDataMatrix <- .filterGenes(dataMatrix, anyna=anyNA(param),
+                                   removeConstant=removeConstant,
+                                   removeNzConstant=removeNzConstant,
+                                   verbose, BPPARAM=BPPARAM)
+
+    filtMappedGeneSets <- .filterAndMapGeneSets(param=param,
+                                                filteredDataMatrix=filtDataMatrix,
+                                                verbose=verbose)
+
+    return(list(filteredDataMatrix=filtDataMatrix,
+                filteredMappedGeneSets=filtMappedGeneSets))
+}
+
 
 
 

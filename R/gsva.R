@@ -1,3 +1,1073 @@
+#' @title Gene Set Variation Analysis
+#' 
+#' @description Estimates GSVA enrichment scores.
+#' 
+#' @param param A parameter object of one of the following classes:
+#' * A [`gsvaParam`] object built using the constructor function
+#' [`gsvaParam`].
+#'   This object will trigger `gsva()` to use the GSVA algorithm by
+#'   Hänzelmann et al. (2013).
+#' * A [`plageParam`] object built using the constructor function
+#' [`plageParam`].
+#'   This object will trigger `gsva()` to use the PLAGE algorithm by
+#'   Tomfohr et al. (2005).
+#' * A [`zscoreParam`] object built using the constructor function
+#' [`zscoreParam`].
+#'   This object will trigger `gsva()` to use the combined z-score algorithm by
+#'   Lee et al. (2008).
+#' * A [`ssgseaParam`] object built using the constructor function
+#' [`ssgseaParam`].
+#'   This object will trigger `gsva()` to use the ssGSEA algorithm by
+#'   Barbie et al. (2009).
+#'
+#' @param verbose Gives information about each calculation step. Default: `TRUE`.
+#' 
+#' @param BPPARAM An object of class `BiocParallelParam` specifying parameters
+#'   related to the parallel execution of some of the tasks and calculations
+#'   within this function.
+#' 
+#' @return A gene-set by sample matrix of GSVA enrichment scores stored in a
+#' container object of the same type as the input expression data container. If
+#' the input was a base matrix or a `dgCMatrix` object, then the output will
+#' be a base matrix object with the gene sets employed in the calculations
+#' stored in an attribute called `geneSets`. If the input was an
+#' `ExpressionSet` object, then the output will be also an `ExpressionSet`
+#' object with the gene sets employed in the calculations stored in an
+#' attribute called `geneSets`. If the input was an object of one of the
+#' classes described in [`GsvaExprData`], such as a `SingleCellExperiment`,
+#' then the output will be of the same class, where enrichment scores will be
+#' stored in an assay called `es` and the gene sets employed in the
+#' calculations will be stored in the `rowData` slot of the object under the
+#' column name `gs`.
+#' 
+#' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`],
+#' [`BiocParallelParam`][BiocParallel::BiocParallelParam-class],
+#' [`dgCMatrix`][Matrix::dgCMatrix-class],
+#' \code{\link[Biobase]{ExpressionSet}},
+### we are using the plain Rd above because
+###  #' [`ExpressionSet`][Biobase::ExpressionSet-class],
+### results in the following R CMD check NOTE:
+### Non-topic package-anchored link(s) in Rd file 'gsva.Rd':
+###  ‘[Biobase:class.ExpressionSet]{ExpressionSet}’
+#' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class]
+#'
+#' @aliases gsva
+#' @name gsva
+#' @rdname gsva
+#' 
+#' @references Barbie, D.A. et al. Systematic RNA interference reveals that
+#' oncogenic KRAS-driven cancers require TBK1.
+#' *Nature*, 462(5):108-112, 2009.
+#' \doi{10.1038/nature08460}
+#'
+#' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
+#' variation analysis for microarray and RNA-Seq data.
+#' *BMC Bioinformatics*, 14:7, 2013.
+#' \doi{10.1186/1471-2105-14-7}
+#'
+#' @references Lee, E. et al. Inferring pathway activity toward precise
+#' disease classification.
+#' *PLoS Comp Biol*, 4(11):e1000217, 2008.
+#' \doi{10.1371/journal.pcbi.1000217}
+#'
+#' @references Tomfohr, J. et al. Pathway level analysis of gene expression
+#' using singular value decomposition.
+#' *BMC Bioinformatics*, 6:225, 2005.
+#' \doi{10.1186/1471-2105-6-225}
+#'
+#' @examples
+#' library(GSVA)
+#' library(limma)
+#' 
+#' p <- 10 ## number of genes
+#' n <- 30 ## number of samples
+#' nGrp1 <- 15 ## number of samples in group 1
+#' nGrp2 <- n - nGrp1 ## number of samples in group 2
+#' 
+#' ## consider three disjoint gene sets
+#' geneSets <- list(set1=paste("g", 1:3, sep=""),
+#'                  set2=paste("g", 4:6, sep=""),
+#'                  set3=paste("g", 7:10, sep=""))
+#'
+#' ## sample data from a normal distribution with mean 0 and st.dev. 1
+#' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+#'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+#'
+#' ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
+#' y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
+#' 
+#' ## build design matrix
+#' design <- cbind(sampleGroup1=1, sampleGroup2vs1=c(rep(0, nGrp1), rep(1, nGrp2)))
+#' 
+#' ## fit linear model
+#' fit <- lmFit(y, design)
+#' 
+#' ## estimate moderated t-statistics
+#' fit <- eBayes(fit)
+#' 
+#' ## genes in set1 are differentially expressed
+#' topTable(fit, coef="sampleGroup2vs1")
+#' 
+#' ## build GSVA parameter object
+#' gsvapar <- gsvaParam(y, geneSets)
+#' 
+#' ## estimate GSVA enrichment scores for the three sets
+#' gsva_es <- gsva(gsvapar)
+#' 
+#' ## fit the same linear model now to the GSVA enrichment scores
+#' fit <- lmFit(gsva_es, design)
+#' 
+#' ## estimate moderated t-statistics
+#' fit <- eBayes(fit)
+#' 
+#' ## set1 is differentially expressed
+#' topTable(fit, coef="sampleGroup2vs1")
+NULL
+
+#' @aliases gsva,gsvaParam-method
+#' @importFrom cli cli_alert_info cli_alert_success
+#' @importFrom BiocParallel bpnworkers
+#' @importFrom utils packageDescription
+#' @rdname gsva
+#' @exportMethod gsva
+setMethod("gsva", signature(param="gsvaParam"),
+          function(param,
+                   verbose=TRUE,
+                   BPPARAM=SerialParam(progressbar=verbose))
+          {
+              if (verbose) {
+                  cli_alert_info(sprintf("GSVA version %s",
+                                         packageDescription("GSVA")[["Version"]]))
+                  gsva_global$show_start_and_end_messages <- FALSE
+              }
+
+              rankspar <- gsvaRanks(param=param, verbose=verbose,
+                                    BPPARAM=BPPARAM)
+
+              es <- gsvaScores(param=rankspar, verbose=verbose,
+                               BPPARAM=BPPARAM)
+
+              if (verbose) {
+                  cli_alert_success("Calculations finished")
+                  gsva_global$show_start_and_end_messages <- TRUE
+              }
+              
+              return(es)
+          })
+
+
+#' @title The `gsvaParam` class
+#'
+#' @description Objects of class `gsvaParam` contain the parameters for running
+#' the `GSVA` method.
+#'
+#' @details In addition to a number of parameters shared with all methods
+#' implemented by package GSVA, `GSVA` takes six method-specific parameters.
+#' All of these parameters are described in detail below.
+#'
+#' @param exprData The expression data set.  Must be one of the classes
+#' supported by [`GsvaExprData-class`].  For a list of these classes, see its
+#' help page using `help(GsvaExprData)`.
+#'
+#' @param geneSets The gene sets.  Must be one of the classes supported by
+#' [`GsvaGeneSets-class`].  For a list of these classes, see its help page using
+#' `help(GsvaGeneSets)`.
+#' 
+#' @param assay Character vector of length 1.  The name of the assay to use in
+#' case `exprData` is a multi-assay container, otherwise ignored.  By default,
+#' an assay called 'logcounts' will be used if present, otherwise the first
+#' assay is used.
+#' 
+#' @param annotation An object of class `GeneIdentifierType` from
+#' package `GSEABase` describing the gene identifiers used as the row names of
+#' the expression data set.  See `GeneIdentifierType` for help on available
+#' gene identifier types and how to construct them.  This
+#' information can be used to map gene identifiers occurring in the gene sets.
+#' 
+#' If the default value `NULL` is provided, an attempt will be made to extract
+#' the gene identifier type from the expression data set provided as `exprData`
+#' (by calling [`gsvaAnnotation`] on it).  If still not successful, the
+#' `NullIdentifier()` will be used as the gene identifier type, gene identifier
+#' mapping will be disabled and gene identifiers used in expression data set and
+#' gene sets can only be matched directly.
+#' 
+#' @param minSize Numeric vector of length 1.  Minimum size of the resulting gene
+#' sets after gene identifier mapping. By default, the minimum size is 1.
+#' 
+#' @param maxSize Numeric vector of length 1.  Maximum size of the resulting gene
+#' sets after gene identifier mapping. By default, the maximum size is `Inf`.
+#' 
+#' @param kcdf Character vector of length 1 denoting the kernel to use during
+#' the non-parametric estimation of the empirical cumulative distribution
+#' function (ECDF) of expression levels across samples. The value `kcdf="auto"`
+#' will allow GSVA to automatically choose one of the possible values. The
+#' value `kcdf="Gaussian"` is suitable when input expression values are
+#' continuous, such as microarray fluorescent units in logarithmic scale,
+#' RNA-seq log-CPMs, log-RPKMs, or log-TPMs. When input expression values are
+#' integer counts, such as those derived from RNA-seq experiments, then this
+#' argument should be set to `kcdf="Poisson"`. When we do not want to use a
+#' kernel approach for the estimation of the ECDF, then we should set
+#' `kcdf="none"`.
+#'
+#' @param kcdfNoneMinSampleSize Integer vector of length 1. When `kcdf="auto"`,
+#' this parameter decides at what minimum sample size `kcdf="none"`, i.e., the
+#' estimation of the empirical cumulative distribution function (ECDF) of
+#' expression levels across samples is performed directly without using a
+#' kernel. By default, this value is set to 200; see the `kcdf` slot.
+#'
+#' @param tau Numeric vector of length 1.  The exponent defining the weight of
+#' the tail in the random walk performed by the `GSVA` (Hänzelmann et al.,
+#' 2013) method.  The default value is 1 as described in the paper.
+#'
+#' @param maxDiff Logical vector of length 1 which offers two approaches to
+#' calculate the enrichment statistic (ES) from the KS random walk statistic.
+#' * `FALSE`: ES is calculated as the maximum distance of the random walk
+#' from 0. This approach produces a distribution of enrichment scores that is
+#' bimodal, but it can give large enrichment scores to gene sets whose genes
+#' are not concordantly activated in one direction only.
+#' * `TRUE` (the default): ES is calculated as the magnitude difference between
+#' the largest positive and negative random walk deviations. This default value
+#' gives larger enrichment scores to gene sets whose genes are concordantly
+#' activated in one direction only.
+#'
+#' @param absRanking Logical vector of length 1 used only when `maxDiff=TRUE`.
+#' When `absRanking=FALSE` (default) a modified Kuiper statistic is used to
+#' calculate enrichment scores, taking the magnitude difference between the
+#' largest positive and negative random walk deviations. When
+#' `absRanking=TRUE` the original Kuiper statistic that sums the largest
+#' positive and negative random walk deviations is used.
+#' 
+#' @param sparse Logical vector of length 1 used only when the input expression
+#' data in `exprData` is stored in a sparse matrix (e.g., a `dgCMatrix` or a
+#' `SingleCellExperiment` object storing the expression data in a `dgCMatrix`).
+#' In such a case, when `sparse=TRUE` (default), a sparse version of the GSVA
+#' algorithm will be applied. Otherwise, when `sparse=FALSE`, the classical
+#' version of the GSVA algorithm will be used.
+#'
+#' @param checkNA Character vector of length 1 specifying whether the input
+#' expression data should be checked for the presence of missing values (`NA`
+#' or `NaN`). This must be one of the strings `"auto"` (default), `"yes"`, or
+#' `"no"`. The default value `"auto"` means that the software will perform that
+#' check only when the input expression data is provided as a base `matrix`, an
+#' `ExpressionSet` or a `SummarizedExperiment` object, while every other type
+#' of input expression data container (e.g., `SingleCellExperiment`, etc.) will
+#' not be checked. If `checkNA="yes"`, then the input expression data will be
+#' checked for missing values irrespective of the object class of the data
+#' container, and if `checkNA="no"`, then that check will not be performed.
+#'
+#' @param use Character vector of length 1 specifying a policy for dealing with
+#' missing values (`NA` or `NaN`) in the input expression data argument
+#' `exprData`. It only applies when either `checkNA="yes"`, or `checkNA="auto"`
+#' (see the `checkNA` parameter. The argument value must be one of the strings
+#' `"everything"` (default), `"all.obs"`, or `"na.rm"`. The policy of the
+#' default value `"everything"` consists of propagating missing values so that
+#' the resulting enrichment score will be `NA`, whenever one or more of its
+#' contributing values is missing, giving a warning when that happens. When
+#' `use="all.obs"`, the presence of `NA`s in the input expression data will
+#' produce an error. Finally, when `use="na.rm"`, missing values in the input
+#' expression data will be removed from calculations, giving a warning when that
+#' happens, and giving an error if no values are left after removing the missing
+#' values.
+#'
+#' @param filterRows Logical vector of length 1, indicating whether the rows in,
+#' the input expression data, typically corresponding to transcripts, genes or
+#' proteins, should be filtered for constant expression across columns,
+#' typically corresponding to samples or cells, with respect to all available
+#' (nonmissing) values and to the non-zero values. By default, this slot is set
+#' to `TRUE` and the user may set it to `FALSE` when there is absolute certainty
+#' that no such rows exist in the input expression data, since this may save
+#' running time, especially with data sets with hundreds of thousands or
+#' millions of columns.
+#'
+#' @param ondisk Character vector of length 1 denoting whether an on-disk backend
+#' should be used to reduce the memory footprint. The default value
+#' `ondisk="auto"` will attempt to load all the data in main memory when the
+#' number of nonzero values is equal or smaller than 2^31, otherwise it will
+#' attempt working with an on-disk data structure that reduces de memory
+#' footprint. When `ondisk="yes"` it will attempt to work with an on-disk data
+#' structure, while when `ondisk="no"` it will attempt to load all the data in
+#' main memory, irrespective of whether the number of nonzero values is larger,
+#' equal, or smaller than 2^31.
+#'
+#' @param verbose Logical vector of length 1. It gives information about some
+#' decisions made by the software during parameter object construction when
+#' `verbose=TRUE` (default) and remains silent otherwise.
+#'
+#' @return A new [`gsvaParam-class`] object.
+#'
+#' @seealso [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class],
+#' [`matrix`],
+#' \code{\link[Biobase]{ExpressionSet}},
+### we are using the plain Rd above because
+###  #' [`ExpressionSet`][Biobase::ExpressionSet-class],
+### results in the following R CMD check NOTE:
+### Non-topic package-anchored link(s) in Rd file 'gsvaParam-class.Rd':
+###  ‘[Biobase:class.ExpressionSet]{ExpressionSet}’
+#' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment-class],
+#' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class]
+#'
+#' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
+#' variation analysis for microarray and RNA-Seq data.
+#' *BMC Bioinformatics*, 14:7, 2013.
+#' \doi{10.1186/1471-2105-14-7}
+#'
+#' @examples
+#' suppressPackageStartupMessages({
+#' library(GSEABase)
+#' library(GSVA)
+#' library(GSVAdata)
+#' })
+#'
+#' data(geneprotExpCostaEtAl2021)
+#' data(c2BroadSets)
+#' 
+#' ## for simplicity, use only a subset of the sample data
+#' se <- geneExpCostaEtAl2021[1:1000, ]
+#' gsc <- c2BroadSets[1:100]
+#' gp1 <- gsvaParam(se, gsc)
+#' gp1
+#'
+#'
+#' @importFrom methods new
+#' @importFrom cli cli_alert_warning
+#' @importFrom utils capture.output
+#' @rdname gsvaParam-class
+#' 
+#' @export
+gsvaParam <- function(exprData, geneSets,
+                      assay=NA_character_, annotation=NULL,
+                      minSize=1, maxSize=Inf,
+                      kcdf=c("auto", "Gaussian", "Poisson", "none"),
+                      kcdfNoneMinSampleSize=200, tau=1, maxDiff=TRUE,
+                      absRanking=FALSE, sparse=TRUE,
+                      checkNA=c("auto", "yes", "no"),
+                      use=c("everything", "all.obs", "na.rm"),
+                      filterRows=TRUE,
+                      ondisk=c("auto", "yes", "no"),
+                      verbose=TRUE) {
+    kcdf <- match.arg(kcdf)
+    kcdfNoneMinSampleSize <- as.integer(kcdfNoneMinSampleSize)
+    checkNA <- match.arg(checkNA)
+    use <- match.arg(use)
+    ondisk <- match.arg(ondisk)
+
+    ## check assay parameter and assay names
+    assay <- .check_assayNames(assay, exprData, verbose)
+
+    ## check for presence of valid row/feature names
+    exprData <- .check_rowNames(expr=exprData, useDummyNames=TRUE,
+                                verbose=verbose)
+
+    xa <- gsvaAnnotation(exprData)
+    if(is.null(xa)) {
+        if(is.null(annotation)) {
+            annotation <- NullIdentifier()
+        }
+    } else {
+        if(is.null(annotation)) {
+            annotation <- xa
+        } else {
+            msg <- sprintf(paste0("using argument annotation='%s' and ",
+                                  "ignoring exprData annotation ('%s')"),
+                           capture.output(annotation), capture.output(xa))
+            cli_alert_info(msg)
+        }
+    }
+
+    naparam <- .check_for_na_values(exprData=exprData, assay=assay,
+                                    checkNA=checkNA, use=use)
+
+    nzc <- .estimate_nzcount(exprData, assay, verbose)
+
+    if (!is_sparse(unwrapData(exprData, assay))) ## use sparse regime only
+        sparse <- FALSE                          ## when input is sparse
+
+    if (!filterRows) {
+        cli_alert_warning("filterRows=FALSE and rows with constant values will not be filtered out")
+        cli_alert_warning("Use it only if you are sure that such rows are not present in the input data")
+    }
+
+    param <- new("gsvaParam",
+                 exprData=exprData, geneSets=geneSets,
+                 assay=assay, annotation=annotation,
+                 minSize=minSize, maxSize=maxSize,
+                 kcdf=kcdf, kcdfNoneMinSampleSize=kcdfNoneMinSampleSize,
+                 tau=as.double(tau), maxDiff=maxDiff, absRanking=absRanking,
+                 sparse=sparse, checkNA=checkNA, didCheckNA=naparam$didCheckNA,
+                 anyNA=naparam$any_na, use=use, filterRows=filterRows,
+                 nzcount=nzc, ondisk=ondisk)
+
+    maxmem <- .check_maxmem(param, "auto", verbose)
+    .check_ondisk(param, maxmem, verbose)
+
+    return(param)
+}
+
+
+## ----- validator -----
+
+setValidity("gsvaParam", function(object) {
+    inv <- NULL
+    xd <- object@exprData
+    dd <- dim(xd)
+    an <- gsvaAssayNames(xd)
+    oa <- object@assay
+    
+    if(dd[1] == 0) {
+        inv <- c(inv, "@exprData has 0 rows")
+    }
+    if(dd[2] == 0) {
+        inv <- c(inv, "@exprData has 0 columns")
+    }
+    if(length(object@geneSets) == 0) {
+        inv <- c(inv, "@geneSets has length 0")
+    }
+    if(length(oa) != 1) {
+        inv <- c(inv, "@assay must be of length 1")
+    }
+    if(.isCharLength1(oa) && .isCharNonEmpty(an) && (!(oa %in% an))) {
+        inv <- c(inv, "@assay must be one of assayNames(@exprData)")
+    }
+    if(length(object@annotation) != 1) {
+        inv <- c(inv, "@annotation must be of length 1")
+    }
+    if(!inherits(object@annotation, "GeneIdentifierType")) {
+        inv <- c(inv, "@annotation must be a subclass of 'GeneIdentifierType'")
+    }
+    if(length(object@minSize) != 1) {
+        inv <- c(inv, "@minSize must be of length 1")
+    }
+    if(object@minSize < 1) {
+        inv <- c(inv, "@minSize must be at least 1 or greater")
+    }
+    if(length(object@maxSize) != 1) {
+        inv <- c(inv, "@maxSize must be of length 1")
+    }
+    if(object@maxSize < object@minSize) {
+        inv <- c(inv, "@maxSize must be at least @minSize or greater")
+    }
+    if(length(object@kcdfNoneMinSampleSize) != 1) {
+        inv <- c(inv, "@kcdfNoneMinSampleSize must be of length 1")
+    }
+    if(object@kcdfNoneMinSampleSize < 0) {
+        inv <- c(inv, "@kcdfNoneMinSampleSize must be a non-negative integer")
+    }
+    if(is.na(object@kcdfNoneMinSampleSize)) {
+        inv <- c(inv, "@kcdfNoneMinSampleSize must not be NA")
+    }
+    if(length(object@tau) != 1) {
+        inv <- c(inv, "@tau must be of length 1")
+    }
+    if(is.na(object@tau)) {
+        inv <- c(inv, "@tau must not be NA")
+    }
+    if(length(object@maxDiff) != 1) {
+        inv <- c(inv, "@maxDiff must be of length 1")
+    }
+    if(is.na(object@maxDiff)) {
+        inv <- c(inv, "@maxDiff must not be NA")
+    }
+    if(length(object@absRanking) != 1) {
+        inv <- c(inv, "@absRanking must be of length 1")
+    }
+    if(is.na(object@absRanking)) {
+        inv <- c(inv, "@absRanking must not be NA")
+    }
+    if(length(object@sparse) != 1) {
+        inv <- c(inv, "@sparse must be of length 1")
+    }
+    if(is.na(object@sparse)) {
+        inv <- c(inv, "@sparse must not be NA")
+    }
+    if(!.isCharLength1(object@checkNA)) {
+        inv <- c(inv, "@use must be a single character string")
+    }
+    if(length(object@didCheckNA) != 1) {
+        inv <- c(inv, "@didCheckNA must be of length 1")
+    }
+    if(is.na(object@didCheckNA)) {
+        inv <- c(inv, "@didCheckNA must not be NA")
+    }
+    if(length(object@anyNA) != 1) {
+        inv <- c(inv, "@anyNA must be of length 1")
+    }
+    if(is.na(object@anyNA)) {
+        inv <- c(inv, "@anyNA must not be NA")
+    }
+    if(!.isCharLength1(object@use)) {
+        inv <- c(inv, "@use must be a single character string")
+    }
+    if(length(object@filterRows) != 1) {
+        inv <- c(inv, "@filterRows must be of length 1")
+    }
+    if(is.na(object@filterRows)) {
+        inv <- c(inv, "@filterRows must not be NA")
+    }
+    if(length(object@nzcount) != 1) {
+        inv <- c(inv, "@nzcount must be of length 1")
+    }
+    if(is.na(object@nzcount)) {
+        inv <- c(inv, "@nzcount must not be NA")
+    }
+    return(if(length(inv) == 0) TRUE else inv)
+})
+
+
+## ----- getters -----
+
+#' @noRd
+.get_kcdf <- function(object) {
+  stopifnot(inherits(object, "gsvaParam"))
+  return(object@kcdf)
+}
+
+#' @noRd
+.get_kcdfNoneMinSampleSize <- function(object) {
+  stopifnot(inherits(object, "gsvaParam"))
+  return(object@kcdfNoneMinSampleSize)
+}
+
+#' @noRd
+.get_tau <- function(object) {
+  stopifnot(inherits(object, "gsvaParam"))
+  return(object@tau)
+}
+
+#' @noRd
+.get_maxDiff <- function(object) {
+  stopifnot(inherits(object, "gsvaParam"))
+  return(object@maxDiff)
+}
+
+#' @noRd
+.get_absRanking <- function(object) {
+  stopifnot(inherits(object, "gsvaParam"))
+  return(object@absRanking)
+}
+
+#' @noRd
+.get_sparse <- function(object) {
+  stopifnot(inherits(object, "gsvaParam"))
+  return(object@sparse)
+}
+
+#' @noRd
+.get_filterRows <- function(object) {
+  stopifnot(inherits(object, "gsvaParam"))
+  return(object@filterRows)
+}
+
+#' @noRd
+.get_ondisk <- function(object) {
+  stopifnot(inherits(object, "gsvaParam"))
+  return(object@ondisk)
+}
+
+## getters for 'checkNA', 'didCheckNA' and 'use' are
+## in utils.R as they are shared with ssGSEA
+
+#' @param x An object of class [`gsvaParam-class`].
+#'
+#' @param recursive Not used with `x` being an object of
+#' class [`gsvaParam-class`].
+#'
+#' @aliases anyNA,gsvaParam-method
+#' @rdname gsvaParam-class
+setMethod("anyNA", signature=c("gsvaParam"),
+          function(x, recursive=FALSE)
+            return(x@anyNA))
+
+#' @importFrom SparseArray nzcount
+#' @aliases nzcount,gsvaParam-method
+setMethod("nzcount", signature=c("gsvaParam"),
+          function(x)
+            return(x@nzcount))
+
+
+## ----- show -----
+
+setMethod("show",
+          signature=signature(object="gsvaParam"),
+          function(object) {
+              callNextMethod(object)
+              cat("kcdf: ", .get_kcdf(object), "\n",
+                  "kcdfNoneMinSampleSize: ", .get_kcdfNoneMinSampleSize(object), "\n",
+                  "tau: ", .get_tau(object), "\n",
+                  "maxDiff: ", .get_maxDiff(object), "\n",
+                  "absRanking: ", .get_absRanking(object), "\n",
+                  sep="")
+              cat("sparse: ", .get_sparse(object), "\n")
+              cat("checkNA: ", .get_checkNA(object), "\n", sep="")
+              if (.get_didCheckNA(object)) {
+                  if (anyNA(object)) {
+                      cat("missing data: yes\n",
+                          "na_use: ", .get_NAuse(object), "\n", sep="")
+                  } else
+                      cat("missing data: no\n")
+              } else
+                  cat("missing data: didn't check\n")
+              cat("filterRows: ", .get_filterRows(object), "\n")
+              nzcmsg <- sprintf("nonzero values: %s than 2^31 (INT_MAX)\n",
+                                ifelse(nzcount(object) > .Machine$integer.max,
+                                       "more", "less"))
+              cat("ondisk: ", .get_ondisk(object), "\n")
+              cat(nzcmsg)
+          })
+
+#' @title GSVA ranks and scores
+#'
+#' @description Calculate GSVA scores in two steps: (1) calculate GSVA
+#' ranks; and (2) calculate GSVA scores using the previously calculated
+#' ranks.
+#'
+#' @param param A [`gsvaParam-class`] object built using the constructor
+#' function [`gsvaParam`].
+#'
+#' @param verbose Gives information about each calculation step. Default: `TRUE`.
+#'
+#' @param BPPARAM An object of class `BiocParallelParam` specifying parameters
+#' related to the parallel execution of some of the tasks and calculations
+#' within this function.
+#'
+#' @param maxmem A vector of length 1 either specifying a number in bytes, or
+#' a character string with either the word `auto` (default), or a number
+#' followed by a suffix indicating kilobytes (K), megabytes (M), gigabytes (G)
+#' or terabytes (T), which GSVA will use to attempt bounding the maximum amount
+#' of main memory used across all threads of execution to that given quantity.
+#' By default `maxmem="auto"`, indicating that the maximum memory will be the
+#' 90% of the total main memory, as calculated by [`Sys.meminfo()`][memuse::Sys.meminfo].
+#' To avoid setting any bound on the maximum memory, please use `maxmem=Inf`.
+#' Note that the amount of main memory used in an R session or script may depend
+#' on other commands and packages used in that same session or script.
+#'
+#' @return In the case of the `gsvaRanks()` method, an object of class
+#' [`gsvaRanksParam-class`].
+#'
+#' @seealso [`gsvaParam-class`], [`gsvaRanksParam-class`], [`gsva`],
+#' [`BiocParallelParam`][BiocParallel::BiocParallelParam-class],
+#' [`dgCMatrix`][Matrix::dgCMatrix-class],
+#' \code{\link[Biobase]{ExpressionSet}},
+### we are using the plain Rd above because
+###  #' [`ExpressionSet`][Biobase::ExpressionSet-class],
+### results in the following R CMD check NOTE:
+### Non-topic package-anchored link(s) in Rd file 'gsvaRanks.Rd':
+###  ‘[Biobase:class.ExpressionSet]{ExpressionSet}’
+#' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class]
+#'
+#' @aliases gsvaRanks,gsvaParam-method
+#' @name gsvaRanks
+#' @rdname gsvaRanks
+#'
+#' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
+#' variation analysis for microarray and RNA-Seq data.
+#' *BMC Bioinformatics*, 14:7, 2013.
+#' \doi{10.1186/1471-2105-14-7}
+#'
+#' @examples
+#' library(GSVA)
+#'
+#' p <- 10 ## number of genes
+#' n <- 30 ## number of samples
+#' nGrp1 <- 15 ## number of samples in group 1
+#' nGrp2 <- n - nGrp1 ## number of samples in group 2
+#'
+#' ## consider three disjoint gene sets
+#' geneSets <- list(gset1=paste0("g", 1:3),
+#'                  gset2=paste0("g", 4:6),
+#'                  gset3=paste0("g", 7:10))
+#'
+#' ## sample data from a normal distribution with mean 0 and st.dev. 1
+#' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+#'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+#'
+#' ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
+#' y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
+#'
+#' ## build GSVA parameter object
+#' gsvapar <- gsvaParam(y, geneSets)
+#'
+#' ## calculate GSVA ranks
+#' gsvarankspar <- gsvaRanks(gsvapar)
+#' gsvarankspar
+#' ## calculate GSVA scores
+#' gsva_es <- gsvaScores(gsvarankspar)
+#' gsva_es
+#'
+#' ## calculate now GSVA scores in a single step
+#' gsva_es1 <- gsva(gsvapar)
+#'
+#' ## both approaches give the same result with the same input gene sets
+#' all.equal(gsva_es1, gsva_es)
+#'
+#' ## however, results will be (obviously) different with different gene sets
+#' geneSets2 <- list(gset1=paste0("g", 3:6),
+#'                   gset2=paste0("g", c(1, 2, 7, 8)))
+#'
+#' ## note that there is no need to calculate the GSVA ranks again
+#' geneSets(gsvarankspar) <- geneSets2
+#' gsvaScores(gsvarankspar)
+#'
+#' @importFrom cli cli_alert_info cli_alert_success
+#' @importFrom BiocParallel bpnworkers
+#' @exportMethod gsvaRanks
+setMethod("gsvaRanks", signature(param="gsvaParam"),
+          function(param,
+                   verbose=TRUE,
+                   BPPARAM=SerialParam(progressbar=verbose),
+                   maxmem="auto") {
+              if (verbose && gsva_global$show_start_and_end_messages) {
+                  cli_alert_info(sprintf("GSVA version %s",
+                                         packageDescription("GSVA")[["Version"]]))
+              }
+
+              exprData <- get_exprData(param)
+              dataMatrix <- unwrapData(exprData, get_assay(param))
+              maxmem <- .check_maxmem(param, maxmem, verbose)
+              ondisk <- .check_ondisk(param, maxmem, verbose)
+
+              if (is(dataMatrix, "DelayedMatrix") && ondisk == "no") {
+                  if (verbose)
+                      cli_alert_info("Loading input expression data into main memory")
+                  if (is_sparse(dataMatrix)) {
+                      dataMatrix <- as(dataMatrix, "SVT_SparseArray")
+                  } else
+                      dataMatrix <- as.matrix(dataMatrix)
+              }
+
+              filtDataMatrix <- dataMatrix
+              if (.get_filterRows(param))
+                  filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
+                                                 removeConstant=TRUE,
+                                                 removeNzConstant=TRUE,
+                                                 verbose, BPPARAM=BPPARAM,
+                                                 maxmem=maxmem)
+              else if (verbose)
+                  cli_alert_warning("Skipping filtering of constant rows (filterRows=FALSE)")
+              
+              if (verbose)
+                  cli_alert_info(sprintf("Calculating GSVA ranks"))
+
+              kcdfminssize <- .get_kcdfNoneMinSampleSize(param)
+              gsvarnks <- .compute_gsva_ranks(expr=filtDataMatrix,
+                                              kcdf=.get_kcdf(param),
+                                              kcdf.min.ssize=kcdfminssize,
+                                              sparse=.get_sparse(param),
+                                              any_na=anyNA(param),
+                                              na_use=.get_NAuse(param),
+                                              verbose=verbose,
+                                              BPPARAM=BPPARAM,
+                                              maxmem=maxmem)
+
+              rownames(gsvarnks) <- rownames(filtDataMatrix)
+              colnames(gsvarnks) <- colnames(filtDataMatrix)
+
+              rnkcontainer <- wrapData(get_exprData(param), gsvarnks)
+              rval <- new("gsvaRanksParam",
+                          exprData=rnkcontainer, geneSets=get_geneSets(param),
+                          assay="gsvaranks", annotation=get_annotation(param),
+                          minSize=get_minSize(param), maxSize=get_maxSize(param),
+                          kcdf=.get_kcdf(param),
+                          kcdfNoneMinSampleSize=.get_kcdfNoneMinSampleSize(param),
+                          tau=.get_tau(param), maxDiff=.get_maxDiff(param),
+                          absRanking=.get_absRanking(param),
+                          sparse=.get_sparse(param), checkNA=.get_checkNA(param),
+                          didCheckNA=.get_didCheckNA(param), anyNA=anyNA(param),
+                          use=.get_NAuse(param), filterRows=.get_filterRows(param),
+                          nzcount=nzcount(param), ondisk=.get_ondisk(param))
+
+              if (verbose && gsva_global$show_start_and_end_messages)
+                  cli_alert_success("Calculations finished")
+
+              return(rval)
+          })
+
+
+## ----- setters for gsvaRanksParam -----
+
+#' @param object For the replacement method, an object of class
+#' [`gsvaRanksParam-class`].
+#'
+#' @param value For the replacement method, an object of the classes supported by
+#' [`GsvaGeneSets-class`].
+#'
+#' @aliases geneSets<-
+#' @aliases geneSets<-,gsvaRanksParam,GsvaGeneSets-method
+#' @rdname gsvaParam-class
+#' @exportMethod geneSets
+setReplaceMethod("geneSets", signature=signature(object="gsvaRanksParam",
+                                                 value="GsvaGeneSets"),
+                 function(object, value) {
+                   object@geneSets <- value
+                   object
+                 })
+
+#' @param param A parameter object of the [`gsvaRanksParam-class`] class.
+#'
+#' @return In the case of the `gsvaScores()` method, a gene-set by sample matrix
+#' of GSVA enrichment scores stored in a container object of the same type as
+#' the input ranks data container. If
+#' the input was a base matrix or a `dgCMatrix` object, then the output will
+#' be a base matrix object with the gene sets employed in the calculations
+#' stored in an attribute called `geneSets`. If the input was an
+#' `ExpressionSet` object, then the output will be also an `ExpressionSet`
+#' object with the gene sets employed in the calculations stored in an
+#' attributed called `geneSets`. If the input was an object of one of the
+#' classes described in [`GsvaExprData`], such as a `SingleCellExperiment`,
+#' then the output will be of the same class, where enrichment scores will be
+#' stored in an assay called `es` and the gene sets employed in the
+#' calculations will be stored in the `rowData` slot of the object under the
+#' column name `gs`.
+#'
+#' @aliases gsvaScores,gsvaRanksParam-method
+#' @name gsvaScores
+#' @rdname gsvaRanks
+#'
+#' @importFrom cli cli_alert_info cli_abort cli_alert_success
+#' @importFrom BiocParallel bpnworkers
+#' @exportMethod gsvaScores
+setMethod("gsvaScores", signature(param="gsvaRanksParam"),
+          function(param, verbose=TRUE,
+                   BPPARAM=SerialParam(progressbar=verbose),
+                   maxmem="auto") {
+              if (verbose && gsva_global$show_start_and_end_messages) {
+                  cli_alert_info(sprintf("GSVA version %s",
+                                         packageDescription("GSVA")[["Version"]]))
+              }
+
+              ## assuming rows in the rank data have been already filtered
+              exprData <- get_exprData(param)
+              filtDataMatrix <- unwrapData(exprData, get_assay(param))
+
+              filtMappedGeneSets <- .filterAndMapGeneSets(param=param,
+                                           filteredDataMatrix=filtDataMatrix,
+                                           verbose=verbose)
+
+              sparse <- .get_sparse(param)
+              if (sparse && !is_sparse(filtDataMatrix))
+                  sparse <- FALSE
+
+              if (verbose) {
+                if (sparse)
+                    cli_alert_info("GSVA sparse algorithm")
+                  else
+                    cli_alert_info("GSVA dense (classical) algorithm")
+              }
+
+              maxmem <- .check_maxmem(param, maxmem, verbose)
+              ondisk <- .check_ondisk(param, maxmem, verbose)
+
+              if (is(filtDataMatrix, "DelayedMatrix") && ondisk == "no") {
+                  if (verbose)
+                      cli_alert_info("Loading input expression data into main memory")
+                  if (is_sparse(filtDataMatrix)) {
+                      if (nzcount(param) < .Machine$integer.max)
+                          filtDataMatrix <- as(filtDataMatrix, "dgCMatrix")
+                      else
+                          filtDataMatrix <- as(filtDataMatrix, "SVT_SparseArray")
+                  } else
+                      filtDataMatrix <- as.matrix(filtDataMatrix)
+              }
+
+              if (bpnworkers(BPPARAM) > 1 && nrow(filtDataMatrix) > 100 &&
+                  ncol(filtDataMatrix) > 100) {
+                  if (verbose) {
+                      msg <- sprintf("Calculating GSVA scores with %d cores",
+                                     as.integer(bpnworkers(BPPARAM)))
+                      cli_alert_info(msg)
+                  }
+              } else {
+                  if (verbose)
+                      cli_alert_info("Calculating GSVA scores")
+                  BPPARAM <- NULL
+              }
+
+              ondisk <- FALSE
+              esreqmem <- as.numeric(length(filtMappedGeneSets)) *
+                          as.numeric(ncol(filtDataMatrix)) * 8 ## 8 bytes per double
+              if (esreqmem > maxmem) {
+                cli_alert_warning("The resulting matrix of enrichment scores will not fit")
+                cli_alert_warning("in the given maximum main memory size, the returned")
+                cli_alert_warning("object will use an on-disk data structure")
+                ondisk <- TRUE
+              }
+
+              gsva_es <- .processMatrixCols(filtDataMatrix,
+                                            FUN=.compute_gsva_scores,
+                                            geneSetsIdx=filtMappedGeneSets,
+                                            tau=.get_tau(param),
+                                            maxDiff=.get_maxDiff(param),
+                                            absRanking=.get_absRanking(param),
+                                            sparse=sparse, any_na=anyNA(param),
+                                            na_use=.get_NAuse(param),
+                                            minSize=get_minSize(param),
+                                            ondisk=ondisk, verbose=verbose,
+                                            minparrows=100, minparcols=100,
+                                            BPPARAM=BPPARAM,
+                                            maxmem=ceiling(maxmem/100)) ## use
+                                            ## of memory increases here about
+                                            ## 10-fold over block size memory
+
+              rownames(gsva_es) <- names(filtMappedGeneSets)
+              colnames(gsva_es) <- colnames(filtDataMatrix)
+
+              gs <- .geneSetsIndices2Names(indices=filtMappedGeneSets,
+                                           names=rownames(filtDataMatrix))
+              rval <- wrapData(get_exprData(param), gsva_es, gs)
+
+              if (verbose && gsva_global$show_start_and_end_messages)
+                  cli_alert_success("Calculations finished")
+
+              return(rval)
+          })
+
+#' @title GSVA enrichment data and visualization
+#'
+#' @description Extract and plot enrichment data from GSVA scores.
+#'
+#' @param param A [`gsvaRanksParam-class`] object obtained with the method
+#' [`gsvaRanks`].
+#'
+#' @param column The column for which we want to retrieve the enrichment data.
+#' This parameter is only available in the `gsvaEnrichment()` method.
+#'
+#' @param geneSet Either a positive integer number between 1 and the number of
+#' available gene sets in `param`, or a character string with the name of
+#' one of the gene sets available in `param`.
+#'
+#' @param plot A character string indicating whether an enrichment plot should
+#' be produced using either base R graphics (`plot="base"`) or the ggplot2 package
+#' (`plot="ggplot"`), or not (`plot="no"`). In the latter case, the enrichment
+#' data will be returned. By default `plot="auto"`, which implies that if this
+#' method is called from an interactive session, a plot using base R graphics
+#' will be produced and, otherwise, the enrichment data is returned.
+#'
+#' @param ... Further arguments passed to the `plot()` function when the
+#' previous parameter `plot="base"`.
+#'
+#' @return When `plot="no"`, this method returns the enrichment data. When
+#' `plot="ggplot"`, this method returns a `ggplot` object. When `plot="base"`
+#' no value is returned.
+#'
+#' @aliases gsvaEnrichment,gsvaRanksParam-method
+#' @name gsvaEnrichment
+#' @rdname gsvaEnrichment
+#'
+#' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
+#' variation analysis for microarray and RNA-Seq data.
+#' *BMC Bioinformatics*, 14:7, 2013.
+#' \doi{10.1186/1471-2105-14-7}
+#'
+#' @examples
+#' library(GSVA)
+#'
+#' p <- 10 ## number of genes
+#' n <- 30 ## number of samples
+#' nGrp1 <- 15 ## number of samples in group 1
+#' nGrp2 <- n - nGrp1 ## number of samples in group 2
+#'
+#' ## consider three disjoint gene sets
+#' geneSets <- list(gset1=paste0("g", 1:3),
+#'                  gset2=paste0("g", 4:6),
+#'                  gset3=paste0("g", 7:10))
+#'
+#' ## sample data from a normal distribution with mean 0 and st.dev. 1
+#' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+#'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+#'
+#' ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
+#' y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
+#'
+#' ## build GSVA parameter object
+#' gsvapar <- gsvaParam(y, geneSets)
+#'
+#' ## calculate GSVA ranks
+#' gsvarankspar <- gsvaRanks(gsvapar)
+#' gsvarankspar
+#'
+#' ## by default the enrichment data for the first column and the first
+#' ## gene set are retrieved
+#' gsvaEnrichment(gsvarankspar)
+#'
+#' @importFrom cli cli_alert_info cli_abort cli_alert_danger
+#' @importFrom utils installed.packages
+#' @exportMethod gsvaEnrichment
+setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
+          function(param, column=1, geneSet=1,
+                   plot=c("auto", "base", "ggplot", "no"), ...)
+          {
+              plot <- match.arg(plot)
+
+              geneSets <- get_geneSets(param)
+              if (length(geneSet) > 1) {
+                  msg <- paste("Please provide only the name or position of a",
+                               "single gene set.")
+                  cli_abort(c("x"=msg))
+              }
+              if (is.character(geneSet)) {
+                  if (!geneSet %in% names(geneSets)) {
+                      msg <- paste("Gene set %s is missing from the input",
+                                   "parameter object")
+                      cli_abort(c("x"=sprintf(msg, geneSet)))
+                  }
+              } else if (is.numeric(geneSet)) {
+                  if (geneSet < 1 || geneSet > length(geneSets)) {
+                       msg <- paste("When 'geneSet' is numeric, it should be a",
+                                    "number between 1 and the number of gene",
+                                    "sets (%d).")
+                       cli_abort(c("x"=sprintf(msg, length(geneSets))))
+                  }
+              } else {
+                  msg <- paste("'geneSet' should be either numeric or",
+                               "character.")
+                  cli_abort(c("x"=msg))
+              }
+
+              tau <- .get_tau(param)
+              maxDiff <- .get_maxDiff(param)
+              absRanking <- .get_absRanking(param)
+              sparse <- .get_sparse(param)
+              any_na <- anyNA(param)
+              na_use <- .get_NAuse(param)
+              minsize <- get_minSize(param)
+
+              exprData <- get_exprData(param)
+              filtDataMatrix <- unwrapData(exprData, get_assay(param))
+
+              ## no need for verbosity when mapping a single gene set
+              filtMappedGeneSets <- .filterAndMapGeneSets(param,
+                                           wgset=geneSet,
+                                           filteredDataMatrix=filtDataMatrix,
+                                           verbose=FALSE)
+
+              geneSetIdx <- filtMappedGeneSets[[1]]
+              edata <- .gsva_enrichment_data(R=filtDataMatrix,
+                                             column=column,
+                                             geneSetIdx=geneSetIdx,
+                                             maxDiff=maxDiff,
+                                             absRanking=absRanking,
+                                             tau=tau,
+                                             sparse=sparse,
+                                             any_na=any_na,
+                                             na_use=na_use,
+                                             minSize=minsize)
+
+              if (plot == "no" || (plot == "auto" && !interactive()))
+                  return(edata)
+
+              if (plot == "auto" || plot == "base")
+                  .plot_enrichment_base(edata, ...) 
+              else { ## plot == "ggplot"
+                  instpkgs <- installed.packages(noCache=TRUE)[, "Package"]
+                  if (!"ggplot2" %in% instpkgs)
+                      cli_alert_danger("Please install the ggplot2 package")
+                  else
+                      .plot_enrichment_ggplot(edata)
+              }
+          })
+
+
+
+
 #' @importFrom S4Arrays is_sparse
 #' @importFrom DelayedArray seed
 #' @importFrom cli cli_abort
@@ -208,499 +1278,6 @@ zorder_rankstat <- function(z, p) {
     list(kernel=kernel, Gaussk=Gaussk)
 }
 
-## BEGIN exported methods (to be moved to 'gsvaNewAPI.R')
-
-#' @title GSVA ranks and scores
-#'
-#' @description Calculate GSVA scores in two steps: (1) calculate GSVA
-#' ranks; and (2) calculate GSVA scores using the previously calculated
-#' ranks.
-#'
-#' @param param A [`gsvaParam-class`] object built using the constructor
-#' function [`gsvaParam`].
-#'
-#' @param verbose Gives information about each calculation step. Default: `TRUE`.
-#'
-#' @param BPPARAM An object of class `BiocParallelParam` specifying parameters
-#' related to the parallel execution of some of the tasks and calculations
-#' within this function.
-#'
-#' @param maxmem A vector of length 1 either specifying a number in bytes, or
-#' a character string with either the word `auto` (default), or a number
-#' followed by a suffix indicating kilobytes (K), megabytes (M), gigabytes (G)
-#' or terabytes (T), which GSVA will use to attempt bounding the maximum amount
-#' of main memory used across all threads of execution to that given quantity.
-#' By default `maxmem="auto"`, indicating that the maximum memory will be the
-#' 90% of the total main memory, as calculated by [`Sys.meminfo()`][memuse::Sys.meminfo].
-#' To avoid setting any bound on the maximum memory, please use `maxmem=Inf`.
-#' Note that the amount of main memory used in an R session or script may depend
-#' on other commands and packages used in that same session or script.
-#'
-#' @return In the case of the `gsvaRanks()` method, an object of class
-#' [`gsvaRanksParam-class`].
-#'
-#' @seealso [`gsvaParam-class`], [`gsvaRanksParam-class`], [`gsva`],
-#' [`BiocParallelParam`][BiocParallel::BiocParallelParam-class],
-#' [`dgCMatrix`][Matrix::dgCMatrix-class],
-#' \code{\link[Biobase]{ExpressionSet}},
-### we are using the plain Rd above because
-###  #' [`ExpressionSet`][Biobase::ExpressionSet-class],
-### results in the following R CMD check NOTE:
-### Non-topic package-anchored link(s) in Rd file 'gsvaRanks.Rd':
-###  ‘[Biobase:class.ExpressionSet]{ExpressionSet}’
-#' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class]
-#'
-#' @aliases gsvaRanks,gsvaParam-method
-#' @name gsvaRanks
-#' @rdname gsvaRanks
-#'
-#' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
-#' variation analysis for microarray and RNA-Seq data.
-#' *BMC Bioinformatics*, 14:7, 2013.
-#' \doi{10.1186/1471-2105-14-7}
-#'
-#' @examples
-#' library(GSVA)
-#'
-#' p <- 10 ## number of genes
-#' n <- 30 ## number of samples
-#' nGrp1 <- 15 ## number of samples in group 1
-#' nGrp2 <- n - nGrp1 ## number of samples in group 2
-#'
-#' ## consider three disjoint gene sets
-#' geneSets <- list(gset1=paste0("g", 1:3),
-#'                  gset2=paste0("g", 4:6),
-#'                  gset3=paste0("g", 7:10))
-#'
-#' ## sample data from a normal distribution with mean 0 and st.dev. 1
-#' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
-#'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
-#'
-#' ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
-#' y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
-#'
-#' ## build GSVA parameter object
-#' gsvapar <- gsvaParam(y, geneSets)
-#'
-#' ## calculate GSVA ranks
-#' gsvarankspar <- gsvaRanks(gsvapar)
-#' gsvarankspar
-#' ## calculate GSVA scores
-#' gsva_es <- gsvaScores(gsvarankspar)
-#' gsva_es
-#'
-#' ## calculate now GSVA scores in a single step
-#' gsva_es1 <- gsva(gsvapar)
-#'
-#' ## both approaches give the same result with the same input gene sets
-#' all.equal(gsva_es1, gsva_es)
-#'
-#' ## however, results will be (obviously) different with different gene sets
-#' geneSets2 <- list(gset1=paste0("g", 3:6),
-#'                   gset2=paste0("g", c(1, 2, 7, 8)))
-#'
-#' ## note that there is no need to calculate the GSVA ranks again
-#' geneSets(gsvarankspar) <- geneSets2
-#' gsvaScores(gsvarankspar)
-#'
-#' @importFrom cli cli_alert_info cli_alert_success
-#' @importFrom BiocParallel bpnworkers
-#' @exportMethod gsvaRanks
-setMethod("gsvaRanks", signature(param="gsvaParam"),
-          function(param,
-                   verbose=TRUE,
-                   BPPARAM=SerialParam(progressbar=verbose),
-                   maxmem="auto") {
-              if (verbose && gsva_global$show_start_and_end_messages) {
-                  cli_alert_info(sprintf("GSVA version %s",
-                                         packageDescription("GSVA")[["Version"]]))
-              }
-
-              exprData <- get_exprData(param)
-              dataMatrix <- unwrapData(exprData, get_assay(param))
-              maxmem <- .check_maxmem(param, maxmem, verbose)
-              ondisk <- .check_ondisk(param, maxmem, verbose)
-
-              if (is(dataMatrix, "DelayedMatrix") && ondisk == "no") {
-                  if (verbose)
-                      cli_alert_info("Loading input expression data into main memory")
-                  if (is_sparse(dataMatrix)) {
-                      dataMatrix <- as(dataMatrix, "SVT_SparseArray")
-                  } else
-                      dataMatrix <- as.matrix(dataMatrix)
-              }
-
-              filtDataMatrix <- dataMatrix
-              if (get_filterRows(param))
-                  filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
-                                                 removeConstant=TRUE,
-                                                 removeNzConstant=TRUE,
-                                                 verbose, BPPARAM=BPPARAM,
-                                                 maxmem=maxmem)
-              else if (verbose)
-                  cli_alert_warning("Skipping filtering of constant rows (filterRows=FALSE)")
-              
-              if (verbose)
-                  cli_alert_info(sprintf("Calculating GSVA ranks"))
-
-              kcdfminssize <-get_kcdfNoneMinSampleSize(param)
-              gsvarnks <- .compute_gsva_ranks(expr=filtDataMatrix,
-                                              kcdf=get_kcdf(param),
-                                              kcdf.min.ssize=kcdfminssize,
-                                              sparse=get_sparse(param),
-                                              any_na=anyNA(param),
-                                              na_use=get_NAuse(param),
-                                              verbose=verbose,
-                                              BPPARAM=BPPARAM,
-                                              maxmem=maxmem)
-
-              rownames(gsvarnks) <- rownames(filtDataMatrix)
-              colnames(gsvarnks) <- colnames(filtDataMatrix)
-
-              rnkcontainer <- wrapData(get_exprData(param), gsvarnks)
-              rval <- new("gsvaRanksParam",
-                          exprData=rnkcontainer, geneSets=get_geneSets(param),
-                          assay="gsvaranks", annotation=get_annotation(param),
-                          minSize=get_minSize(param), maxSize=get_maxSize(param),
-                          kcdf=get_kcdf(param),
-                          kcdfNoneMinSampleSize=get_kcdfNoneMinSampleSize(param),
-                          tau=get_tau(param), maxDiff=get_maxDiff(param),
-                          absRanking=get_absRanking(param),
-                          sparse=get_sparse(param), checkNA=get_checkNA(param),
-                          didCheckNA=get_didCheckNA(param), anyNA=anyNA(param),
-                          use=get_NAuse(param), filterRows=get_filterRows(param),
-                          nzcount=nzcount(param), ondisk=get_ondisk(param))
-
-              if (verbose && gsva_global$show_start_and_end_messages)
-                  cli_alert_success("Calculations finished")
-
-              return(rval)
-          })
-
-.check_geneSets_minSize_maxSize_tau <- function(geneSets, minSize, maxSize, tau) {
-  if (all(!is.na(geneSets))) {
-      if (!is.list(geneSets) && !is(geneSets, "GeneSetCollection"))
-          cli_abort(c("x"="'geneSets' must be either a list or a 'GeneSetCollection' object"))
-
-      if (length(geneSets) == 0)
-          cli_abort(c("x"="'geneSets' has length 0"))
-  }
-
-  if (length(minSize) != 1)
-      cli_abort(c("x"="'minSize' must be of length 1"))
-  if (length(maxSize) != 1)
-      cli_abort(c("x"="'maxSize' must be of length 1"))
-
-  if ((is.na(minSize) && !is.na(maxSize)) || ## here assuming length 'minSize' and 'maxSize'
-      (!is.na(minSize) && is.na(maxSize)))   ## is 1, otherwise 'is.na()' would return > 1 value
-      cli_abort(c("x"="'minSize' and 'maxSize' should be either both NA or both non-NA"))
-
-  if (!is.na(minSize) && !is.na(maxSize)) {
-      if (!is.integer(minSize) && !is.numeric(minSize))
-          cli_abort(c("x"="'minSize' must be a positive integer value"))
-      if (!is.integer(maxSize) && !is.numeric(maxSize))
-          cli_abort(c("x"="'maxSize' must be a positive integer value"))
-      if (minSize < 1)
-          cli_abort(c("x"="'minSize' must be a positive integer value"))
-      if (maxSize < 1)
-          cli_abort(c("x"="'maxSize' must be a positive integer value"))
-      if (maxSize < minSize)
-          cli_abort(c("x"="'maxSize' must be at least 'minSize' or greater"))
-  }
-
-  if (length(tau) != 1)
-      cli_abort(c("x"="'tau' must be of length 1"))
-  if (!is.na(tau)) {
-    if (!is.integer(tau) && !is.numeric(tau))
-          cli_abort(c("x"="'tau' must be a numeric value"))
-  }
-}
-
-.check_maxDiff_absRanking <- function(maxDiff, absRanking) {
-  if (length(maxDiff) != 1)
-      cli_abort(c("x"="'maxDiff' must be of length 1"))
-
-  if (!is.na(maxDiff)) {
-    if (!is.logical(maxDiff))
-          cli_abort(c("x"="'maxDiff' must be a logical value"))
-  }
-
-  if (length(absRanking) != 1)
-      cli_abort(c("x"="'absRanking' must be of length 1"))
-
-  if (!is.na(absRanking)) {
-    if (!is.logical(absRanking))
-          cli_abort(c("x"="'absRanking' must be a logical value"))
-  }
-}
-
-
-#' @param param A parameter object of the [`gsvaRanksParam-class`] class.
-#'
-#' @return In the case of the `gsvaScores()` method, a gene-set by sample matrix
-#' of GSVA enrichment scores stored in a container object of the same type as
-#' the input ranks data container. If
-#' the input was a base matrix or a `dgCMatrix` object, then the output will
-#' be a base matrix object with the gene sets employed in the calculations
-#' stored in an attribute called `geneSets`. If the input was an
-#' `ExpressionSet` object, then the output will be also an `ExpressionSet`
-#' object with the gene sets employed in the calculations stored in an
-#' attributed called `geneSets`. If the input was an object of one of the
-#' classes described in [`GsvaExprData`], such as a `SingleCellExperiment`,
-#' then the output will be of the same class, where enrichment scores will be
-#' stored in an assay called `es` and the gene sets employed in the
-#' calculations will be stored in the `rowData` slot of the object under the
-#' column name `gs`.
-#'
-#' @aliases gsvaScores,gsvaRanksParam-method
-#' @name gsvaScores
-#' @rdname gsvaRanks
-#'
-#' @importFrom cli cli_alert_info cli_abort cli_alert_success
-#' @importFrom BiocParallel bpnworkers
-#' @exportMethod gsvaScores
-setMethod("gsvaScores", signature(param="gsvaRanksParam"),
-          function(param, verbose=TRUE,
-                   BPPARAM=SerialParam(progressbar=verbose),
-                   maxmem="auto") {
-              if (verbose && gsva_global$show_start_and_end_messages) {
-                  cli_alert_info(sprintf("GSVA version %s",
-                                         packageDescription("GSVA")[["Version"]]))
-              }
-
-              ## assuming rows in the rank data have been already filtered
-              exprData <- get_exprData(param)
-              filtDataMatrix <- unwrapData(exprData, get_assay(param))
-
-              filtMappedGeneSets <- .filterAndMapGeneSets(param=param,
-                                           filteredDataMatrix=filtDataMatrix,
-                                           verbose=verbose)
-
-              sparse <- get_sparse(param)
-              if (sparse && !is_sparse(filtDataMatrix))
-                  sparse <- FALSE
-
-              if (verbose) {
-                if (sparse)
-                    cli_alert_info("GSVA sparse algorithm")
-                  else
-                    cli_alert_info("GSVA dense (classical) algorithm")
-              }
-
-              maxmem <- .check_maxmem(param, maxmem, verbose)
-              ondisk <- .check_ondisk(param, maxmem, verbose)
-
-              if (is(filtDataMatrix, "DelayedMatrix") && ondisk == "no") {
-                  if (verbose)
-                      cli_alert_info("Loading input expression data into main memory")
-                  if (is_sparse(filtDataMatrix)) {
-                      if (nzcount(param) < .Machine$integer.max)
-                          filtDataMatrix <- as(filtDataMatrix, "dgCMatrix")
-                      else
-                          filtDataMatrix <- as(filtDataMatrix, "SVT_SparseArray")
-                  } else
-                      filtDataMatrix <- as.matrix(filtDataMatrix)
-              }
-
-              if (bpnworkers(BPPARAM) > 1 && nrow(filtDataMatrix) > 100 &&
-                  ncol(filtDataMatrix) > 100) {
-                  if (verbose) {
-                      msg <- sprintf("Calculating GSVA scores with %d cores",
-                                     as.integer(bpnworkers(BPPARAM)))
-                      cli_alert_info(msg)
-                  }
-              } else {
-                  if (verbose)
-                      cli_alert_info("Calculating GSVA scores")
-                  BPPARAM <- NULL
-              }
-
-              ondisk <- FALSE
-              esreqmem <- as.numeric(length(filtMappedGeneSets)) *
-                          as.numeric(ncol(filtDataMatrix)) * 8 ## 8 bytes per double
-              if (esreqmem > maxmem) {
-                cli_alert_warning("The resulting matrix of enrichment scores will not fit")
-                cli_alert_warning("in the given maximum main memory size, the returned")
-                cli_alert_warning("object will use an on-disk data structure")
-                ondisk <- TRUE
-              }
-
-              gsva_es <- .processMatrixCols(filtDataMatrix,
-                                            FUN=.compute_gsva_scores,
-                                            geneSetsIdx=filtMappedGeneSets,
-                                            tau=get_tau(param),
-                                            maxDiff=get_maxDiff(param),
-                                            absRanking=get_absRanking(param),
-                                            sparse=sparse, any_na=anyNA(param),
-                                            na_use=get_NAuse(param),
-                                            minSize=get_minSize(param),
-                                            ondisk=ondisk, verbose=verbose,
-                                            minparrows=100, minparcols=100,
-                                            BPPARAM=BPPARAM,
-                                            maxmem=ceiling(maxmem/100)) ## use
-                                            ## of memory increases here about
-                                            ## 10-fold over block size memory
-
-              rownames(gsva_es) <- names(filtMappedGeneSets)
-              colnames(gsva_es) <- colnames(filtDataMatrix)
-
-              gs <- .geneSetsIndices2Names(indices=filtMappedGeneSets,
-                                           names=rownames(filtDataMatrix))
-              rval <- wrapData(get_exprData(param), gsva_es, gs)
-
-              if (verbose && gsva_global$show_start_and_end_messages)
-                  cli_alert_success("Calculations finished")
-
-              return(rval)
-          })
-
-#' @title GSVA enrichment data and visualization
-#'
-#' @description Extract and plot enrichment data from GSVA scores.
-#'
-#' @param param A [`gsvaRanksParam-class`] object obtained with the method
-#' [`gsvaRanks`].
-#'
-#' @param column The column for which we want to retrieve the enrichment data.
-#' This parameter is only available in the `gsvaEnrichment()` method.
-#'
-#' @param geneSet Either a positive integer number between 1 and the number of
-#' available gene sets in `param`, or a character string with the name of
-#' one of the gene sets available in `param`.
-#'
-#' @param plot A character string indicating whether an enrichment plot should
-#' be produced using either base R graphics (`plot="base"`) or the ggplot2 package
-#' (`plot="ggplot"`), or not (`plot="no"`). In the latter case, the enrichment
-#' data will be returned. By default `plot="auto"`, which implies that if this
-#' method is called from an interactive session, a plot using base R graphics
-#' will be produced and, otherwise, the enrichment data is returned.
-#'
-#' @param ... Further arguments passed to the `plot()` function when the
-#' previous parameter `plot="base"`.
-#'
-#' @return When `plot="no"`, this method returns the enrichment data. When
-#' `plot="ggplot"`, this method returns a `ggplot` object. When `plot="base"`
-#' no value is returned.
-#'
-#' @aliases gsvaEnrichment,gsvaRanksParam-method
-#' @name gsvaEnrichment
-#' @rdname gsvaEnrichment
-#'
-#' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
-#' variation analysis for microarray and RNA-Seq data.
-#' *BMC Bioinformatics*, 14:7, 2013.
-#' \doi{10.1186/1471-2105-14-7}
-#'
-#' @examples
-#' library(GSVA)
-#'
-#' p <- 10 ## number of genes
-#' n <- 30 ## number of samples
-#' nGrp1 <- 15 ## number of samples in group 1
-#' nGrp2 <- n - nGrp1 ## number of samples in group 2
-#'
-#' ## consider three disjoint gene sets
-#' geneSets <- list(gset1=paste0("g", 1:3),
-#'                  gset2=paste0("g", 4:6),
-#'                  gset3=paste0("g", 7:10))
-#'
-#' ## sample data from a normal distribution with mean 0 and st.dev. 1
-#' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
-#'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
-#'
-#' ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
-#' y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
-#'
-#' ## build GSVA parameter object
-#' gsvapar <- gsvaParam(y, geneSets)
-#'
-#' ## calculate GSVA ranks
-#' gsvarankspar <- gsvaRanks(gsvapar)
-#' gsvarankspar
-#'
-#' ## by default the enrichment data for the first column and the first
-#' ## gene set are retrieved
-#' gsvaEnrichment(gsvarankspar)
-#'
-#' @importFrom cli cli_alert_info cli_abort cli_alert_danger
-#' @importFrom utils installed.packages
-#' @exportMethod gsvaEnrichment
-setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
-          function(param, column=1, geneSet=1,
-                   plot=c("auto", "base", "ggplot", "no"), ...)
-          {
-              plot <- match.arg(plot)
-
-              geneSets <- get_geneSets(param)
-              if (length(geneSet) > 1) {
-                  msg <- paste("Please provide only the name or position of a",
-                               "single gene set.")
-                  cli_abort(c("x"=msg))
-              }
-              if (is.character(geneSet)) {
-                  if (!geneSet %in% names(geneSets)) {
-                      msg <- paste("Gene set %s is missing from the input",
-                                   "parameter object")
-                      cli_abort(c("x"=sprintf(msg, geneSet)))
-                  }
-              } else if (is.numeric(geneSet)) {
-                  if (geneSet < 1 || geneSet > length(geneSets)) {
-                       msg <- paste("When 'geneSet' is numeric, it should be a",
-                                    "number between 1 and the number of gene",
-                                    "sets (%d).")
-                       cli_abort(c("x"=sprintf(msg, length(geneSets))))
-                  }
-              } else {
-                  msg <- paste("'geneSet' should be either numeric or",
-                               "character.")
-                  cli_abort(c("x"=msg))
-              }
-
-              tau <- get_tau(param)
-              maxDiff <- get_maxDiff(param)
-              absRanking <- get_absRanking(param)
-              sparse <- get_sparse(param)
-              any_na <- anyNA(param)
-              na_use <- get_NAuse(param)
-              minsize <- get_minSize(param)
-
-              exprData <- get_exprData(param)
-              filtDataMatrix <- unwrapData(exprData, get_assay(param))
-
-              ## no need for verbosity when mapping a single gene set
-              filtMappedGeneSets <- .filterAndMapGeneSets(param,
-                                           wgset=geneSet,
-                                           filteredDataMatrix=filtDataMatrix,
-                                           verbose=FALSE)
-
-              geneSetIdx <- filtMappedGeneSets[[1]]
-              edata <- .gsva_enrichment_data(R=filtDataMatrix,
-                                             column=column,
-                                             geneSetIdx=geneSetIdx,
-                                             maxDiff=maxDiff,
-                                             absRanking=absRanking,
-                                             tau=tau,
-                                             sparse=sparse,
-                                             any_na=any_na,
-                                             na_use=na_use,
-                                             minSize=minsize)
-
-              if (plot == "no" || (plot == "auto" && !interactive()))
-                  return(edata)
-
-              if (plot == "auto" || plot == "base")
-                  .plot_enrichment_base(edata, ...) 
-              else { ## plot == "ggplot"
-                  instpkgs <- installed.packages(noCache=TRUE)[, "Package"]
-                  if (!"ggplot2" %in% instpkgs)
-                      cli_alert_danger("Please install the ggplot2 package")
-                  else
-                      .plot_enrichment_ggplot(edata)
-              }
-          })
-
-
-## END exported methods (to be moved to 'gsvaNewAPI.R')
 
 #' @importFrom cli cli_progress_update
 #' @importFrom parallel splitIndices
