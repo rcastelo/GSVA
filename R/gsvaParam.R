@@ -173,6 +173,7 @@
 #'
 #' @importFrom methods new
 #' @importFrom cli cli_alert_warning
+#' @importFrom utils capture.output
 #' @rdname gsvaParam-class
 #' 
 #' @export

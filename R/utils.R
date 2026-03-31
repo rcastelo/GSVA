@@ -52,6 +52,7 @@
 ## 2025-03-12  axel: as an afterthought, if we have a multi-assay container with
 ##   assay names AND no assay is selected AND one of the assay names happens to
 ##   be 'logcounts' --> use this one by default rather than the first in list.
+#' @importFrom utils head
 .check_assayNames <- function(a, xd, verbose) {
     an <- gsvaAssayNames(xd)
 
@@ -283,6 +284,7 @@
 ## features in both input objects follow the same nomenclature,
 
 #' @importFrom cli cli_abort
+#' @importFrom IRanges CharacterList match
 .mapGeneSetsToFeatures <- function(gsets, features) {
 
     ## Aaron Lun's suggestion at
@@ -888,11 +890,13 @@
     return(opc)
 }
 
+#' @importFrom Biobase selectSome
 .showSome <- function(x) {
-    paste0(paste(Biobase::selectSome(x, 4), collapse=", "),
+    paste0(paste(selectSome(x, 4), collapse=", "),
            " (", length(x), " total)")
 }
 
+#' @importFrom utils capture.output
 .catObj <- function(x, prefix = "  ") {
     if(is.null(x)) {
         cat(paste0(prefix, "none."))
@@ -926,6 +930,7 @@
     return(.isCharLength1(ap))
 }
 
+#' @importFrom utils installed.packages
 .isAnnoPkgInstalled <- function(ap) {
     ap <- c(ap, paste0(ap, ".db"))
     return(any(ap %in% rownames(installed.packages())))

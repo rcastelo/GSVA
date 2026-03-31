@@ -114,6 +114,7 @@
 #' sp1
 #'
 #' @importFrom methods new
+#' @importFrom utils capture.output
 #' @rdname ssgseaParam-class
 #' 
 #' @export

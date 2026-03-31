@@ -70,6 +70,7 @@
 #' pp1
 #'
 #' @importFrom methods new
+#' @importFrom utils capture.output
 #' @rdname plageParam-class
 #' 
 #' @export

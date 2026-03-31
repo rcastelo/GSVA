@@ -84,6 +84,7 @@ setMethod("gsvaShow",
                   "  cols: ", .showSome(colnames(object)), "\n", sep="")
           })
 
+#' @importFrom Matrix nnzero
 setMethod("gsvaShow",
           signature=signature(object="dgCMatrix"),
           function(object) {

@@ -71,6 +71,7 @@
 #' zp1
 #'
 #' @importFrom methods new
+#' @importFrom utils capture.output
 #' @rdname zscoreParam-class
 #' 
 #' @export

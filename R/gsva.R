@@ -623,7 +623,8 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
 #' gsvaEnrichment(gsvarankspar)
 #'
 #' @importFrom cli cli_alert_info cli_abort cli_alert_danger
-#' @exportMethod gsvaScores
+#' @importFrom utils installed.packages
+#' @exportMethod gsvaEnrichment
 setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
           function(param, column=1, geneSet=1,
                    plot=c("auto", "base", "ggplot", "no"), ...)
@@ -1210,7 +1211,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
     return(res)
 }
 
-#' @importFrom graphics abline grid lines segments
+#' @importFrom graphics plot abline grid lines segments
 .plot_enrichment_base <- function(edata, ...) {
     ylim <- range(edata$stats$stat)
     hgsetticks <- (ylim[2] - ylim[1]) * 0.1
