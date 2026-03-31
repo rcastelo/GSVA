@@ -19,40 +19,6 @@ extern SEXP Matrix_DimNamesSym,
             SVT_SparseArray_svtSym,
             GSVA_attrNAsSym;
 
-/* to add attributes to R objects from C code */
-static SEXP
-installAttrib(SEXP, SEXP, SEXP);
-
-static SEXP
-installAttrib(SEXP vec, SEXP name, SEXP val)
-{
-  SEXP s, t;
-
-  if (TYPEOF(vec) == CHARSXP)
-    error("cannot set attribute on a CHARSXP");
-  PROTECT(vec);
-  PROTECT(name);
-  PROTECT(val);
-  for (s = ATTRIB(vec); s != R_NilValue; s = CDR(s)) {
-    if (TAG(s) == name) {
-      SETCAR(s, val);
-      UNPROTECT(3);
-      return val;
-    }
-  }
-  s = Rf_allocList(1);
-  SETCAR(s, val);
-  SET_TAG(s, name);
-  if (ATTRIB(vec) == R_NilValue)
-    SET_ATTRIB(vec, s);
-  else {
-    t = nthcdr(ATTRIB(vec), length(ATTRIB(vec)) - 1);
-    SETCDR(t, s);
-  }
-  UNPROTECT(3);
-  return val;
-}
-
 void
 gsva_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, int n,
               double tau, double* walkstat, double* walkstatpos,
@@ -191,116 +157,6 @@ gsva_rnd_walk_nas(int* gsetidx, int k, int* decordstat, double* symrnkstat, int 
 
   R_Free(gsetrnk);
   R_Free(gsetidx_wonas);
-}
-
-SEXP
-old_gsva_score_genesets_R(SEXP genesetsidxR, SEXP decordstatR, SEXP symrnkstatR,
-                          SEXP maxdiffR, SEXP absrnkR, SEXP tauR, SEXP anynaR,
-                          SEXP nauseR, SEXP minsizeR, SEXP verboseR) {
-  SEXP     dimInput;
-  int      m = length(genesetsidxR);
-  int      p, n;
-  Rboolean maxdiff=asLogical(maxdiffR);
-  Rboolean absrnk=asLogical(absrnkR);
-  double   tau=REAL(tauR)[0];
-  Rboolean anyna=asLogical(anynaR);
-  int      nause=INTEGER(nauseR)[0]; /* everything=1, all.obs=2, na.rm=3 */
-  int      minsize=INTEGER(minsizeR)[0];
-  int*     decordstat;
-  double*  symrnkstat;
-  SEXP     esR;
-  double*  es;
-  int      wna=0;
-  Rboolean abort=FALSE;
-  Rboolean verbose=asLogical(verboseR);
-  SEXP     pb=R_NilValue;
-  int      nunprotect=0;
-
-  dimInput = getAttrib(decordstatR, R_DimSymbol);
-  p = INTEGER(dimInput)[0]; /* number of genes/features */
-  n = INTEGER(dimInput)[1]; /* number of samples/cells */
-
-  decordstat = INTEGER(decordstatR);
-  symrnkstat = REAL(symrnkstatR);
-
-  PROTECT(esR = allocMatrix(REALSXP, m, n)); nunprotect++;
-  es = REAL(esR);
-
-  if (verbose) {
-    pb = PROTECT(cli_progress_bar(p, NULL)); nunprotect++;
-    cli_progress_set_name(pb, "Calculating GSVA scores");
-  }
-
-  for (int i=0; i < n; i++) {
-    int*     decordstat_col = decordstat + i * p;
-    double*  symrnkstat_col = symrnkstat + i * p;
-
-    if (verbose) { /* show progress */
-      if (i % 100 == 0 && CLI_SHOULD_TICK)
-        cli_progress_set(pb, i);
-    }
-
-    for (int j=0; j < m; j++) {
-      SEXP    gsetidxR=VECTOR_ELT(genesetsidxR, j);
-      int*    gsetidx;
-      int     k = length(gsetidxR);
-#ifdef LONG_VECTOR_SUPPORT
-      R_xlen_t idx = m * i + j;
-#else
-      int idx = m * i + j;
-#endif
-      double  walkstatpos, walkstatneg;
-
-      walkstatpos = walkstatneg = NA_REAL;
-      gsetidx = INTEGER(gsetidxR);
-      if (anyna)
-        gsva_rnd_walk_nas(gsetidx, k, decordstat_col, symrnkstat_col, p, tau,
-                          nause, minsize, NULL, &walkstatpos, &walkstatneg,
-                          &wna);
-      else
-        gsva_rnd_walk(gsetidx, k, decordstat_col, symrnkstat_col, p, tau,
-                      NULL, &walkstatpos, &walkstatneg);
-
-      es[idx] = NA_REAL;
-      if (!anyna || (!ISNA(walkstatpos) && !ISNA(walkstatneg))) {
-	      if (maxdiff) {
-		      es[idx] = walkstatpos + walkstatneg;
-          if (absrnk)
-            es[idx] = walkstatpos - walkstatneg;
-	      } else {
-		        es[idx] = (walkstatpos > fabs(walkstatneg)) ? walkstatpos : walkstatneg;
-	      }
-      } else {
-        if (anyna && (ISNA(walkstatpos) || ISNA(walkstatneg)) && nause == 2) { /* all.obs */
-          abort=TRUE;
-          break;
-        }
-      }
-    }
-  }
-
-  if (anyna) {
-    SEXP attr;
-
-    if (nause == 2 && abort) {
-      PROTECT(attr = allocVector(STRSXP, 1));
-      SET_STRING_ELT(attr, 0, mkChar("abort"));
-      installAttrib(esR, GSVA_attrNAsSym, attr);
-      UNPROTECT(1); /* attr */
-    } else if (nause == 3 && wna == 1) {
-      PROTECT(attr = allocVector(STRSXP, 1));
-      SET_STRING_ELT(attr, 0, mkChar("wna"));
-      installAttrib(esR, GSVA_attrNAsSym, attr);
-      UNPROTECT(1); /* attr */
-    }
-  }
-
-  if (verbose)
-    cli_progress_done(pb);
-
-  UNPROTECT(nunprotect); /* esR pb */
-
-  return(esR);
 }
 
 /* fetch column from a dense matrix XR
@@ -511,12 +367,12 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP sparseR,
     if (nause == 2 && abort) {
       PROTECT(attr = allocVector(STRSXP, 1));
       SET_STRING_ELT(attr, 0, mkChar("abort"));
-      installAttrib(esR, GSVA_attrNAsSym, attr);
+      Rf_setAttrib(esR, GSVA_attrNAsSym, attr);
       UNPROTECT(1); /* attr */
     } else if (nause == 3 && wna == 1) {
       PROTECT(attr = allocVector(STRSXP, 1));
       SET_STRING_ELT(attr, 0, mkChar("wna"));
-      installAttrib(esR, GSVA_attrNAsSym, attr);
+      Rf_setAttrib(esR, GSVA_attrNAsSym, attr);
       UNPROTECT(1); /* attr */
     }
   }
