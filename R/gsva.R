@@ -1169,6 +1169,8 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
 ## here 'ties.method="last"' allows one to obtain the result
 ## from 'order()' based on ranks
 ## pending how to propagate verbosity if necessary
+
+#' @importFrom MatrixGenerics colRanks
 compute.col.ranks <- function(Z, ties.method="last", verbose=TRUE) {
     R <- NULL
 
@@ -2083,52 +2085,6 @@ zorder_rankstat <- function(z, p) {
   stopifnot(is.integer(decOrdStat)) ## QC
   stopifnot(is.numeric(symRnkStat)) ## QC
   .Call("gsva_rnd_walk_R", gsetIdx, decOrdStat, symRnkStat)
-}
-
-#' @importFrom cli cli_abort
-.old_gsva_score_genesets <- function(colIdx, geneSetsIdx, decOrdStat, symRnkStat,
-                                     maxDiff, absRanking, tau, any_na, na_use,
-                                     minSize, wna_env, verbose) {
-  minSize <- as.integer(minSize)
-  stopifnot(is.null(colIdx) || is.integer(colIdx)) ## QC
-  stopifnot(is.list(geneSetsIdx)) ## QC
-  stopifnot(length(geneSetsIdx) > 0) ## QC
-  stopifnot(is.integer(geneSetsIdx[[1]])) ## QC
-  stopifnot(is.integer(decOrdStat)) ## QC
-  stopifnot(is.numeric(symRnkStat)) ## QC
-  stopifnot(all(dim(decOrdStat) == dim(symRnkStat))) ## QC
-  stopifnot(is.logical(maxDiff)) ## QC
-  stopifnot(is.logical(absRanking)) ## QC
-  stopifnot(is.numeric(tau)) ## QC but it still might be an integer!!
-  stopifnot(is.logical(any_na)) ## QC
-  stopifnot(is.character(na_use)) ## QC
-  stopifnot(is.integer(minSize)) ## QC
-  stopifnot(is.logical(verbose)) ## QC
-  na_use <- as.integer(factor(na_use, levels=c("everything", "all.obs",
-                                               "na.rm")))
-  if (is.null(colIdx)) {
-    if (is.null(dim(decOrdStat)))
-      decOrdStat <- matrix(decOrdStat, ncol=1)
-    if (is.null(dim(symRnkStat)))
-      symRnkStat <- matrix(symRnkStat, ncol=1)
-  } else {
-    decOrdStat <- decOrdStat[, colIdx, drop=FALSE]
-    symRnkStat <- symRnkStat[, colIdx, drop=FALSE]
-  }
-  sco <- .Call("old_gsva_score_genesets_R", geneSetsIdx, decOrdStat, symRnkStat,
-               maxDiff, absRanking, as.double(tau), any_na, na_use, minSize,
-               verbose)
-  if (any_na) {
-    if (na_use == 2 && !is.null(attr(sco, "attrNAs")))
-        cli_abort(c("x"="Input GSVA ranks have NA values."))
-
-    if (na_use == 3 && !is.null(attr(sco, "attrNAs")))
-        assign("w", TRUE, envir=wna_env)
-
-    attr(sco, "attrNAs") <- NULL ## clean up the NA informing attribute
-  }
-
-  sco
 }
 
 #' @importFrom cli cli_abort

@@ -401,7 +401,7 @@ setMethod("show",
 
 #' @importFrom IRanges IntegerList match
 #' @importFrom BiocParallel bpnworkers
-#' @importFrom sparseMatrixStats colRanks
+#' @importFrom MatrixGenerics colRanks
 #' @importFrom cli cli_alert_info cli_alert_warning cli_abort
 #' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
 ssgsea <- function(X, geneSets, alpha=0.25,
