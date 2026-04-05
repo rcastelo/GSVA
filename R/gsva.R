@@ -1608,20 +1608,26 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
 ## calculate ranks using on an SVT_SparseArray object
 .colRanks_SVT_SparseArray <- function(X, ties.method="last") {
     R <- X
-    rnks <- lapply(lapply(X@SVT, "[[", 1), rank, ties.method=ties.method)
-    R@type <- "integer" ## rank() w/ ties.method="last" returns integer
-    R@SVT <- mapply(list, rnks, lapply(X@SVT, "[[", 2), SIMPLIFY=FALSE)
+    whposlen <- which(lengths(X@SVT) > 0L)
+    rnks <- lapply(lapply(X@SVT[whposlen], "[[", 1), rank,
+                   ties.method=ties.method)
+    R@SVT[whposlen] <- mapply(list, rnks, lapply(X@SVT[whposlen], "[[", 2),
+                              SIMPLIFY=FALSE)
+    if (ties.method == "last")
+        R@type <- "integer" ## rank() w/ ties.method="last" returns integer
     R
 }
 
 ## calculate ranks using an HDF5 backend
 
+#' @importFrom BiocGenerics "type<-"
 #' @importFrom MatrixGenerics colRanks
 #' @importFrom BiocParallel SerialParam
 .colRanksHDF5 <- function(X, grid=NULL, ties.method="last") {
     stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
 
-    sink <- HDF5RealizationSink(dim(X), as.sparse=is_sparse(X))
+    sink <- HDF5RealizationSink(dim(X), H5type="H5T_STD_I32LE", ## integer ranks
+                                as.sparse=is_sparse(X))
     if (is.null(grid))
         grid <- DummyArrayGrid(dim(X))
 
@@ -1633,7 +1639,7 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
             block <- colRanks(block, ties.method=ties.method,
                               preserveShape=TRUE)
             if (ties.method == "last")
-                mode(block) <- "integer"
+                type(block) <- "integer"
         }
         write_block(sink, grid, block)
     }

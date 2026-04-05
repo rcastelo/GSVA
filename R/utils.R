@@ -470,7 +470,8 @@
 }
 
 ## adapted from .define_multiworker_grid() in beachmat/R/colBlockApply.R
-#' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength type
+#' @importFrom BiocGenerics type
+#' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .rowgridsize <- function(X, nworkers=1, maxmem=Inf) {
   typesze <- c("integer"=4, "double"=8) ## 4 bytes for integers, 8 bytes for doubles
   grid <- DummyArrayGrid(dim(X))
@@ -494,7 +495,8 @@
 }
 
 ## adapted from .define_multiworker_grid() in beachmat/R/colBlockApply.R
-#' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength type
+#' @importFrom BiocGenerics type
+#' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .colgridsize <- function(X, nworkers=1, maxmem=Inf) {
   typesze <- c("integer"=4, "double"=8) ## 4 bytes for integers, 8 bytes for doubles
   grid <- DummyArrayGrid(dim(X))
@@ -568,7 +570,7 @@
         rng <- rowsrng
         if (!is(X, "DelayedMatrix"))
             rng <- start(rowsrng):end(rowsrng)
-        res <- WRAPPED_FUN(X[rng, ], ..., verbose=FALSE)
+        res <- WRAPPED_FUN(X[rng, , drop=FALSE], ..., verbose=FALSE)
         if (verbose && is(idpbe, "environment"))
             cli_progress_update(id=get("idpb", envir=idpbe), width(rowsrng))
         return(res)
@@ -649,7 +651,7 @@
         rng <- colsrng
         if (!is(X, "DelayedMatrix"))
             rng <- start(colsrng):end(colsrng)
-        res <- WRAPPED_FUN(X[, rng], ..., verbose=FALSE)
+        res <- WRAPPED_FUN(X[, rng, drop=FALSE], ..., verbose=FALSE)
         if (verbose && is(idpbe, "environment"))
             cli_progress_update(id=get("idpb", envir=idpbe), width(colsrng))
         return(res)
