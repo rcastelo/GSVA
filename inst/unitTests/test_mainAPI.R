@@ -1,9 +1,9 @@
 
 ###
-### unit tests for GSVA's new API
+### unit tests for the main API
 ###
 
-test_newAPI <- function() {
+test_mainAPI <- function() {
     message("Running unit tests for the new API.")
     
     p <- 100; n <- 30; ngs <- 5 # number of genes, samples, gene sets

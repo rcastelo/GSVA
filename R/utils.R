@@ -11,7 +11,7 @@ setMethod("unwrapData", signature("dgCMatrix"),
               return(container)
           })
 
-setMethod("unwrapData", signature("SVT_SparseArray"),
+setMethod("unwrapData", signature("SVT_SparseMatrix"),
           function(container, assay) {
               return(container)
           })
@@ -102,7 +102,7 @@ setMethod("wrapData", signature(container="dgCMatrix"),
               return(dataMatrix)
           })
 
-setMethod("wrapData", signature(container="SVT_SparseArray"),
+setMethod("wrapData", signature(container="SVT_SparseMatrix"),
           function(container, dataMatrix, geneSets) {
               if (!missing(geneSets))
                   attr(dataMatrix, "geneSets") <- geneSets
@@ -378,8 +378,15 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
   return(object@didCheckNA)
 }
 
+.get_ondisk <- function(object) {
+  stopifnot(inherits(object, "ssgseaParam") ||
+            inherits(object, "gsvaParam"))
+  return(object@ondisk)
+}
+
 ## adapted from .define_multiworker_grid() in beachmat/R/colBlockApply.R
-#' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength type
+#' @importFrom BiocGenerics type
+#' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .rowgridsize <- function(X, nworkers=1, maxmem=Inf) {
   typesze <- c("integer"=4, "double"=8) ## 4 bytes for integers, 8 bytes for doubles
   grid <- DummyArrayGrid(dim(X))
@@ -403,7 +410,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 }
 
 ## adapted from .define_multiworker_grid() in beachmat/R/colBlockApply.R
-#' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength type
+#' @importFrom BiocGenerics type
+#' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .colgridsize <- function(X, nworkers=1, maxmem=Inf) {
   typesze <- c("integer"=4, "double"=8) ## 4 bytes for integers, 8 bytes for doubles
   grid <- DummyArrayGrid(dim(X))
@@ -445,6 +453,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## through a BiocParallelParam object BPPARAM, when different from NULL, and
 ## reporting progress using the 'cli' package when possible
 
+#' @importFrom BiocGenerics type
 #' @importFrom cli cli_abort cli_progress_bar cli_alert_warning
 #' @importFrom BiocParallel bplapply bpnworkers bpprogressbar bptry bpok
 #' @importFrom memuse howbig
@@ -452,7 +461,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 #' @importFrom IRanges start end width
 .processMatrixRows <- function(X, FUN, ..., verbose=TRUE,
                                minparrows=100, minparcols=100,
-                               progressmsg="Progress", BPPARAM=NULL, maxmem=Inf) {
+                               progressmsg="Progress", BPPARAM=NULL,
+                               maxmem=Inf) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
@@ -477,7 +487,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         rng <- rowsrng
         if (!is(X, "DelayedMatrix"))
             rng <- start(rowsrng):end(rowsrng)
-        res <- WRAPPED_FUN(X[rng, ], ..., verbose=FALSE)
+        res <- WRAPPED_FUN(X[rng, , drop=FALSE], ..., verbose=FALSE)
         if (verbose && is(idpbe, "environment"))
             cli_progress_update(id=get("idpb", envir=idpbe), width(rowsrng))
         return(res)
@@ -526,19 +536,21 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## through a BiocParallelParam object BPPARAM, when different from NULL, and
 ## reporting progress using the 'cli' package when possible
 
+#' @importFrom BiocGenerics type
 #' @importFrom cli cli_abort
 #' @importFrom BiocParallel bplapply bpnworkers bptry bpok
 #' @importClassesFrom IRanges IRanges
 #' @importFrom IRanges start end width
 .processMatrixCols <- function(X, FUN, ..., verbose=TRUE,
                                minparrows=100, minparcols=100,
-                               progressmsg="Progress", BPPARAM=NULL, maxmem=Inf) {
+                               progressmsg="Progress", BPPARAM=NULL,
+                               maxmem=Inf) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
     if (!is.null(BPPARAM) && nrow(X) > minparrows && ncol(X) > minparcols) {
         if (!is(BPPARAM, "BiocParallelParam"))
-            cli_abort(c("x"="'BPPARAM' must be a BiocParallelParam derivative"))
+            cli_abort(c("x"="'Argument BPPARAM' must be a 'BiocParallelParam' derivative. Please consult the BiocParallel package."))
         nworkers <- bpnworkers(BPPARAM)
     }
 
@@ -558,7 +570,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         rng <- colsrng
         if (!is(X, "DelayedMatrix"))
             rng <- start(colsrng):end(colsrng)
-        res <- WRAPPED_FUN(X[, rng], ..., verbose=FALSE)
+        res <- WRAPPED_FUN(X[, rng, drop=FALSE], ..., verbose=FALSE)
         if (verbose && is(idpbe, "environment"))
             cli_progress_update(id=get("idpb", envir=idpbe), width(colsrng))
         return(res)
@@ -593,7 +605,19 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             }
         }
     }
+
+    mines <- maxes <- NULL
+    if (!is.null(attr(res[[1]], "min"))) { ## min and max enrichment scores stored by ssGSEA
+        mines <- min(vapply(X=res, FUN=function(x) attr(x, "min"), FUN.VALUE=numeric(1)))
+        maxes <- max(vapply(X=res, FUN=function(x) attr(x, "max"), FUN.VALUE=numeric(1)))
+    }
+
     res <- do.call("cbind", res)
+
+    if (!is.null(mines)) { ## min and max enrichment scores stored by ssGSEA
+        attr(res, "min") <- mines
+        attr(res, "max") <- maxes
+    }
 
     return(res)
 }
@@ -631,7 +655,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     nzc <- tot <- nr*nc
     if (is_sparse(X)) {
         estimated_flag <- FALSE
-        if (is(X, "dgCMatrix") || is(X, "SVT_SparseArray"))
+        if (is(X, "dgCMatrix") || is(X, "SVT_SparseMatrix"))
             nzc <- nzcount(X)
         else if (is(X, "DelayedMatrix")) {
             if (nc < 2000)
@@ -702,7 +726,16 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     maxmem
 }
 
+
+## verifies that the 'ondisk' parameter is either 'auto', 'yes' or 'no' and, if
+## 'auto', checks whether the input data fits in the maximum available main
+## memory and sets 'ondisk' to 'yes' or 'no' accordingly. If the input data is
+## a DelayedArray, also reports whether it fits in the maximum available main
+## memory. If 'ondisk' is set to 'yes', then this function returns TRUE,
+## otherwise it returns FALSE.
+
 #' @importFrom cli cli_abort cli_alert_info
+#' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
 #' @importFrom memuse howbig
 .check_ondisk <- function(param, maxmem, verbose) {
@@ -729,7 +762,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     } else if (ondisk != "yes" && ondisk != "no")
         cli_abort(c("x"="'ondisk' should be either 'auto', 'yes' or 'no'"))
 
-    ondisk
+    ondisk == "yes"
 }
 
 

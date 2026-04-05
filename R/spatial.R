@@ -66,6 +66,7 @@
 #' @importFrom stats dist pnorm
 #' @importFrom SummarizedExperiment assay
 #' @importFrom cli cli_abort
+#' @importFrom BiocParallel bplapply SerialParam
 #' @exportMethod spatCor
 #' @export
 

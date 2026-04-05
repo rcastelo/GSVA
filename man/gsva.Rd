@@ -12,7 +12,12 @@
 
 \S4method{gsva}{plageParam}(param, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
 
-\S4method{gsva}{ssgseaParam}(param, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
+\S4method{gsva}{ssgseaParam}(
+  param,
+  verbose = TRUE,
+  BPPARAM = SerialParam(progressbar = verbose),
+  maxmem = "auto"
+)
 
 \S4method{gsva}{zscoreParam}(param, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
 }
@@ -42,17 +47,37 @@ Barbie et al. (2009).
 \item{BPPARAM}{An object of class \code{BiocParallelParam} specifying parameters
 related to the parallel execution of some of the tasks and calculations
 within this function.}
+
+\item{maxmem}{A vector of length 1 either specifying a number in bytes, or
+a character string with either the word \code{auto} (default), or a number
+followed by a suffix indicating kilobytes (K), megabytes (M), gigabytes (G)
+or terabytes (T), which GSVA will use to attempt bounding the maximum amount
+of main memory used across all threads of execution to that given quantity.
+By default \code{maxmem="auto"}, indicating that the maximum memory will be the
+90\% of the total main memory, as calculated by
+\code{\link[memuse:meminfo]{Sys.meminfo()}}. To avoid setting any bound on the
+maximum memory, use \code{maxmem=Inf}. Note that the amount of main memory used
+in an R session or script may depend on other commands and packages used in
+that same session or script.}
 }
 \value{
 A gene-set by sample matrix of GSVA enrichment scores stored in a
-container object of the same type as the input expression data container. If
-the input was a base matrix or a \code{dgCMatrix} object, then the output will
-be a base matrix object with the gene sets employed in the calculations
-stored in an attribute called \code{geneSets}. If the input was an
-\code{ExpressionSet} object, then the output will be also an \code{ExpressionSet}
-object with the gene sets employed in the calculations stored in an
-attribute called \code{geneSets}. If the input was an object of one of the
-classes described in \code{\link{GsvaExprData}}, such as a \code{SingleCellExperiment},
+container object of the same type as the input expression data container,
+except for the fact that enrichment scores are always dense, irrespective of
+whether the input is sparse, such as in single-cell data. If the input was a
+base matrix, a \code{\link[Matrix:dgCMatrix-class]{dgCMatrix}}, a
+\code{\link[SparseArray:SVT_SparseArray-class]{SVT_SparseMatrix}}, or a
+\code{\link[DelayedArray:DelayedArray-class]{DelayedMatrix}} object, then the output
+will be either a base matrix object or a
+\code{\link[DelayedArray:DelayedArray-class]{DelayedMatrix}}, with the gene sets
+employed in the calculations stored in an attribute called \code{geneSets} of that
+object. If the input was an \code{ExpressionSet} object, then the output will be
+also an \code{ExpressionSet} object with the gene sets employed in the
+calculations stored in an attribute called \code{geneSets}. If the input was an
+object of either class
+\code{\link[SummarizedExperiment:SummarizedExperiment-class]{SummarizedExperiment}},
+\code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}},
+or \code{\link[SpatialExperiment:SpatialExperiment]{SpatialExperiment}},
 then the output will be of the same class, where enrichment scores will be
 stored in an assay called \code{es} and the gene sets employed in the
 calculations will be stored in the \code{rowData} slot of the object under the

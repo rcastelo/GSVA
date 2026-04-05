@@ -9,12 +9,11 @@
 #' @importMethodsFrom SummarizedExperiment assays assayNames colData rowData
 #' @importMethodsFrom SpatialExperiment imgData spatialCoords
 #' @importMethodsFrom GSEABase geneIds incidence GeneSetCollection GeneSet
-#' @importMethodsFrom BiocParallel bpiterate "bpworkers<-" bplapply "bpprogressbar<-"
+#' @importMethodsFrom BiocParallel bplapply "bpprogressbar<-"
 #'
 #' @importFrom stats ecdf na.omit rnorm rpois sd
 #' @importFrom S4Vectors SimpleList DataFrame
 #' @importFrom SummarizedExperiment SummarizedExperiment
-#' @importFrom BiocParallel SerialParam MulticoreParam multicoreWorkers bpnworkers
 #' @importFrom SingleCellExperiment SingleCellExperiment
 #' @importFrom SpatialExperiment SpatialExperiment
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid defaultAutoGrid

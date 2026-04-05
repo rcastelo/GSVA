@@ -1041,19 +1041,19 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
     res
 }
 
-.rowNzRanges_SVT_SparseArray_byrow <- function(X, verbose=FALSE) {
+.rowNzRanges_SVT_SparseMatrix_byrow <- function(X, verbose=FALSE) {
     res <- .Call("row_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
     res
 }
 
-.rowNzRanges_SVT_SparseArray_transpose_C <- function(X, verbose=FALSE) {
+.rowNzRanges_SVT_SparseMatrix_transpose_C <- function(X, verbose=FALSE) {
     res <- .Call("col_rngs_nzrngs_SVT_SparseMatrix_R", t(X), verbose=verbose)
     res
 }
 
 ## after discussions at https://github.com/Bioconductor/SparseArray/issues/22
 
-.rowNzRanges_SVT_SparseArray <- function(X, verbose=FALSE) {
+.rowNzRanges_SVT_SparseMatrix <- function(X, verbose=FALSE) {
     res <- .Call("rowbycols_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
     res
 }
@@ -1075,7 +1075,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 }
 
 #' @importFrom MatrixGenerics rowMins rowMaxs
-.rowNzRanges_SVT_SparseArray_rowbycols_R <- function(X, anyna=FALSE, verbose=FALSE) {
+.rowNzRanges_SVT_SparseMatrix_rowbycols_R <- function(X, anyna=FALSE, verbose=FALSE) {
     naa <- NULL
     if (anyna)
         naa <- .safe_replace_zeros_with_NAs(X)
@@ -1096,13 +1096,13 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
         res <- rowRanges(X, na.rm=TRUE)
     else if (is(X, "dgCMatrix"))
         res <- .rowNzRanges_dgCMatrix(X, verbose=verbose)
-    else if (is(X, "SVT_SparseArray"))
-        res <- .rowNzRanges_SVT_SparseArray(X, verbose=verbose)
+    else if (is(X, "SVT_SparseMatrix"))
+        res <- .rowNzRanges_SVT_SparseMatrix(X, verbose=verbose)
     else if (is(X, "DelayedArray")) {
         grid <- DummyArrayGrid(dim(X))
         block <- read_block(X, grid[[1L]])
         if (is_sparse(block)) ## input HDF5 may be sparse or not
-            res <- .rowNzRanges_SVT_SparseArray(block, verbose=verbose)
+            res <- .rowNzRanges_SVT_SparseMatrix(block, verbose=verbose)
         else
             res <- rowRanges(X)
     } else
@@ -1116,7 +1116,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 #' @importFrom DelayedArray blockApply setAutoBPPARAM rowRanges
 #' @importFrom cli cli_alert_warning cli_abort cli_alert_info
 #' @importFrom cli cli_progress_bar cli_progress_done
-#' @importFrom BiocParallel SerialParam bpnworkers bpiterate bpprogressbar
+#' @importFrom BiocParallel SerialParam bpnworkers bpprogressbar
 .filterGenes <- function(expr, anyna=FALSE, removeConstant=TRUE,
                          removeNzConstant=TRUE, verbose=TRUE, BPPARAM=NULL,
                          maxmem=Inf) {

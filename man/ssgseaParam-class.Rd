@@ -5,6 +5,7 @@
 \alias{ssgseaParam-class}
 \alias{ssgseaParam}
 \alias{anyNA,ssgseaParam-method}
+\alias{nzcount,ssgseaParam-method}
 \title{\code{ssgseaParam} class}
 \usage{
 ssgseaParam(
@@ -18,10 +19,13 @@ ssgseaParam(
   normalize = TRUE,
   checkNA = c("auto", "yes", "no"),
   use = c("everything", "all.obs", "na.rm"),
+  ondisk = c("auto", "yes", "no"),
   verbose = TRUE
 )
 
 \S4method{anyNA}{ssgseaParam}(x, recursive = FALSE)
+
+\S4method{nzcount}{ssgseaParam}(x)
 }
 \arguments{
 \item{exprData}{The expression data set.  Must be one of the classes
@@ -90,6 +94,14 @@ expression data will be removed from calculations, giving a warning when that
 happens, and giving an error if no values are left after removing the missing
 values.}
 
+\item{ondisk}{Character vector of length 1 denoting whether an on-disk backend
+should be used to reduce the memory footprint. The default value
+\code{ondisk="auto"} will attempt to load all the data in main memory when the
+input nonzero values fit in main memory, otherwise it will attempt working
+with an on-disk data structure that reduces de memory footprint. When
+\code{ondisk="yes"} it will attempt to work with an on-disk data structure, while
+when \code{ondisk="no"} it will attempt to load all the data in main memory.}
+
 \item{verbose}{Logical vector of length 1. It gives information about some
 decisions made by the software during parameter object construction when
 \code{verbose=TRUE} (default) and remains silent otherwise.}
@@ -145,6 +157,17 @@ expression data contains missing (\code{NA}) values.}
 (default), \code{"all.obs"}, or \code{"na.rm"}, which refer to three different policies
 to apply in the presence of missing values in the input expression data; see
 \code{ssgseaParam}.}
+
+\item{\code{nzcount}}{Numeric vector of length 1. Number of non-zero values in the
+selected assay, if there is more than one, of the 'exprData' slot.}
+
+\item{\code{ondisk}}{Character vector of length 1 denoting whether an on-disk backend
+should be used to reduce the memory footprint. The default value
+\code{ondisk="auto"} will attempt to load all the data in main memory when the
+input nonzero values fit in main memory, otherwise it will attempt working
+with an on-disk data structure that reduces de memory footprint. When
+\code{ondisk="yes"} it will attempt to work with an on-disk data structure, while
+when \code{ondisk="no"} it will attempt to load all the data in main memory.}
 }}
 
 \examples{

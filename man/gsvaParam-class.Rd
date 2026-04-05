@@ -6,6 +6,7 @@
 \alias{gsvaRanksParam-class}
 \alias{gsvaParam}
 \alias{anyNA,gsvaParam-method}
+\alias{nzcount,gsvaParam-method}
 \alias{geneSets<-,gsvaRanksParam,GsvaGeneSets-method}
 \alias{geneSets<-}
 \title{\code{gsvaParam} class}
@@ -31,6 +32,8 @@ gsvaParam(
 )
 
 \S4method{anyNA}{gsvaParam}(x, recursive = FALSE)
+
+\S4method{nzcount}{gsvaParam}(x)
 
 \S4method{geneSets}{gsvaRanksParam,GsvaGeneSets}(object) <- value
 }
@@ -154,12 +157,10 @@ millions of columns.}
 \item{ondisk}{Character vector of length 1 denoting whether an on-disk backend
 should be used to reduce the memory footprint. The default value
 \code{ondisk="auto"} will attempt to load all the data in main memory when the
-number of nonzero values is equal or smaller than 2^31, otherwise it will
-attempt working with an on-disk data structure that reduces de memory
-footprint. When \code{ondisk="yes"} it will attempt to work with an on-disk data
-structure, while when \code{ondisk="no"} it will attempt to load all the data in
-main memory, irrespective of whether the number of nonzero values is larger,
-equal, or smaller than 2^31.}
+input nonzero values fit in main memory, otherwise it will attempt working
+with an on-disk data structure that reduces de memory footprint. When
+\code{ondisk="yes"} it will attempt to work with an on-disk data structure, while
+when \code{ondisk="no"} it will attempt to load all the data in main memory.}
 
 \item{verbose}{Logical vector of length 1. It gives information about some
 decisions made by the software during parameter object construction when
@@ -276,12 +277,10 @@ selected assay, if there is more than one, of the 'exprData' slot.}
 \item{\code{ondisk}}{Character vector of length 1 denoting whether an on-disk backend
 should be used to reduce the memory footprint. The default value
 \code{ondisk="auto"} will attempt to load all the data in main memory when the
-number of nonzero values is equal or smaller than 2^31, otherwise it will
-attempt working with an on-disk data structure that reduces de memory
-footprint. When \code{ondisk="yes"} it will attempt to work with an on-disk data
-structure, while when \code{ondisk="no"} it will attempt to load all the data in
-main memory, irrespective of whether the number of nonzero values is larger,
-equal, or smaller than 2^31.}
+input nonzero values fit in main memory, otherwise it will attempt working
+with an on-disk data structure that reduces de memory footprint. When
+\code{ondisk="yes"} it will attempt to work with an on-disk data structure, while
+when \code{ondisk="no"} it will attempt to load all the data in main memory.}
 }}
 
 \examples{

@@ -26,15 +26,35 @@
 #'   related to the parallel execution of some of the tasks and calculations
 #'   within this function.
 #' 
+#' @param maxmem A vector of length 1 either specifying a number in bytes, or
+#' a character string with either the word `auto` (default), or a number
+#' followed by a suffix indicating kilobytes (K), megabytes (M), gigabytes (G)
+#' or terabytes (T), which GSVA will use to attempt bounding the maximum amount
+#' of main memory used across all threads of execution to that given quantity.
+#' By default `maxmem="auto"`, indicating that the maximum memory will be the
+#' 90% of the total main memory, as calculated by
+#' [`Sys.meminfo()`][memuse::Sys.meminfo]. To avoid setting any bound on the
+#' maximum memory, use `maxmem=Inf`. Note that the amount of main memory used
+#' in an R session or script may depend on other commands and packages used in
+#' that same session or script.
+#'
 #' @return A gene-set by sample matrix of GSVA enrichment scores stored in a
-#' container object of the same type as the input expression data container. If
-#' the input was a base matrix or a `dgCMatrix` object, then the output will
-#' be a base matrix object with the gene sets employed in the calculations
-#' stored in an attribute called `geneSets`. If the input was an
-#' `ExpressionSet` object, then the output will be also an `ExpressionSet`
-#' object with the gene sets employed in the calculations stored in an
-#' attribute called `geneSets`. If the input was an object of one of the
-#' classes described in [`GsvaExprData`], such as a `SingleCellExperiment`,
+#' container object of the same type as the input expression data container,
+#' except for the fact that enrichment scores are always dense, irrespective of
+#' whether the input is sparse, such as in single-cell data. If the input was a
+#' base matrix, a [`dgCMatrix`][Matrix::dgCMatrix-class], a
+#' [`SVT_SparseMatrix`][SparseArray::SVT_SparseMatrix-class], or a 
+#' [`DelayedMatrix`][DelayedArray::DelayedMatrix-class] object, then the output
+#' will be either a base matrix object or a
+#' [`DelayedMatrix`][DelayedArray::DelayedMatrix-class], with the gene sets
+#' employed in the calculations stored in an attribute called `geneSets` of that
+#' object. If the input was an `ExpressionSet` object, then the output will be
+#' also an `ExpressionSet` object with the gene sets employed in the
+#' calculations stored in an attribute called `geneSets`. If the input was an
+#' object of either class
+#' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment-class],
+#' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class],
+#' or [`SpatialExperiment`][SpatialExperiment::SpatialExperiment-class],
 #' then the output will be of the same class, where enrichment scores will be
 #' stored in an assay called `es` and the gene sets employed in the
 #' calculations will be stored in the `rowData` slot of the object under the
@@ -282,12 +302,10 @@ setMethod("gsva", signature(param="gsvaParam"),
 #' @param ondisk Character vector of length 1 denoting whether an on-disk backend
 #' should be used to reduce the memory footprint. The default value
 #' `ondisk="auto"` will attempt to load all the data in main memory when the
-#' number of nonzero values is equal or smaller than 2^31, otherwise it will
-#' attempt working with an on-disk data structure that reduces de memory
-#' footprint. When `ondisk="yes"` it will attempt to work with an on-disk data
-#' structure, while when `ondisk="no"` it will attempt to load all the data in
-#' main memory, irrespective of whether the number of nonzero values is larger,
-#' equal, or smaller than 2^31.
+#' input nonzero values fit in main memory, otherwise it will attempt working
+#' with an on-disk data structure that reduces de memory footprint. When
+#' `ondisk="yes"` it will attempt to work with an on-disk data structure, while
+#' when `ondisk="no"` it will attempt to load all the data in main memory.
 #'
 #' @param verbose Logical vector of length 1. It gives information about some
 #' decisions made by the software during parameter object construction when
@@ -509,6 +527,9 @@ setValidity("gsvaParam", function(object) {
     if(is.na(object@nzcount)) {
         inv <- c(inv, "@nzcount must not be NA")
     }
+    if(!.isCharLength1(object@ondisk)) {
+        inv <- c(inv, "@use must be a single character string")
+    }
     return(if(length(inv) == 0) TRUE else inv)
 })
 
@@ -557,13 +578,7 @@ setValidity("gsvaParam", function(object) {
   return(object@filterRows)
 }
 
-#' @noRd
-.get_ondisk <- function(object) {
-  stopifnot(inherits(object, "gsvaParam"))
-  return(object@ondisk)
-}
-
-## getters for 'checkNA', 'didCheckNA' and 'use' are
+## getters for 'checkNA', 'didCheckNA', 'use' and 'ondisk' are
 ## in utils.R as they are shared with ssGSEA
 
 #' @param x An object of class [`gsvaParam-class`].
@@ -579,6 +594,7 @@ setMethod("anyNA", signature=c("gsvaParam"),
 
 #' @importFrom SparseArray nzcount
 #' @aliases nzcount,gsvaParam-method
+#' @rdname gsvaParam-class
 setMethod("nzcount", signature=c("gsvaParam"),
           function(x)
             return(x@nzcount))
@@ -623,7 +639,8 @@ setMethod("show",
 #' @param param A [`gsvaParam-class`] object built using the constructor
 #' function [`gsvaParam`].
 #'
-#' @param verbose Gives information about each calculation step. Default: `TRUE`.
+#' @param verbose Gives information about each calculation step. Default:
+#' `TRUE`.
 #'
 #' @param BPPARAM An object of class `BiocParallelParam` specifying parameters
 #' related to the parallel execution of some of the tasks and calculations
@@ -635,10 +652,11 @@ setMethod("show",
 #' or terabytes (T), which GSVA will use to attempt bounding the maximum amount
 #' of main memory used across all threads of execution to that given quantity.
 #' By default `maxmem="auto"`, indicating that the maximum memory will be the
-#' 90% of the total main memory, as calculated by [`Sys.meminfo()`][memuse::Sys.meminfo].
-#' To avoid setting any bound on the maximum memory, please use `maxmem=Inf`.
-#' Note that the amount of main memory used in an R session or script may depend
-#' on other commands and packages used in that same session or script.
+#' 90% of the total main memory, as calculated by
+#' [`Sys.meminfo()`][memuse::Sys.meminfo]. To avoid setting any bound on the
+#' maximum memory, use `maxmem=Inf`. Note that the amount of main memory used
+#' in an R session or script may depend on other commands and packages used in
+#' that same session or script.
 #'
 #' @return In the case of the `gsvaRanks()` method, an object of class
 #' [`gsvaRanksParam-class`].
@@ -725,11 +743,11 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
               maxmem <- .check_maxmem(param, maxmem, verbose)
               ondisk <- .check_ondisk(param, maxmem, verbose)
 
-              if (is(dataMatrix, "DelayedMatrix") && ondisk == "no") {
+              if (is(dataMatrix, "DelayedMatrix") && !ondisk) {
                   if (verbose)
                       cli_alert_info("Loading input expression data into main memory")
                   if (is_sparse(dataMatrix)) {
-                      dataMatrix <- as(dataMatrix, "SVT_SparseArray")
+                      dataMatrix <- as(dataMatrix, "SVT_SparseMatrix")
                   } else
                       dataMatrix <- as.matrix(dataMatrix)
               }
@@ -822,17 +840,21 @@ setReplaceMethod("geneSets", signature=signature(object="gsvaRanksParam",
 #' @name gsvaScores
 #' @rdname gsvaRanks
 #'
+#' @importFrom S4Arrays is_sparse
 #' @importFrom cli cli_alert_info cli_abort cli_alert_success
 #' @importFrom BiocParallel bpnworkers
+#' @importFrom memuse howbig
 #' @exportMethod gsvaScores
 setMethod("gsvaScores", signature(param="gsvaRanksParam"),
           function(param, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose),
                    maxmem="auto") {
-              if (verbose && gsva_global$show_start_and_end_messages) {
+
+              if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_info(sprintf("GSVA version %s",
                                          packageDescription("GSVA")[["Version"]]))
-              }
+              if (!is(BPPARAM, "BiocParallelParam"))
+                  cli_abort(c("x"="Argument 'BPPARAM' must be a 'BiocParallelParam' derivative. Please consult the BiocParallel package."))
 
               ## assuming rows in the rank data have been already filtered
               exprData <- get_exprData(param)
@@ -856,14 +878,11 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
               maxmem <- .check_maxmem(param, maxmem, verbose)
               ondisk <- .check_ondisk(param, maxmem, verbose)
 
-              if (is(filtDataMatrix, "DelayedMatrix") && ondisk == "no") {
+              if (is(filtDataMatrix, "DelayedMatrix") && !ondisk) {
                   if (verbose)
                       cli_alert_info("Loading input expression data into main memory")
                   if (is_sparse(filtDataMatrix)) {
-                      if (nzcount(param) < .Machine$integer.max)
-                          filtDataMatrix <- as(filtDataMatrix, "dgCMatrix")
-                      else
-                          filtDataMatrix <- as(filtDataMatrix, "SVT_SparseArray")
+                      filtDataMatrix <- as(filtDataMatrix, "SVT_SparseMatrix")
                   } else
                       filtDataMatrix <- as.matrix(filtDataMatrix)
               }
@@ -871,23 +890,26 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
               if (bpnworkers(BPPARAM) > 1 && nrow(filtDataMatrix) > 100 &&
                   ncol(filtDataMatrix) > 100) {
                   if (verbose) {
-                      msg <- sprintf("Calculating GSVA scores with %d cores",
-                                     as.integer(bpnworkers(BPPARAM)))
+                      msg <- sprintf("Using a %s parallel back-end with %d workers",
+                                     class(BPPARAM), bpnworkers(BPPARAM))
                       cli_alert_info(msg)
                   }
-              } else {
-                  if (verbose)
-                      cli_alert_info("Calculating GSVA scores")
+              } else
                   BPPARAM <- NULL
-              }
 
-              ondisk <- FALSE
-              esreqmem <- as.numeric(length(filtMappedGeneSets)) *
-                          as.numeric(ncol(filtDataMatrix)) * 8 ## 8 bytes per double
+              if (verbose)
+                  cli_alert_info(sprintf("Calculating GSVA scores for %d gene sets",
+                                 length(filtMappedGeneSets)))
+
+              esreqmem <- howbig(as.numeric(length(filtMappedGeneSets)),
+                                 as.numeric(ncol(filtDataMatrix)),
+                                 representation="dense", sparsity=1,
+                                 type="double")
               if (esreqmem > maxmem) {
-                cli_alert_warning("The resulting matrix of enrichment scores will not fit")
-                cli_alert_warning("in the given maximum main memory size, the returned")
-                cli_alert_warning("object will use an on-disk data structure")
+                cli_alert_warning("The resulting (dense) matrix of enrichment")
+                cli_alert_warning("scores will not fit in the given maximum")
+                cli_alert_warning("main memory size, and it will be returned")
+                cli_alert_warning("using an on-disk data structure")
                 ondisk <- TRUE
               }
 
@@ -1093,7 +1115,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                 gene.cdf <- .kcdfvals_sparse_to_sparse(expr, Gaussk, verbose)
             else
                 gene.cdf <- .kcdfvals_sparse_to_dense(expr, Gaussk, verbose)
-        } else if (is(expr, "SVT_SparseArray")) {
+        } else if (is(expr, "SVT_SparseMatrix")) {
             if (sparse)
                 gene.cdf <- .kcdfvals_svt_to_svt(expr, Gaussk, verbose)
             else
@@ -1136,7 +1158,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                 gene.cdf <- .ecdfvals_sparse_to_sparse(expr, verbose)
             else
                 gene.cdf <- .ecdfvals_sparse_to_dense(expr, verbose)
-        } else if (is(expr, "SVT_SparseArray")) {
+        } else if (is(expr, "SVT_SparseMatrix")) {
             if (sparse)
                 gene.cdf <- .ecdfvals_svt_to_svt(expr, verbose)
             else
@@ -1171,17 +1193,20 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
 ## pending how to propagate verbosity if necessary
 
 #' @importFrom MatrixGenerics colRanks
-compute.col.ranks <- function(Z, ties.method="last", verbose=TRUE) {
+compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE, verbose=TRUE) {
     R <- NULL
+
+    if (drop.sparsity && !is(Z, "DelayedMatrix"))
+        Z <- as.matrix(Z)
 
     if (is(Z, "dgCMatrix")) { ## assumes expression values are positive
         R <- .sparseColumnApplyAndReplace(Z, rank, ties.method=ties.method)
-    } else if (is(Z, "SVT_SparseArray")) {
-        R <- .colRanks_SVT_SparseArray(Z, ties.method=ties.method)
+    } else if (is(Z, "SVT_SparseMatrix")) {
+        R <- .colRanks_SVT_SparseMatrix(Z, ties.method=ties.method)
     } else if (is(Z, "DelayedMatrix")) {
-        R <- .colRanksHDF5(Z, ties.method=ties.method)
+        R <- .colRanksHDF5(Z, ties.method=ties.method, drop.sparsity=drop.sparsity)
     } else {
-        R <- colRanks(Z, ties.method="last", preserveShape=TRUE)
+        R <- colRanks(Z, ties.method=ties.method, preserveShape=TRUE)
     }
 
     return(R)
@@ -1222,9 +1247,9 @@ zorder_rankstat <- function(z, p) {
 
 #' @importFrom Matrix nnzero
 .sufficient_ssize <- function(expr, kcdf.min.ssize) {
-  ## in the sparse case stored in a 'dgCMatrix' or a 'SVT_SparseArray',
+  ## in the sparse case stored in a 'dgCMatrix' or a 'SVT_SparseMatrix',
   ## by now, use the average nonzero values per row
-  if (is(expr, "dgCMatrix") || is(expr, "SVT_SparseArray"))
+  if (is(expr, "dgCMatrix") || is(expr, "SVT_SparseMatrix"))
     return((nnzero(expr) / nrow(expr)) >= kcdf.min.ssize)
 
   ## in every other case, including the dense case, by now,
@@ -1262,7 +1287,7 @@ zorder_rankstat <- function(z, p) {
 
     if (verbose) {
         is_sparse_matrix <- is(expr, "dgCMatrix") ||
-                            is(expr, "SVT_SparseArray") ||
+                            is(expr, "SVT_SparseMatrix") ||
                             (is(expr, "DelayedMatrix") && is_sparse(expr))
         if (is_sparse_matrix && sparse)
             cli_alert_info("GSVA sparse algorithm")
@@ -1367,7 +1392,8 @@ zorder_rankstat <- function(z, p) {
     ## here 'ties.method="last"' allows one to obtain the result
     ## from 'order()' based on ranks
     R <- .processMatrixCols(Z, FUN=compute.col.ranks, ties.method="last",
-                            verbose=verbose, minparrows=100, minparcols=100,
+                            drop.sparsity=FALSE, verbose=verbose,
+                            minparrows=100, minparcols=100,
                             BPPARAM=BPPARAM, maxmem=maxmem)
 
     return(R)
@@ -1634,7 +1660,7 @@ zorder_rankstat <- function(z, p) {
 
 #' @importFrom cli cli_alert_info cli_alert_warning
 #' @importFrom BiocParallel bpnworkers
-#' @importFrom S4Arrays is_sparse refdim
+#' @importFrom S4Arrays is_sparse refdim DummyArrayGrid
 .compute_gsva_scores <- function(R, geneSetsIdx, tau, maxDiff, absRanking,
                                  sparse, any_na, na_use, minSize, ondisk,
                                  verbose) {
@@ -1861,7 +1887,7 @@ zorder_rankstat <- function(z, p) {
 ##
 
 .fetch_row_nzvals <- function(X, i, whimin1=NULL) {
-  stopifnot(is(X, "SVT_SparseArray")) ## QC
+  stopifnot(is(X, "SVT_SparseMatrix")) ## QC
   stopifnot(is.numeric(i)) ## QC
   if (!is.null(whimin1)) {
       stopifnot(is.numeric(whimin1)) ## QC
@@ -1872,19 +1898,19 @@ zorder_rankstat <- function(z, p) {
 }
 
 .ecdfvals_svt_to_dense <- function(X, verbose) {
-  stopifnot(is(X, "SVT_SparseArray")) ## QC
+  stopifnot(is(X, "SVT_SparseMatrix")) ## QC
   stopifnot(is.logical(verbose)) ## QC
   .Call("ecdfvals_svt_to_dense_R", X, verbose)
 }
 
 .ecdfvals_svt_to_sparse <- function(X, verbose) {
-  stopifnot(is(X, "SVT_SparseArray")) ## QC
+  stopifnot(is(X, "SVT_SparseMatrix")) ## QC
   stopifnot(is.logical(verbose)) ## QC
   .Call("ecdfvals_svt_to_sparse_R", X, verbose)
 }
 
 .ecdfvals_svt_to_svt <- function(X, verbose) {
-  stopifnot(is(X, "SVT_SparseArray")) ## QC
+  stopifnot(is(X, "SVT_SparseMatrix")) ## QC
   stopifnot(is.logical(verbose)) ## QC
   .Call("ecdfvals_svt_to_svt_R", X, verbose)
 }
@@ -1931,6 +1957,7 @@ zorder_rankstat <- function(z, p) {
   res
 }
 
+#' @importFrom S4Arrays DummyArrayGrid
 #' @importFrom HDF5Array HDF5RealizationSink
 #' @importFrom DelayedArray seed rowAutoGrid blockReduce
 .ecdfvals_denseh5_to_denseh5 <- function(X, grid=NULL, verbose) {
@@ -1978,14 +2005,14 @@ zorder_rankstat <- function(z, p) {
 }
 
 .kcdfvals_svt_to_dense <- function(X, Gaussk, verbose) {
-  stopifnot(is(X, "SVT_SparseArray")) ## QC
+  stopifnot(is(X, "SVT_SparseMatrix")) ## QC
   stopifnot(is.logical(Gaussk)) ## QC
   stopifnot(is.logical(verbose)) ## QC
   .Call("kcdfvals_svt_to_dense_R", X, Gaussk, verbose)
 }
 
 .kcdfvals_svt_to_svt <- function(X, Gaussk, verbose) {
-  stopifnot(is(X, "SVT_SparseArray")) ## QC
+  stopifnot(is(X, "SVT_SparseMatrix")) ## QC
   stopifnot(is.logical(Gaussk)) ## QC
   stopifnot(is.logical(verbose)) ## QC
   .Call("kcdfvals_svt_to_svt_R", X, Gaussk, verbose)
@@ -2007,6 +2034,7 @@ zorder_rankstat <- function(z, p) {
   .Call("kcdfvals_sparse_to_dense_R", X, Xrsp, Gaussk, verbose)
 }
 
+#' @importFrom S4Arrays DummyArrayGrid
 #' @importFrom HDF5Array HDF5RealizationSink
 #' @importFrom DelayedArray seed rowAutoGrid blockReduce
 .kcdfvals_sparseh5_to_sparseh5 <- function(X, Gaussk, grid=NULL, verbose) {
@@ -2027,6 +2055,7 @@ zorder_rankstat <- function(z, p) {
   res
 }
 
+#' @importFrom S4Arrays DummyArrayGrid
 #' @importFrom HDF5Array HDF5RealizationSink
 #' @importFrom DelayedArray seed rowAutoGrid blockReduce
 .kcdfvals_sparseh5_to_denseh5 <- function(X, Gaussk, grid=NULL, verbose) {
@@ -2047,6 +2076,7 @@ zorder_rankstat <- function(z, p) {
   res
 }
 
+#' @importFrom S4Arrays DummyArrayGrid
 #' @importFrom HDF5Array HDF5RealizationSink
 #' @importFrom DelayedArray seed rowAutoGrid blockReduce
 .kcdfvals_denseh5_to_denseh5 <- function(X, Gaussk, grid=NULL, verbose) {
@@ -2139,35 +2169,46 @@ zorder_rankstat <- function(z, p) {
   .Call("order_rankstat_sparse_to_sparse_R", X, j)
 }
 
-## calculate ranks using on an SVT_SparseArray object
-.colRanks_SVT_SparseArray <- function(X, ties.method="last") {
+## calculate ranks using on an SVT_SparseMatrix object
+#' @importFrom BiocGenerics type
+.colRanks_SVT_SparseMatrix <- function(X, ties.method="last") {
     R <- X
-    rnks <- lapply(lapply(X@SVT, "[[", 1), rank, ties.method=ties.method)
-    R@type <- "integer" ## rank() w/ ties.method="last" returns integer
-    R@SVT <- mapply(list, rnks, lapply(X@SVT, "[[", 2), SIMPLIFY=FALSE)
+    whposlen <- which(lengths(X@SVT) > 0L)
+    rnks <- lapply(lapply(X@SVT[whposlen], "[[", 1), rank,
+                          ties.method=ties.method)
+    R@SVT[whposlen] <- mapply(list, rnks, lapply(X@SVT[whposlen], "[[", 2),
+                              SIMPLIFY=FALSE)
+    if (ties.method == "last")
+        R@type <- "integer" ## rank() w/ ties.method="last" returns integer
+
     R
 }
 
 ## calculate ranks using an HDF5 backend
 
+#' @importFrom BiocGenerics "type<-"
+#' @importFrom S4Arrays DummyArrayGrid
 #' @importFrom MatrixGenerics colRanks
 #' @importFrom BiocParallel SerialParam
-.colRanksHDF5 <- function(X, grid=NULL, ties.method="last") {
+.colRanksHDF5 <- function(X, grid=NULL, ties.method="last", drop.sparsity=FALSE) {
     stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
 
-    sink <- HDF5RealizationSink(dim(X), as.sparse=is_sparse(X))
+    sink <- HDF5RealizationSink(dim(X), H5type="H5T_STD_I32LE", ## integer ranks
+                                as.sparse=is_sparse(X) && !drop.sparsity)
     if (is.null(grid))
         grid <- DummyArrayGrid(dim(X))
 
     colRanks_byBlock <- function(grid, sink) {
         block <- read_block(X, grid)
-        if (is(block, "SVT_SparseArray")) {
-            block <- .colRanks_SVT_SparseArray(block, ties.method=ties.method)
+        if (is(block, "SVT_SparseMatrix") && drop.sparsity)
+            block <- as.matrix(block)
+        if (is(block, "SVT_SparseMatrix")) {
+            block <- .colRanks_SVT_SparseMatrix(block, ties.method=ties.method)
         } else {
             block <- colRanks(block, ties.method=ties.method,
                               preserveShape=TRUE)
             if (ties.method == "last")
-                mode(block) <- "integer"
+                type(block) <- "integer"
         }
         write_block(sink, grid, block)
     }

@@ -217,7 +217,7 @@ combinez <- function(gSetIdx, j, Z) sum(Z[gSetIdx, j]) / sqrt(length(gSetIdx))
 
 #' @importFrom cli cli_alert_info
 #' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
-#' @importFrom BiocParallel bpnworkers
+#' @importFrom BiocParallel bpnworkers SerialParam bplapply
 #' @importFrom Matrix colSums
 zscore <- function(X, geneSets, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose)) {
