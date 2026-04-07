@@ -96,6 +96,8 @@ row_rngs_nzrngs_RsparseMatrix_R(SEXP XRspR, SEXP verboseR) {
   return(rngR);
 }
 
+/* this function was only here for testing purposes */
+/*
 SEXP
 row_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR) {
   SEXP        rngR;
@@ -121,13 +123,13 @@ row_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR) {
           length(Xsvt_dimR));
 
   Xsvt_dim = INTEGER(Xsvt_dimR);
-  nr = Xsvt_dim[0]; /* number of rows */
-  nc = Xsvt_dim[1]; /* number of columns */
+  nr = Xsvt_dim[0];  * number of rows * 
+  nc = Xsvt_dim[1];  * number of columns * 
 
   Xsvt_type = CHAR(STRING_ELT(getAttrib(XsvtR, SVT_SparseArray_typeSym), 0));
   Xsvt_SVT = GET_SLOT(XsvtR, SVT_SparseArray_svtSym);
 
-  whimin1 = R_Calloc(nc, int); /* assuming values are set to 0s */
+  whimin1 = R_Calloc(nc, int);  * assuming values are set to 0s * 
 
   itypevals = 0;
   if (!strcmp(Xsvt_type, "integer")) {
@@ -153,17 +155,17 @@ row_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR) {
     double nzmin=NA_REAL;
     double nzmax=NA_REAL;
 
-    if (verbose) { /* show progress */
+    if (verbose) {  * show progress * 
       if (i % 100 == 0 && CLI_SHOULD_TICK)
         cli_progress_set(pb, i);
     }
 
-    /* fetch nonzero values in the i-th row */
+     * fetch nonzero values in the i-th row * 
     nv = fetch_row_nzvals(Xsvt_SVT, i, itypevals, whimin1,
                           inzvals, dnzvals, NULL);
 
-    if (nv < nc)     /* if there is at least one zero in the row */
-      min = max = 0; /* then we can use it to initialize min and max */
+    if (nv < nc)      * if there is at least one zero in the row * 
+      min = max = 0;  * then we can use it to initialize min and max * 
      
     for (int j=0; j < nv; j++) {
       double x = itypevals ? ((double) inzvals[j]) : dnzvals[j];
@@ -194,11 +196,14 @@ row_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR) {
   if (verbose)
     cli_progress_done(pb);
 
-  UNPROTECT(nunprotect); /* XsvtR rngR pb */
+  UNPROTECT(nunprotect);  * XsvtR rngR pb * 
 
   return(rngR);
 }
+*/
 
+/* this function was only here for testing purposes */
+/*
 SEXP
 col_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR) {
   SEXP        rngR;
@@ -221,8 +226,8 @@ col_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR) {
           length(Xsvt_dimR));
 
   Xsvt_dim = INTEGER(Xsvt_dimR);
-  nr = Xsvt_dim[0]; /* number of rows */
-  nc = Xsvt_dim[1]; /* number of columns */
+  nr = Xsvt_dim[0];  * number of rows * 
+  nc = Xsvt_dim[1];  * number of columns * 
 
   Xsvt_type = CHAR(STRING_ELT(getAttrib(XsvtR, SVT_SparseArray_typeSym), 0));
   Xsvt_SVT = GET_SLOT(XsvtR, SVT_SparseArray_svtSym);
@@ -249,12 +254,12 @@ col_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR) {
     double nzmin=NA_REAL;
     double nzmax=NA_REAL;
 
-    if (verbose) { /* show progress */
+    if (verbose) {  * show progress * 
       if (i % 100 == 0 && CLI_SHOULD_TICK)
         cli_progress_set(pb, i);
     }
 
-    if (length(Xsvt_SVT) > 0) { /* matrix not empty */
+    if (length(Xsvt_SVT) > 0) {  * matrix not empty * 
       svtLeaf = VECTOR_ELT(Xsvt_SVT, i);
       if (svtLeaf != R_NilValue) {
         SEXP    valsR = VECTOR_ELT(svtLeaf, 0);
@@ -264,8 +269,8 @@ col_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR) {
         int*    inzvals;
         double* dnzvals;
 
-        if (noffsets < nr)     /* if there is at least one zero in the column */
-          min = max = 0;       /* then we can use it to initialize min and max */
+        if (noffsets < nr)      * if there is at least one zero in the column * 
+          min = max = 0;        * then we can use it to initialize min and max * 
 
         if (nvals > 0) {
           if (itypevals)
@@ -305,10 +310,11 @@ col_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR) {
   if (verbose)
     cli_progress_done(pb);
 
-  UNPROTECT(nunprotect); /* XsvtR rngR pb */
+  UNPROTECT(nunprotect);  * XsvtR rngR pb * 
 
   return(rngR);
 }
+*/
 
 SEXP
 rowbycols_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR) {

@@ -1041,15 +1041,16 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
     res
 }
 
-.rowNzRanges_SVT_SparseMatrix_byrow <- function(X, verbose=FALSE) {
-    res <- .Call("row_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
-    res
-}
-
-.rowNzRanges_SVT_SparseMatrix_transpose_C <- function(X, verbose=FALSE) {
-    res <- .Call("col_rngs_nzrngs_SVT_SparseMatrix_R", t(X), verbose=verbose)
-    res
-}
+## these were only here for testing purposes
+## .rowNzRanges_SVT_SparseMatrix_byrow <- function(X, verbose=FALSE) {
+##     res <- .Call("row_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
+##     res
+## }
+## 
+## .rowNzRanges_SVT_SparseMatrix_transpose_C <- function(X, verbose=FALSE) {
+##     res <- .Call("col_rngs_nzrngs_SVT_SparseMatrix_R", t(X), verbose=verbose)
+##     res
+## }
 
 ## after discussions at https://github.com/Bioconductor/SparseArray/issues/22
 
