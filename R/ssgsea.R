@@ -78,27 +78,15 @@ setMethod("gsva", signature(param="ssgseaParam"),
                 ondisk <- TRUE
               }
 
-              ## ssgsea_sco <- NULL
-              ## if (version == 1L)
-              ##     ssgsea_sco <- ssgsea(X=filtDataMatrix,
-              ##                          geneSetsIdx=filtMappedGeneSets,
-              ##                          alpha=.get_alpha(param), 
-              ##                          normalization=.get_normalize(param),
-              ##                          any_na=anyNA(param),
-              ##                          na_use=.get_NAuse(param),
-              ##                          minSize=get_minSize(param),
-              ##                          verbose=verbose,
-              ##                          BPPARAM=BPPARAM)
-              ## else
-                  ssgsea_sco <- ssgsea2(X=filtDataMatrix,
-                                       geneSetsIdx=filtMappedGeneSets,
-                                       alpha=.get_alpha(param), 
-                                       normalization=.get_normalize(param),
-                                       any_na=anyNA(param),
-                                       na_use=.get_NAuse(param),
-                                       minSize=get_minSize(param),
-                                       ondisk=ondisk, verbose=verbose,
-                                       BPPARAM=BPPARAM, maxmem=maxmem)
+              ssgsea_sco <- ssgsea(X=filtDataMatrix,
+                                   geneSetsIdx=filtMappedGeneSets,
+                                   alpha=.get_alpha(param), 
+                                   normalization=.get_normalize(param),
+                                   any_na=anyNA(param),
+                                   na_use=.get_NAuse(param),
+                                   minSize=get_minSize(param),
+                                   ondisk=ondisk, verbose=verbose,
+                                   BPPARAM=BPPARAM, maxmem=maxmem)
 
               gs <- .geneSetsIndices2Names(
                   indices=filtMappedGeneSets,
@@ -482,128 +470,12 @@ setMethod("show",
 }
 
 #' @importFrom IRanges IntegerList match
-#' @importFrom BiocParallel bpnworkers bplapply SerialParam
-#' @importFrom MatrixGenerics colRanks
-#' @importFrom cli cli_alert_info cli_alert_warning cli_abort
-#' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
-ssgsea <- function(X, geneSetsIdx, alpha=0.25,
-                   normalization=TRUE,
-                   any_na=FALSE,
-                   na_use=c("everything", "all.obs", "na.rm"),
-                   minSize=1, verbose=TRUE,
-                   BPPARAM=SerialParam(progressbar=verbose)) {
-  na_use <- match.arg(na_use)
-
-  if (verbose)
-    cli_alert_info("Calculating ranks")
-  
-  R <- t(colRanks(X, ties.method="average"))
-  mode(R) <- "integer"
-
-  if (verbose)
-    cli_alert_info("Calculating rank weights")
-  
-  Ra <- abs(R)^alpha
-  
-  wna_env <- new.env()
-  assign("w", FALSE, envir=wna_env)
-  geneSetsIdx <- IntegerList(geneSetsIdx)
-  n <- ncol(X)
-  es <- NULL
-  if (n > 10 && bpnworkers(BPPARAM) > 1) {
-  
-    es <- bplapply(as.list(seq_len(n)), function(j) {
-      if (any_na && na_use == "na.rm") {
-        geneRanking <- order(R[, j], decreasing=TRUE, na.last=NA)
-        geneSetsRankIdx <- match(geneSetsIdx, geneRanking)
-        es_sample <- vapply(X=geneSetsRankIdx, FUN=.fastRndWalkNArm,
-                            FUN.VALUE=numeric(1),
-                            geneRanking, j, Ra, any_na, na_use,
-                            minSize, wna_env, USE.NAMES=FALSE)
-      } else {
-        geneRanking <- order(R[, j], decreasing=TRUE)
-        geneSetsRankIdx <- match(geneSetsIdx, geneRanking)
-        es_sample <- vapply(X=geneSetsRankIdx, FUN=.fastRndWalk,
-                            FUN.VALUE=numeric(1),
-                            geneRanking, j, Ra)
-      }
-      es_sample
-    }, BPPARAM=BPPARAM)
-  } else {
-    idpb <- NULL
-    if (verbose)
-      idpb <- cli_progress_bar("Calculating ssGSEA scores", total=n)
-    es <- lapply(as.list(seq_len(n)), function(j) {
-      if (any_na && na_use == "na.rm") {
-        geneRanking <- order(R[, j], decreasing=TRUE, na.last=NA)
-        geneSetsRankIdx <- match(geneSetsIdx, geneRanking)
-        es_sample <- vapply(X=geneSetsRankIdx, FUN=.fastRndWalkNArm,
-                            FUN.VALUE=numeric(1),
-                            geneRanking, j, Ra, any_na, na_use,
-                            minSize, wna_env, USE.NAMES=FALSE)
-      } else {
-        geneRanking <- order(R[, j], decreasing=TRUE)
-        geneSetsRankIdx <- match(geneSetsIdx, geneRanking)
-        es_sample <- vapply(X=geneSetsRankIdx, FUN=.fastRndWalk,
-                            FUN.VALUE=numeric(1),
-                            geneRanking, j, Ra)
-      }
-      if (verbose)
-        cli_progress_update(id=idpb)
-      es_sample
-    })
-    if (verbose)
-      cli_progress_done(idpb)
-  }
-  es <- do.call("cbind", es)
-  
-  if (any_na && na_use =="na.rm")
-    if (get("w", envir=wna_env)) {
-      msg <- sprintf(paste("NA enrichment scores in gene sets with less than",
-                           "%d genes after removing missing values"), minSize)
-      cli_alert_warning(msg)
-    }
-  
-  if (normalization) {
-    if (verbose)
-      cli_alert_info("Normalizing ssGSEA scores")
-    ## normalize enrichment scores by using the entire data set, as indicated
-    ## by Barbie et al., 2009, online methods, pg. 2
-
-    ## consider calculating the range on the fly to avoid having to do this
-    ## on a large matrix
-    rng <- NULL
-    if (any_na)
-      rng <- range(es, na.rm=TRUE) ## discard always NA values to calculate the
-                                   ## normalization factor to enable either the
-                                   ## propogation of NA values or to avoid them
-    else
-      rng <- range(es) ## na.rm increases execution time and memory consumption
-
-    if (any(is.na(rng) | !is.finite(rng))) {
-      msg <- paste("Cannot calculate normalizing factor for the enrichment",
-                   "scores, most likely due to NA values in the input data.")
-      cli_abort(c("x"=msg))
-    }
-    es <- es[, seq_len(n), drop=FALSE] / (rng[2] - rng[1])
-  }
-  
-  if (length(geneSetsIdx) == 1)
-    es <- matrix(es, nrow=1)
-  
-  rownames(es) <- names(geneSetsIdx)
-  colnames(es) <- colnames(X)
-  
-  es
-}
-
-#' @importFrom IRanges IntegerList match
 #' @importFrom BiocParallel bpnworkers
 #' @importFrom BiocGenerics "type<-"
 #' @importFrom MatrixGenerics colRanks
 #' @importFrom cli cli_alert_info cli_alert_warning cli_abort
 #' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
-ssgsea2 <- function(X, geneSetsIdx, alpha=0.25,
+ssgsea <- function(X, geneSetsIdx, alpha=0.25,
                    normalization=TRUE,
                    any_na=FALSE,
                    na_use=c("everything", "all.obs", "na.rm"),

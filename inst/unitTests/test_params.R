@@ -13,6 +13,7 @@ test_plageParam <- function() {
     gs <- replicate(ngs, sample(rownames(y), 25, replace=TRUE), simplify=FALSE)
 
     pp <- plageParam(y, gs)
+    show(pp)
 
     checkTrue(inherits(pp, "plageParam"))
     checkTrue(inherits(pp, "GsvaMethodParam"))
@@ -30,6 +31,7 @@ test_zscoreParam <- function() {
     gs <- replicate(ngs, sample(rownames(y), 25, replace=TRUE), simplify=FALSE)
     
     zp <- zscoreParam(y, gs)
+    show(zp)
 
     checkTrue(inherits(zp, "zscoreParam"))
     checkTrue(inherits(zp, "GsvaMethodParam"))
@@ -47,6 +49,7 @@ test_ssgseaParam <- function() {
     gs <- replicate(ngs, sample(rownames(y), 25, replace=TRUE), simplify=FALSE)
     
     sp <- ssgseaParam(y, gs)
+    show(sp)
 
     checkTrue(inherits(sp, "ssgseaParam"))
     checkTrue(inherits(sp, "GsvaMethodParam"))
@@ -75,6 +78,7 @@ test_gsvaParam <- function() {
     gs <- replicate(ngs, sample(rownames(y), 25, replace=TRUE), simplify=FALSE)
     
     gp <- gsvaParam(y, gs)
+    show(gp)
 
     checkTrue(inherits(gp, "gsvaParam"))
     checkTrue(inherits(gp, "GsvaMethodParam"))

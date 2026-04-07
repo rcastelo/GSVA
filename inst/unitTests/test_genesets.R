@@ -21,7 +21,13 @@ test_genesets <- function() {
     y[gsets$set1, (nGrp1+1):n] <- y[gsets$set1, (nGrp1+1):n] + 2
 
     ## estimate GSVA enrichment scores with gene sets input as a list
-    es.mat <- gsva(gsvaParam(y, gsets), verbose=FALSE)
+    gsvapar <- gsvaParam(y, gsets, verbose=FALSE)
+    es.mat <- gsva(gsvapar, verbose=FALSE)
+
+    ## check that gene sets are correctly propagated to the parameter object
+    checkIdentical(geneSets(gsvapar), gsets)
+    ## check that gene sets are correctly propagated to the output enrichment score matrix
+    checkIdentical(geneSets(es.mat), gsets)
 
     ## convert input gene sets into a GeneSetCollection object
     gsc <- geneIdsToGeneSetCollection(gsets)
@@ -42,4 +48,15 @@ test_geneSetDeDuplication <- function() {
     checkTrue(all(lengths(deduplicateGeneSets(gsets, deduplUse="union")) == c(3, 5)))
     checkTrue(all(lengths(deduplicateGeneSets(gsets, deduplUse="smallest")) == c(3, 3)))
     checkTrue(all(lengths(deduplicateGeneSets(gsets, deduplUse="largest")) == c(3, 4)))
+}
+
+test_readGMT <- function() {
+    message("Running unit tests for reading GMT files with readGMT()")
+
+    library(GSVAdata)
+    fname <- system.file("extdata", "c2.subsetdups.v7.5.symbols.gmt.gz",
+                        package="GSVAdata")
+    warn <- FALSE
+    suppressWarnings(c2.dupgenesets <- readGMT(fname, deduplUse="union", valueType="list"))
+    checkTrue(!any(duplicated(names(c2.dupgenesets))))
 }
