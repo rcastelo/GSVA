@@ -133,7 +133,7 @@ jobs:
       ## Most of these steps are the same as the ones in
       ## https://github.com/r-lib/actions/blob/master/examples/check-standard.yaml
       ## If they update their steps, we will also need to update ours.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up RStudio Package Manager for R binary packages
         run: sudo apt-get -y install apt-file ; Rscript --vanilla -e 'install.packages("rspm", repos="https://cran.r-project.org")'
@@ -179,7 +179,7 @@ jobs:
 
       - name: Cache R packages
         if: "!contains(github.event.head_commit.message, '/nocache')"
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /home/runner/work/_temp/Library
           key: ${{ env.cache-version }}-${{ runner.os }}-biocdocker-biocbranch-${{ needs.define-docker-info.outputs.biocversion }}-r-${{ steps.findrversion.outputs.rversion }}-bioc-${{ steps.findrversion.outputs.biocversionnum }}-${{ hashFiles('.github/depends.Rds') }}
