@@ -37,36 +37,50 @@
 #'
 #' @examples
 #'
+#' library(Matrix)
 #' library(SpatialExperiment)
-#' library(TENxVisiumData)
-#' library(scuttle)
-#' library(GSVA)
 #'
-#' spe <- HumanCerebellum()
-#' 
-#' is_mito <- grepl("(^MT-)|(^mt-)", rowData(spe)$symbol)
-#' spe <- addPerCellQC(spe, subsets=list(mito=is_mito))
-#' discardmask <- spe$sum < 250 | spe$detected < 200 | spe$subsets_mito_percent > 40
-#' spe <- spe[, !discardmask]
-#' spe <- spe[rowSums(assay(spe)) > 100, ]
-#' spe <- computeLibraryFactors(spe)
-#' spe <- logNormCounts(spe)
-#' 
-#' set.seed(123) ## for reproducibility of the random markers
+#' ## build a SpatialExperiment object
+#' syspath <- system.file("extdata", package="GSVA")
+#' fname <- "human_cerebellum_norm_logcounts_250x4816.mtx.gz"
+#' logcounts <- as(readMM(gzfile(file.path(syspath, fname))), "CsparseMatrix")
+#' fname <- "human_cerebellum_rowdata_250x4816.csv.gz"
+#' rowdata <- read.csv(gzfile(file.path(syspath, fname)), row.names=1)
+#' fname <- "human_cerebellum_coldata_250x4816.csv.gz"
+#' coldata <- read.csv(gzfile(file.path(syspath, fname)), row.names=1)
+#' fname <- "human_cerebellum_spatialcoords_250x4816.csv.gz"
+#' spatialcoords <- as.matrix(read.csv(gzfile(file.path(syspath, fname)),
+#'                                     row.names=1))
+#'
+#' spe <- SpatialExperiment(assays=list(logcounts=logcounts),
+#'                          rowData=rowdata,
+#'                          colData=coldata,
+#'                          spatialCoords=spatialcoords,
+#'                          sample_id="HumanCerebellum_WholeTranscriptome")
+#' spe <- addImg(spe, sample_id="HumanCerebellum_WholeTranscriptome",
+#'               image_id="lowres",
+#'               imageSource=file.path(syspath, "human_cerebellum_lowres.png"),
+#'               scaleFactor=0.0450045, load=TRUE)
+#'
+#' set.seed(123) ## for reproducibility of the random gene sets
 #' ## build two gene sets with 4 randomly chosen genes and one
 #' ## third gene set with a few microglia marker genes
 #' gsets <- list(gset1=sample(rownames(spe), size=4, replace=FALSE),
 #'               gset2=sample(rownames(spe), size=4, replace=FALSE),
 #'               microglia=c("ENSG00000078808", "ENSG00000116251",
 #'                           "ENSG00000142583", "ENSG00000173372"))
-#' gsvapar <- gsvaParam(spe, gsets)
+#'
+#' ## calculate GSVA enrichment scores
+#' gsvapar <- gsvaParam(spe, gsets, verbose=FALSE)
 #' es <- gsva(gsvapar, verbose=FALSE)
+#'
+#' ## calculate spatial autocorrelation on the GSVA enrichment scores
 #' spatCor(es, verbose=FALSE)
 #'
 #' @importFrom stats dist pnorm
 #' @importFrom SummarizedExperiment assay
-#' @importFrom cli cli_abort
-#' @importFrom BiocParallel bplapply SerialParam
+#' @importFrom cli cli_abort cli_progress_bar cli_progress_update
+#' @importFrom BiocParallel bpnworkers bplapply bpprogressbar SerialParam
 #' @exportMethod spatCor
 #' @export
 
@@ -74,6 +88,14 @@ setMethod("spatCor", signature("SpatialExperiment"),
     function(spe, assay= NA_character_, na.rm=FALSE,
              alternative="two.sided", squared=TRUE, verbose=TRUE,
              BPPARAM=SerialParam(progressbar = verbose)) {
+
+        nworkers <- 1L
+        if (!is.null(BPPARAM)) {
+            if (!is(BPPARAM, "BiocParallelParam"))
+                cli_abort(c("x"="'Argument BPPARAM' must be a 'BiocParallelParam' derivative. Please consult the BiocParallel package."))
+            nworkers <- bpnworkers(BPPARAM)
+        }
+
         assay <- .check_assayNames(assay, spe, verbose)
         weight_list <- .spe_dist_weight_matrix(spe,squared)
         rowns <- rownames(spe)
@@ -82,18 +104,43 @@ setMethod("spatCor", signature("SpatialExperiment"),
         df_res <- data.frame(observed=numeric(), expected=numeric(),
                              sd=numeric(), p.value=numeric(),
                              sample_id=character())
-        for(sample in unique(colData(spe)$sample_id)) {
+        for (sample in unique(colData(spe)$sample_id)) {
             spe_Moran <- list()
             logc <- assay(spe[,colData(spe)$sample_id == sample], assay)
             logc <- .filterGenes(logc, verbose=verbose, BPPARAM=BPPARAM)
-            spe_Moran <- bplapply(rowns, function(x) {
-                if (!(x %in% rownames(logc))) {
-                    return(list(observed=NA, expected=NA, sd=NA, p.value=NA))
-                } else {
-                    .internal_moran(logc[x, ], weight_list, na.rm=na.rm,
-                                    alternative=alternative)	       
+            if (is.null(BPPARAM) || nworkers == 1L) {
+                env <- NULL
+                if (verbose) {
+                    env <- new.env(parent=globalenv())
+                    progressmsg <- sprintf("Sample %s", sample)
+                    assign("idpb", cli_progress_bar(progressmsg,
+                                                    total=length(rowns)),
+                            envir=env)
                 }
-            }, BPPARAM = BPPARAM)
+                spe_Moran <- lapply(rowns, function(x, idpbe) {
+                    res <- list(observed=NA, expected=NA, sd=NA, p.value=NA)
+                    if (x %in% rownames(logc)) {
+                        res <- .internal_moran(logc[x, ], weight_list,
+                                               na.rm=na.rm,
+                                               alternative=alternative)
+                        if (verbose && is(idpbe, "environment"))
+                            cli_progress_update(id=get("idpb", envir=idpbe), 1)
+                    }
+                    res
+                }, idpb=env)
+                if (verbose)
+                    cli_progress_done(get("idpb", envir=env))
+            } else {                               ## parallel execution
+                if (verbose)
+                    bpprogressbar(BPPARAM) <- TRUE ## reporting progress wo/ cli
+                spe_Moran <- bplapply(rowns, function(x) {
+                    res <- list(observed=NA, expected=NA, sd=NA, p.value=NA)
+                    if (x %in% rownames(logc))
+                        res <- .internal_moran(logc[x, ], weight_list, na.rm=na.rm,
+                                               alternative=alternative)	       
+                    res
+                }, BPPARAM = BPPARAM)
+            }
             df_sample <- do.call(rbind, lapply(spe_Moran, as.data.frame))
             df_sample <- data.frame(gene_id = rownames(spe), df_sample) 
             df_sample$sample_id <- sample

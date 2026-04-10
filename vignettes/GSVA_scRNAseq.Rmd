@@ -102,7 +102,7 @@ package `r Biocpkg("scuttle")` [@mccarthy2017scater]. We start identifying
 mitochondrial genes.
 
 ```{r, message=FALSE, warning=FALSE}
-library(scuttle)
+library(scrapper)
 
 is_mito <- grepl("^MT-", rowData(sce)$Symbol_TENx)
 table(is_mito)
@@ -110,8 +110,8 @@ table(is_mito)
 Calculate quality control (QC) metrics and filter out low-quality cells.
 
 ```{r}
-sce <- quickPerCellQC(sce, subsets=list(Mito=is_mito),
-                           sub.fields="subsets_Mito_percent")
+sce <- quickRnaQc.se(sce, subsets=list(mito=is_mito))
+sce <- sce[, sce$keep]
 dim(sce)
 ```
 Figure \@ref(fig:cntxgene) below shows the empirical cumulative distribution of
@@ -135,8 +135,7 @@ Calculate library size factors and normalized units of expression in
 logarithmic scale.
 
 ```{r}
-sce <- computeLibraryFactors(sce)
-sce <- logNormCounts(sce)
+sce <- normalizeRnaCounts.se(sce, size.factors=sce$sum)
 assayNames(sce)
 ```
 
@@ -246,9 +245,9 @@ construction, and here we set `k=20` because it leads to a number of clusters
 close to the expected number of cell types.
 
 ```{r, message=FALSE, warning=FALSE}
-library(scran)
+library(bluster)
 
-g <- buildSNNGraph(es, k=20, assay.type="es")
+g <- makeSNNGraph(t(assay(es)), k=20)
 ```
 Second, we use the function `cluster_walktrap()` from the `r CRANpkg("igraph")`
 package [@csardi2006igraph], to cluster cells by finding densely connected
@@ -269,8 +268,7 @@ cluster the most frequent gene set, storing that assignment into the `sce`
 object with the function `colLabels()`.
 
 ```{r}
-## whmax <- apply(assay(es), 2, which.max)
-whmax <- apply(assay(es), 2, function(x) which.max(as.vector(x)))
+whmax <- apply(assay(es), 2, which.max)
 gsxlab <- split(rownames(es)[whmax], colLabels(es))
 gsxlab <- names(sapply(sapply(gsxlab, table), which.max))
 colLabels(es) <- factor(gsub("[0-9]\\.", "", gsxlab))[colLabels(es)]

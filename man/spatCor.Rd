@@ -54,30 +54,44 @@ alternative. It also tests for spatial autocorrelation assuming normality.
 }
 \examples{
 
+library(Matrix)
 library(SpatialExperiment)
-library(TENxVisiumData)
-library(scuttle)
-library(GSVA)
 
-spe <- HumanCerebellum()
+## build a SpatialExperiment object
+syspath <- system.file("extdata", package="GSVA")
+fname <- "human_cerebellum_norm_logcounts_250x4816.mtx.gz"
+logcounts <- as(readMM(gzfile(file.path(syspath, fname))), "CsparseMatrix")
+fname <- "human_cerebellum_rowdata_250x4816.csv.gz"
+rowdata <- read.csv(gzfile(file.path(syspath, fname)), row.names=1)
+fname <- "human_cerebellum_coldata_250x4816.csv.gz"
+coldata <- read.csv(gzfile(file.path(syspath, fname)), row.names=1)
+fname <- "human_cerebellum_spatialcoords_250x4816.csv.gz"
+spatialcoords <- as.matrix(read.csv(gzfile(file.path(syspath, fname)),
+                                    row.names=1))
 
-is_mito <- grepl("(^MT-)|(^mt-)", rowData(spe)$symbol)
-spe <- addPerCellQC(spe, subsets=list(mito=is_mito))
-discardmask <- spe$sum < 250 | spe$detected < 200 | spe$subsets_mito_percent > 40
-spe <- spe[, !discardmask]
-spe <- spe[rowSums(assay(spe)) > 100, ]
-spe <- computeLibraryFactors(spe)
-spe <- logNormCounts(spe)
+spe <- SpatialExperiment(assays=list(logcounts=logcounts),
+                         rowData=rowdata,
+                         colData=coldata,
+                         spatialCoords=spatialcoords,
+                         sample_id="HumanCerebellum_WholeTranscriptome")
+spe <- addImg(spe, sample_id="HumanCerebellum_WholeTranscriptome",
+              image_id="lowres",
+              imageSource=file.path(syspath, "human_cerebellum_lowres.png"),
+              scaleFactor=0.0450045, load=TRUE)
 
-set.seed(123) ## for reproducibility of the random markers
+set.seed(123) ## for reproducibility of the random gene sets
 ## build two gene sets with 4 randomly chosen genes and one
 ## third gene set with a few microglia marker genes
 gsets <- list(gset1=sample(rownames(spe), size=4, replace=FALSE),
               gset2=sample(rownames(spe), size=4, replace=FALSE),
               microglia=c("ENSG00000078808", "ENSG00000116251",
                           "ENSG00000142583", "ENSG00000173372"))
-gsvapar <- gsvaParam(spe, gsets)
+
+## calculate GSVA enrichment scores
+gsvapar <- gsvaParam(spe, gsets, verbose=FALSE)
 es <- gsva(gsvapar, verbose=FALSE)
+
+## calculate spatial autocorrelation on the GSVA enrichment scores
 spatCor(es, verbose=FALSE)
 
 }
