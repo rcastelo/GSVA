@@ -135,6 +135,9 @@ setMethod("gsva", signature(param="zscoreParam"),
 zscoreParam <- function(exprData, geneSets,
                         assay=NA_character_, annotation=NULL,
                         minSize=1,maxSize=Inf, verbose=TRUE) {
+
+    .check_input_expr_gene_sets(exprData, geneSets)
+
     ## check assay parameter and assay names
     assay <- .check_assayNames(assay, exprData, verbose)
 

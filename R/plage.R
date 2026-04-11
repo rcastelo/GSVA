@@ -131,6 +131,9 @@ setMethod("gsva", signature(param="plageParam"),
 plageParam <- function(exprData, geneSets,
                        assay=NA_character_, annotation=NULL,
                        minSize=1, maxSize=Inf, verbose=TRUE) {
+
+    .check_input_expr_gene_sets(exprData, geneSets)
+
     ## check assay parameter and assay names
     assay <- .check_assayNames(assay, exprData, verbose)
 

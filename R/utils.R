@@ -200,6 +200,40 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
           })
 
 
+## return direct subclasse of a union class, e.g., 'GsvaExprData'
+## or 'GsvaGeneSets'
+
+## obtain direct subclasses of a union class for error reporting purposes
+#' @importFrom methods isClass getClass is
+#' @importFrom cli cli_abort
+.getDirectSubclasses <- function(unionClass) {
+    if (!isClass(unionClass))
+        cli_abort(c("x"=sprintf("'%s' is not a valid union class name",
+                                unionClass)))
+
+    subClasses <- getClass(unionClass)@subclasses
+    dist <- vapply(subClasses, function(x) x@distance, numeric(1))
+    directSubclasses <- names(dist)[dist == 1]
+    directSubclasses
+}
+
+.check_input_expr_gene_sets <- function(exprData, geneSets) {
+    if (!is(exprData, "GsvaExprData")) {
+        subclassnames <- .getDirectSubclasses("GsvaExprData")
+        msg <- sprintf(paste("argument 'exprData' must be an object of one of",
+                            "the following classes: %s"),
+                       paste(subclassnames, collapse=", "))
+        cli_abort(c("x"=msg))
+    }
+    if (!is(geneSets, "GsvaGeneSets")) {
+        subclassnames <- .getDirectSubclasses("GsvaGeneSets")
+        msg <- sprintf(paste("argument 'geneSets' must be an object of one of",
+                            "the following classes: %s"),
+                       paste(subclassnames, collapse=", "))
+        cli_abort(c("x"=msg))
+    }
+}
+
 ## generate dummy names, e.g. row/col names for object M that knows 'nrow()'
 .dummyNames <- function(M, n=nrow(M), prefix="row") {
     fmt <- sprintf("%s%%0%dd", prefix, floor(log10(n)) + 1)

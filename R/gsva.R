@@ -347,7 +347,7 @@ setMethod("gsva", signature(param="gsvaParam"),
 #'
 #'
 #' @importFrom methods new
-#' @importFrom cli cli_alert_warning
+#' @importFrom cli cli_abort cli_alert_warning
 #' @importFrom utils capture.output
 #' @rdname gsvaParam-class
 #' 
@@ -363,6 +363,9 @@ gsvaParam <- function(exprData, geneSets,
                       filterRows=TRUE,
                       ondisk=c("auto", "yes", "no"),
                       verbose=TRUE) {
+
+    .check_input_expr_gene_sets(exprData, geneSets)
+
     kcdf <- match.arg(kcdf)
     kcdfNoneMinSampleSize <- as.integer(kcdfNoneMinSampleSize)
     checkNA <- match.arg(checkNA)

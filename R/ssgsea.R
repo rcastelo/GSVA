@@ -235,6 +235,9 @@ ssgseaParam <- function(exprData, geneSets,
                         use=c("everything", "all.obs", "na.rm"),
                         ondisk=c("auto", "yes", "no"),
                         verbose=TRUE) {
+
+    .check_input_expr_gene_sets(exprData, geneSets)
+
     checkNA <- match.arg(checkNA)
     use <- match.arg(use)
     ondisk <- match.arg(ondisk)
