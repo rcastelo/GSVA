@@ -11,8 +11,16 @@ test_plageParam <- function() {
                 dimnames=list(paste0("g", seq.int(p)),
                               paste0("s", seq.int(n))))
     gs <- replicate(ngs, sample(rownames(y), 25, replace=TRUE), simplify=FALSE)
+    names(gs) <- paste0("gs", seq.int(ngs))
 
     pp <- plageParam(y, gs)
+    show(pp)
+
+    checkTrue(inherits(pp, "plageParam"))
+    checkTrue(inherits(pp, "GsvaMethodParam"))
+
+    gsc <- geneIdsToGeneSetCollection(gs)
+    pp <- plageParam(y, gsc)
     show(pp)
 
     checkTrue(inherits(pp, "plageParam"))
@@ -29,12 +37,20 @@ test_zscoreParam <- function() {
                 dimnames=list(paste0("g", seq.int(p)),
                               paste0("s", seq.int(n))))
     gs <- replicate(ngs, sample(rownames(y), 25, replace=TRUE), simplify=FALSE)
+    names(gs) <- paste0("gs", seq.int(ngs))
     
     zp <- zscoreParam(y, gs)
     show(zp)
 
     checkTrue(inherits(zp, "zscoreParam"))
     checkTrue(inherits(zp, "GsvaMethodParam"))
+
+    gsc <- geneIdsToGeneSetCollection(gs)
+    pp <- plageParam(y, gsc)
+    show(pp)
+
+    checkTrue(inherits(pp, "plageParam"))
+    checkTrue(inherits(pp, "GsvaMethodParam"))
 
     checkException(zscoreParam(42))
 }
@@ -47,6 +63,7 @@ test_ssgseaParam <- function() {
                 dimnames=list(paste0("g", seq.int(p)),
                               paste0("s", seq.int(n))))
     gs <- replicate(ngs, sample(rownames(y), 25, replace=TRUE), simplify=FALSE)
+    names(gs) <- paste0("gs", seq.int(ngs))
     
     sp <- ssgseaParam(y, gs)
     show(sp)

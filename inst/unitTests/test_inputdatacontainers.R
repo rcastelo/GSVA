@@ -65,7 +65,9 @@ test_inputdatacontainers <- function() {
     library(Matrix)
     yMat <- Matrix(y, sparse=TRUE)
 
-    es.dgCMat <- gsva(gsvaParam(yMat, gsets, verbose=FALSE), verbose=FALSE)
+    param <- gsvaParam(yMat, gsets, verbose=FALSE)
+    show(param)
+    es.dgCMat <- gsva(param, verbose=FALSE)
     gsets.dgCMat <- geneSets(es.dgCMat)
 
     checkTrue(identical(es.mat, es.dgCMat))
@@ -75,4 +77,28 @@ test_inputdatacontainers <- function() {
     library(GSEABase)
     gsc <- geneIdsToGeneSetCollection(gsets.dgCMat, geneIdType="whatever")
     checkTrue(is(gsc, "GeneSetCollection"))
+
+    sp <- 0.5 * prod(dim(y))
+    ysp <- as.vector(y)
+    ysp[sample(length(ysp), sp)] <- 0
+    yMatSp <- Matrix(ysp, nrow=nrow(yMat), ncol=ncol(yMat),
+		     dimnames=dimnames(yMat), sparse=TRUE)
+    paramSp <- gsvaParam(yMatSp, gsets, verbose=FALSE)
+    es.dgCMatSp <- gsva(paramSp, verbose=FALSE)
+    
+    ## estimate GSVA enrichment scores with input as a SingleCellExperiment object
+    library(SingleCellExperiment)
+    sce <- SingleCellExperiment(assays=list(logcounts=yMatSp),
+				rowData=DataFrame(data.frame(dummy=1:nrow(y),
+							     row.names=rownames(y))),
+				colData=DataFrame(data.frame(dummy=1:ncol(y),
+							     row.names=colnames(y))))
+    param <- gsvaParam(sce, gsets, verbose=FALSE)
+    show(param)
+    es.sce <- gsva(param, verbose=FALSE)
+    gsets.sce <- geneSets(es.sce)
+
+    attr(es.dgCMatSp, "geneSets") <- NULL
+    checkTrue(identical(es.dgCMatSp, assay(es.sce)))
+    checkTrue(identical(gsets.mat, gsets.sce))
 }
