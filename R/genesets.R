@@ -1383,58 +1383,12 @@ setMethod("computeGeneSetsOverlap",
     .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
 })
 
-#' @aliases computeGeneSetsOverlap,list,ExpressionSet-method
-#' @rdname computeGeneSetsOverlap
-#' @exportMethod computeGeneSetsOverlap
-setMethod("computeGeneSetsOverlap",
-          signature(gSets="list", uniqGenes="ExpressionSet"),
-          function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
-    uniqGenes <- featureNames(uniqGenes)
-    totalGenes <- length(uniqGenes)
-
-    ## map to the actual features for which expression data is available
-    gSets <- .mapGeneSetsToFeatures(gSets, uniqGenes)
-
-    lenGsets <- lengths(gSets)
-    totalGsets <- length(gSets)
-
-    gSetsMembershipMatrix <- matrix(0, nrow=totalGenes, ncol=totalGsets,
-                                    dimnames=list(uniqGenes, names(gSets)))
-    members <- cbind(unlist(gSets, use.names=FALSE),
-                     rep(seq_len(totalGsets), times=lenGsets))
-    gSetsMembershipMatrix[members] <- 1
-
-    .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
-})
-
 #' @aliases computeGeneSetsOverlap,GeneSetCollection,character-method
 #' @rdname computeGeneSetsOverlap
 #' @exportMethod computeGeneSetsOverlap
 setMethod("computeGeneSetsOverlap",
           signature(gSets="GeneSetCollection", uniqGenes="character"),
           function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
-
-    gSetsMembershipMatrix <- incidence(gSets)
-    mask <- colnames(gSetsMembershipMatrix) %in% uniqGenes
-    gSetsMembershipMatrix <- t(gSetsMembershipMatrix[, mask])
-
-    .computeGeneSetsOverlap(gSetsMembershipMatrix, minSize, maxSize)
-})
-
-#' @aliases computeGeneSetsOverlap,GeneSetCollection,ExpressionSet-method
-#' @rdname computeGeneSetsOverlap
-#' @importFrom GSEABase mapIdentifiers AnnoOrEntrezIdentifier
-#' @importFrom Biobase featureNames
-#' @importFrom BiocGenerics annotation
-#' @exportMethod computeGeneSetsOverlap
-setMethod("computeGeneSetsOverlap",
-          signature(gSets="GeneSetCollection", uniqGenes="ExpressionSet"),
-          function(gSets, uniqGenes, minSize=1, maxSize=Inf) {
-    ## map gene identifiers of the gene sets to the features in the chip
-    gSets <- mapIdentifiers(gSets,
-                            AnnoOrEntrezIdentifier(annotation(uniqGenes)))
-  
-    uniqGenes <- featureNames(uniqGenes)
 
     gSetsMembershipMatrix <- incidence(gSets)
     mask <- colnames(gSetsMembershipMatrix) %in% uniqGenes
