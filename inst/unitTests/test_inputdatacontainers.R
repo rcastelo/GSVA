@@ -25,7 +25,7 @@ test_inputdatacontainers <- function() {
     gsets.mat <- geneSets(es.mat)
 
     ## estimate GSVA enrichment scores with input as an ExpressionSet object
-    library(Biobase)
+    suppressPackageStartupMessages(library(Biobase))
 
     y2 <- y
     rownames(y2) <- NULL
@@ -48,8 +48,9 @@ test_inputdatacontainers <- function() {
     checkTrue(identical(gsets.mat, gsets.eSet))
 
     ## estimate GSVA enrichment scores with input as a SummarizedExperiment object
-    library(S4Vectors)
-    library(SummarizedExperiment)
+    suppressPackageStartupMessages(library(S4Vectors))
+    suppressPackageStartupMessages(library(SummarizedExperiment))
+
     se <- SummarizedExperiment(assay=list(counts=y2),
                                rowData=DataFrame(data.frame(dummy=1:nrow(y),
                                                             row.names=rownames(y))),
@@ -62,7 +63,8 @@ test_inputdatacontainers <- function() {
     checkTrue(identical(gsets.mat, gsets.se))
 
     ## estimate GSVA enrichment scores with input as a dgCMatrix object
-    library(Matrix)
+    suppressPackageStartupMessages(library(Matrix))
+
     yMat <- Matrix(y, sparse=TRUE)
 
     param <- gsvaParam(yMat, gsets, verbose=FALSE)
@@ -74,8 +76,9 @@ test_inputdatacontainers <- function() {
     checkTrue(identical(gsets.mat, gsets.dgCMat))
 
     ## testing geneIdsToGeneSetCollection()
-    library(GSEABase)
-    gsc <- geneIdsToGeneSetCollection(gsets.dgCMat, geneIdType="whatever")
+    suppressPackageStartupMessages(library(GSEABase))
+
+    suppressWarnings(gsc <- geneIdsToGeneSetCollection(gsets.dgCMat, geneIdType="whatever"))
     checkTrue(is(gsc, "GeneSetCollection"))
 
     sp <- 0.5 * prod(dim(y))
@@ -87,12 +90,15 @@ test_inputdatacontainers <- function() {
     es.dgCMatSp <- gsva(paramSp, verbose=FALSE)
     
     ## estimate GSVA enrichment scores with input as a SingleCellExperiment object
-    library(SingleCellExperiment)
+    suppressPackageStartupMessages(library(SingleCellExperiment))
+
     sce <- SingleCellExperiment(assays=list(logcounts=yMatSp),
 				rowData=DataFrame(data.frame(dummy=1:nrow(y),
 							     row.names=rownames(y))),
 				colData=DataFrame(data.frame(dummy=1:ncol(y),
 							     row.names=colnames(y))))
+    gsvaAnnotation(sce) <- SymbolIdentifier("org.Hs.eg.db")
+    out <- gsvaAnnotation(sce)
     param <- gsvaParam(sce, gsets, verbose=FALSE)
     show(param)
     es.sce <- gsva(param, verbose=FALSE)
@@ -101,4 +107,8 @@ test_inputdatacontainers <- function() {
     attr(es.dgCMatSp, "geneSets") <- NULL
     checkTrue(identical(es.dgCMatSp, assay(es.sce)))
     checkTrue(identical(gsets.mat, gsets.sce))
+
+    gsets.ov.list <- computeGeneSetsOverlap(gsets.sce, rownames(sce))
+    gsets.ov.gsc <- computeGeneSetsOverlap(gsc, rownames(sce))
+    checkTrue(identical(gsets.ov.list, gsets.ov.gsc))
 }

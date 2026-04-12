@@ -53,10 +53,21 @@ test_geneSetDeDuplication <- function() {
 test_readGMT <- function() {
     message("Running unit tests for reading GMT files with readGMT()")
 
+    checkException(readGMT(c("nonexistent_file1.gmt", "nonexistent_file2.gmt")))
+    checkException(readGMT("nonexistent_file.gmt"))
+
     library(GSVAdata)
     fname <- system.file("extdata", "c2.subsetdups.v7.5.symbols.gmt.gz",
                         package="GSVAdata")
-    warn <- FALSE
-    suppressWarnings(c2.dupgenesets <- readGMT(fname, deduplUse="union", valueType="list"))
+    suppressWarnings(c2.dupgenesets <- readGMT(fname, deduplUse="union",
+                                               valueType="list"))
+    checkTrue(!any(duplicated(names(c2.dupgenesets))))
+    suppressWarnings(c2.dupgenesets <- readGMT(fname, deduplUse="largest",
+                                               valueType="list"))
+    suppressWarnings(c2.dupgenesets <- readGMT(fname, deduplUse="drop",
+                                               valueType="list"))
+    checkTrue(!any(duplicated(names(c2.dupgenesets))))
+    suppressWarnings(c2.dupgenesets <- readGMT(fname, deduplUse="smallest",
+                                               valueType="GeneSetCollection"))
     checkTrue(!any(duplicated(names(c2.dupgenesets))))
 }
