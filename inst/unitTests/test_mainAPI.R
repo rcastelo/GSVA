@@ -14,13 +14,6 @@ test_mainAPI <- function() {
     gs <- replicate(ngs, sample(rownames(xf), 25, replace=FALSE), simplify=FALSE)
     names(gs) <- paste0("gs", seq_len(ngs))
 
-    ## library("Biobase")
-    ## es1 <- ExpressionSet(xf)
-    ## es2 <- ExpressionSet(xi)
-
-    ## library("SummarizedExperiment")
-    ## se <- SummarizedExperiment(assays=list(expr=xf, counts=xi))
-
     g1 <- gsva(gsvaParam(exprData=xf, geneSets=gs), verbose=FALSE)
     checkIdentical(class(xf), class(g1))
     checkEquals(names(gs), rownames(g1))

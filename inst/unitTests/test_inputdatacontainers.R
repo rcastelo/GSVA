@@ -22,40 +22,57 @@ test_inputdatacontainers <- function() {
 
     ## estimate GSVA enrichment scores with input as a matrix
     es.mat <- gsva(gsvaParam(y, gsets), verbose=FALSE)
+    gsets.mat <- geneSets(es.mat)
 
     ## estimate GSVA enrichment scores with input as an ExpressionSet object
+    library(Biobase)
+
     y2 <- y
     rownames(y2) <- NULL
-    eset <- Biobase::ExpressionSet(assayData=y2,
-                                   phenoData=as(data.frame(dummy=1:ncol(y),
-                                                           row.names=colnames(y)),
-                                                "AnnotatedDataFrame"),
-                                   featureData=as(data.frame(dummy=1:nrow(y),
-                                                             row.names=rownames(y)),
-                                                  "AnnotatedDataFrame"))
+    eset <- ExpressionSet(assayData=y2,
+                          phenoData=as(data.frame(dummy=1:ncol(y),
+                                                  row.names=colnames(y)),
+                                       "AnnotatedDataFrame"),
+                          featureData=as(data.frame(dummy=1:nrow(y),
+                                                    row.names=rownames(y)),
+                                         "AnnotatedDataFrame"))
     es.eset <- gsva(gsvaParam(eset, gsets), verbose=FALSE)
+    gsets.eSet <- geneSets(es.eset)
 
     ## as of 1.51.9, gene sets will be returned as attributes for containers not
     ## inheriting from SummarizedExperiment and interfere with the check
     es.mat2 <- es.mat
     attr(es.mat2, "geneSets") <- NULL
     attr(es.eset, "geneSets") <- NULL
-    checkTrue(identical(es.mat2, Biobase::exprs(es.eset)))
+    checkTrue(identical(es.mat2, exprs(es.eset)))
+    checkTrue(identical(gsets.mat, gsets.eSet))
 
     ## estimate GSVA enrichment scores with input as a SummarizedExperiment object
-    se <- SummarizedExperiment::SummarizedExperiment(assay=list(counts=y2),
-                                                     rowData=S4Vectors::DataFrame(data.frame(dummy=1:nrow(y),
-                                                                                             row.names=rownames(y))),
-                                                     colData=S4Vectors::DataFrame(data.frame(dummy=1:ncol(y),
-                                                                                             row.names=colnames(y))))
-    es.se <- gsva(gsvaParam(se, gsets), verbose=FALSE)
+    library(S4Vectors)
+    library(SummarizedExperiment)
+    se <- SummarizedExperiment(assay=list(counts=y2),
+                               rowData=DataFrame(data.frame(dummy=1:nrow(y),
+                                                            row.names=rownames(y))),
+                               colData=DataFrame(data.frame(dummy=1:ncol(y),
+                                                            row.names=colnames(y))))
+    es.se <- gsva(gsvaParam(se, gsets, verbose=FALSE), verbose=FALSE)
+    gsets.se <- geneSets(es.se)
 
-    checkTrue(identical(es.mat2, SummarizedExperiment::assays(es.se)[[1]]))
+    checkTrue(identical(es.mat2, assay(es.se)))
+    checkTrue(identical(gsets.mat, gsets.se))
 
     ## estimate GSVA enrichment scores with input as a dgCMatrix object
-    yMat <- Matrix::Matrix(y, sparse=TRUE)
+    library(Matrix)
+    yMat <- Matrix(y, sparse=TRUE)
 
-    es.dgCMat <- gsva(gsvaParam(yMat, gsets), verbose=FALSE)
+    es.dgCMat <- gsva(gsvaParam(yMat, gsets, verbose=FALSE), verbose=FALSE)
+    gsets.dgCMat <- geneSets(es.dgCMat)
 
     checkTrue(identical(es.mat, es.dgCMat))
+    checkTrue(identical(gsets.mat, gsets.dgCMat))
+
+    ## testing geneIdsToGeneSetCollection()
+    library(GSEABase)
+    gsc <- geneIdsToGeneSetCollection(gsets.dgCMat, geneIdType="whatever")
+    checkTrue(is(gsc, "GeneSetCollection"))
 }
