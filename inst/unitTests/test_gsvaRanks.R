@@ -7,9 +7,9 @@ test_gsvaRanks <- function() {
     nGrp2 <- n - nGrp1 ## number of samples in group 2
 
     ## consider three disjoint gene sets
-    geneSets <- list(set1=paste("g", 1:3, sep=""),
-                     set2=paste("g", 4:6, sep=""),
-                     set3=paste("g", 7:10, sep=""))
+    gsets <- list(set1=paste("g", 1:3, sep=""),
+                  set2=paste("g", 4:6, sep=""),
+                  set3=paste("g", 7:10, sep=""))
 
     ## sample data from a normal distribution with mean 0 and st.dev. 1
     ## seeding the random number generator for the purpose of this test
@@ -18,7 +18,7 @@ test_gsvaRanks <- function() {
                 dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
 
     ## build GSVA parameter object
-    gsvapar <- gsvaParam(y, geneSets)
+    gsvapar <- gsvaParam(y, gsets)
 
     ## calculate GSVA scores in one step
     gsva_es1 <- gsva(gsvapar, verbose=FALSE)
@@ -34,4 +34,10 @@ test_gsvaRanks <- function() {
     ## the same result with the same input gene sets
     checkEqualsNumeric(gsva_es1, gsva_es2)
     checkTrue(all.equal(gsva_es1, gsva_es2))
+
+    ## check that gsvaEnrichment() works
+    geneSets(gsvarankspar) <- c(gsets, set4=c("g1", "g4", "g7"))
+    gsvaenrich <- gsvaEnrichment(gsvarankspar, plot="no")
+    checkEqualsNumeric(gsva_es1[1, 1], gsvaenrich$score)
 }
+
