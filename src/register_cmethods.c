@@ -35,9 +35,6 @@ SEXP
 ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR);
 
 SEXP
-order_rankstat_R(SEXP xR);
-
-SEXP
 ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR);
 
 SEXP
@@ -53,12 +50,6 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP sparseR,
 
 SEXP
 ranks2stats_R(SEXP ranksR, SEXP jR, SEXP sparseR);
-
-SEXP
-order_rankstat_sparse_to_dense_R(SEXP XCspR, SEXP jR);
-
-SEXP
-order_rankstat_sparse_to_sparse_R(SEXP XCspR, SEXP jR);
 
 SEXP
 fetch_row_nzvals_R(SEXP svtR, SEXP iR, SEXP whimin1R);
@@ -94,8 +85,6 @@ static R_CallMethodDef callMethods[] = {
   {"ecdfvals_dense_to_dense_nas_R", (DL_FUNC) &ecdfvals_dense_to_dense_nas_R, 2},
   {"gsva_score_genesets_R", (DL_FUNC) &gsva_score_genesets_R, 10},
   {"ranks2stats_R", (DL_FUNC) &ranks2stats_R, 4},
-  {"order_rankstat_sparse_to_dense_R", (DL_FUNC) &order_rankstat_sparse_to_dense_R, 2},
-  {"order_rankstat_sparse_to_sparse_R", (DL_FUNC) &order_rankstat_sparse_to_sparse_R, 2},
   {"fetch_row_nzvals_R", (DL_FUNC) &fetch_row_nzvals_R, 3},
   {"row_rngs_nzrngs_RsparseMatrix_R", (DL_FUNC) &row_rngs_nzrngs_RsparseMatrix_R, 2},
   /* {"row_rngs_nzrngs_SVT_SparseMatrix_R", (DL_FUNC) &row_rngs_nzrngs_SVT_SparseMatrix_R, 2}, */
@@ -138,5 +127,4 @@ R_init_GSVA(DllInfo *info) {
   GSVA_attrNAsSym = install("attrNAs");
 
   R_useDynamicSymbols(info, TRUE);
-
 }

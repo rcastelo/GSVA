@@ -29,7 +29,7 @@ test_sparseMethods <- function(){
     checkEqualsNumeric(ms, Ms)
 }
 
-text_sparse_ecdfvals <- function() {
+test_sparse_ecdfvals <- function() {
     message("Running unit tests for sparse ECDF values calculations.")
 
     ecdfvals_dense <- function(X) t(apply(X, 1, function(rx) ecdf(rx)(rx)))
@@ -75,8 +75,8 @@ text_sparse_ecdfvals <- function() {
     checkEqualsNumeric(SparseArray(res_C_sparse_to_sparse), res_C_svt_to_svt)
 }
 
-text_sparse_kcdfvals <- function() {
-    message("Running unit tests for sparse ECDF values calculations.")
+test_sparse_kcdfvals <- function() {
+    message("Running unit tests for sparse KCDF values calculations.")
 
     kcdfegaussianvals_sparse_to_dense <- function(x) {
         x <- as.matrix(x)
