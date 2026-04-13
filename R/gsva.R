@@ -1215,17 +1215,6 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE, verbos
     return(R)
 }
 
-zorder_rankstat <- function(z, p) {
-  ## calculation of the ranks by expression-level statistic
-  zord <- apply(z, 2, order, decreasing=TRUE)
-
-  ## calculation of the rank-order statistic
-  zrs <- apply(zord, 2, function(x, p)
-               do.call("[<-", list(rep(0, p), x, abs(p:1-p/2))), p)
-
-  list(Zorder=zord, ZrankStat=zrs)
-}
-
 ## here gSetIdx contains the positions in the decreasing gene ranking
 ## and rankStat contains the rank statistic value in the original
 ## gene order of the data
@@ -1308,51 +1297,6 @@ zorder_rankstat <- function(z, p) {
     list(kernel=kernel, Gaussk=Gaussk)
 }
 
-
-#' @importFrom cli cli_progress_update
-#' @importFrom parallel splitIndices
-.row_iter <- function(X, idpb, n_chunks) {
-    idx <- splitIndices(nrow(X), min(nrow(X), n_chunks))
-    i <- 0L
-    function() {
-        if (i == length(idx))
-            return(NULL)
-        i <<- i + 1L
-        if (!is.null(idpb))
-            cli_progress_update(id=idpb, set=i)
-        X[idx[[i]], , drop=FALSE]
-    }
-}
-
-#' @importFrom cli cli_progress_update
-#' @importFrom parallel splitIndices
-.col_iter <- function(X, idpb, n_chunks) {
-    idx <- splitIndices(ncol(X), min(ncol(X), n_chunks))
-    i <- 0L
-    function() {
-        if (i == length(idx))
-            return(NULL)
-        i <<- i + 1L
-        if (!is.null(idpb))
-            cli_progress_update(id=idpb, set=i)
-        X[, idx[[i]], drop=FALSE]
-    }
-}
-
-#' @importFrom cli cli_progress_update
-#' @importFrom parallel splitIndices
-.col_iter_idx <- function(X, idpb, n_chunks) {
-    idx <- splitIndices(ncol(X), min(ncol(X), n_chunks))
-    i <- 0L
-    function() {
-        if (i == length(idx))
-            return(NULL)
-        i <<- i + 1L
-        if (!is.null(idpb))
-            cli_progress_update(id=idpb, set=i)
-        idx[[i]]
-    }
-}
 
 #' @importFrom IRanges IntegerList match
 #' @importFrom BiocParallel bpnworkers
@@ -1540,91 +1484,6 @@ zorder_rankstat <- function(z, p) {
 
     list(dos=dos, srs=srs)
 }
-
-## convert ranks into decreasing order statistics and symmetric rank statistics
-## r is a matrix of features x samples/cells
-
-#' @importFrom MatrixGenerics colMaxs
-#' @importFrom BiocGenerics which
-.ranks2stats_block <- function(r, sparse) {
-    stopifnot(length(dim(r)) == 2) ## QC
-    mask <- unname(as.matrix(r)) == 0L
-    p <- nrow(r)
-    r_dense <- as.matrix(unname(r))           ## convert to dense
-    mode(r_dense) <- "integer"                ## assume ranks are integer
-    wh <- NULL
-
-    if (any(mask)) {                          ## sparse ranks into dense ranks
-        nzs <- colSums(mask)
-        mode(nzs) <- "integer"
-        nzsmat <- matrix(nzs, nrow=nrow(r), ncol=ncol(r), byrow=TRUE)
-        wh <- which(mask, arr.ind=TRUE)
-        nzsmat[wh] <- 0L
-        r_dense <- r_dense + nzsmat           ## shift ranks of nonzero values
-        r_dense[wh] <- unlist(lapply(nzs,     ## zeros get increasing ranks
-                                     seq.int))
-    }
-
-    dos <- p - r_dense + 1L                   ## dense ranks into
-                                              ## decreasing order stats
-    srs <- NULL
-    if (any(mask) && sparse) {
-        r[wh] <- 1L                   ## all zeros get the same first rank
-        wh <- which(!mask, arr.ind=TRUE)
-        r[wh] <- r[wh] + 1L       ## shift ranks of nonzero values by one
-        maxrmat <- matrix(colMaxs(r)/2, nrow=nrow(r), ncol=ncol(r), byrow=TRUE)
-        srs <- as.matrix(abs(maxrmat - r))
-    } else
-        srs <- abs(p/2 - r_dense)
-
-    list(dos=dos, srs=srs)
-}
-
-## convert ranks into decreasing order statistics and symmetric rank statistics
-## skipping NA values, r is a matrix of features x samples/cells
-.ranks2stats_nas_block <- function(r, sparse) {
-    stopifnot(length(dim(r)) == 2) ## QC
-    mask <- unname(as.matrix(r)) == 0L
-    na_mask <- is.na(mask)
-
-    if (all(na_mask))
-        return(list(dos=matrix(NA_integer_, nrow(r), ncol(r)),
-                    srs=matrix(NA_real_, nrow(r), ncol(r))))
-
-    n_nas <- colSums(na_mask)
-    mode(n_nas) <- "integer"
-    mask <- !na_mask & mask
-    p <- nrow(r)
-    r_dense <- as.matrix(r)
-    mode(r_dense) <- "integer"          ## assume ranks are integer
-
-    if (any(mask)) {                    ## sparse ranks into dense ranks
-        nzs <- colSums(mask)
-        mode(nzs) <- "integer"
-        nzsmat <- matrix(nzs, nrow=nrow(r), ncol=ncol(r), byrow=TRUE)
-        nzsmat[mask] <- 0L
-        r_dense <- r_dense + nzsmat            ## shift ranks of nonzero values
-        r_dense[!mask] <- r_dense[!mask] + nzs ## shift ranks of nonzero values
-        r_dense[mask] <- unlist(lapply(nzs,    ## zeros get increasing ranks
-                                       seq.int))
-    }
-
-    n_nasmat <-  matrix(n_nas, nrow=nrow(r), ncol=ncol(r), byrow=TRUE)
-    dos <- p - n_nasmat - r_dense + 1L   ## dense ranks into decreasing order stats
-
-    srs <- NULL
-    if (any(mask) && sparse) {
-        r[!mask] <- r[!mask] + 1L     ## shift ranks of nonzero values by one
-        r[mask] <- 1L                 ## all zeros get the same first rank
-        maxrmat <- matrix(colMaxs(r, na.rm=TRUE)/2, nrow=nrow(r), ncol=ncol(r),
-                          byrow=TRUE)
-        srs <- abs(maxrmat - r)
-    } else
-        srs <- abs((p - n_nasmat)/2 - r_dense)
-
-    list(dos=dos, srs=srs)
-}
-
 
 ## convert ranks into decreasing order statistics and symmetric rank statistics
 ## skipping NA values
@@ -2108,11 +1967,6 @@ zorder_rankstat <- function(z, p) {
   res
 }
 
-.order_rankstat <- function(x) {
-  stopifnot(is.numeric(x)) ## QC
-  .Call("order_rankstat_R", x)
-}
-
 .gsva_rnd_walk <- function(gsetIdx, decOrdStat, symRnkStat) {
   stopifnot(is.integer(gsetIdx)) ## QC
   stopifnot(is.integer(decOrdStat)) ## QC
@@ -2152,24 +2006,6 @@ zorder_rankstat <- function(z, p) {
     }
 
     sco
-}
-
-.ranks2stats_C <- function(R, j, sparse, anyna) {
-  stopifnot(is.numeric(j)) ## QC
-  stopifnot(is.logical(sparse)) ## QC
-  stopifnot(is.logical(anyna)) ## QC
-  .Call("ranks2stats_R", R, as.integer(j), sparse, anyna)
-}
-
-
-.order_rankstat_sparse_to_dense <- function(X, j) {
-  stopifnot(is(X, "CsparseMatrix")) ## QC
-  .Call("order_rankstat_sparse_to_dense_R", X, j)
-}
-
-.order_rankstat_sparse_to_sparse <- function(X, j) {
-  stopifnot(is(X, "CsparseMatrix")) ## QC
-  .Call("order_rankstat_sparse_to_sparse_R", X, j)
 }
 
 ## calculate ranks using on an SVT_SparseMatrix object

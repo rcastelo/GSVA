@@ -11,7 +11,7 @@ Authors@R: c(person("Robert", "Castelo", role=c("aut", "cre"),
              person("Chan Zuckerberg Initiative (CZI)", role="fnd"),
              person("Spanish Ministry of Science, Innovation and Universities (MCIU)", role="fnd"))
 Depends: R (>= 4.0.0)
-Imports: methods, stats, utils, graphics, parallel, BiocGenerics,
+Imports: methods, stats, utils, graphics, BiocGenerics,
          MatrixGenerics, S4Vectors, S4Arrays, HDF5Array, SparseArray,
          DelayedArray, IRanges, Biobase, SummarizedExperiment, GSEABase,
          Matrix (>= 1.5-0), BiocParallel, SingleCellExperiment, BiocSingular,

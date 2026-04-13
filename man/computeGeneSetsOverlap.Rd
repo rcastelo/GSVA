@@ -3,18 +3,12 @@
 \name{computeGeneSetsOverlap}
 \alias{computeGeneSetsOverlap}
 \alias{computeGeneSetsOverlap,list,character-method}
-\alias{computeGeneSetsOverlap,list,ExpressionSet-method}
 \alias{computeGeneSetsOverlap,GeneSetCollection,character-method}
-\alias{computeGeneSetsOverlap,GeneSetCollection,ExpressionSet-method}
 \title{Compute gene-sets overlap}
 \usage{
 \S4method{computeGeneSetsOverlap}{list,character}(gSets, uniqGenes, minSize = 1, maxSize = Inf)
 
-\S4method{computeGeneSetsOverlap}{list,ExpressionSet}(gSets, uniqGenes, minSize = 1, maxSize = Inf)
-
 \S4method{computeGeneSetsOverlap}{GeneSetCollection,character}(gSets, uniqGenes, minSize = 1, maxSize = Inf)
-
-\S4method{computeGeneSetsOverlap}{GeneSetCollection,ExpressionSet}(gSets, uniqGenes, minSize = 1, maxSize = Inf)
 }
 \arguments{
 \item{gSets}{Gene sets given either as a \code{list} or a
