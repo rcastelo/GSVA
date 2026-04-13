@@ -28,6 +28,8 @@ test_navalues <- function() {
     ## calculate GSVA scores with use="na.rm"
     gsvapar <- gsvaParam(y, geneSets, use="na.rm")
     es <- gsva(gsvapar, verbose=FALSE)
+    gsvapar <- gsvaParam(y, geneSets, kcdf="none", use="na.rm")
+    es <- gsva(gsvapar, verbose=FALSE)
 
     ## calculate GSVA scores with use="all.obs", which
     ## should prompt an error when building the parameter object

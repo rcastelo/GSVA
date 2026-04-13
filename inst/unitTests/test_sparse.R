@@ -34,17 +34,20 @@ text_sparse_ecdfvals <- function() {
 
     ecdfvals_dense <- function(X) t(apply(X, 1, function(rx) ecdf(rx)(rx)))
     ecdfvals_sparse_to_sparse <- function(X) {
+        stopifnot(is(X, "dgCMatrix")) ## QC
         for (i in 1:nrow(X)) {
             rx <- X[i, , drop=FALSE]
-            vals <- unique(sort(rx@x))
+            vals <- sort(unique(rx@x))
             mt <- match(rx@x, vals)
             tab <- tabulate(mt, nbins=length(vals))
             ecdfvals <- cumsum(tab) / nnzero(rx)
-            X[i, rep.int(1:n, diff(rx@p))] <- ecdfvals[mt]
+            X[i, which(diff(rx@p) > 0)] <- ecdfvals[mt]
         }
         X
     }
 
+    suppressPackageStartupMessages(library(Matrix))
+    suppressPackageStartupMessages(library(SparseArray))
     n <- 100
     p <- 100
     z <- numeric(p * n)
@@ -53,13 +56,72 @@ text_sparse_ecdfvals <- function() {
     zz <- matrix(z, nrow=p, ncol=n)
     zzs <- Matrix(zz, sparse=TRUE)
     res_R_dense <- ecdfvals_dense(zz)
-    res_C_dense_to_dense <- GSVA:::.ecdfvals_dense_to_dense(zz)
+    res_C_dense_to_dense <- GSVA:::.ecdfvals_dense_to_dense(zz, FALSE)
     checkEqualsNumeric(res_R_dense, res_C_dense_to_dense)
 
-    res_C_sparse_to_dense <- GSVA:::.ecdfvals_sparse_to_dense(zzs)
+    res_C_sparse_to_dense <- GSVA:::.ecdfvals_sparse_to_dense(zzs, FALSE)
     checkEqualsNumeric(res_R_dense, res_C_sparse_to_dense)
 
     res_R_sparse_to_sparse <- ecdfvals_sparse_to_sparse(zzs)
-    res_C_sparse_to_sparse <- GSVA:::.ecdfvals_sparse_to_sparse(zzs)
+    res_C_sparse_to_sparse <- GSVA:::.ecdfvals_sparse_to_sparse(zzs, FALSE)
     checkEqualsNumeric(res_R_sparse_to_sparse, res_C_sparse_to_sparse)
+
+    zzs <- SparseArray(zzs)
+    res_C_svt_to_dense <- GSVA:::.ecdfvals_svt_to_dense(zzs, FALSE)
+    checkEqualsNumeric(res_R_dense, res_C_svt_to_dense)
+    res_C_svt_to_sparse <- GSVA:::.ecdfvals_svt_to_sparse(zzs, FALSE)
+    checkEqualsNumeric(res_C_sparse_to_sparse, res_C_svt_to_sparse)
+    res_C_svt_to_svt <- GSVA:::.ecdfvals_svt_to_svt(zzs, FALSE)
+    checkEqualsNumeric(SparseArray(res_C_sparse_to_sparse), res_C_svt_to_svt)
+}
+
+text_sparse_kcdfvals <- function() {
+    message("Running unit tests for sparse ECDF values calculations.")
+
+    kcdfegaussianvals_sparse_to_dense <- function(x) {
+        x <- as.matrix(x)
+        t(apply(x, 1, function(rx, n) {
+           bw <- sd(rx) / 4
+	   if (is.na(bw) || bw == 0)
+               bw = 0.001
+           rowSums(pnorm(outer(rx, rx, FUN="-")/bw)/n)
+        }, ncol(x)))
+    }
+
+    kcdfgaussianvals_sparse_to_sparse <- function(X) {
+        stopifnot(is(X, "dgCMatrix")) ## QC
+        for (i in 1:nrow(X)) {
+            rx <- X[i, , drop=FALSE]
+            bw <- sd(rx@x) / 4
+	    if (is.na(bw) || bw == 0)
+                bw = 0.001
+            kcdfvals <- rowSums(pnorm(outer(rx@x, rx@x, FUN="-")/bw)/nnzero(rx))
+            X[i, which(diff(rx@p) > 0)] <- kcdfvals
+        }
+        X
+    }
+
+    suppressPackageStartupMessages(library(Matrix))
+    suppressPackageStartupMessages(library(SparseArray))
+    n <- 100
+    p <- 100
+    z <- numeric(p * n)
+    nnz <- ceiling(0.05 * p * n) ## 5% nonzero values
+    z[sample(1:(p*n), size=nnz, replace=FALSE)] <- rnorm(nnz)
+    zz <- matrix(z, nrow=p, ncol=n)
+    zzs <- Matrix(zz, sparse=TRUE)
+
+    res_R_sparse_to_dense <- kcdfegaussianvals_sparse_to_dense(zzs)
+    res_C_sparse_to_dense <- GSVA:::.kcdfvals_sparse_to_dense(zzs, TRUE, FALSE)
+    checkEqualsNumeric(res_R_sparse_to_dense, res_C_sparse_to_dense, tolerance=0.001)
+
+    res_R_sparse_to_sparse <- kcdfgaussianvals_sparse_to_sparse(zzs)
+    res_C_sparse_to_sparse <- GSVA:::.kcdfvals_sparse_to_sparse(zzs, TRUE, FALSE)
+    checkEqualsNumeric(res_R_sparse_to_sparse, res_C_sparse_to_sparse, tolerance=0.001)
+
+    zzs <- SparseArray(zzs)
+    res_C_svt_to_dense <- GSVA:::.kcdfvals_svt_to_dense(zzs, TRUE, FALSE)
+    checkEqualsNumeric(res_R_sparse_to_dense, res_C_svt_to_dense, tolerance=0.001)
+    res_C_svt_to_svt <- GSVA:::.kcdfvals_svt_to_svt(zzs, TRUE, FALSE)
+    checkEqualsNumeric(SparseArray(res_C_sparse_to_sparse), res_C_svt_to_svt)
 }
