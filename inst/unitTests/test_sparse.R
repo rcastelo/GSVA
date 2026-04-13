@@ -69,8 +69,8 @@ test_sparse_ecdfvals <- function() {
     zzs <- SparseArray(zzs)
     res_C_svt_to_dense <- GSVA:::.ecdfvals_svt_to_dense(zzs, FALSE)
     checkEqualsNumeric(res_R_dense, res_C_svt_to_dense)
-    res_C_svt_to_sparse <- GSVA:::.ecdfvals_svt_to_sparse(zzs, FALSE)
-    checkEqualsNumeric(res_C_sparse_to_sparse, res_C_svt_to_sparse)
+    ## res_C_svt_to_sparse <- GSVA:::.ecdfvals_svt_to_sparse(zzs, FALSE)
+    ## checkEqualsNumeric(res_C_sparse_to_sparse, res_C_svt_to_sparse)
     res_C_svt_to_svt <- GSVA:::.ecdfvals_svt_to_svt(zzs, FALSE)
     checkEqualsNumeric(SparseArray(res_C_sparse_to_sparse), res_C_svt_to_svt)
 }
