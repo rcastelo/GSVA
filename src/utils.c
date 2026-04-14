@@ -152,7 +152,7 @@ match_int(SEXP x, SEXP table) {
   SET_TAG(t, install("x")); t=CDR(t);
   SETCAR(t, table);
   SET_TAG(t, install("table"));
-  ansR = eval(s, R_GlobalEnv);
+  ansR = eval(s, R_BaseEnv);
 
   /*
   SEXP ansR = match5(table, x, NA_INTEGER, NULL, R_GlobalEnv);

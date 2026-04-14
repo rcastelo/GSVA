@@ -240,8 +240,8 @@ typedef int (*FetchColFunDef)(SEXP, int, int, int*);
 FetchColFunDef
 find_dim_and_fetchcolfun(SEXP XR, int** dim) {
   FetchColFunDef fetch_col;
-  SEXP           classR = eval(lang2(install("class"), XR), R_GlobalEnv);
-  const char*    class = CHAR(STRING_ELT(classR, 0));
+  SEXP        classR = eval(lang2(install("class"), XR), R_BaseEnv);
+  const char* class = CHAR(STRING_ELT(classR, 0));
 
   if (!strcmp(class, "matrix")) {
     fetch_col = &fetch_col_matrix;
@@ -253,7 +253,7 @@ find_dim_and_fetchcolfun(SEXP XR, int** dim) {
     fetch_col = &fetch_col_SVT_SparseMatrix;
     *dim = INTEGER(GET_SLOT(XR, SVT_SparseArray_dimSym));
   } else
-    error("input class %s cannot be handled yet\n", class);
+    error("input class %s cannot be handled yet.", class);
 
   return fetch_col;
 }
@@ -320,13 +320,13 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP sparseR,
       ranks2stats(ranksR, p, n, i, sparse, fetch_col, decordstat_col, symrnkstat_col);
 
     for (int j=0; j < m; j++) {
-      SEXP    gsetidxR=VECTOR_ELT(genesetsidxR, j);
-      int*    gsetidx;
-      int     k = length(gsetidxR);
+      SEXP     gsetidxR = VECTOR_ELT(genesetsidxR, j);
+      int*     gsetidx;
+      int      k = length(gsetidxR);
 #ifdef LONG_VECTOR_SUPPORT
-      R_xlen_t idx = m * i + j;
+      R_xlen_t idx = (R_xlen_t) m * i + j;
 #else
-      int idx = m * i + j;
+      int      idx = (size_t) m * i + j;
 #endif
       double  walkstatpos, walkstatneg;
 

@@ -293,7 +293,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     an <- gsvaAssayNames(xd)
 
     if(length(a) != 1) {
-        msg <- sprintf("argument 'assay' must be of length 1 (is %d)", length(a))
+        msg <- "argument 'assay' must be of length 1 (it is {length(a)})"
         cli_abort(msg)
     }
     
@@ -306,28 +306,26 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             def <- grep("logcounts", an, fixed=TRUE, value=TRUE)
             assay <- if(length(def) > 0) head(def, 1) else head(an, 1)
             if (verbose) {
-                msg <- sprintf("No assay name provided; using default assay '%s'",
-                               assay)
+                msg <- "No assay name provided; using default assay '{assay}'"
                 cli_alert_info(msg)
             }
         } else {                # check the provided assay name before using it
             if(a %in% an) {
                 assay <- a      # found it: OK!
             } else {            # assay name provided but not found: ERROR
-                msg <- sprintf(paste0("invalid argument assay='%s': not part of ",
-                                      "exprData's assay name list."), a)
+                msg <- paste("invalid argument assay='{a}': not part of",
+                             "assay names in input argument 'exprData'.")
                 cli_abort(msg)
             }
         }
     } else {                    # we don't have no assay names at all
         if(.isMultiAssayContainer(xd)) {  # these must have assay names: ERROR
-            msg <- sprintf("exprData object of class '%s' has no assay names.",
-                           class(xd))
+            msg <- "exprData object of class '{class(xd)}' has no assay names."
             cli_abort(msg)
         } else {                       # i.e. there is exactly one unnamed assay
             if(verbose && !is.na(a)) { # and the provided name is useless but harmless
-                msg <- sprintf(paste0("argument assay='%s' ignored since exprData ",
-                                      "has no assay names."), a)
+                msg <- paste("argument assay='{a}' ignored since input argument",
+                             "'exprData' has not assay names.")
                 cli_alert_info(msg)
             }
 
@@ -501,8 +499,11 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     FUN <- match.fun(FUN)
     nworkers <- 1L
     if (!is.null(BPPARAM) && nrow(X) > minparrows && ncol(X) > minparcols) {
-        if (!is(BPPARAM, "BiocParallelParam"))
-            cli_abort(c("x"="'BPPARAM' must be a BiocParallelParam derivative"))
+        if (!is(BPPARAM, "BiocParallelParam")) {
+            msg <- paste("'BPPARAM' must be a BiocParallelParam derivative.",
+                         "Please consult the 'BiocParallel' package.")
+            cli_abort(c("x"=msg))
+        }
         nworkers <- bpnworkers(BPPARAM)
     }
 
@@ -548,14 +549,19 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                               BPPARAM=BPPARAM))
         bpokmask <- bpok(res)
         if (any(!bpokmask)) {
-            cli_alert_warning(sprintf("%d execution thread(s) give an error, reporting the first one"))
+            msg <- paste("{sum(!bpokmask)} execution thread(s) give an error,",
+                         "reporting the first one.")
+            cli_alert_warning(msg)
             print(attr(res[[which(!bpokmask)]], "traceback"))
             cli_alert_warning("Trying to execute again the failing thread(s)")
             bptry(res <- bplapply(rir, FUN=FUN_WRAPPER, verbose=FALSE,
                                   idpbe=NULL, WRAPPED_FUN=FUN, ...,
                                   BPREDO=res, BPPARAM=BPPARAM))
-            if (any(!bpok(res))) {
-                cli_alert_warning(sprintf("%d execution thread(s) give an error, reporting the first one"))
+            bpokmask <- bpok(res)
+            if (any(!bpokmask)) {
+                msg <- paste("{sum(!bpokmask)} execution thread(s) give an",
+                             "error, reporting the first one.")
+                cli_alert_warning(msg)
                 print(attr(res[[which(!bpokmask)]], "traceback"))
                 cli_abort(c("x"="Cancelling execution"))
             }
@@ -583,8 +589,11 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     FUN <- match.fun(FUN)
     nworkers <- 1L
     if (!is.null(BPPARAM) && nrow(X) > minparrows && ncol(X) > minparcols) {
-        if (!is(BPPARAM, "BiocParallelParam"))
-            cli_abort(c("x"="'Argument BPPARAM' must be a 'BiocParallelParam' derivative. Please consult the BiocParallel package."))
+        if (!is(BPPARAM, "BiocParallelParam")) {
+            msg <- paste("'BPPARAM' must be a BiocParallelParam derivative.",
+                         "Please consult the 'BiocParallel' package.")
+            cli_abort(c("x"=msg))
+        }
         nworkers <- bpnworkers(BPPARAM)
     }
 
@@ -626,14 +635,19 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                               BPPARAM=BPPARAM))
         bpokmask <- bpok(res)
         if (any(!bpokmask)) {
-            cli_alert_warning(sprintf("%d execution thread(s) give an error, reporting the first one"))
+            msg <- paste("{sum(!bpokmask)} execution thread(s) give an error,",
+                         "reporting the first one.")
+            cli_alert_warning(msg)
             print(attr(res[[which(!bpokmask)]], "traceback"))
             cli_alert_warning("Trying to execute again the failing thread(s)")
             bptry(res <- bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
                                   idpbe=NULL, WRAPPED_FUN=FUN, ...,
                                   BPREDO=res, BPPARAM=BPPARAM))
-            if (any(!bpok(res))) {
-                cli_alert_warning(sprintf("%d execution thread(s) give an error, reporting the first one"))
+            bpokmask <- bpok(res)
+            if (any(!bpokmask)) {
+                msg <- paste("{sum(!bpokmask)} execution thread(s) give an",
+                             "error, reporting the first one.")
+                cli_alert_warning(msg)
                 print(attr(res[[which(!bpokmask)]], "traceback"))
                 cli_abort(c("x"="Cancelling execution"))
             }
@@ -707,7 +721,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                 estimated_flag <- TRUE
             }
         } else
-            cli_abort(c("x"=sprintf("%s sparse matrix class cannot be handled", class(X))))
+            cli_abort(c("x"="{class(X)} sparse matrix class cannot be handled."))
 
         if (verbose) {
             estmsg <- ""
@@ -734,8 +748,10 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
   unit[unit==""] <- "1"
 
   fac <- c("1"=1, "K"=1024, "M"=1024^2, "G"=1024^3, "T"=1024^4)
-  if (!toupper(unit) %in% names(fac))
-      cli_abort(c("x"=sprintf("Unknown memory unit '%s', please use either K, M, G or T", unit)))
+  if (!toupper(unit) %in% names(fac)) {
+      msg <- "Unknown memory unit '{unit}', please use either K, M, G or T."
+      cli_abort(c("x"=msg))
+  }
 
   num * unname(fac[toupper(unit)])
 }
@@ -743,8 +759,12 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 #' @importFrom cli cli_abort cli_alert_info
 #' @importFrom memuse Sys.meminfo
 .check_maxmem <- function(param, x, verbose) {
-    if (length(x) > 1 || (!is.numeric(x) && !is.character(x)))
-        cli_abort(c("x"="'maxmem' should be a vector of length 1 of either a number in bytes or a character string"))
+    if (length(x) > 1 || (!is.numeric(x) && !is.character(x))) {
+        msg <- paste("'maxmem' should be a vector of length 1 of either a",
+                     "number in bytes or a character string formed by a",
+                     "number followed by the suffix K, M, G or T.")
+        cli_abort(c("x"=msg))
+    }
 
     if (is.character(x) && x == "auto") {
         totalram <- Sys.meminfo()$totalram
@@ -788,10 +808,16 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         ondisk <- "no"
         if (as.numeric(sze) > maxmem) {
             ondisk <- "yes"
-            if (is(X, "DelayedArray") && verbose)
-                cli_alert_info("On-disk input data does not fit in the maximum available main memory")
-        } else if (is(X, "DelayedArray") && verbose)
-            cli_alert_info("On-disk input data fits in the maximum available main memory")
+            if (is(X, "DelayedArray") && verbose) {
+                msg <- paste("On-disk input data does not fit in the maximum",
+                             "available main memory")
+                cli_alert_info(msg)
+            }
+        } else if (is(X, "DelayedArray") && verbose) {
+            msg <- paste("On-disk input data fits in the maximum available",
+                         "main memory")
+            cli_alert_info(msg)
+        }
 
     } else if (ondisk != "yes" && ondisk != "no")
         cli_abort(c("x"="'ondisk' should be either 'auto', 'yes' or 'no'"))

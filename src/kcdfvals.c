@@ -254,9 +254,9 @@ kcdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP GausskR, SEXP verboseR) 
      * of the output dense matrix */
     for (int j=0; j < nc; j++) {
 #ifdef LONG_VECTOR_SUPPORT
-      R_xlen_t idx = nr * j + i;
+      R_xlen_t idx = (R_xlen_t) nr * j + i;
 #else
-      int idx = nr * j + i;
+      int      idx = (size_t) nr * j + i;
 #endif
 
       kcdf_vals[idx] = r[j];
@@ -355,9 +355,9 @@ kcdfvals_svt_to_dense_R(SEXP XsvtR, SEXP GausskR, SEXP verboseR) {
      * of the output dense matrix */
     for (int j=0; j < nc; j++) {
 #ifdef LONG_VECTOR_SUPPORT
-      R_xlen_t idx = nr * j + i;
+      R_xlen_t idx = (R_xlen_t) nr * j + i;
 #else
-      int idx = nr * j + i;
+      int      idx = (size_t) nr * j + i;
 #endif
 
       kcdf_vals[idx] = r[j];

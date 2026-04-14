@@ -150,10 +150,12 @@ row_d_nologodds(double* x, double* y, double* r, int size_density_n,
     is_precomputed = 1;
   }
 
-	for(int j = 0; j < size_test_n; ++j){
+	for (int j = 0; j < size_test_n; ++j) {
 		double left_tail = 0.0;
 
-		for(int i = 0; i < size_density_n; ++i){
+		for (int i = 0; i < size_density_n; ++i) {
+      if (ISNA(x[i]) || ISNA(y[j]) || ISNAN(x[i]) || ISNAN(y[j]))
+          error("Sparse nonzero expression values cannot be NAs or NaNs.");
 			left_tail += Gaussk ? precomputedCdf(y[j]-x[i], bw) : ppois(y[j], x[i]+bw, TRUE, FALSE);
 		}
 		r[j] = left_tail / size_density_n;
@@ -173,8 +175,13 @@ matrix_d(double* X, double* Y, double* R, int n_density_samples,
   }
     
 	for(int j = 0; j < n_genes; ++j){
-		int offset_density = j * n_density_samples;
-		int offset_test = j * n_test_samples;
+#ifdef LONG_VECTOR_SUPPORT
+    R_xlen_t offset_density = (R_xlen_t) n_density_samples * j;
+    R_xlen_t offset_test = (R_xlen_t) n_test_samples * j;
+#else
+		int      offset_density = (size_t) n_density_samples * j;
+		int      offset_test = (size_t) n_test_samples * j;
+#endif
 
     if (!any_na)
 		  row_d(&X[offset_density], &Y[offset_test], &R[offset_test],
@@ -183,7 +190,8 @@ matrix_d(double* X, double* Y, double* R, int n_density_samples,
       if (na_use == 1L) /* propagate NAs */
 		    row_d_naprop(&X[offset_density], &Y[offset_test], &R[offset_test],
                      n_density_samples, n_test_samples, Gaussk);
-      else              /* remove NAs (assuming 3 b/c 2 should have earlier prompt the error */
+      else              /* remove NAs (assuming 3 b/c 2 should have prompt
+                           the error earlier */
 		    row_d_narm(&X[offset_density], &Y[offset_test], &R[offset_test],
                    n_density_samples, n_test_samples, Gaussk);
     }

@@ -443,15 +443,14 @@ geneIdsToGeneSetCollection <- function(geneIdsList,
         git <- geneIdType
     } else {
         git <- NullIdentifier()
-        cli_alert_warning(paste0("Invalid value of argument `geneIdType` ",
-                                 "ignored, using `NullIdentifier()` instead."))
+        cli_alert_warning(paste("Invalid value of argument `geneIdType`",
+                                "ignored, using `NullIdentifier()` instead."))
     }
     
     return(GeneSetCollection(mapply(function(gn, gs) {
         if(anyDuplicated(gs) > 0) {
             gs <- unique(gs)
-            msg <- sprintf("Duplicated gene IDs removed from gene set %s", gn)
-            cli_alert_warning(msg)
+            cli_alert_warning("Duplicated gene IDs removed from gene set {gn}")
         }
         
         GeneSet(gs,
@@ -569,7 +568,8 @@ readGMT <- function (con,
                      geneIdType = "auto",
                      collectionType = NullCollection(), 
                      valueType = c("GeneSetCollection", "list"),
-                     deduplUse = c("first", "drop", "union", "smallest", "largest"),
+                     deduplUse = c("first", "drop", "union", "smallest",
+                                   "largest"),
                      ...) {
     valueType <- match.arg(valueType)
 
@@ -606,8 +606,8 @@ readGMT <- function (con,
         geneIdType <- guessGeneIdType(lapply(lines, tail, -2))
     } else if(!inherits(geneIdType, "GeneIdentifierType")) {
         geneIdType <- NullIdentifier()
-        cli_alert_warning(paste0("Invalid value of argument `geneIdType` ",
-                                 "ignored, using `NullIdentifier()` instead."))
+        cli_alert_warning(paste("Invalid value of argument `geneIdType`",
+                                "ignored, using `NullIdentifier()` instead."))
     } ## else: fine, no?
     
     ## on second thoughts, another small addition: let the user choose the return type
@@ -891,8 +891,8 @@ setMethod("mapGeneSetsToAnno",
           function(geneSets, anno, verbose=FALSE) {
               if(.isAnnoPkgValid(anno)) {
                   if(!.isAnnoPkgInstalled(anno)) {
-                      msg <- "Please install the annotation package %s"
-                      stop(sprintf(msg, anno))
+                      msg <- "Please install the annotation package {anno}."
+                      cli_abort(c("x"=msg, anno))
                   }
 
                   if (verbose)
@@ -929,8 +929,8 @@ setMethod("mapGeneSetsToAnno",
 
               if(.isAnnoPkgValid(annoDb)) {
                   if(!.isAnnoPkgInstalled(annoDb)) {
-                      msg <- "Please install the annotation package %s"
-                      stop(sprintf(msg, annoDb))
+                      msg <- "Please install the annotation package {anno}."
+                      cli_abort(c("x"=msg, anno))
                   }
 
                   if (verbose)
@@ -1106,9 +1106,10 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
             res <- .rowNzRanges_SVT_SparseMatrix(block, verbose=verbose)
         else
             res <- rowRanges(X)
-    } else
-        cli_abort(c("x"=sprintf(".rowNzRanges: input object class %s not handled yet",
-                                class(X))))
+    } else {
+        msg <- ".rowNzRanges: input object class {class(X)} not handled yet."
+        cli_abort(c("x"=msg))
+    }
     res
 }
 
@@ -1162,8 +1163,8 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 
     nzmask <- constantNzRows & !constantRows
     if (verbose && any(nzmask)) {
-        msg <- sprintf("%d rows with constant nonzero values throughout the samples",
-                       sum(nzmask))
+        msg <- paste("{sum(nzmask)} rows with constant nonzero values",
+                     "throughout the samples")
         cli_alert_warning(msg)
         if (removeNzConstant)
            cli_alert_warning("Rows with constant nonzero values are discarded")
@@ -1177,8 +1178,10 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
          removemask <- removemask | nzmask
 
     if (any(removemask)) {
-        if (nrow(expr) - sum(removemask) < 2)
-            cli_abort(c("x"="Less than two rows left in the input assay object"))
+        if (nrow(expr) - sum(removemask) < 2) {
+            msg <- "Less than two rows left in the input assay object."
+            cli_abort(c("x"=msg))
+        }
 
         expr <- expr[!removemask, ]
     }
@@ -1231,13 +1234,10 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
         ## check and alert if we had to drop out-of-range indices
         diffGs <- names(geneSets)[lengths(geneSets) != lengths(mappedGeneSets)]
         if(length(diffGs) > 0) {
-            singular <- length(diffGs) == 1
-            msg <- sprintf(
-                paste0("Out-of-range indices from %d index gene %s (%s) ",
-                       "have been dropped."),
-                length(diffGs),
-                if(singular) "set" else "sets",
-                paste0(sQuote(diffGs, q=FALSE), collapse = ", "))
+            diffGstxt <- paste(sQuote(diffGs, q=FALSE), collapse = ", ")
+            settxt <- ifelse(length(diffGs) == 1, "set", "sets")
+            msg <- paste("Out-of-range indices from {length(diffGs)} index",
+                         "gene {settxt} ({diffGstxt}) have been dropped")
             cli_alert_warning(msg)
         }
     } else { # not a list of index vectors, i.e., as before

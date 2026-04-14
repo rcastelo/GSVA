@@ -353,17 +353,17 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
     ecdf_vals = REAL(ecdfRobj);
     icz = 0; /* zero-based index of the columns at zeroes */
     for (int j=0; j < length(xR); j++) {
-      int col = nzcols[j];            /* zero-based col index */
+      int      col = nzcols[j];      /* zero-based col index */
 #ifdef LONG_VECTOR_SUPPORT
-      R_xlen_t idx = nr * col + i;
+      R_xlen_t idx = (R_xlen_t) nr * col + i;
 #else
-      int idx = nr * col + i;
+      int      idx = (size_t) nr * col + i;
 #endif
-      while (icz < col) {   /* fill up the zero columns */
+      while (icz < col) {           /* fill up the zero columns */
 #ifdef LONG_VECTOR_SUPPORT
-        R_xlen_t idxz = nr * icz + i;
+        R_xlen_t idxz = (R_xlen_t) nr * icz + i;
 #else
-        int idxz = nr * icz + i;
+        int      idxz = (size_t) nr * icz + i;
 #endif
         ecdf_vals[idxz] = ecdfuniqv[whz];
         icz++;
@@ -374,9 +374,9 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
 
     for (int j=icz; j < nc; j++) { /* fill up remaining zero columns */
 #ifdef LONG_VECTOR_SUPPORT
-        R_xlen_t idxz = nr * j + i;
+        R_xlen_t idxz = (R_xlen_t) nr * j + i;
 #else
-        int idxz = nr * j + i;
+        int      idxz = (size_t) nr * j + i;
 #endif
         ecdf_vals[idxz] = ecdfuniqv[whz];
     }
@@ -1081,18 +1081,18 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
     ecdf_vals = REAL(ecdfRobj);
     icz = 0; /* zero-based index of the columns at zeroes */
     for (int j=XRsp_p[i]; j < XRsp_p[i+1]; j++) {
-      int k = j - XRsp_p[i];          /* index value at ecdf */
-      int col = XRsp_j[j];            /* zero-based col index */
+      int      k = j - XRsp_p[i];          /* index value at ecdf */
+      int      col = XRsp_j[j];            /* zero-based col index */
 #ifdef LONG_VECTOR_SUPPORT
-      R_xlen_t idx = nr * col + i;
+      R_xlen_t idx = (R_xlen_t) nr * col + i;
 #else
-      int idx = nr * col + i;
+      int      idx = (size_t) nr * col + i;
 #endif
       while (icz < col) {   /* fill up the zero columns */
 #ifdef LONG_VECTOR_SUPPORT
-        R_xlen_t idxz = nr * icz + i;
+        R_xlen_t idxz = (R_xlen_t) nr * icz + i;
 #else
-        int idxz = nr * icz + i;
+        int      idxz = (size_t) nr * icz + i;
 #endif
         ecdf_vals[idxz] = ecdfuniqv[whz];
         icz++;
@@ -1102,9 +1102,9 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
     }
     for (int j=icz; j < nc; j++) { /* fill up remaining zero columns */
 #ifdef LONG_VECTOR_SUPPORT
-        R_xlen_t idxz = nr * j + i;
+        R_xlen_t idxz = (R_xlen_t) nr * j + i;
 #else
-        int idxz = nr * j + i;
+        int      idxz = (size_t) nr * j + i;
 #endif
         ecdf_vals[idxz] = ecdfuniqv[whz];
     }
@@ -1179,9 +1179,9 @@ ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR) {
     x = REAL(xR);
     for (int j=0; j < nc; j++) {
 #ifdef LONG_VECTOR_SUPPORT
-      R_xlen_t idx = nr * j + i;
+      R_xlen_t idx = (R_xlen_t) nr * j + i;
 #else
-      int idx = nr * j + i;
+      int      idx = (size_t) nr * j + i;
 #endif
       uniqv[j] = x[j] = X[idx];
     }
@@ -1226,9 +1226,9 @@ ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR) {
 
     for (int j=0; j < nc; j++) {
 #ifdef LONG_VECTOR_SUPPORT
-      R_xlen_t idx = nr * j + i;
+      R_xlen_t idx = (R_xlen_t) nr * j + i;
 #else
-      int idx = nr * j + i;
+      int      idx = (size_t) nr * j + i;
 #endif
       ecdf_vals[idx] = ecdfuniqv[mt[j]-1];
     }
@@ -1305,9 +1305,9 @@ ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR) {
     nnas = 0; /* non-NA values */
     for (int j=0; j < nc; j++) {
 #ifdef LONG_VECTOR_SUPPORT
-      R_xlen_t idx = nr * j + i;
+      R_xlen_t idx = (R_xlen_t) nr * j + i;
 #else
-      int idx = nr * j + i;
+      int      idx = (size_t) nr * j + i;
 #endif
       x[j] = X[idx];
       if (!ISNA(x[j]) && !ISNAN(x[j])) {
@@ -1356,9 +1356,9 @@ ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR) {
 
     for (int j=0; j < nc; j++) {
 #ifdef LONG_VECTOR_SUPPORT
-      R_xlen_t idx = nr * j + i;
+      R_xlen_t idx = (R_xlen_t) nr * j + i;
 #else
-      int idx = nr * j + i;
+      int      idx = (size_t) nr * j + i;
 #endif
       if (!ISNA(X[idx]) && !ISNAN(X[idx]))
         ecdf_vals[idx] = ecdfuniqv[mt[j]-1];

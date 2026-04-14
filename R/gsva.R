@@ -1030,20 +1030,20 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
               }
               if (is.character(geneSet)) {
                   if (!geneSet %in% names(geneSets)) {
-                      msg <- paste("Gene set %s is missing from the input",
-                                   "parameter object")
-                      cli_abort(c("x"=sprintf(msg, geneSet)))
+                      msg <- paste("Gene set {geneSet} is missing from the input",
+                                   "parameter object.")
+                      cli_abort(c("x"=msg))
                   }
               } else if (is.numeric(geneSet)) {
                   if (geneSet < 1 || geneSet > length(geneSets)) {
                        msg <- paste("When 'geneSet' is numeric, it should be a",
                                     "number between 1 and the number of gene",
-                                    "sets (%d).")
-                       cli_abort(c("x"=sprintf(msg, length(geneSets))))
+                                    "sets ({length(geneSets)}).")
+                       cli_abort(c("x"=msg))
                   }
               } else {
-                  msg <- paste("'geneSet' should be either numeric or",
-                               "character.")
+                  msg <- paste("input argument 'geneSet' should be either",
+                               "numeric or character.")
                   cli_abort(c("x"=msg))
               }
 
@@ -1152,9 +1152,10 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                                                   "na.rm"))),
                        verbose)
             gene.cdf <- t(matrix(A, n.test.samples, n.genes))
-        } else
-            cli_abort(c("x"=sprintf("Matrix class %s cannot be handled yet.",
-                                    class(expr))))
+        } else {
+            msg <- "Matrix class {class(expr)} cannot be handled yet."
+            cli_abort(c("x"=msg))
+        }
     } else { ## direct ECDF estimation
         if (is(expr, "dgCMatrix")) {
             if (sparse)
@@ -1183,9 +1184,10 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                 gene.cdf <- .ecdfvals_dense_to_dense_nas(expr, verbose)
             else
                 gene.cdf <- .ecdfvals_dense_to_dense(expr, verbose)
-        } else
-            cli_abort(c("x"=sprintf("Input container class %s cannot be handled yet.",
-                                    class(expr))))
+        } else {
+            msg <- "Input container class {class(expr)} cannot be handled yet."
+            cli_abort(c("x"=msg))
+        }
     }
 
     return(gene.cdf)	
@@ -1544,7 +1546,9 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE, verbos
         if (length(grid) != length(grid_es) ||
             refdim(grid)[2] != refdim(grid_es)[2] ||
             dim(grid)[2] != dim(grid_es)[2]) {
-            cli_abort(c("x"="Grid column blocks for ranks should match grid column blocks for enrichment scores"))
+            msg <- paste("Grid column blocks for ranks should match grid",
+                         "column blocks for enrichment scores")
+            cli_abort(c("x"=msg))
         }
 
         ## avp - ArrayViewport for reaching the (possibly sparse) rank matrix
@@ -1572,9 +1576,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE, verbos
 
     if (any_na && na_use == "na.rm")
         if (get("w", envir=wna_env)) {
-            msg <- sprintf(paste("NA enrichment scores in gene sets with less",
-                                 "than %d genes after removing missing values"),
-                           minSize)
+            msg <- paste("NA enrichment scores in gene sets with less",
+                         "than {minSize} genes after removing missing values")
             cli_alert_warning(msg)
         }
 
@@ -1619,10 +1622,9 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE, verbos
     
     if (any_na && na_use == "na.rm")
         if (get("w", envir=wna_env)) {
-            msg <- sprintf(paste("Gene set has fewer than %d genes after",
-                                 "removing missing values, no enrichment data",
-                                 "available"),
-                           minSize)
+            msg <- paste("Gene set has fewer than {minSize} genes after",
+                         "removing missing values, no enrichment data",
+                         "available")
             cli_alert_warning(msg)
             return(list())
         }
