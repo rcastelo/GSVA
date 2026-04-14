@@ -16,7 +16,6 @@ setMethod("gsva", signature(param="ssgseaParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose),
                    maxmem="auto") {
-                   ## version=1L) {
 
               if (verbose)
                   cli_alert_info(sprintf("GSVA version %s",
@@ -55,12 +54,8 @@ setMethod("gsva", signature(param="ssgseaParam"),
                                      class(BPPARAM), bpnworkers(BPPARAM))
                       cli_alert_info(msg)
                   }
-              } else {
-                  ## if (version == 1L)
-                  ##     BPPARAM <- SerialParam(progressbar=verbose)
-                  ## else
+              } else
                       BPPARAM <- NULL
-              }
 
               if (verbose)
                   cli_alert_info(sprintf("Calculating ssGSEA scores for %d gene sets",
@@ -71,10 +66,11 @@ setMethod("gsva", signature(param="ssgseaParam"),
                                  representation="dense", sparsity=1,
                                  type="double")
               if (esreqmem > maxmem) {
-                cli_alert_warning("The resulting (dense) matrix of enrichment")
-                cli_alert_warning("scores will not fit in the given maximum")
-                cli_alert_warning("main memory size, and it will be returned")
-                cli_alert_warning("using an on-disk data structure")
+                msg <- paste("The resulting (dense) matrix of enrichment",
+                             "scores will not fit in the given maximum",
+                             "main memory size, and it will be returned",
+                             "using an on-disk data structure")
+                cli_alert_warning(msg)
                 ondisk <- TRUE
               }
 

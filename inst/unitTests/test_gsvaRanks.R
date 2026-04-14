@@ -39,5 +39,9 @@ test_gsvaRanks <- function() {
     geneSets(gsvarankspar) <- c(gsets, set4=c("g1", "g4", "g7"))
     gsvaenrich <- gsvaEnrichment(gsvarankspar, plot="no")
     checkEqualsNumeric(gsva_es1[1, 1], gsvaenrich$score)
-}
 
+    ## test the ggplotting from gsvaEnrichment()
+    ggp <- gsvaEnrichment(gsvarankspar, plot="ggplot")
+    checkTrue(is(ggp, "ggplot"))
+    checkTrue(identical(gsvaenrich$stats, ggp@data))
+}

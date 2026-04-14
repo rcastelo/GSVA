@@ -670,26 +670,6 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     return(res)
 }
 
-## calculate number of nonzero values in an on-disk DelayedArray
-.nzcountDA <- function(X) {
-    ## coerce to double to ensure we can deal with numbers larger than 2^31
-    nr <- as.numeric(nrow(X))
-    nc <- as.numeric(ncol(X))
-    block_dim <- chunkdim(X)
-    grid_dim <- dim(chunkGrid(X))
-    nzc <- 0
-    for (i in seq_len(grid_dim[1]))
-        for (j in seq_len(grid_dim[2])) {
-            icoord <- (i-1)*block_dim[1]+1
-            jcoord <- (j-1)*block_dim[2]+1
-            bdim <- c(min(c(nr, i*block_dim[1]))-icoord+1, min(c(nc, j*block_dim[2]))-jcoord+1)
-            vp <- ArrayViewport(dim(X), IRanges(c(icoord, jcoord), width=bdim))
-            block <- read_block(X, vp)
-            nzc <- nzc + as.numeric(nzcount(block))
-        }
-    nzc
-}
-
 #' @importFrom IRanges IRanges
 #' @importFrom S4Arrays is_sparse ArrayViewport
 #' @importFrom DelayedArray chunkdim chunkGrid
@@ -823,12 +803,6 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         cli_abort(c("x"="'ondisk' should be either 'auto', 'yes' or 'no'"))
 
     ondisk == "yes"
-}
-
-
-.guessIfCountData <- function(x, tolerance = sqrt(.Machine$double.eps)) {
-    return(typeof(x) == "integer" ||
-           (all(x >= 0) && all(x - round(x) < tolerance)))
 }
 
 

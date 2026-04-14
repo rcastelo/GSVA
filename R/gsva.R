@@ -909,10 +909,11 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                                  representation="dense", sparsity=1,
                                  type="double")
               if (esreqmem > maxmem) {
-                cli_alert_warning("The resulting (dense) matrix of enrichment")
-                cli_alert_warning("scores will not fit in the given maximum")
-                cli_alert_warning("main memory size, and it will be returned")
-                cli_alert_warning("using an on-disk data structure")
+                msg <- paste("The resulting (dense) matrix of enrichment",
+                             "scores will not fit in the given maximum",
+                             "main memory size, and it will be returned",
+                             "using an on-disk data structure")
+                cli_alert_warning(msg)
                 ondisk <- TRUE
               }
 
@@ -1692,10 +1693,11 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE, verbos
     ## from https://stackoverflow.com/a/39877048
     fintticks <- function(x) unique(floor(pretty(seq(min(x),
                                     (max(x) + 1) * 1.1))))
-    .data <- get(".data")
+    .data <- ggplot2::.data
     ggplot2::ggplot(data=edata$stats) +
         ggplot2::scale_x_continuous(breaks=fintticks) +
-        ggplot2::geom_line(ggplot2::aes(x=.data$rank, y=.data$stat), color="green") +
+        ggplot2::geom_line(ggplot2::aes(x=.data$rank, y=.data$stat),
+                           color="green") +
         ggplot2::geom_segment(data=gsetticks,
                      mapping=ggplot2::aes(x=.data$gsetrnk, y=-hgsetticks/2,
                                  xend=.data$gsetrnk, yend=hgsetticks/2),
