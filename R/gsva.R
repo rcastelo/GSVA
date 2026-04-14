@@ -1217,28 +1217,6 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE, verbos
     return(R)
 }
 
-## here gSetIdx contains the positions in the decreasing gene ranking
-## and rankStat contains the rank statistic value in the original
-## gene order of the data
-.gsvaRndWalk_rankingpos_notau <- function(gSetIdx, geneRanking, rankStat) {
-    n <- length(geneRanking)
-    k <- length(gSetIdx)
-
-    stepCDFinGeneSet <- integer(n)
-    stepCDFinGeneSet[gSetIdx] <- rankStat[geneRanking[gSetIdx]]
-    stepCDFinGeneSet <- cumsum(stepCDFinGeneSet)
-    stepCDFinGeneSet <- stepCDFinGeneSet / stepCDFinGeneSet[n]
-
-    stepCDFoutGeneSet <- rep(1L, n)
-    stepCDFoutGeneSet[gSetIdx] <- 0L
-    stepCDFoutGeneSet <- cumsum(stepCDFoutGeneSet)
-    stepCDFoutGeneSet <- stepCDFoutGeneSet / stepCDFoutGeneSet[n]
-
-    walkStat <- stepCDFinGeneSet - stepCDFoutGeneSet
-
-    walkStat
-}
-
 #' @importFrom Matrix nnzero
 .sufficient_ssize <- function(expr, kcdf.min.ssize) {
   ## in the sparse case stored in a 'dgCMatrix' or a 'SVT_SparseMatrix',

@@ -865,11 +865,11 @@ setMethod("mapGeneSetsToAnno", signature(geneSets="list", anno="NULL"),
               return(geneSets)
           })
 
-setMethod("mapGeneSetsToAnno", signature(geneSets="list", anno="character"),
-          function(geneSets, anno, verbose=FALSE) {
-              gsc <- geneIdsToGeneSetCollection(geneIdsList=geneSets)
-              return(mapGeneSetsToAnno(gsc, anno))
-          })
+## setMethod("mapGeneSetsToAnno", signature(geneSets="list", anno="character"),
+##           function(geneSets, anno, verbose=FALSE) {
+##               gsc <- geneIdsToGeneSetCollection(geneIdsList=geneSets)
+##               return(mapGeneSetsToAnno(gsc, anno))
+##           })
 
 setMethod("mapGeneSetsToAnno",
           signature(geneSets="list", anno="GeneIdentifierType"),
@@ -886,37 +886,37 @@ setMethod("mapGeneSetsToAnno",
 
 #' @importFrom cli cli_alert_info cli_alert_warning
 #' @importFrom GSEABase AnnoOrEntrezIdentifier mapIdentifiers
-setMethod("mapGeneSetsToAnno",
-          signature(geneSets="GeneSetCollection", anno="character"),
-          function(geneSets, anno, verbose=FALSE) {
-              if(.isAnnoPkgValid(anno)) {
-                  if(!.isAnnoPkgInstalled(anno)) {
-                      msg <- "Please install the annotation package {anno}."
-                      cli_abort(c("x"=msg, anno))
-                  }
-
-                  if (verbose)
-                      cli_alert_info("Mapping identifiers")
-
-                  mappedGeneSets <- mapIdentifiers(geneSets,
-                                                   AnnoOrEntrezIdentifier(anno))
-                  rval <- geneIds(mappedGeneSets)
-
-              } else {
-                  if (verbose) {
-                      msg <- paste("No annotation metadata available in the",
-                                   "input expression data object")
-                      cli_alert_warning(msg)
-                      msg <- paste("Attempting to directly match identifiers",
-                                   "in expression data to gene sets")
-                      cli_alert_warning(msg)
-                  }
-
-                  rval <- geneIds(geneSets)
-              }
-
-              return(rval)
-          })
+## setMethod("mapGeneSetsToAnno",
+##           signature(geneSets="GeneSetCollection", anno="character"),
+##           function(geneSets, anno, verbose=FALSE) {
+##               if(.isAnnoPkgValid(anno)) {
+##                   if(!.isAnnoPkgInstalled(anno)) {
+##                       msg <- "Please install the annotation package {anno}."
+##                       cli_abort(c("x"=msg, anno))
+##                   }
+##
+##                   if (verbose)
+##                       cli_alert_info("Mapping identifiers")
+## 
+##                   mappedGeneSets <- mapIdentifiers(geneSets,
+##                                                    AnnoOrEntrezIdentifier(anno))
+##                   rval <- geneIds(mappedGeneSets)
+## 
+##               } else {
+##                   if (verbose) {
+##                       msg <- paste("No annotation metadata available in the",
+##                                    "input expression data object")
+##                       cli_alert_warning(msg)
+##                       msg <- paste("Attempting to directly match identifiers",
+##                                    "in expression data to gene sets")
+##                       cli_alert_warning(msg)
+##                   }
+## 
+##                   rval <- geneIds(geneSets)
+##               }
+## 
+##               return(rval)
+##           })
 
 #' @importFrom cli cli_alert_info cli_alert_warning
 #' @importFrom GSEABase mapIdentifiers geneIds
@@ -1057,37 +1057,6 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 .rowNzRanges_SVT_SparseMatrix <- function(X, verbose=FALSE) {
     res <- .Call("rowbycols_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
     res
-}
-
-#' @importFrom SparseArray NaArray
-.fast_replace_zeros_with_NAs <- function(x) {
-    stopifnot(is(x, "SparseArray"))
-    naa <- NaArray(dim=dim(x), type=type(x), dimnames=dimnames(x))
-    naa@NaSVT <- x@SVT ## ASSUMING x@SVT HAS NO NA VALUES!!
-    naa
-}
-
-#' @importFrom SparseArray NaArray nzwhich
-.safe_replace_zeros_with_NAs <- function(x) {
-    naa <- NaArray(dim=dim(x), type=type(x), dimnames=dimnames(x))
-    nzidx <- nzwhich(x)
-    naa[nzidx] <- x[nzidx]
-    naa
-}
-
-#' @importFrom MatrixGenerics rowMins rowMaxs
-.rowNzRanges_SVT_SparseMatrix_rowbycols_R <- function(X, anyna=FALSE, verbose=FALSE) {
-    naa <- NULL
-    if (anyna)
-        naa <- .safe_replace_zeros_with_NAs(X)
-    else
-        naa <- .fast_replace_zeros_with_NAs(X)  # only if 'X' is guaranteed to be NA-free!
-
-    ranges1 <- cbind(rowMins(X, na.rm=TRUE), rowMaxs(X, na.rm=TRUE))
-    ranges2 <- suppressWarnings(cbind(rowMins(naa, na.rm=TRUE), rowMaxs(naa, na.rm=TRUE)))
-    allzeros <- ranges1[ , 1L] == 0L & ranges1[ , 2L] == 0L
-    ranges2[allzeros] <- NA_integer_
-    cbind(ranges1, ranges2)
 }
 
 #' @importFrom S4Arrays DummyArrayGrid read_block
