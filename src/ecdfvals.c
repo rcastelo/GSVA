@@ -418,11 +418,13 @@ nzcount_intCSCp_SVT(SEXP SVT, int* CSCp) {
   for (int i=0; i < SVT_len; i++) {
     SEXP subSVT = VECTOR_ELT(SVT, i);
 
+    if (subSVT != R_NilValue) {
 #ifdef LONG_VECTOR_SUPPORT
-    nzcount = nzcount + XLENGTH(VECTOR_ELT(subSVT, 1));
+        nzcount = nzcount + XLENGTH(VECTOR_ELT(subSVT, 1));
 #else
-    nzcount = nzcount + length(VECTOR_ELT(subSVT, 1));
+        nzcount = nzcount + length(VECTOR_ELT(subSVT, 1));
 #endif
+    }
     CSCp[i+1] = (int) nzcount;
   }
 
