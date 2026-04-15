@@ -1135,11 +1135,13 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                                                            verbose)
             else {
                 if (is_sparse(expr)) ## input HDF5 may be sparse or not
-                    gene.cdf <- .kcdfvals_sparseh5_to_denseh5(expr, Gaussk=Gaussk,
+                    gene.cdf <- .kcdfvals_sparseh5_to_denseh5(expr,
+                                                              Gaussk=Gaussk,
                                                               grid=grid,
                                                               verbose)
                 else
                     gene.cdf <- .kcdfvals_denseh5_to_denseh5(expr,
+                                                             Gaussk=Gaussk,
                                                              grid=grid,
                                                              verbose)
             }
@@ -1754,12 +1756,6 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE, verbos
   stopifnot(is(X, "SVT_SparseMatrix")) ## QC
   stopifnot(is.logical(verbose)) ## QC
   .Call("ecdfvals_svt_to_dense_R", X, verbose)
-}
-
-.ecdfvals_svt_to_sparse <- function(X, verbose) {
-  stopifnot(is(X, "SVT_SparseMatrix")) ## QC
-  stopifnot(is.logical(verbose)) ## QC
-  .Call("ecdfvals_svt_to_sparse_R", X, verbose)
 }
 
 .ecdfvals_svt_to_svt <- function(X, verbose) {

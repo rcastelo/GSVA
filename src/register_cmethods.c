@@ -38,9 +38,6 @@ SEXP
 ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR);
 
 SEXP
-ecdfvals_svt_to_sparse_R(SEXP XsvtR, SEXP verboseR);
-
-SEXP
 ecdfvals_svt_to_svt_R(SEXP XsvtR, SEXP verboseR);
 
 SEXP
@@ -79,7 +76,6 @@ static R_CallMethodDef callMethods[] = {
   {"ecdfvals_sparse_to_sparse_R", (DL_FUNC) &ecdfvals_sparse_to_sparse_R, 3},
   {"ecdfvals_sparse_to_dense_R", (DL_FUNC) &ecdfvals_sparse_to_dense_R, 3},
   {"ecdfvals_svt_to_dense_R", (DL_FUNC) &ecdfvals_svt_to_dense_R, 2},
-  {"ecdfvals_svt_to_sparse_R", (DL_FUNC) &ecdfvals_svt_to_sparse_R, 2},
   {"ecdfvals_svt_to_svt_R", (DL_FUNC) &ecdfvals_svt_to_svt_R, 2},
   {"ecdfvals_dense_to_dense_R", (DL_FUNC) &ecdfvals_dense_to_dense_R, 2},
   {"ecdfvals_dense_to_dense_nas_R", (DL_FUNC) &ecdfvals_dense_to_dense_nas_R, 2},

@@ -10,27 +10,30 @@ test_sparseMethods <- function(){
     gene.sets <- list("my_list1"= paste0("gene_", 1:2),
                       "my_list2"= paste0("gene_", 3:4))
     
-    M <- as(as(as(m, "dMatrix"), "generalMatrix"), "CsparseMatrix")
+    suppressPackageStartupMessages(library(Matrix))
+    M <- Matrix(m, sparse=TRUE)
 
-    mg <- gsva(gsvaParam(m, gene.sets), verbose=FALSE)
-    Mg <- gsva(gsvaParam(M, gene.sets, sparse=FALSE), verbose=FALSE)
+    suppressPackageStartupMessages(library(cli)) ## for cli_fmt()
+
+    out <- cli_fmt(mg <- gsva(gsvaParam(m, gene.sets), verbose=TRUE))
+    out <- cli_fmt(Mg <- gsva(gsvaParam(M, gene.sets, sparse=FALSE, verbose=TRUE), verbose=TRUE))
     checkEqualsNumeric(mg, Mg)
     
-    mp <- gsva(plageParam(m, gene.sets), verbose=FALSE)
-    Mp <- gsva(plageParam(M, gene.sets), verbose=FALSE)
+    out <- cli_fmt(mp <- gsva(plageParam(m, gene.sets), verbose=TRUE))
+    out <- cli_fmt(Mp <- gsva(plageParam(M, gene.sets), verbose=TRUE))
     checkEqualsNumeric(mp, Mp)
     
-    mz <- gsva(zscoreParam(m, gene.sets), verbose=FALSE)
-    Mz <- gsva(zscoreParam(M, gene.sets), verbose=FALSE)
+    out <- cli_fmt(mz <- gsva(zscoreParam(m, gene.sets), verbose=TRUE))
+    out <- cli_fmt(Mz <- gsva(zscoreParam(M, gene.sets), verbose=TRUE))
     checkEqualsNumeric(mz, Mz)
     
-    ms <- gsva(ssgseaParam(m, gene.sets), verbose=FALSE)
-    Ms <- gsva(ssgseaParam(M, gene.sets), verbose=FALSE)
+    out <- cli_fmt(ms <- gsva(ssgseaParam(m, gene.sets), verbose=TRUE))
+    out <- cli_fmt(Ms <- gsva(ssgseaParam(M, gene.sets), verbose=TRUE))
     checkEqualsNumeric(ms, Ms)
 }
 
-test_sparse_ecdfvals <- function() {
-    message("Running unit tests for sparse ECDF values calculations")
+test_ecdfvals <- function() {
+    message("Running unit tests for ECDF values calculations")
 
     ecdfvals_dense <- function(X) t(apply(X, 1, function(rx) ecdf(rx)(rx)))
     ecdfvals_sparse_to_sparse <- function(X) {
@@ -46,8 +49,12 @@ test_sparse_ecdfvals <- function() {
         X
     }
 
-    suppressPackageStartupMessages(library(Matrix))
-    suppressPackageStartupMessages(library(SparseArray))
+    suppressPackageStartupMessages({
+        library(Matrix)
+	library(HDF5Array)
+	library(SparseArray)
+    })
+
     n <- 100
     p <- 100
     z <- numeric(p * n)
@@ -56,27 +63,45 @@ test_sparse_ecdfvals <- function() {
     zz <- matrix(z, nrow=p, ncol=n)
     zzs <- Matrix(zz, sparse=TRUE)
     res_R_dense <- ecdfvals_dense(zz)
-    res_C_dense_to_dense <- GSVA:::.ecdfvals_dense_to_dense(zz, FALSE)
-    checkEqualsNumeric(res_R_dense, res_C_dense_to_dense)
+    res_C_dense <- GSVA:::compute.gene.cdf(zz, Gaussk=FALSE, kernel=FALSE, sparse=FALSE)
+    checkEqualsNumeric(res_R_dense, res_C_dense)
 
-    res_C_sparse_to_dense <- GSVA:::.ecdfvals_sparse_to_dense(zzs, FALSE)
+    res_C_sparse_to_dense <- GSVA:::compute.gene.cdf(zzs, Gaussk=FALSE, kernel=FALSE, sparse=FALSE)
     checkEqualsNumeric(res_R_dense, res_C_sparse_to_dense)
 
     res_R_sparse_to_sparse <- ecdfvals_sparse_to_sparse(zzs)
-    res_C_sparse_to_sparse <- GSVA:::.ecdfvals_sparse_to_sparse(zzs, FALSE)
+    res_C_sparse_to_sparse <- GSVA:::compute.gene.cdf(zzs, Gaussk=FALSE, kernel=FALSE, sparse=TRUE)
     checkEqualsNumeric(res_R_sparse_to_sparse, res_C_sparse_to_sparse)
 
     zzs <- SparseArray(zzs)
-    res_C_svt_to_dense <- GSVA:::.ecdfvals_svt_to_dense(zzs, FALSE)
+    res_C_svt_to_dense <- GSVA:::compute.gene.cdf(zzs, Gaussk=FALSE, kernel=FALSE, sparse=FALSE)
     checkEqualsNumeric(res_R_dense, res_C_svt_to_dense)
-    res_C_svt_to_sparse <- GSVA:::.ecdfvals_svt_to_sparse(zzs, FALSE)
-    checkEqualsNumeric(res_C_sparse_to_sparse, res_C_svt_to_sparse)
     res_C_svt_to_svt <- GSVA:::.ecdfvals_svt_to_svt(zzs, FALSE)
     checkEqualsNumeric(SparseArray(res_C_sparse_to_sparse), res_C_svt_to_svt)
+
+    zz <- as(zz, "HDF5Array")
+    res_C_denseh5_to_denseh5 <- GSVA:::compute.gene.cdf(zz, Gaussk=FALSE, kernel=FALSE, sparse=FALSE)
+    checkEqualsNumeric(res_R_dense, res_C_denseh5_to_denseh5)
+    zzs <- as(zzs, "HDF5Array")
+    res_C_sparseh5_to_denseh5 <- GSVA:::compute.gene.cdf(zzs, Gaussk=FALSE, kernel=FALSE, sparse=FALSE)
+    checkEqualsNumeric(res_R_dense, res_C_sparseh5_to_denseh5)
+    res_C_sparseh5_to_sparseh5 <- GSVA:::compute.gene.cdf(zzs, Gaussk=FALSE, kernel=FALSE, sparse=TRUE)
+    checkEqualsNumeric(res_R_sparse_to_sparse, res_C_sparseh5_to_sparseh5)
 }
 
-test_sparse_kcdfvals <- function() {
-    message("Running unit tests for sparse KCDF values calculations")
+test_kcdfvals <- function() {
+    message("Running unit tests for KCDF values calculations")
+
+    kcdfegaussianvals_dense_to_dense <- function(x) {
+        x <- as.matrix(x)
+        t(apply(x, 1, function(rx, n) {
+           bw <- sd(rx) / 4
+	   if (is.na(bw) || bw == 0)
+               bw = 0.001
+           kecdf <- rowSums(pnorm(outer(rx, rx, FUN="-")/bw)/n)
+	   -log((1-kecdf)/kecdf)
+        }, ncol(x)))
+    }
 
     kcdfegaussianvals_sparse_to_dense <- function(x) {
         x <- as.matrix(x)
@@ -101,8 +126,12 @@ test_sparse_kcdfvals <- function() {
         X
     }
 
-    suppressPackageStartupMessages(library(Matrix))
-    suppressPackageStartupMessages(library(SparseArray))
+    suppressPackageStartupMessages({
+        library(Matrix)
+	library(HDF5Array)
+	library(SparseArray)
+    })
+
     n <- 100
     p <- 100
     z <- numeric(p * n)
@@ -112,16 +141,26 @@ test_sparse_kcdfvals <- function() {
     zzs <- Matrix(zz, sparse=TRUE)
 
     res_R_sparse_to_dense <- kcdfegaussianvals_sparse_to_dense(zzs)
-    res_C_sparse_to_dense <- GSVA:::.kcdfvals_sparse_to_dense(zzs, TRUE, FALSE)
-    checkEqualsNumeric(res_R_sparse_to_dense, res_C_sparse_to_dense, tolerance=0.001)
+    res_C_sparse_to_dense <- GSVA:::compute.gene.cdf(zzs, Gaussk=TRUE, kernel=TRUE, sparse=FALSE)
+    checkEqualsNumeric(res_R_sparse_to_dense, res_C_sparse_to_dense, tolerance=0.00001)
 
     res_R_sparse_to_sparse <- kcdfgaussianvals_sparse_to_sparse(zzs)
-    res_C_sparse_to_sparse <- GSVA:::.kcdfvals_sparse_to_sparse(zzs, TRUE, FALSE)
-    checkEqualsNumeric(res_R_sparse_to_sparse, res_C_sparse_to_sparse, tolerance=0.001)
+    res_C_sparse_to_sparse <- GSVA:::compute.gene.cdf(zzs, Gaussk=TRUE, kernel=TRUE, sparse=TRUE)
+    checkEqualsNumeric(res_R_sparse_to_sparse, res_C_sparse_to_sparse, tolerance=0.0001)
 
     zzs <- SparseArray(zzs)
-    res_C_svt_to_dense <- GSVA:::.kcdfvals_svt_to_dense(zzs, TRUE, FALSE)
-    checkEqualsNumeric(res_R_sparse_to_dense, res_C_svt_to_dense, tolerance=0.001)
-    res_C_svt_to_svt <- GSVA:::.kcdfvals_svt_to_svt(zzs, TRUE, FALSE)
+    res_C_svt_to_dense <- GSVA:::compute.gene.cdf(zzs, Gaussk=TRUE, kernel=TRUE, sparse=FALSE)
+    checkEqualsNumeric(res_R_sparse_to_dense, res_C_svt_to_dense, tolerance=0.00001)
+    res_C_svt_to_svt <- GSVA:::compute.gene.cdf(zzs, Gaussk=TRUE, kernel=TRUE, sparse=TRUE)
     checkEqualsNumeric(SparseArray(res_C_sparse_to_sparse), res_C_svt_to_svt)
+
+    res_R_dense_to_dense <- kcdfegaussianvals_dense_to_dense(zz)
+    zz <- as(zz, "HDF5Array")
+    res_C_denseh5_to_denseh5 <- GSVA:::compute.gene.cdf(zz, Gaussk=TRUE, kernel=TRUE, sparse=FALSE)
+    checkEqualsNumeric(res_R_dense_to_dense, res_C_denseh5_to_denseh5, tolerance=0.0001)
+    zzs <- as(zzs, "HDF5Array")
+    res_C_sparseh5_to_denseh5 <- GSVA:::compute.gene.cdf(zzs, Gaussk=TRUE, kernel=TRUE, sparse=FALSE)
+    checkEqualsNumeric(res_R_sparse_to_dense, res_C_sparseh5_to_denseh5, tolerance=0.00001)
+    res_C_sparseh5_to_sparseh5 <- GSVA:::compute.gene.cdf(zzs, Gaussk=TRUE, kernel=TRUE, sparse=TRUE)
+    checkEqualsNumeric(res_R_sparse_to_sparse, res_C_sparseh5_to_sparseh5, tolerance=0.0001)
 }
