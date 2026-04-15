@@ -288,6 +288,7 @@ setMethod("nzcount", signature=c("zscoreParam"),
 
 #' @importFrom MatrixGenerics rowMeans rowSds
 #' @importFrom SparseArray rowMeans rowSds
+#' @importFrom DelayedMatrixStats rowSds
 .scale_rows <- function(X, verbose) {
     ## scaled <- t(scale(t(X)))
     rmns <- rowMeans(X)
