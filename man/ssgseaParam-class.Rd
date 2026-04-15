@@ -29,38 +29,38 @@ ssgseaParam(
 }
 \arguments{
 \item{exprData}{The expression data set.  Must be one of the classes
-supported by \code{\linkS4class{GsvaExprData}}.  For a list of these classes, see its
+supported by \code{\linkS4class{GsvaExprData}}. For a list of these classes, see its
 help page using \code{help(GsvaExprData)}.}
 
 \item{geneSets}{The gene sets.  Must be one of the classes supported by
 \code{\linkS4class{GsvaGeneSets}}.  For a list of these classes, see its help page using
 \code{help(GsvaGeneSets)}.}
 
-\item{assay}{Character vector of length 1.  The name of the assay to use in
-case \code{exprData} is a multi-assay container, otherwise ignored.  By default,
+\item{assay}{Character vector of length 1. The name of the assay to use in
+case \code{exprData} is a multi-assay container, otherwise ignored. By default,
 an assay called 'logcounts' will be used if present, otherwise the first
 assay is used.}
 
 \item{annotation}{An object of class \code{GeneIdentifierType} from
 package \code{GSEABase} describing the gene identifiers used as the row names of
-the expression data set.  See \code{GeneIdentifierType} for help on available
-gene identifier types and how to construct them.  This
+the expression data set. See \code{GeneIdentifierType} for help on available
+gene identifier types and how to construct them. This
 information can be used to map gene identifiers occurring in the gene sets.
 
 If the default value \code{NULL} is provided, an attempt will be made to extract
 the gene identifier type from the expression data set provided as \code{exprData}
-(by calling \code{\link{gsvaAnnotation}} on it).  If still not successful, the
+(by calling \code{\link{gsvaAnnotation}} on it). If still not successful, the
 \code{NullIdentifier()} will be used as the gene identifier type, gene identifier
 mapping will be disabled and gene identifiers used in expression data set and
 gene sets can only be matched directly.}
 
-\item{minSize}{Numeric vector of length 1.  Minimum size of the resulting gene
+\item{minSize}{Numeric vector of length 1. Minimum size of the resulting gene
 sets after gene identifier mapping. By default, the minimum size is 1.}
 
-\item{maxSize}{Numeric vector of length 1.  Maximum size of the resulting gene
+\item{maxSize}{Numeric vector of length 1. Maximum size of the resulting gene
 sets after gene identifier mapping. By default, the maximum size is \code{Inf}.}
 
-\item{alpha}{Numeric vector of length 1.  The exponent defining the
+\item{alpha}{Numeric vector of length 1. The exponent defining the
 weight of the tail in the random walk performed by the \code{ssGSEA} (Barbie et
 al., 2009) method.  The default value is 0.25 as described in the paper.}
 
@@ -128,7 +128,7 @@ for implementing a missing value policy.
 
 In addition to a number of parameters shared with all methods
 implemented by package GSVA, \code{ssGSEA} takes two method-specific parameters as
-well as two more parameters for implementing a missing value policy.  All of
+well as two more parameters for implementing a missing value policy. All of
 these parameters are described in detail below.
 }
 \section{Slots}{

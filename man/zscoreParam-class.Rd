@@ -4,6 +4,7 @@
 \name{zscoreParam-class}
 \alias{zscoreParam-class}
 \alias{zscoreParam}
+\alias{nzcount,zscoreParam-method}
 \title{\code{zscoreParam} class}
 \usage{
 zscoreParam(
@@ -13,45 +14,58 @@ zscoreParam(
   annotation = NULL,
   minSize = 1,
   maxSize = Inf,
+  ondisk = c("auto", "yes", "no"),
   verbose = TRUE
 )
+
+\S4method{nzcount}{zscoreParam}(x)
 }
 \arguments{
-\item{exprData}{The expression data set.  Must be one of the classes
-supported by \code{\linkS4class{GsvaExprData}}.  For a list of these classes, see its
+\item{exprData}{The expression data set. Must be one of the classes
+supported by \code{\linkS4class{GsvaExprData}}. For a list of these classes, see its
 help page using \code{help(GsvaExprData)}.}
 
 \item{geneSets}{The gene sets.  Must be one of the classes supported by
 \code{\linkS4class{GsvaGeneSets}}.  For a list of these classes, see its help page using
 \code{help(GsvaGeneSets)}.}
 
-\item{assay}{Character vector of length 1.  The name of the assay to use in
-case \code{exprData} is a multi-assay container, otherwise ignored.  By default,
+\item{assay}{Character vector of length 1. The name of the assay to use in
+case \code{exprData} is a multi-assay container, otherwise ignored. By default,
 an assay called 'logcounts' will be used if present, otherwise the first
 assay is used.}
 
 \item{annotation}{An object of class \code{GeneIdentifierType} from
 package \code{GSEABase} describing the gene identifiers used as the row names of
-the expression data set.  See \code{GeneIdentifierType} for help on available
-gene identifier types and how to construct them.  This
+the expression data set. See \code{GeneIdentifierType} for help on available
+gene identifier types and how to construct them. This
 information can be used to map gene identifiers occurring in the gene sets.
 
 If the default value \code{NULL} is provided, an attempt will be made to extract
 the gene identifier type from the expression data set provided as \code{exprData}
-(by calling \code{\link{gsvaAnnotation}} on it).  If still not successful, the
+(by calling \code{\link{gsvaAnnotation}} on it). If still not successful, the
 \code{NullIdentifier()} will be used as the gene identifier type, gene identifier
 mapping will be disabled and gene identifiers used in expression data set and
 gene sets can only be matched directly.}
 
-\item{minSize}{Numeric vector of length 1.  Minimum size of the resulting gene
+\item{minSize}{Numeric vector of length 1. Minimum size of the resulting gene
 sets after gene identifier mapping. By default, the minimum size is 1.}
 
-\item{maxSize}{Numeric vector of length 1.  Maximum size of the resulting gene
+\item{maxSize}{Numeric vector of length 1. Maximum size of the resulting gene
 sets after gene identifier mapping. By default, the maximum size is \code{Inf}.}
+
+\item{ondisk}{Character vector of length 1 denoting whether an on-disk backend
+should be used to reduce the memory footprint. The default value
+\code{ondisk="auto"} will attempt to load all the data in main memory when the
+input nonzero values fit in main memory, otherwise it will attempt working
+with an on-disk data structure that reduces de memory footprint. When
+\code{ondisk="yes"} it will attempt to work with an on-disk data structure, while
+when \code{ondisk="no"} it will attempt to load all the data in main memory.}
 
 \item{verbose}{Logical vector of length 1. It gives information about some
 decisions made by the software during parameter object construction when
 \code{verbose=TRUE} (default) and remains silent otherwise.}
+
+\item{x}{An object of class \code{\linkS4class{zscoreParam}}.}
 }
 \value{
 A new \code{\linkS4class{zscoreParam}} object.
@@ -70,8 +84,22 @@ from \code{GsvaMethodParam}.
 The combined z-scores method takes a number of parameters shared
 with all methods implemented by package GSVA but does not take any
 method-specific parameters.
-These parameters are described in detail below.
 }
+\section{Slots}{
+
+\describe{
+\item{\code{nzcount}}{Numeric vector of length 1. Number of non-zero values in the
+selected assay, if there is more than one, of the 'exprData' slot.}
+
+\item{\code{ondisk}}{Character vector of length 1 denoting whether an on-disk backend
+should be used to reduce the memory footprint. The default value
+\code{ondisk="auto"} will attempt to load all the data in main memory when the
+input nonzero values fit in main memory, otherwise it will attempt working
+with an on-disk data structure that reduces de memory footprint. When
+\code{ondisk="yes"} it will attempt to work with an on-disk data structure, while
+when \code{ondisk="no"} it will attempt to load all the data in main memory.}
+}}
+
 \examples{
 suppressPackageStartupMessages({
 library(GSEABase)

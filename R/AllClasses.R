@@ -209,6 +209,17 @@ setClass("plageParam",
 #' parameters, this class does not add any slots to the common slots inherited
 #' from `GsvaMethodParam`.
 #'
+#' @slot nzcount Numeric vector of length 1. Number of non-zero values in the
+#' selected assay, if there is more than one, of the 'exprData' slot.
+#'
+#' @slot ondisk Character vector of length 1 denoting whether an on-disk backend
+#' should be used to reduce the memory footprint. The default value
+#' `ondisk="auto"` will attempt to load all the data in main memory when the
+#' input nonzero values fit in main memory, otherwise it will attempt working
+#' with an on-disk data structure that reduces de memory footprint. When
+#' `ondisk="yes"` it will attempt to work with an on-disk data structure, while
+#' when `ondisk="no"` it will attempt to load all the data in main memory.
+#'
 #' @seealso
 #' [`GsvaExprData-class`],
 #' [`GsvaGeneSets-class`],
@@ -221,13 +232,17 @@ setClass("plageParam",
 #' @rdname zscoreParam-class
 #' @exportClass zscoreParam
 setClass("zscoreParam",
+         slots=c(nzcount="numeric",
+                 ondisk="character"),
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
                         assay=NA_character_,
                         annotation=NULL,
                         minSize=NA_integer_,
-                        maxSize=NA_integer_))
+                        maxSize=NA_integer_,
+                        nzcount=NA_real_,
+                        ondisk=NA_character_))
 
 
 

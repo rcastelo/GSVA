@@ -1,5 +1,5 @@
 test_sparseMethods <- function(){
-    message("Running unit tests for sparse methods.")
+    message("Running unit tests for sparse methods")
     
     set.seed(123)
     
@@ -30,7 +30,7 @@ test_sparseMethods <- function(){
 }
 
 test_sparse_ecdfvals <- function() {
-    message("Running unit tests for sparse ECDF values calculations.")
+    message("Running unit tests for sparse ECDF values calculations")
 
     ecdfvals_dense <- function(X) t(apply(X, 1, function(rx) ecdf(rx)(rx)))
     ecdfvals_sparse_to_sparse <- function(X) {
@@ -76,7 +76,7 @@ test_sparse_ecdfvals <- function() {
 }
 
 test_sparse_kcdfvals <- function() {
-    message("Running unit tests for sparse KCDF values calculations.")
+    message("Running unit tests for sparse KCDF values calculations")
 
     kcdfegaussianvals_sparse_to_dense <- function(x) {
         x <- as.matrix(x)

@@ -19,7 +19,12 @@
   maxmem = "auto"
 )
 
-\S4method{gsva}{zscoreParam}(param, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
+\S4method{gsva}{zscoreParam}(
+  param,
+  verbose = TRUE,
+  BPPARAM = SerialParam(progressbar = verbose),
+  maxmem = "auto"
+)
 }
 \arguments{
 \item{param}{A parameter object of one of the following classes:

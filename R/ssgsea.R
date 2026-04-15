@@ -21,8 +21,12 @@ setMethod("gsva", signature(param="ssgseaParam"),
                   cli_alert_info(sprintf("GSVA version %s",
                                          packageDescription("GSVA")[["Version"]]))
 
-              if (!is(BPPARAM, "BiocParallelParam"))
-                  cli_abort(c("x"="Argument 'BPPARAM' must be a 'BiocParallelParam' derivative. Please consult the BiocParallel package."))
+              if (!is(BPPARAM, "BiocParallelParam")) {
+                  msg <- paste("Argument 'BPPARAM' must be a",
+                               "'BiocParallelParam' derivative. Please",
+                               "consult the BiocParallel package.")
+                  cli_abort(c("x"=msg))
+              }
 
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=FALSE,
@@ -36,9 +40,11 @@ setMethod("gsva", signature(param="ssgseaParam"),
               ondisk <- .check_ondisk(param, maxmem, verbose)
 
               if (is_sparse(filtDataMatrix)) {
-                  cli_alert_warning("Input expression data is sparse, but the ssGSEA algorithm")
-                  cli_alert_warning("does not deal with sparsity in any specific way, and data")
-                  cli_alert_warning("will be converted into a dense matrix format")
+                  msg <- paste("Input expression data is sparse, but the",
+                               "ssGSEA algorithm does not deal with sparsity",
+                               "in any specific way, and data will be",
+                               "converted into a dense matrix format")
+                  cli_alert_warning(msg)
               }
 
               if (is(filtDataMatrix, "DelayedMatrix") && !ondisk) {
@@ -55,7 +61,7 @@ setMethod("gsva", signature(param="ssgseaParam"),
                       cli_alert_info(msg)
                   }
               } else
-                      BPPARAM <- NULL
+                  BPPARAM <- NULL
 
               if (verbose)
                   cli_alert_info(sprintf("Calculating ssGSEA scores for %d gene sets",
@@ -103,42 +109,42 @@ setMethod("gsva", signature(param="ssgseaParam"),
 #'
 #' @details In addition to a number of parameters shared with all methods
 #' implemented by package GSVA, `ssGSEA` takes two method-specific parameters as
-#' well as two more parameters for implementing a missing value policy.  All of
+#' well as two more parameters for implementing a missing value policy. All of
 #' these parameters are described in detail below.
 #'
 #' @param exprData The expression data set.  Must be one of the classes
-#' supported by [`GsvaExprData-class`].  For a list of these classes, see its
+#' supported by [`GsvaExprData-class`]. For a list of these classes, see its
 #' help page using `help(GsvaExprData)`.
 #'
 #' @param geneSets The gene sets.  Must be one of the classes supported by
 #' [`GsvaGeneSets-class`].  For a list of these classes, see its help page using
 #' `help(GsvaGeneSets)`.
 #' 
-#' @param assay Character vector of length 1.  The name of the assay to use in
-#' case `exprData` is a multi-assay container, otherwise ignored.  By default,
+#' @param assay Character vector of length 1. The name of the assay to use in
+#' case `exprData` is a multi-assay container, otherwise ignored. By default,
 #' an assay called 'logcounts' will be used if present, otherwise the first
 #' assay is used.
 #' 
 #' @param annotation An object of class `GeneIdentifierType` from
 #' package `GSEABase` describing the gene identifiers used as the row names of
-#' the expression data set.  See `GeneIdentifierType` for help on available
-#' gene identifier types and how to construct them.  This
+#' the expression data set. See `GeneIdentifierType` for help on available
+#' gene identifier types and how to construct them. This
 #' information can be used to map gene identifiers occurring in the gene sets.
 #' 
 #' If the default value `NULL` is provided, an attempt will be made to extract
 #' the gene identifier type from the expression data set provided as `exprData`
-#' (by calling [`gsvaAnnotation`] on it).  If still not successful, the
+#' (by calling [`gsvaAnnotation`] on it). If still not successful, the
 #' `NullIdentifier()` will be used as the gene identifier type, gene identifier
 #' mapping will be disabled and gene identifiers used in expression data set and
 #' gene sets can only be matched directly.
 #' 
-#' @param minSize Numeric vector of length 1.  Minimum size of the resulting gene
+#' @param minSize Numeric vector of length 1. Minimum size of the resulting gene
 #' sets after gene identifier mapping. By default, the minimum size is 1.
 #' 
-#' @param maxSize Numeric vector of length 1.  Maximum size of the resulting gene
+#' @param maxSize Numeric vector of length 1. Maximum size of the resulting gene
 #' sets after gene identifier mapping. By default, the maximum size is `Inf`.
 #' 
-#' @param alpha Numeric vector of length 1.  The exponent defining the
+#' @param alpha Numeric vector of length 1. The exponent defining the
 #' weight of the tail in the random walk performed by the `ssGSEA` (Barbie et
 #' al., 2009) method.  The default value is 0.25 as described in the paper.
 #' 
@@ -246,16 +252,16 @@ ssgseaParam <- function(exprData, geneSets,
                                 verbose=verbose)
 
     xa <- gsvaAnnotation(exprData)
-    if(is.null(xa)) {
-        if(is.null(annotation)) {
+    if (is.null(xa)) {
+        if (is.null(annotation)) {
             annotation <- NullIdentifier()
         }
     } else {
-        if(is.null(annotation)) {
+        if (is.null(annotation)) {
             annotation <- xa
         } else if (verbose) {
-            msg <- sprintf(paste0("using argument annotation='%s' and ",
-                                  "ignoring exprData annotation ('%s')"),
+            msg <- sprintf(paste("using argument annotation='%s' and",
+                                 "ignoring exprData annotation ('%s')"),
                            capture.output(annotation), capture.output(xa))
             cli_alert_info(msg)
         }

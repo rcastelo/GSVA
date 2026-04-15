@@ -1,5 +1,5 @@
 test_inputdatacontainers <- function() {
-    message("Running unit tests for input data containers.")
+    message("Running unit tests for input data containers")
 
     p <- 10 ## number of genes
     n <- 30 ## number of samples
@@ -21,7 +21,7 @@ test_inputdatacontainers <- function() {
     y[gsets$set1, (nGrp1+1):n] <- y[gsets$set1, (nGrp1+1):n] + 2
 
     ## estimate GSVA enrichment scores with input as a matrix
-    es.mat <- gsva(gsvaParam(y, gsets), verbose=FALSE)
+    es.mat <- gsva(gsvaParam(y, gsets, verbose=FALSE), verbose=FALSE)
     gsets.mat <- geneSets(es.mat)
 
     ## estimate GSVA enrichment scores with input as an ExpressionSet object
@@ -36,7 +36,7 @@ test_inputdatacontainers <- function() {
                           featureData=as(data.frame(dummy=1:nrow(y),
                                                     row.names=rownames(y)),
                                          "AnnotatedDataFrame"))
-    es.eset <- gsva(gsvaParam(eset, gsets), verbose=FALSE)
+    es.eset <- gsva(gsvaParam(eset, gsets, verbose=FALSE), verbose=FALSE)
     gsets.eSet <- geneSets(es.eset)
 
     ## as of 1.51.9, gene sets will be returned as attributes for containers not
@@ -67,8 +67,12 @@ test_inputdatacontainers <- function() {
 
     yMat <- Matrix(y, sparse=TRUE)
 
+    ## check show() method for a gsvaParam object
     param <- gsvaParam(yMat, gsets, verbose=FALSE)
-    show(param)
+    out <- capture.output(show(param))
+    checkTrue(length(out) > 0 && sum(nchar(out)) > 0,
+	      "gsvaParam object show method output is empty")
+
     es.dgCMat <- gsva(param, verbose=FALSE)
     gsets.dgCMat <- geneSets(es.dgCMat)
 

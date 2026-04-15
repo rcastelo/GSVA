@@ -1,5 +1,5 @@
 test_genesets <- function() {
-    message("Running unit tests for input gene sets.")
+    message("Running unit tests for input gene sets")
 
     p <- 10 ## number of genes
     n <- 30 ## number of samples
@@ -69,7 +69,7 @@ test_readGMT <- function() {
     checkException(readGMT(c("nonexistent_file1.gmt", "nonexistent_file2.gmt")))
     checkException(readGMT("nonexistent_file.gmt"))
 
-    library(GSVAdata)
+    suppressPackageStartupMessages(library(GSVAdata))
     fname <- system.file("extdata", "c2.subsetdups.v7.5.symbols.gmt.gz",
                         package="GSVAdata")
     suppressWarnings(c2.dupgenesets <- readGMT(fname, deduplUse="union",

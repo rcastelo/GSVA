@@ -856,8 +856,12 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_info(sprintf("GSVA version %s",
                                          packageDescription("GSVA")[["Version"]]))
-              if (!is(BPPARAM, "BiocParallelParam"))
-                  cli_abort(c("x"="Argument 'BPPARAM' must be a 'BiocParallelParam' derivative. Please consult the BiocParallel package."))
+              if (!is(BPPARAM, "BiocParallelParam")) {
+                  sg <- paste("Argument 'BPPARAM' must be a",
+                               "'BiocParallelParam' derivative. Please",
+                               "consult the BiocParallel package.")
+                  cli_abort(c("x"=msg))
+              }
 
               ## assuming rows in the rank data have been already filtered
               exprData <- get_exprData(param)

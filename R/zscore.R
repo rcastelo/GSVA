@@ -2,51 +2,91 @@
 ## methods for the z-score method from Lee et al. (2008)
 ##
 
+#' @importFrom S4Arrays is_sparse
 #' @importFrom cli cli_alert_info cli_alert_success
 #' @importFrom utils packageDescription
 #' @importFrom BiocParallel bpnworkers
 #' @importFrom utils packageDescription
+#' @importFrom memuse howbig
 #' @aliases gsva,zscoreParam-method
 #' @rdname gsva
 #' @exportMethod gsva
 setMethod("gsva", signature(param="zscoreParam"),
           function(param,
                    verbose=TRUE,
-                   BPPARAM=SerialParam(progressbar=verbose))
-          {
+                   BPPARAM=SerialParam(progressbar=verbose),
+                   maxmem="auto") {
+
               if (verbose)
                   cli_alert_info(sprintf("GSVA version %s",
                                          packageDescription("GSVA")[["Version"]]))
+
+              if (!is(BPPARAM, "BiocParallelParam")) {
+                  msg <- paste("Argument 'BPPARAM' must be a",
+                               "'BiocParallelParam' derivative. Please",
+                               "consult the BiocParallel package.")
+                  cli_abort(c("x"=msg))
+              }
 
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=TRUE,
                                                        removeNzConstant=TRUE,
                                                        verbose=verbose,
                                                        BPPARAM=BPPARAM)
-              filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
-              filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
+              filtDataMatrix <- famGaGS[["filteredDataMatrix"]]
+              filtMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
-              if (!inherits(BPPARAM, "SerialParam") && verbose) {
-                  msg <- sprintf("Using a %s parallel back-end with %d workers",
-                                 class(BPPARAM), bpnworkers(BPPARAM))
-                  cli_alert_info(msg)
+              maxmem <- .check_maxmem(param, maxmem, verbose)
+              ondisk <- .check_ondisk(param, maxmem, verbose)
+
+              if (is_sparse(filtDataMatrix)) {
+                  msg <- paste("Input expression data is sparse, but the",
+                               "zscore algorithm does not deal with sparsity",
+                               "in any specific way, and data will be",
+                               "converted into a dense matrix format")
+                  cli_alert_warning(msg)
               }
 
-              ## if (rnaseq)
-              ##     stop("rnaseq=TRUE does not work with method='zscore'.")
+              if (is(filtDataMatrix, "DelayedMatrix") && !ondisk) {
+                  if (verbose)
+                      cli_alert_info("Loading input expression data into main memory")
+                  filtDataMatrix <- as.matrix(filtDataMatrix)
+              }
+
+              if (bpnworkers(BPPARAM) > 1 && nrow(filtDataMatrix) > 100 &&
+                  ncol(filtDataMatrix) > 100) {
+                  if (verbose) {
+                      msg <- sprintf("Using a %s parallel back-end with %d workers",
+                                     class(BPPARAM), bpnworkers(BPPARAM))
+                      cli_alert_info(msg)
+                  }
+              } ## else
+                ##   BPPARAM <- NULL
 
               if(verbose)
                   cli_alert_info(sprintf("Calculating Z-scores for %d gene sets",
-                                         length(filteredMappedGeneSets)))
+                                         length(filtMappedGeneSets)))
+              esreqmem <- howbig(as.numeric(length(filtMappedGeneSets)),
+                                 as.numeric(ncol(filtDataMatrix)),
+                                 representation="dense", sparsity=1,
+                                 type="double")
+              if (esreqmem > maxmem) {
+                msg <- paste("The resulting (dense) matrix of enrichment",
+                             "scores will not fit in the given maximum",
+                             "main memory size, and it will be returned",
+                             "using an on-disk data structure")
+                cli_alert_warning(msg)
+                ondisk <- TRUE
+              }
 
-              zScores <- zscore(X=filteredDataMatrix,
-                                geneSets=filteredMappedGeneSets,
-                                verbose=verbose,
-                                BPPARAM=BPPARAM)
+              zScores <- zscore(X=filtDataMatrix,
+                                geneSets=filtMappedGeneSets,
+                                ondisk=ondisk, verbose=verbose,
+                                BPPARAM=BPPARAM, maxmem=maxmem)
 
               gs <- .geneSetsIndices2Names(
-                  indices=filteredMappedGeneSets,
-                  names=rownames(filteredDataMatrix))
+                  indices=filtMappedGeneSets,
+                  names=rownames(filtDataMatrix))
               rval <- wrapData(get_exprData(param), zScores, gs)
               
               if (verbose)
@@ -64,40 +104,47 @@ setMethod("gsva", signature(param="zscoreParam"),
 #' @details The combined z-scores method takes a number of parameters shared
 #' with all methods implemented by package GSVA but does not take any
 #' method-specific parameters.
-#' These parameters are described in detail below.
 #'
-#' @param exprData The expression data set.  Must be one of the classes
-#' supported by [`GsvaExprData-class`].  For a list of these classes, see its
+#' @param exprData The expression data set. Must be one of the classes
+#' supported by [`GsvaExprData-class`]. For a list of these classes, see its
 #' help page using `help(GsvaExprData)`.
 #'
 #' @param geneSets The gene sets.  Must be one of the classes supported by
 #' [`GsvaGeneSets-class`].  For a list of these classes, see its help page using
 #' `help(GsvaGeneSets)`.
 #' 
-#' @param assay Character vector of length 1.  The name of the assay to use in
-#' case `exprData` is a multi-assay container, otherwise ignored.  By default,
+#' @param assay Character vector of length 1. The name of the assay to use in
+#' case `exprData` is a multi-assay container, otherwise ignored. By default,
 #' an assay called 'logcounts' will be used if present, otherwise the first
 #' assay is used.
 #' 
 #' @param annotation An object of class `GeneIdentifierType` from
 #' package `GSEABase` describing the gene identifiers used as the row names of
-#' the expression data set.  See `GeneIdentifierType` for help on available
-#' gene identifier types and how to construct them.  This
+#' the expression data set. See `GeneIdentifierType` for help on available
+#' gene identifier types and how to construct them. This
 #' information can be used to map gene identifiers occurring in the gene sets.
 #' 
 #' If the default value `NULL` is provided, an attempt will be made to extract
 #' the gene identifier type from the expression data set provided as `exprData`
-#' (by calling [`gsvaAnnotation`] on it).  If still not successful, the
+#' (by calling [`gsvaAnnotation`] on it). If still not successful, the
 #' `NullIdentifier()` will be used as the gene identifier type, gene identifier
 #' mapping will be disabled and gene identifiers used in expression data set and
 #' gene sets can only be matched directly.
 #' 
-#' @param minSize Numeric vector of length 1.  Minimum size of the resulting gene
+#' @param minSize Numeric vector of length 1. Minimum size of the resulting gene
 #' sets after gene identifier mapping. By default, the minimum size is 1.
 #' 
-#' @param maxSize Numeric vector of length 1.  Maximum size of the resulting gene
+#' @param maxSize Numeric vector of length 1. Maximum size of the resulting gene
 #' sets after gene identifier mapping. By default, the maximum size is `Inf`.
 #' 
+#' @param ondisk Character vector of length 1 denoting whether an on-disk backend
+#' should be used to reduce the memory footprint. The default value
+#' `ondisk="auto"` will attempt to load all the data in main memory when the
+#' input nonzero values fit in main memory, otherwise it will attempt working
+#' with an on-disk data structure that reduces de memory footprint. When
+#' `ondisk="yes"` it will attempt to work with an on-disk data structure, while
+#' when `ondisk="no"` it will attempt to load all the data in main memory.
+#'
 #' @param verbose Logical vector of length 1. It gives information about some
 #' decisions made by the software during parameter object construction when
 #' `verbose=TRUE` (default) and remains silent otherwise.
@@ -134,9 +181,12 @@ setMethod("gsva", signature(param="zscoreParam"),
 #' @export
 zscoreParam <- function(exprData, geneSets,
                         assay=NA_character_, annotation=NULL,
-                        minSize=1,maxSize=Inf, verbose=TRUE) {
+                        minSize=1, maxSize=Inf, ondisk=c("auto", "yes", "no"),
+                        verbose=TRUE) {
 
     .check_input_expr_gene_sets(exprData, geneSets)
+
+    ondisk <- match.arg(ondisk)
 
     ## check assay parameter and assay names
     assay <- .check_assayNames(assay, exprData, verbose)
@@ -146,24 +196,26 @@ zscoreParam <- function(exprData, geneSets,
                                 verbose=verbose)
 
     xa <- gsvaAnnotation(exprData)
-    if(is.null(xa)) {
-        if(is.null(annotation)) {
+    if (is.null(xa)) {
+        if (is.null(annotation)) {
             annotation <- NullIdentifier()
         }
     } else {
-        if(is.null(annotation)) {
+        if (is.null(annotation)) {
             annotation <- xa
         } else if (verbose) {
-            msg <- sprintf(paste0("using argument annotation='%s' and ",
-                                  "ignoring exprData annotation ('%s')"),
+            msg <- sprintf(paste("using argument annotation='%s' and",
+                                 "ignoring exprData annotation ('%s')"),
                            capture.output(annotation), capture.output(xa))
             cli_alert_info(msg)
         }
     }
 
+    nzc <- .estimate_nzcount(exprData, assay, verbose)
+
     new("zscoreParam", exprData=exprData, geneSets=geneSets,
         assay=assay, annotation=annotation,
-        minSize=minSize, maxSize=maxSize)
+        minSize=minSize, maxSize=maxSize, nzcount=nzc, ondisk=ondisk)
 }
 
 
@@ -209,9 +261,26 @@ setValidity("zscoreParam", function(object) {
     if(object@maxSize < object@minSize) {
         inv <- c(inv, "@maxSize must be at least @minSize or greater")
     }
+    if(length(object@nzcount) != 1) {
+        inv <- c(inv, "@nzcount must be of length 1")
+    }   
+    if(is.na(object@nzcount)) {
+        inv <- c(inv, "@nzcount must not be NA")
+    }       
+    if(!.isCharLength1(object@ondisk)) {
+        inv <- c(inv, "@ondisk must be a single character string")
+    }
     return(if(length(inv) == 0) TRUE else inv)
 })
 
+#' @param x An object of class [`zscoreParam-class`].
+#'
+#' @importFrom SparseArray nzcount
+#' @aliases nzcount,zscoreParam-method
+#' @rdname zscoreParam-class
+setMethod("nzcount", signature=c("zscoreParam"),
+          function(x)
+            return(x@nzcount))
 
 
 ## ------ internal functions ------
@@ -222,8 +291,8 @@ combinez <- function(gSetIdx, j, Z) sum(Z[gSetIdx, j]) / sqrt(length(gSetIdx))
 #' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
 #' @importFrom BiocParallel bpnworkers SerialParam bplapply
 #' @importFrom Matrix colSums
-zscore <- function(X, geneSets, verbose=TRUE,
-                   BPPARAM=SerialParam(progressbar=verbose)) {
+zscore <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
+                   BPPARAM=NULL, maxmem=Inf) {
     if (is(X, "dgCMatrix")){
         if (verbose)
             cli_alert_info("Centering and scaling non-zero values")

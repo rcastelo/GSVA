@@ -412,7 +412,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 
 .get_ondisk <- function(object) {
   stopifnot(inherits(object, "ssgseaParam") ||
-            inherits(object, "gsvaParam"))
+            inherits(object, "gsvaParam") ||
+            inherits(object, "zscoreParam"))
   return(object@ondisk)
 }
 

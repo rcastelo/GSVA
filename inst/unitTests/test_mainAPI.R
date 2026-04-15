@@ -4,7 +4,7 @@
 ###
 
 test_mainAPI <- function() {
-    message("Running unit tests for the new API.")
+    message("Running unit tests for the main API")
     
     p <- 100; n <- 30; ngs <- 5 # number of genes, samples, gene sets
     xf <- matrix(rnorm(n * p), nrow=p, ncol=n,
