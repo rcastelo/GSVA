@@ -46,9 +46,6 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP sparseR,
                       SEXP nauseR, SEXP minsizeR, SEXP verboseR);
 
 SEXP
-ranks2stats_R(SEXP ranksR, SEXP jR, SEXP sparseR);
-
-SEXP
 fetch_row_nzvals_R(SEXP svtR, SEXP iR, SEXP whimin1R);
 
 SEXP
@@ -80,11 +77,8 @@ static R_CallMethodDef callMethods[] = {
   {"ecdfvals_dense_to_dense_R", (DL_FUNC) &ecdfvals_dense_to_dense_R, 2},
   {"ecdfvals_dense_to_dense_nas_R", (DL_FUNC) &ecdfvals_dense_to_dense_nas_R, 2},
   {"gsva_score_genesets_R", (DL_FUNC) &gsva_score_genesets_R, 10},
-  {"ranks2stats_R", (DL_FUNC) &ranks2stats_R, 4},
   {"fetch_row_nzvals_R", (DL_FUNC) &fetch_row_nzvals_R, 3},
   {"row_rngs_nzrngs_RsparseMatrix_R", (DL_FUNC) &row_rngs_nzrngs_RsparseMatrix_R, 2},
-  /* {"row_rngs_nzrngs_SVT_SparseMatrix_R", (DL_FUNC) &row_rngs_nzrngs_SVT_SparseMatrix_R, 2}, */
-  /* {"col_rngs_nzrngs_SVT_SparseMatrix_R", (DL_FUNC) &col_rngs_nzrngs_SVT_SparseMatrix_R, 2}, */
   {"rowbycols_rngs_nzrngs_SVT_SparseMatrix_R", (DL_FUNC) &rowbycols_rngs_nzrngs_SVT_SparseMatrix_R, 2},
   {NULL, NULL, 0}
 };

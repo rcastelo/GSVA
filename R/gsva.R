@@ -1954,13 +1954,6 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE, verbos
   res
 }
 
-.gsva_rnd_walk <- function(gsetIdx, decOrdStat, symRnkStat) {
-  stopifnot(is.integer(gsetIdx)) ## QC
-  stopifnot(is.integer(decOrdStat)) ## QC
-  stopifnot(is.numeric(symRnkStat)) ## QC
-  .Call("gsva_rnd_walk_R", gsetIdx, decOrdStat, symRnkStat)
-}
-
 #' @importFrom cli cli_abort
 .gsva_score_genesets <- function(R, geneSetsIdx, sparse, maxDiff, absRanking,
                                  tau, any_na, na_use, minSize, wna_env,
