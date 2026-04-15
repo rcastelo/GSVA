@@ -1505,6 +1505,11 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE, verbos
 }
 
 
+## this function computes the GSVA scores for all gene sets in geneSetsIdx for
+## a given rank matrix R, taking care that if 'ondisk=TRUE' because, e.g., the
+## resulting matrix of GSVA scores does not fit in main memory, the scores are
+## written into an on-disk data structure (HDF5) instead of being returned in
+## main memory.
 #' @importFrom cli cli_alert_info cli_alert_warning
 #' @importFrom BiocParallel bpnworkers
 #' @importFrom S4Arrays is_sparse refdim DummyArrayGrid

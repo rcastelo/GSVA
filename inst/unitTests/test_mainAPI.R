@@ -76,6 +76,22 @@ test_mainAPI <- function() {
 
     checkIdentical(p1, p2)
 
+    s1 <- gsva(ssgseaParam(exprData=xf, geneSets=gs), verbose=FALSE)
+    checkIdentical(class(xf), class(s1))
+    checkEquals(names(gs), rownames(s1))
+    checkEquals(colnames(xf), colnames(s1))
+    ## checkTrue((min(s1) >= -1 && (max(s1) <= 1)))
+    checkTrue(!any(is.na(s1)))
+
+    s2 <- gsva(ssgseaParam(xf, gs), verbose=FALSE)
+    checkIdentical(class(xf), class(s2))
+    checkEquals(names(gs), rownames(s2))
+    checkEquals(colnames(xf), colnames(s2))
+    ## checkTrue((min(s2) >= -1 && (max(s2) <= 1)))
+    checkTrue(!any(is.na(s2)))
+
+    checkIdentical(s1, s2)
+
     z1 <- gsva(zscoreParam(exprData=xf, geneSets=gs), verbose=FALSE)
     checkIdentical(class(xf), class(z1))
     checkEquals(names(gs), rownames(z1))
@@ -92,19 +108,23 @@ test_mainAPI <- function() {
 
     checkIdentical(z1, z2)
 
-    s1 <- gsva(ssgseaParam(exprData=xf, geneSets=gs), verbose=FALSE)
-    checkIdentical(class(xf), class(s1))
-    checkEquals(names(gs), rownames(s1))
-    checkEquals(colnames(xf), colnames(s1))
-    ## checkTrue((min(s1) >= -1 && (max(s1) <= 1)))
-    checkTrue(!any(is.na(s1)))
+    ngs <- 40 ## to check the Z-score pipeline that iterates over gene sets
+    gs <- replicate(ngs, sample(rownames(xf), 25, replace=FALSE), simplify=FALSE)
+    names(gs) <- paste0("gs", seq_len(ngs))
 
-    s2 <- gsva(ssgseaParam(xf, gs), verbose=FALSE)
-    checkIdentical(class(xf), class(s2))
-    checkEquals(names(gs), rownames(s2))
-    checkEquals(colnames(xf), colnames(s2))
-    ## checkTrue((min(s2) >= -1 && (max(s2) <= 1)))
-    checkTrue(!any(is.na(s2)))
+    z1 <- gsva(zscoreParam(exprData=xf, geneSets=gs), verbose=FALSE)
+    checkIdentical(class(xf), class(z1))
+    checkEquals(names(gs), rownames(z1))
+    checkEquals(colnames(xf), colnames(z1))
+    ## checkTrue((min(z1) >= -1 && (max(z1) <= 1)))
+    checkTrue(!any(is.na(z1)))
 
-    checkIdentical(s1, s2)
+    z2 <- gsva(zscoreParam(xf, gs), verbose=FALSE)
+    checkIdentical(class(xf), class(z2))
+    checkEquals(names(gs), rownames(z2))
+    checkEquals(colnames(xf), colnames(z2))
+    ## checkTrue((min(z2) >= -1 && (max(z2) <= 1)))
+    checkTrue(!any(is.na(z2)))
+
+    checkIdentical(z1, z2)
 }

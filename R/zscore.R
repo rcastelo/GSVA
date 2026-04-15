@@ -41,7 +41,7 @@ setMethod("gsva", signature(param="zscoreParam"),
 
               if (is_sparse(filtDataMatrix)) {
                   msg <- paste("Input expression data is sparse, but the",
-                               "zscore algorithm does not deal with sparsity",
+                               "Z-score algorithm does not deal with sparsity",
                                "in any specific way, and data will be",
                                "converted into a dense matrix format")
                   cli_alert_warning(msg)
@@ -79,15 +79,16 @@ setMethod("gsva", signature(param="zscoreParam"),
                 ondisk <- TRUE
               }
 
-              zScores <- zscore(X=filtDataMatrix,
-                                geneSets=filtMappedGeneSets,
-                                ondisk=ondisk, verbose=verbose,
-                                BPPARAM=BPPARAM, maxmem=maxmem)
+              es <- NULL
+              es <- zscore(X=filtDataMatrix,
+                           geneSets=filtMappedGeneSets,
+                           ondisk=ondisk, verbose=verbose,
+                           BPPARAM=BPPARAM, maxmem=maxmem)
 
               gs <- .geneSetsIndices2Names(
                   indices=filtMappedGeneSets,
                   names=rownames(filtDataMatrix))
-              rval <- wrapData(get_exprData(param), zScores, gs)
+              rval <- wrapData(get_exprData(param), es, gs)
               
               if (verbose)
                   cli_alert_success("Calculations finished")
@@ -285,46 +286,147 @@ setMethod("nzcount", signature=c("zscoreParam"),
 
 ## ------ internal functions ------
 
-combinez <- function(gSetIdx, j, Z) sum(Z[gSetIdx, j]) / sqrt(length(gSetIdx))
+#' @importFrom MatrixGenerics rowMeans rowSds
+#' @importFrom SparseArray rowMeans rowSds
+.scale_rows <- function(X, verbose) {
+    ## scaled <- t(scale(t(X)))
+    rmns <- rowMeans(X)
+    rsds <- rowSds(X) ## produces tiny differences 10^-16 wrt scale(), but it
+                      ## is more performant
+    scaled <- (X - rmns) / rsds
+
+    return(scaled)
+}
+
+## calculate enrichment scores as combined z-scores for all given genes sets
+## through the columns of the input matrix Z
+## of the input matrix
+#' @importFrom MatrixGenerics colSums
+.compute_z_scores_block <- function(Z, geneSetsIdx, verbose) {
+    idpb <- NULL
+    if (verbose)
+        idpb <- cli_progress_bar("Calculating Z-scores",
+                                 total=2*length(geneSetsIdx))
+
+    es <- t(vapply(lapply(geneSetsIdx,
+                          function(i) {
+                              if (verbose)
+                                  cli_progress_update(id=idpb)
+                              Z[i, , drop=FALSE]
+                          }),
+                   function(z) {
+                       if (verbose)
+                           cli_progress_update(id=idpb)
+                       colSums(z) / sqrt(nrow(z))
+                   }, numeric(ncol(Z))))
+
+    if (verbose)
+        cli_progress_done(idpb)
+
+    return(es)
+}
+
+## this function computes enrichment scores as combined z-scores for all gene
+## sets in geneSetsIdx for a given rank matrix R, taking care that if
+## 'ondisk=TRUE' because, e.g., the resulting matrix of ssGSEA scores does not
+## fit in main memory, the scores are written into an on-disk data structure
+## (HDF5) instead of being returned in main memory.
+#' @importFrom S4Arrays DummyArrayGrid
+.compute_z_scores <- function(Z, geneSetsIdx, ondisk, verbose) {
+    p <- nrow(Z)
+    n <- ncol(Z)
+    es <- NULL
+
+    if (is(Z, "DelayedMatrix") || ondisk) {
+        sink <- HDF5RealizationSink(c(length(geneSetsIdx), ncol(Z)),
+                                    as.sparse=FALSE) ## enrichment scores are dense
+        grid <- DummyArrayGrid(dim(Z))
+        grid_es <- DummyArrayGrid(dim(sink))
+
+        if (length(grid) != length(grid_es) ||
+            refdim(grid)[2] != refdim(grid_es)[2] ||
+            dim(grid)[2] != dim(grid_es)[2]) {
+            msg <- paste("Grid column blocks for ranks should match grid column",
+                         "blocks for enrichment scores")
+            cli_abort(c("x"=msg))
+        }
+
+        ## avp - ArrayViewport for reaching the (possibly sparse) rank matrix
+        ## avp_es - ArrayViewport for writing the enrichment dense scores matrix
+        colScores_byBlock <- function(avp, avp_es, sink) {
+            block <- read_block(Z, avp)
+            block <- .compute_z_scores_block(block, geneSetsIdx, verbose)
+            write_block(sink, avp_es, block)
+        }
+
+        nblock <- length(grid)
+        for (bid in seq_len(nblock))
+            sink <- colScores_byBlock(grid[[bid]], grid_es[[bid]], sink)
+        close(sink)
+        es <- as(sink, "DelayedArray")
+    } else
+        es <- .compute_z_scores_block(Z, geneSetsIdx, verbose)
+
+    return(es)
+}
+
 
 #' @importFrom cli cli_alert_info
 #' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
-#' @importFrom BiocParallel bpnworkers SerialParam bplapply
+#' @importFrom BiocParallel bpnworkers bplapply bpprogressbar
 #' @importFrom Matrix colSums
 zscore <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
                    BPPARAM=NULL, maxmem=Inf) {
-    if (is(X, "dgCMatrix")){
-        if (verbose)
-            cli_alert_info("Centering and scaling non-zero values")
 
-        Z <- t(.sparseColumnApplyAndReplace(t(X), FUN=scale))
-    } else if (is.matrix(X)) {
-        if (verbose)
-            cli_alert_info("Centering and scaling values")
+    Z <- .processMatrixRows(X, .scale_rows, verbose=verbose,
+                            minparrows=100, minparcols=100,
+                            progressmsg="Centering and scaling rows",
+                            BPPARAM=BPPARAM, maxmem=maxmem)
 
-        Z <- t(scale(t(X)))
-    } else
-        stop(sprintf("Matrix class %s cannot be handled yet.", class(X)))
+    es <- NULL
+    if (ncol(Z) >= length(geneSets) || is(Z, "DelayedMatrix") || ondisk) {
+        es <- .processMatrixCols(Z, .compute_z_scores, geneSets,
+                                 ondisk=ondisk, verbose=verbose,
+                                 minparrows=100, minparcols=100,
+                                 progressmsg="Calculating Z-scores per gene set",
+                                 BPPARAM=BPPARAM, maxmem=maxmem)
+    } else {
+        nworkers <- 1L
+        if (!is.null(BPPARAM) && nrow(Z) > 100 && ncol(Z) > 100) {
+            if (!is(BPPARAM, "BiocParallelParam")) {
+                msg <- paste("Argument 'BPPARAM' must be a",
+                             "'BiocParallelParam' derivative. Please",
+                             "consult the BiocParallel package.")
+                cli_abort(c("x"=msg))
+            }
+            nworkers <- bpnworkers(BPPARAM)
+        }
 
-    if (bpnworkers(BPPARAM) > 1)
-        es <- bplapply(geneSets, function(gSetIdx) {
-                           colSums(Z[gSetIdx, , drop=FALSE]) / sqrt(length(gSetIdx))
-                       }, BPPARAM=BPPARAM)
-    else {
-        idpb <- NULL
-        if (verbose)
-            idpb <- cli_progress_bar("Calculating Z-scores",
-                                     total=length(geneSets))
-        es <- lapply(geneSets, function(gSetIdx, verbose, idpb) {
-                           if (verbose)
-                               cli_progress_update(id=idpb)
-                           colSums(Z[gSetIdx, , drop=FALSE]) / sqrt(length(gSetIdx))
-                     }, verbose, idpb)
-        if (verbose)
-            cli_progress_done(idpb)
+        if (is.null(BPPARAM) || nworkers == 1L) {
+            env <- NULL
+            if (verbose) {
+                env <- new.env(parent=globalenv())
+                msg <- "Calculating Z-scores per gene set"
+                assign("idpb", cli_progress_bar(msg, total=length(geneSets)),
+                       envir=env)
+            }
+            es <- lapply(geneSets, function(gSetIdx, verbose, idpbe) {
+                             if (verbose)
+                                 cli_progress_update(id=get("idpb", envir=idpbe))
+                             colSums(Z[gSetIdx, , drop=FALSE]) / sqrt(length(gSetIdx))
+                         }, verbose=verbose, idpbe=env)
+            if (verbose)
+                cli_progress_done(get("idpb", envir=env))
+        } else {
+            if (verbose)
+                bpprogressbar(BPPARAM) <- TRUE ## reporting progress wo/ cli
+
+            es <- bplapply(geneSets, function(gSetIdx) {
+                               colSums(Z[gSetIdx, , drop=FALSE]) / sqrt(length(gSetIdx))
+                           }, BPPARAM=BPPARAM)
+        }
+        es <- do.call(rbind, es)
     }
-    
-    es <- do.call(rbind, es)
 
     es
 }

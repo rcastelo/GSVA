@@ -543,6 +543,11 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
     ssgsea_es
 }
 
+## this function computes the ssGSEA scores for all gene sets in geneSetsIdx for
+## a given rank matrix R, taking care that if 'ondisk=TRUE' because, e.g., the
+## resulting matrix of ssGSEA scores does not fit in main memory, the scores are
+## written into an on-disk data structure (HDF5) instead of being returned in
+## main memory.
 #' @importFrom IRanges IntegerList
 #' @importFrom S4Arrays DummyArrayGrid
 .compute_ssgsea_scores <- function(R, geneSetsIdx, alpha, normalization,
@@ -552,20 +557,20 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
     n <- ncol(R)
     es <- NULL
 
-    ## Ra <- abs(R)^alpha ## remove abs() ? do it later to reduce memory footprint?
-  
     geneSetsIdx <- IntegerList(geneSetsIdx)
 
     if (is(R, "DelayedMatrix") || ondisk) {
         sink <- HDF5RealizationSink(c(length(geneSetsIdx), ncol(R)),
-                                    as.sparse=FALSE) ## ssGSEA scores are dense
+                                    as.sparse=FALSE) ## enrichment scores are dense
         grid <- DummyArrayGrid(dim(R))
         grid_es <- DummyArrayGrid(dim(sink))
 
         if (length(grid) != length(grid_es) ||
             refdim(grid)[2] != refdim(grid_es)[2] ||
             dim(grid)[2] != dim(grid_es)[2]) {
-            cli_abort(c("x"="Grid column blocks for ranks should match grid column blocks for enrichment scores"))
+            msg <- paste("Grid column blocks for ranks should match grid column",
+                         "blocks for enrichment scores")
+            cli_abort(c("x"=msg))
         }
 
         ## avp - ArrayViewport for reaching the (possibly sparse) rank matrix
@@ -631,6 +636,7 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
     if (verbose)
       idpb <- cli_progress_bar("Calculating ssGSEA scores", total=n)
 
+    Ra <- R
     if (alpha != 1)
         Ra <- R^alpha
 
