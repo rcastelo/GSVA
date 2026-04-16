@@ -32,6 +32,11 @@ setMethod("show",
               .catObj(get_geneSets(object))
               cat("gene set size: [", get_minSize(object), ", ",
                   get_maxSize(object),  "]\n", sep="")
+              nzcmsg <- sprintf("nonzero values: %s than 2^31 (INT_MAX)\n",
+                                ifelse(nzcount(object) > .Machine$integer.max,
+                                       "more", "less"))
+              cat(nzcmsg)
+              cat("ondisk: ", .get_ondisk(object), "\n")
           })
 
 
@@ -66,6 +71,12 @@ setMethod("get_maxSize", signature("GsvaMethodParam"),
           function(object) {
               return(object@maxSize)
           })
+
+setMethod("nzcount", signature=c("GsvaMethodParam"),
+          function(x) {
+            return(x@nzcount)
+          })
+
 
 
 ## ----- show component objects without overriding their show() method -----

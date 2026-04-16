@@ -244,15 +244,6 @@ setValidity("zscoreParam", function(object) {
     return(if(length(inv) == 0) TRUE else inv)
 })
 
-#' @param x An object of class [`zscoreParam-class`].
-#'
-#' @importFrom SparseArray nzcount
-#' @aliases nzcount,zscoreParam-method
-#' @rdname zscoreParam-class
-setMethod("nzcount", signature=c("zscoreParam"),
-          function(x)
-            return(x@nzcount))
-
 
 ## ------ internal functions ------
 

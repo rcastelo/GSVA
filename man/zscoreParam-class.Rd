@@ -4,7 +4,6 @@
 \name{zscoreParam-class}
 \alias{zscoreParam-class}
 \alias{zscoreParam}
-\alias{nzcount,zscoreParam-method}
 \title{\code{zscoreParam} class}
 \usage{
 zscoreParam(
@@ -17,8 +16,6 @@ zscoreParam(
   ondisk = c("auto", "yes", "no"),
   verbose = TRUE
 )
-
-\S4method{nzcount}{zscoreParam}(x)
 }
 \arguments{
 \item{exprData}{The expression data set. Must be one of the classes
@@ -64,8 +61,6 @@ when \code{ondisk="no"} it will attempt to load all the data in main memory.}
 \item{verbose}{Logical vector of length 1. It gives information about some
 decisions made by the software during parameter object construction when
 \code{verbose=TRUE} (default) and remains silent otherwise.}
-
-\item{x}{An object of class \code{\linkS4class{zscoreParam}}.}
 }
 \value{
 A new \code{\linkS4class{zscoreParam}} object.
@@ -85,21 +80,6 @@ The combined z-scores method takes a number of parameters shared
 with all methods implemented by package GSVA but does not take any
 method-specific parameters.
 }
-\section{Slots}{
-
-\describe{
-\item{\code{nzcount}}{Numeric vector of length 1. Number of non-zero values in the
-selected assay, if there is more than one, of the 'exprData' slot.}
-
-\item{\code{ondisk}}{Character vector of length 1 denoting whether an on-disk backend
-should be used to reduce the memory footprint. The default value
-\code{ondisk="auto"} will attempt to load all the data in main memory when the
-input nonzero values fit in main memory, otherwise it will attempt working
-with an on-disk data structure that reduces de memory footprint. When
-\code{ondisk="yes"} it will attempt to work with an on-disk data structure, while
-when \code{ondisk="no"} it will attempt to load all the data in main memory.}
-}}
-
 \examples{
 suppressPackageStartupMessages({
 library(GSEABase)

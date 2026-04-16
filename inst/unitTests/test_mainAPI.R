@@ -14,6 +14,11 @@ test_mainAPI <- function() {
     gs <- replicate(ngs, sample(rownames(xf), 25, replace=FALSE), simplify=FALSE)
     names(gs) <- paste0("gs", seq_len(ngs))
 
+    checkException(g <- gsvaRanks(gsvaParam(exprData=xf, geneSets=gs),
+				  verbose=FALSE, maxmem=c(1, 2)))
+    g <- gsvaRanks(gsvaParam(exprData=xf, geneSets=gs), verbose=FALSE,
+		   maxmem="1M")
+
     g1 <- gsva(gsvaParam(exprData=xf, geneSets=gs), verbose=FALSE)
     checkIdentical(class(xf), class(g1))
     checkEquals(names(gs), rownames(g1))

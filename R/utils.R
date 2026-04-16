@@ -26,64 +26,30 @@ setMethod("unwrapData", signature("ExpressionSet"),
               return(exprs(container))
           })
 
+#' @importFrom cli cli_abort
 setMethod("unwrapData", signature("SummarizedExperiment"),
           function(container, assay) {
-              if (length(assays(container)) == 0L)
-                  stop("The input SummarizedExperiment object has no assay data.")
-
-              if (missing(assay) || is.na(assay)) {
-                  assay <- names(assays(container))[1]
-              } else {
-                  if (!is.character(assay))
-                      stop("The 'assay' argument must contain a character string.")
-
-                  assay <- assay[1]
-
-                  if (!assay %in% names(assays(container)))
-                      stop(sprintf("Assay %s not found in the input SummarizedExperiment object.", assay))
-              }
+              assay <- .check_unwrapping_assay(container,
+                                               "SummarizedExperiment", assay)
 
               return(assays(container)[[assay]])
           })
 
+#' @importFrom cli cli_abort
 setMethod("unwrapData", signature("SingleCellExperiment"),
           function(container, assay) {
-              if (length(assays(container)) == 0L)
-                  stop("The input SingleCellExperiment object has no assay data.")
-
-              if (missing(assay) || is.na(assay)) {
-                  assay <- names(assays(container))[1]
-              } else {
-                  if (!is.character(assay))
-                      stop("The 'assay' argument must contain a character string.")
-
-                  assay <- assay[1]
-
-                  if (!assay %in% names(assays(container)))
-                      stop(sprintf("Assay %s not found in the input SingleCellExperiment object.", assay))
-              }
+              assay <- .check_unwrapping_assay(container,
+                                               "SingleCellExperiment", assay)
 
               return(assays(container)[[assay]])
           })
 
 setMethod("unwrapData", signature("SpatialExperiment"),
           function(container, assay) {
-            if (length(assays(container)) == 0L)
-              stop("The input SpatialExperiment object has no assay data.")
-            
-            if (missing(assay) || is.na(assay)) {
-              assay <- names(assays(container))[1]
-            } else {
-              if (!is.character(assay))
-                stop("The 'assay' argument must contain a character string.")
-              
-              assay <- assay[1]
-              
-              if (!assay %in% names(assays(container)))
-                stop(sprintf("Assay %s not found in the input SpatialExperiment object.", assay))
-            }
-            
-            return(assays(container)[[assay]])
+              assay <- .check_unwrapping_assay(container,
+                                               "SpatialExperiment", assay)
+
+              return(assays(container)[[assay]])
           })
 
 
@@ -134,7 +100,7 @@ setMethod("wrapData", signature(container="SummarizedExperiment"),
               if (!missing(geneSets)) {
                   adata <- SimpleList(es=dataMatrix)
                   rdata <- DataFrame(gs=CharacterList(geneSets))
-              } else { ## assume missing geneSets imples dataMatrix are ranks
+              } else { ## assume missing geneSets implies dataMatrix are ranks
                   mask <- rownames(container) %in% rownames(dataMatrix)
                   adata <- c(assays(container[mask, ]),
                              SimpleList(gsvaranks=dataMatrix))
@@ -157,7 +123,7 @@ setMethod("wrapData", signature(container="SingleCellExperiment"),
               if (!missing(geneSets)) {
                   adata <- SimpleList(es=dataMatrix)
                   rdata <- DataFrame(gs=CharacterList(geneSets))
-              } else { ## assume missing geneSets imples dataMatrix are ranks
+              } else { ## assume missing geneSets implies dataMatrix are ranks
                   mask <- rownames(container) %in% rownames(dataMatrix)
                   adata <- c(assays(container[mask, ]),
                              SimpleList(gsvaranks=dataMatrix))
@@ -180,7 +146,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
               if (!missing(geneSets)) {
                   adata <- SimpleList(es=dataMatrix)
                   rdata <- DataFrame(gs=CharacterList(geneSets))
-              } else { ## assume missing geneSets imples dataMatrix are ranks
+              } else { ## assume missing geneSets implies dataMatrix are ranks
                   mask <- rownames(container) %in% rownames(dataMatrix)
                   adata <- c(assays(container[mask, ]),
                              SimpleList(gsvaranks=dataMatrix))
@@ -401,6 +367,32 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     return(assay)
 }
 
+#' @importFrom cli cli_abort
+.check_unwrapping_assay <- function(container, container_class, assay) {
+
+    if (length(assays(container)) == 0L) {
+        msg <- "The input {container_class} object has no assay data."
+        cli_abort(c("x"=msg))
+    }
+
+    if (missing(assay) || is.na(assay)) {
+        assay <- names(assays(container))[1]
+    } else {
+        if (!is.character(assay)) {
+            msg <- "The 'assay' argument must contain a character string."
+            cli_abort(c("x"=msg))
+        }
+        assay <- assay[1]
+        if (!assay %in% names(assays(container))) {
+            msg <- paste("Assay {assay} not found in the input",
+                         "{container_class} object.")
+            cli_abort(c("x"=msg))
+        }
+    }
+
+    assay
+}
+
 
 
 ## converts a dgCMatrix into a list of its columns, based on
@@ -507,8 +499,10 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                     grid <- defaultAutoGrid(X)
                     block_dim <- dim(grid[[1L]])
                 }
-                block_dim <- c(min(c(nr, block_dim[1])), min(c(nc, block_dim[2]))) ## just in case there's only one block
-                vp <- ArrayViewport(dim(X), IRanges(c(1, 1), width=block_dim))     ## just use the first block
+                block_dim <- c(min(c(nr, block_dim[1])), ## just in case there
+                               min(c(nc, block_dim[2]))) ## is only one block
+                ## just use the first block
+                vp <- ArrayViewport(dim(X), IRanges(c(1, 1), width=block_dim))
                 block <- read_block(X, vp)
                 nzc <- ceiling(tot * as.numeric(nzcount(block)) / prod(block_dim))
                 estimated_flag <- TRUE
@@ -559,6 +553,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         cli_abort(c("x"=msg))
     }
 
+    maxmem <- x
     if (is.character(x) && x == "auto") {
         totalram <- Sys.meminfo()$totalram
         maxmem <- as.numeric(totalram * 0.9) ## auto takes 90% of RAM
@@ -567,8 +562,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             gsva_global$show_start_and_end_messages)
             cli_alert_info(sprintf("Maximum available main memory (90%%): %s",
                                    as.character(totalram * 0.9)))
-    } else if (is.numeric(x))
-        maxmem <- x
+    }
+
     maxmem <- .memtext2bytes(maxmem)
     maxmem
 }

@@ -349,14 +349,9 @@ setMethod("anyNA", signature=c("ssgseaParam"),
           function(x, recursive=FALSE)
             return(x@anyNA))
 
-#' @importFrom SparseArray nzcount
-#' @aliases nzcount,ssgseaParam-method
-#' @rdname ssgseaParam-class
-setMethod("nzcount", signature=c("ssgseaParam"),
-          function(x)
-            return(x@nzcount))
 
 ## ----- show -----
+
 setMethod("show",
           signature=signature(object="ssgseaParam"),
           function(object) {

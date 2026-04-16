@@ -124,6 +124,16 @@ setClassUnion("GsvaGeneSets",
 #' @slot maxSize Numeric vector of length 1.  Maximum size of the resulting gene
 #' sets after gene identifier mapping. By default, the maximum size is `Inf`.
 #' 
+#' @slot nzcount Numeric vector of length 1. Number of non-zero values in the
+#' selected assay, if there is more than one, of the 'exprData' slot.
+#'
+#' @slot ondisk Character vector of length 1 denoting whether an on-disk backend
+#' should be used to reduce the memory footprint. The default value
+#' `ondisk="auto"` will attempt to load all the data in main memory when the
+#' input nonzero values fit in main memory, otherwise it will attempt working
+#' with an on-disk data structure that reduces de memory footprint. When
+#' `ondisk="yes"` it will attempt to work with an on-disk data structure, while
+#' when `ondisk="no"` it will attempt to load all the data in main memory.
 
 #' @seealso
 #' [`GsvaExprData-class`],
@@ -164,7 +174,9 @@ setClass("GsvaMethodParam",
                  assay="character",
                  annotation="GeneIdentifierType",
                  minSize="numeric",
-                 maxSize="numeric"),
+                 maxSize="numeric",
+                 nzcount="numeric",
+                 ondisk="character"),
          contains="VIRTUAL")
 
 
@@ -178,17 +190,6 @@ setClass("GsvaMethodParam",
 #' class does not add any slots to the common slots inherited from
 #' `GsvaMethodParam`.
 #'
-#' @slot nzcount Numeric vector of length 1. Number of non-zero values in the
-#' selected assay, if there is more than one, of the 'exprData' slot.
-#'
-#' @slot ondisk Character vector of length 1 denoting whether an on-disk backend
-#' should be used to reduce the memory footprint. The default value
-#' `ondisk="auto"` will attempt to load all the data in main memory when the
-#' input nonzero values fit in main memory, otherwise it will attempt working
-#' with an on-disk data structure that reduces de memory footprint. When
-#' `ondisk="yes"` it will attempt to work with an on-disk data structure, while
-#' when `ondisk="no"` it will attempt to load all the data in main memory.
-#'
 #' @seealso
 #' [`GsvaExprData-class`],
 #' [`GsvaGeneSets-class`],
@@ -201,8 +202,6 @@ setClass("GsvaMethodParam",
 #' @rdname plageParam-class
 #' @exportClass plageParam
 setClass("plageParam",
-         slots=c(nzcount="numeric",
-                 ondisk="character"),
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
@@ -224,17 +223,6 @@ setClass("plageParam",
 #' parameters, this class does not add any slots to the common slots inherited
 #' from `GsvaMethodParam`.
 #'
-#' @slot nzcount Numeric vector of length 1. Number of non-zero values in the
-#' selected assay, if there is more than one, of the 'exprData' slot.
-#'
-#' @slot ondisk Character vector of length 1 denoting whether an on-disk backend
-#' should be used to reduce the memory footprint. The default value
-#' `ondisk="auto"` will attempt to load all the data in main memory when the
-#' input nonzero values fit in main memory, otherwise it will attempt working
-#' with an on-disk data structure that reduces de memory footprint. When
-#' `ondisk="yes"` it will attempt to work with an on-disk data structure, while
-#' when `ondisk="no"` it will attempt to load all the data in main memory.
-#'
 #' @seealso
 #' [`GsvaExprData-class`],
 #' [`GsvaGeneSets-class`],
@@ -247,8 +235,6 @@ setClass("plageParam",
 #' @rdname zscoreParam-class
 #' @exportClass zscoreParam
 setClass("zscoreParam",
-         slots=c(nzcount="numeric",
-                 ondisk="character"),
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
@@ -296,17 +282,6 @@ setClass("zscoreParam",
 #' to apply in the presence of missing values in the input expression data; see
 #' `ssgseaParam`.
 #'
-#' @slot nzcount Numeric vector of length 1. Number of non-zero values in the
-#' selected assay, if there is more than one, of the 'exprData' slot.
-#'
-#' @slot ondisk Character vector of length 1 denoting whether an on-disk backend
-#' should be used to reduce the memory footprint. The default value
-#' `ondisk="auto"` will attempt to load all the data in main memory when the
-#' input nonzero values fit in main memory, otherwise it will attempt working
-#' with an on-disk data structure that reduces de memory footprint. When
-#' `ondisk="yes"` it will attempt to work with an on-disk data structure, while
-#' when `ondisk="no"` it will attempt to load all the data in main memory.
-#'
 #' @seealso
 #' [`GsvaExprData-class`],
 #' [`GsvaGeneSets-class`],
@@ -324,9 +299,7 @@ setClass("ssgseaParam",
                  checkNA="character",
                  didCheckNA="logical",
                  anyNA="logical",
-                 use="character",
-                 nzcount="numeric",
-                 ondisk="character"),
+                 use="character"),
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,
@@ -351,7 +324,7 @@ setClass("ssgseaParam",
 #' S4 class for GSVA method parameter objects.
 #'
 #' In addition to the common parameter slots inherited from `[GsvaMethodParam]`,
-#' this class has slots for the six method-specific parameters of the GSVA
+#' this class has slots for a number of method-specific parameters of the GSVA
 #' method described below.
 #'
 #' @slot kcdf Character vector of length 1 denoting the kernel to use during
@@ -425,17 +398,6 @@ setClass("ssgseaParam",
 #' running time, especially with data sets with hundreds of thousands or
 #' millions of columns.
 #'
-#' @slot nzcount Numeric vector of length 1. Number of non-zero values in the
-#' selected assay, if there is more than one, of the 'exprData' slot.
-#'
-#' @slot ondisk Character vector of length 1 denoting whether an on-disk backend
-#' should be used to reduce the memory footprint. The default value
-#' `ondisk="auto"` will attempt to load all the data in main memory when the
-#' input nonzero values fit in main memory, otherwise it will attempt working
-#' with an on-disk data structure that reduces de memory footprint. When
-#' `ondisk="yes"` it will attempt to work with an on-disk data structure, while
-#' when `ondisk="no"` it will attempt to load all the data in main memory.
-#'
 #' @seealso
 #' [`GsvaExprData-class`],
 #' [`GsvaGeneSets-class`],
@@ -458,9 +420,7 @@ setClass("gsvaParam",
                  didCheckNA="logical",
                  anyNA="logical",
                  use="character",
-                 filterRows="logical",
-                 nzcount="numeric",
-                 ondisk="character"),
+                 filterRows="logical"),
          contains="GsvaMethodParam",
          prototype=list(exprData=NULL,
                         geneSets=NULL,

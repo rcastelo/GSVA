@@ -8,7 +8,12 @@
 \alias{gsva,zscoreParam-method}
 \title{Gene Set Variation Analysis}
 \usage{
-\S4method{gsva}{gsvaParam}(param, verbose = TRUE, BPPARAM = SerialParam(progressbar = verbose))
+\S4method{gsva}{gsvaParam}(
+  param,
+  verbose = TRUE,
+  BPPARAM = SerialParam(progressbar = verbose),
+  maxmem = "auto"
+)
 
 \S4method{gsva}{plageParam}(
   param,

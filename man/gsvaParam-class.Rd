@@ -6,7 +6,6 @@
 \alias{gsvaRanksParam-class}
 \alias{gsvaParam}
 \alias{anyNA,gsvaParam-method}
-\alias{nzcount,gsvaParam-method}
 \alias{geneSets<-,gsvaRanksParam,GsvaGeneSets-method}
 \alias{geneSets<-}
 \title{\code{gsvaParam} class}
@@ -32,8 +31,6 @@ gsvaParam(
 )
 
 \S4method{anyNA}{gsvaParam}(x, recursive = FALSE)
-
-\S4method{nzcount}{gsvaParam}(x)
 
 \S4method{geneSets}{gsvaRanksParam,GsvaGeneSets}(object) <- value
 }
@@ -188,7 +185,7 @@ the \code{GSVA} method.
 }
 \details{
 In addition to the common parameter slots inherited from \verb{[GsvaMethodParam]},
-this class has slots for the six method-specific parameters of the GSVA
+this class has slots for a number of method-specific parameters of the GSVA
 method described below.
 
 In addition to a number of parameters shared with all methods
@@ -270,17 +267,6 @@ to \code{TRUE} and the user may set it to \code{FALSE} when there is absolute ce
 that no such rows exist in the input expression data, since this may save
 running time, especially with data sets with hundreds of thousands or
 millions of columns.}
-
-\item{\code{nzcount}}{Numeric vector of length 1. Number of non-zero values in the
-selected assay, if there is more than one, of the 'exprData' slot.}
-
-\item{\code{ondisk}}{Character vector of length 1 denoting whether an on-disk backend
-should be used to reduce the memory footprint. The default value
-\code{ondisk="auto"} will attempt to load all the data in main memory when the
-input nonzero values fit in main memory, otherwise it will attempt working
-with an on-disk data structure that reduces de memory footprint. When
-\code{ondisk="yes"} it will attempt to work with an on-disk data structure, while
-when \code{ondisk="no"} it will attempt to load all the data in main memory.}
 }}
 
 \examples{

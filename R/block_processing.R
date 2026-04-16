@@ -84,18 +84,13 @@
     FUN <- match.fun(FUN)
     nworkers <- 1L
     if (!is.null(BPPARAM) && nrow(X) > minparrows && ncol(X) > minparcols) {
-        if (!is(BPPARAM, "BiocParallelParam")) {
-            msg <- paste("'BPPARAM' must be a BiocParallelParam derivative.",
-                         "Please consult the 'BiocParallel' package.")
-            cli_abort(c("x"=msg))
-        }
+        stopifnot(is(BPPARAM, "BiocParallelParam"))
         nworkers <- bpnworkers(BPPARAM)
     }
 
     grid <- .rowgridsize(X, nworkers, maxmem)
     rir <- .splitRowsInRanges(grid)
     if (length(rir) > 1 && verbose) {
-        typesze <- c("integer"=4, "double"=8) ## 4 bytes for integers, 8 bytes for doubles
         sze <- howbig(as.numeric(width(rir[[1]])), as.numeric(ncol(X)),
                       representation="dense", type=type(X))
         cli_alert_info(sprintf("Splitting calculations in %d chunks of [%d, %d] and %s",
@@ -193,7 +188,6 @@
     cir <- .splitColsInRanges(grid)
 
     if (length(cir) > 1 && verbose) {
-        typesze <- c("integer"=4, "double"=8) ## 4 bytes for integers, 8 bytes for doubles
         sze <- howbig(as.numeric(nrow(X)), as.numeric(width(cir[[1]])),
                       representation="dense", type=type(X))
         cli_alert_info(sprintf("Splitting calculations in %d chunks of [%d, %d] and %s",

@@ -153,7 +153,8 @@ NULL
 setMethod("gsva", signature(param="gsvaParam"),
           function(param,
                    verbose=TRUE,
-                   BPPARAM=SerialParam(progressbar=verbose)) {
+                   BPPARAM=SerialParam(progressbar=verbose),
+                   maxmem="auto") {
 
               if (verbose) {
                   pkgversion <- packageDescription("GSVA")[["Version"]]
@@ -164,10 +165,10 @@ setMethod("gsva", signature(param="gsvaParam"),
               .check_bpparam(BPPARAM)
 
               rankspar <- gsvaRanks(param=param, verbose=verbose,
-                                    BPPARAM=BPPARAM)
+                                    BPPARAM=BPPARAM, maxmem=maxmem)
 
               es <- gsvaScores(param=rankspar, verbose=verbose,
-                               BPPARAM=BPPARAM)
+                               BPPARAM=BPPARAM, maxmem=maxmem)
 
               if (verbose) {
                   cli_alert_success("Calculations finished")
@@ -597,13 +598,6 @@ setMethod("anyNA", signature=c("gsvaParam"),
           function(x, recursive=FALSE)
             return(x@anyNA))
 
-#' @importFrom SparseArray nzcount
-#' @aliases nzcount,gsvaParam-method
-#' @rdname gsvaParam-class
-setMethod("nzcount", signature=c("gsvaParam"),
-          function(x)
-            return(x@nzcount))
-
 
 ## ----- show -----
 
@@ -628,11 +622,6 @@ setMethod("show",
               } else
                   cat("missing data: didn't check\n")
               cat("filterRows: ", .get_filterRows(object), "\n")
-              nzcmsg <- sprintf("nonzero values: %s than 2^31 (INT_MAX)\n",
-                                ifelse(nzcount(object) > .Machine$integer.max,
-                                       "more", "less"))
-              cat("ondisk: ", .get_ondisk(object), "\n")
-              cat(nzcmsg)
           })
 
 #' @title GSVA ranks and scores
