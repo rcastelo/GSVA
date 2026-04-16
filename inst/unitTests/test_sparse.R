@@ -33,9 +33,9 @@ test_sparseMethods <- function(){
     out <- cli_fmt(Mg <- gsva(gsvaParam(M, gsets, sparse=FALSE), verbose=TRUE))
     checkEqualsNumeric(mg, Mg)
     
-    ## out <- cli_fmt(mp <- gsva(plageParam(m, gsets), verbose=TRUE))
-    ## out <- cli_fmt(Mp <- gsva(plageParam(M, gsets), verbose=TRUE))
-    ## checkEqualsNumeric(mp, Mp)
+    out <- cli_fmt(mp <- gsva(plageParam(m, gsets), verbose=TRUE))
+    out <- cli_fmt(Mp <- gsva(plageParam(M, gsets), verbose=TRUE))
+    checkEqualsNumeric(mp, Mp)
     
     out <- cli_fmt(mz <- gsva(zscoreParam(m, gsets), verbose=TRUE))
     out <- cli_fmt(Mz <- gsva(zscoreParam(M, gsets), verbose=TRUE))

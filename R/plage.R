@@ -244,72 +244,60 @@ setValidity("plageParam", function(object) {
     return(if(length(inv) == 0) TRUE else inv)
 })
 
-#' @param x An object of class [`zscoreParam-class`].
+#' @param x An object of class [`plageParam-class`].
 #'
 #' @importFrom SparseArray nzcount
-#' @aliases nzcount,zscoreParam-method
-#' @rdname zscoreParam-class
-setMethod("nzcount", signature=c("zscoreParam"),
+#' @aliases nzcount,plageParam-method
+#' @rdname plageParam-class
+setMethod("nzcount", signature=c("plageParam"),
           function(x)
             return(x@nzcount))
 
 ## ------ internal functions ------
 
 #' @importFrom BiocSingular runExactSVD
-#' @importFrom cli cli_progress_update
-rightsingularsvdvectorgset <- function(gSetIdx, Z, verbose, idpb) {
-  if(is(Z, "dgCMatrix")){
-    s <- runExactSVD(Z[gSetIdx, ])
-  } else {
-    s <- svd(Z[gSetIdx, ])
-  }
-  if (verbose)
-      cli_progress_update(id=idpb)
+rightsingularsvdvectorgset <- function(gSetIdx, Z) {
+  s <- svd(Z[gSetIdx, ])
   s$v[, 1]
 }
 
 #' @importFrom cli cli_alert_info
 #' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
-#' @importFrom BiocParallel bpnworkers SerialParam bplapply
+#' @importFrom BiocParallel bpnworkers bpprogressbar bplapply
 plage <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
                   BPPARAM=NULL, maxmem=Inf) {
-    Z <- NULL
-    if (is(X, "dgCMatrix")){
-        if (verbose)
-            cli_alert_info("Centering and scaling non-zero values")
 
-        Z <- t(.sparseColumnApplyAndReplace(t(X), FUN=scale))
-    } else if (is.matrix(X)) {
-        if (verbose)
-            cli_alert_info("Centering and scaling values")
+    Z <- .processMatrixRows(X, .scale_rows, verbose=verbose,
+                            minparrows=100, minparcols=100,
+                            progressmsg="Centering and scaling rows",
+                            BPPARAM=BPPARAM, maxmem=maxmem)
 
-        Z <- t(scale(t(X)))
-    } else
-        stop(sprintf("Matrix class %s cannot be handled yet.", class(X)))
-
-    if (!is.null(BPPARAM)) {
+    es <- NULL
+    if (is.null(BPPARAM) || bpnworkers(BPPARAM) == 1) {
+        env <- NULL
+        if (verbose) {
+            env <- new.env(parent=globalenv())
+            msg <- "Calculating PLAGE scores per gene set"
+            assign("idpb", cli_progress_bar(msg, total=length(geneSets)),
+                   envir=env)
+        }
+        es <- lapply(geneSets, function(gSetIdx, verbose, idpbe) {
+                         if (verbose)
+                             cli_progress_update(id=get("idpb", envir=idpbe))
+                         rightsingularsvdvectorgset(gSetIdx, Z)
+                     }, verbose=verbose, idpbe=env)
         if (verbose)
-            cli_progress_bar("Calculating PLAGE scores")
-        es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
-                       verbose=FALSE, idpb=character(0), BPPARAM=BPPARAM)
+            cli_progress_done(get("idpb", envir=env))
     } else {
-        idpb <- NULL
         if (verbose)
-            idpb <- cli_progress_bar("Calculating PLAGE scores",
-                                     total=length(geneSets))
-        es <- lapply(geneSets, rightsingularsvdvectorgset, Z,
-                     verbose, idpb)
-        if (verbose)
-            cli_progress_done(idpb)
+            bpprogressbar(BPPARAM) <- TRUE ## reporting progress wo/ cli
+
+        es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
+                       BPPARAM=BPPARAM)
     }
         
     es <- do.call(rbind, es)
         
-    ## why these extra steps for dense matrices?
-    ## svd() removes all dimnames, while BiocSingular::runExactSVD()
-    ## retains them.  colnames must be set; however, I don't see a reason
-    ## to set rownames nor recreating the matrix if only one gene set.
-    ## hmmm...
     if (length(geneSets) == 1)
         es <- matrix(es, nrow=1)
         

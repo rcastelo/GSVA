@@ -362,18 +362,7 @@ zscore <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
                                  progressmsg="Calculating Z-scores per gene set",
                                  BPPARAM=BPPARAM, maxmem=maxmem)
     } else {
-        nworkers <- 1L
-        if (!is.null(BPPARAM) && nrow(Z) > 100 && ncol(Z) > 100) {
-            if (!is(BPPARAM, "BiocParallelParam")) {
-                msg <- paste("Argument 'BPPARAM' must be a",
-                             "'BiocParallelParam' derivative. Please",
-                             "consult the BiocParallel package.")
-                cli_abort(c("x"=msg))
-            }
-            nworkers <- bpnworkers(BPPARAM)
-        }
-
-        if (is.null(BPPARAM) || nworkers == 1L) {
+        if (is.null(BPPARAM) || bpnworkers(BPPARAM) == 1L) {
             env <- NULL
             if (verbose) {
                 env <- new.env(parent=globalenv())

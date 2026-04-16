@@ -269,7 +269,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 #' @importFrom cli cli_alert_info
 .check_open_parallelism <- function(expr, BPPARAM, minparrows, minparcols,
                                     verbose) {
-    if (bpnworkers(BPPARAM) > 1 && nrow(expr) > 100 && ncol(expr) > 100) {
+    if (bpnworkers(BPPARAM) > 1 && nrow(expr) > minparrows &&
+        ncol(expr) > minparcols) {
         if (verbose) {
             msg <- sprintf("Using a %s parallel back-end with %d workers",
                            class(BPPARAM), bpnworkers(BPPARAM))
