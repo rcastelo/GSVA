@@ -7,7 +7,6 @@
 #' @importFrom utils packageDescription
 #' @importFrom BiocParallel bpnworkers
 #' @importFrom utils packageDescription
-#' @importFrom memuse howbig
 #' @aliases gsva,ssgseaParam-method
 #' @rdname gsva
 #' @exportMethod gsva
@@ -17,16 +16,12 @@ setMethod("gsva", signature(param="ssgseaParam"),
                    BPPARAM=SerialParam(progressbar=verbose),
                    maxmem="auto") {
 
-              if (verbose)
-                  cli_alert_info(sprintf("GSVA version %s",
-                                         packageDescription("GSVA")[["Version"]]))
-
-              if (!is(BPPARAM, "BiocParallelParam")) {
-                  msg <- paste("Argument 'BPPARAM' must be a",
-                               "'BiocParallelParam' derivative. Please",
-                               "consult the BiocParallel package.")
-                  cli_abort(c("x"=msg))
+              if (verbose) {
+                  pkgversion <- packageDescription("GSVA")[["Version"]]
+                  cli_alert_info("GSVA version {pkgversion}")
               }
+
+              .check_bpparam(BPPARAM)
 
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=FALSE,
@@ -39,61 +34,37 @@ setMethod("gsva", signature(param="ssgseaParam"),
               maxmem <- .check_maxmem(param, maxmem, verbose)
               ondisk <- .check_ondisk(param, maxmem, verbose)
 
-              if (is_sparse(filtDataMatrix)) {
-                  msg <- paste("Input expression data is sparse, but the",
-                               "ssGSEA algorithm does not deal with sparsity",
-                               "in any specific way, and data will be",
-                               "converted into a dense matrix format")
-                  cli_alert_warning(msg)
+              filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
+                                                              "ssGSEA",
+                                                              ondisk, verbose)
+
+              BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
+                                                 minparrows=100, minparcols=100,
+                                                 verbose)
+
+              ondisk <- .check_es_memory_requirements(filtDataMatrix,
+                                                      filtMappedGeneSets,
+                                                      ondisk, maxmem)
+
+              if (verbose) {
+                  n <- length(filtMappedGeneSets)
+                  cli_alert_info("Calculating ssGSEA scores for {n} gene sets")
               }
 
-              if (is(filtDataMatrix, "DelayedMatrix") && !ondisk) {
-                  if (verbose)
-                      cli_alert_info("Loading input expression data into main memory")
-                  filtDataMatrix <- as.matrix(filtDataMatrix)
-              }
-
-              if (bpnworkers(BPPARAM) > 1 && nrow(filtDataMatrix) > 100 &&
-                  ncol(filtDataMatrix) > 100) {
-                  if (verbose) {
-                      msg <- sprintf("Using a %s parallel back-end with %d workers",
-                                     class(BPPARAM), bpnworkers(BPPARAM))
-                      cli_alert_info(msg)
-                  }
-              } else
-                  BPPARAM <- NULL
-
-              if (verbose)
-                  cli_alert_info(sprintf("Calculating ssGSEA scores for %d gene sets",
-                                         length(filtMappedGeneSets)))
-
-              esreqmem <- howbig(as.numeric(length(filtMappedGeneSets)),
-                                 as.numeric(ncol(filtDataMatrix)),
-                                 representation="dense", sparsity=1,
-                                 type="double")
-              if (esreqmem > maxmem) {
-                msg <- paste("The resulting (dense) matrix of enrichment",
-                             "scores will not fit in the given maximum",
-                             "main memory size, and it will be returned",
-                             "using an on-disk data structure")
-                cli_alert_warning(msg)
-                ondisk <- TRUE
-              }
-
-              ssgsea_sco <- ssgsea(X=filtDataMatrix,
-                                   geneSetsIdx=filtMappedGeneSets,
-                                   alpha=.get_alpha(param), 
-                                   normalization=.get_normalize(param),
-                                   any_na=anyNA(param),
-                                   na_use=.get_NAuse(param),
-                                   minSize=get_minSize(param),
-                                   ondisk=ondisk, verbose=verbose,
-                                   BPPARAM=BPPARAM, maxmem=maxmem)
+              ssgsea_es <- ssgsea(X=filtDataMatrix,
+                                  geneSetsIdx=filtMappedGeneSets,
+                                  alpha=.get_alpha(param), 
+                                  normalization=.get_normalize(param),
+                                  any_na=anyNA(param),
+                                  na_use=.get_NAuse(param),
+                                  minSize=get_minSize(param),
+                                  ondisk=ondisk, verbose=verbose,
+                                  BPPARAM=BPPARAM, maxmem=maxmem)
 
               gs <- .geneSetsIndices2Names(
                   indices=filtMappedGeneSets,
                   names=rownames(filtDataMatrix))
-              rval <- wrapData(get_exprData(param), ssgsea_sco, gs)
+              rval <- wrapData(get_exprData(param), ssgsea_es, gs)
               
               if (verbose)
                   cli_alert_success("Calculations finished")

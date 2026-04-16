@@ -153,13 +153,15 @@ NULL
 setMethod("gsva", signature(param="gsvaParam"),
           function(param,
                    verbose=TRUE,
-                   BPPARAM=SerialParam(progressbar=verbose))
-          {
+                   BPPARAM=SerialParam(progressbar=verbose)) {
+
               if (verbose) {
-                  cli_alert_info(sprintf("GSVA version %s",
-                                         packageDescription("GSVA")[["Version"]]))
+                  pkgversion <- packageDescription("GSVA")[["Version"]]
+                  cli_alert_info("GSVA version {pkgversion}")
                   gsva_global$show_start_and_end_messages <- FALSE
               }
+
+              .check_bpparam(BPPARAM)
 
               rankspar <- gsvaRanks(param=param, verbose=verbose,
                                     BPPARAM=BPPARAM)
@@ -736,34 +738,37 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose),
                    maxmem="auto") {
+
               if (verbose && gsva_global$show_start_and_end_messages) {
-                  cli_alert_info(sprintf("GSVA version %s",
-                                         packageDescription("GSVA")[["Version"]]))
+                  pkgversion <- packageDescription("GSVA")[["Version"]]
+                  cli_alert_info("GSVA version {pkgversion}")
               }
+
+              .check_bpparam(BPPARAM)
 
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
               maxmem <- .check_maxmem(param, maxmem, verbose)
               ondisk <- .check_ondisk(param, maxmem, verbose)
 
-              if (is(dataMatrix, "DelayedMatrix") && !ondisk) {
-                  if (verbose)
-                      cli_alert_info("Loading input expression data into main memory")
-                  if (is_sparse(dataMatrix)) {
-                      dataMatrix <- as(dataMatrix, "SVT_SparseMatrix")
-                  } else
-                      dataMatrix <- as.matrix(dataMatrix)
-              }
+              dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
+                                                          ondisk, verbose)
 
               filtDataMatrix <- dataMatrix
+              BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
+                                                 minparrows=100, minparcols=100,
+                                                 verbose)
+
               if (.get_filterRows(param))
                   filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
                                                  removeConstant=TRUE,
                                                  removeNzConstant=TRUE,
                                                  verbose, BPPARAM=BPPARAM,
                                                  maxmem=maxmem)
-              else if (verbose)
-                  cli_alert_warning("Skipping filtering of constant rows (filterRows=FALSE)")
+              else if (verbose) {
+                  msg <- "Skipping filtering of constant rows (filterRows=FALSE)"
+                  cli_alert_warning(msg)
+              }
               
               if (verbose)
                   cli_alert_info(sprintf("Calculating GSVA ranks"))
@@ -844,24 +849,19 @@ setReplaceMethod("geneSets", signature=signature(object="gsvaRanksParam",
 #' @rdname gsvaRanks
 #'
 #' @importFrom S4Arrays is_sparse
-#' @importFrom cli cli_alert_info cli_abort cli_alert_success
-#' @importFrom BiocParallel bpnworkers
-#' @importFrom memuse howbig
+#' @importFrom cli cli_alert_info cli_alert_success
 #' @exportMethod gsvaScores
 setMethod("gsvaScores", signature(param="gsvaRanksParam"),
           function(param, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose),
                    maxmem="auto") {
 
-              if (verbose && gsva_global$show_start_and_end_messages)
-                  cli_alert_info(sprintf("GSVA version %s",
-                                         packageDescription("GSVA")[["Version"]]))
-              if (!is(BPPARAM, "BiocParallelParam")) {
-                  sg <- paste("Argument 'BPPARAM' must be a",
-                               "'BiocParallelParam' derivative. Please",
-                               "consult the BiocParallel package.")
-                  cli_abort(c("x"=msg))
+              if (verbose && gsva_global$show_start_and_end_messages) {
+                  pkgversion <- packageDescription("GSVA")[["Version"]]
+                  cli_alert_info("GSVA version {pkgversion}")
               }
+
+              .check_bpparam(BPPARAM)
 
               ## assuming rows in the rank data have been already filtered
               exprData <- get_exprData(param)
@@ -885,40 +885,20 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
               maxmem <- .check_maxmem(param, maxmem, verbose)
               ondisk <- .check_ondisk(param, maxmem, verbose)
 
-              if (is(filtDataMatrix, "DelayedMatrix") && !ondisk) {
-                  if (verbose)
-                      cli_alert_info("Loading input expression data into main memory")
-                  if (is_sparse(filtDataMatrix)) {
-                      filtDataMatrix <- as(filtDataMatrix, "SVT_SparseMatrix")
-                  } else
-                      filtDataMatrix <- as.matrix(filtDataMatrix)
-              }
+              filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
+                                                              "GSVA", ondisk,
+                                                              verbose)
 
-              if (bpnworkers(BPPARAM) > 1 && nrow(filtDataMatrix) > 100 &&
-                  ncol(filtDataMatrix) > 100) {
-                  if (verbose) {
-                      msg <- sprintf("Using a %s parallel back-end with %d workers",
-                                     class(BPPARAM), bpnworkers(BPPARAM))
-                      cli_alert_info(msg)
-                  }
-              } else
-                  BPPARAM <- NULL
+              BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
+                                                 minparrows=100, minparcols=100,
+                                                 verbose)
 
-              if (verbose)
-                  cli_alert_info(sprintf("Calculating GSVA scores for %d gene sets",
-                                 length(filtMappedGeneSets)))
-
-              esreqmem <- howbig(as.numeric(length(filtMappedGeneSets)),
-                                 as.numeric(ncol(filtDataMatrix)),
-                                 representation="dense", sparsity=1,
-                                 type="double")
-              if (esreqmem > maxmem) {
-                msg <- paste("The resulting (dense) matrix of enrichment",
-                             "scores will not fit in the given maximum",
-                             "main memory size, and it will be returned",
-                             "using an on-disk data structure")
-                cli_alert_warning(msg)
-                ondisk <- TRUE
+              ondisk <- .check_es_memory_requirements(filtDataMatrix,
+                                                      filtMappedGeneSets,
+                                                      ondisk, maxmem)
+              if (verbose) {
+                  n <- length(filtMappedGeneSets)
+                  cli_alert_info("Calculating GSVA scores for {n} gene sets")
               }
 
               gsva_es <- .processMatrixCols(filtDataMatrix,
@@ -1023,8 +1003,8 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
 #' @exportMethod gsvaEnrichment
 setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
           function(param, column=1, geneSet=1,
-                   plot=c("auto", "base", "ggplot", "no"), ...)
-          {
+                   plot=c("auto", "base", "ggplot", "no"), ...) {
+
               plot <- match.arg(plot)
 
               geneSets <- get_geneSets(param)
@@ -1105,6 +1085,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                              sparse=FALSE, any_na=FALSE,
                              na_use=c("everything", "all.obs", "na.rm"),
                              grid=NULL, verbose=TRUE, BPPARAM=NULL) {
+
     na_use <- match.arg(na_use)
     n.test.samples <- ncol(expr)
     n.genes <- nrow(expr)
@@ -1205,7 +1186,8 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
 ## pending how to propagate verbosity if necessary
 
 #' @importFrom MatrixGenerics colRanks
-compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE, verbose=TRUE) {
+compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
+                              verbose=TRUE) {
     R <- NULL
 
     if (drop.sparsity && !is(Z, "DelayedMatrix"))
@@ -1299,28 +1281,15 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE, verbos
     kernel <- kcdfparam$kernel
     Gaussk <- kcdfparam$Gaussk
 
-    if (bpnworkers(BPPARAM) > 1 && nrow(expr) > 100 && ncol(expr) > 100) {
-        if (verbose) {
-            msg <- sprintf("Calculating row ECDFs with %d cores",
-                           as.integer(bpnworkers(BPPARAM)))
-            cli_alert_info(msg)
-        }
-    } else {
-        if (verbose)
-            cli_alert_info("Calculating row ECDFs")
-        BPPARAM <- NULL
-    }
+    if (verbose)
+       cli_alert_info("Calculating row ECDFs")
 
     Z <- .processMatrixRows(expr, FUN=compute.gene.cdf, Gaussk=Gaussk,
                             kernel=kernel, sparse=sparse, any_na=any_na,
                             na_use=na_use, verbose=verbose, minparrows=100,
                             minparcols=100, BPPARAM=BPPARAM, maxmem=maxmem)
 
-    if (!is.null(BPPARAM) && verbose) {
-        msg <- sprintf("Calculating column ranks with %d cores",
-                       as.integer(bpnworkers(BPPARAM)))
-        cli_alert_info(msg)
-    } else if (verbose)
+    if (verbose)
         cli_alert_info("Calculating column ranks")
  
     ## here 'ties.method="last"' allows one to obtain the result
@@ -1717,19 +1686,22 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE, verbos
         { if (!is.na(edata$whichMaxPos) &&
               (edata$maxDiff || edata$maxPos >= abs(edata$maxNeg)))
               ggplot2::geom_segment(data=data.frame(whichMaxPos=edata$whichMaxPos,
-                                           maxPos=edata$maxPos),
+                                                    maxPos=edata$maxPos),
                            mapping=ggplot2::aes(x=.data$whichMaxPos, y=0,
-                                       xend=.data$whichMaxPos, yend=.data$maxPos),
+                                       xend=.data$whichMaxPos,
+                                       yend=.data$maxPos),
                            colour="darkred", linetype="dashed") } +
         { if (!is.na(edata$whichMaxPos) &&
               (edata$maxDiff || edata$maxPos < abs(edata$maxNeg)))
               ggplot2::geom_segment(data=data.frame(whichMaxNeg=edata$whichMaxNeg,
-                                           maxNeg=edata$maxNeg),
+                                                    maxNeg=edata$maxNeg),
                            mapping=ggplot2::aes(x=.data$whichMaxNeg, y=0,
-                                       xend=.data$whichMaxNeg, yend=.data$maxNeg),
+                                       xend=.data$whichMaxNeg,
+                                       yend=.data$maxNeg),
                            colour="darkred", linetype="dashed") } +
         ggplot2::theme(panel.background=ggplot2::element_blank(),
-              panel.grid.major=ggplot2::element_line(colour="grey", linetype="dotted"),
+              panel.grid.major=ggplot2::element_line(colour="grey",
+                                                     linetype="dotted"),
               panel.grid.minor=ggplot2::element_line(colour=NA),
               axis.text=ggplot2::element_text(size=12),
               axis.title=ggplot2::element_text(size=14),
@@ -2009,7 +1981,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE, verbos
 #' @importFrom S4Arrays DummyArrayGrid
 #' @importFrom MatrixGenerics colRanks
 #' @importFrom BiocParallel SerialParam
-.colRanksHDF5 <- function(X, grid=NULL, ties.method="last", drop.sparsity=FALSE) {
+.colRanksHDF5 <- function(X, grid=NULL, ties.method="last",
+                          drop.sparsity=FALSE) {
     stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
 
     sink <- HDF5RealizationSink(dim(X), H5type="H5T_STD_I32LE", ## integer ranks

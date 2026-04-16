@@ -12,39 +12,53 @@
 setMethod("gsva", signature(param="plageParam"),
           function(param,
                    verbose=TRUE,
-                   BPPARAM=SerialParam(progressbar=verbose))
-          {
-              if (verbose)
-                  cli_alert_info(sprintf("GSVA version %s",
-                                         packageDescription("GSVA")[["Version"]]))
+                   BPPARAM=SerialParam(progressbar=verbose),
+                   maxmem="auto") {
+
+              if (verbose) {
+                  pkgversion <- packageDescription("GSVA")[["Version"]]
+                  cli_alert_info("GSVA version {pkgversion}")
+              }
+
+              .check_bpparam(BPPARAM)
 
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=TRUE,
                                                        removeNzConstant=TRUE,
                                                        verbose=verbose,
                                                        BPPARAM=BPPARAM)
-              filteredDataMatrix <- famGaGS[["filteredDataMatrix"]]
-              filteredMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
+              filtDataMatrix <- famGaGS[["filteredDataMatrix"]]
+              filtMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
-              if (!inherits(BPPARAM, "SerialParam") && verbose) {
-                  msg <- sprintf("Using a %s parallel back-end with %d workers",
-                                 class(BPPARAM), bpnworkers(BPPARAM))
-                  cli_alert_info(msg)
+              maxmem <- .check_maxmem(param, maxmem, verbose)
+              ondisk <- .check_ondisk(param, maxmem, verbose)
+
+              filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
+                                                              "PLAGE",
+                                                              ondisk, verbose)
+
+              BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
+                                                 minparrows=100, minparcols=100,
+                                                 verbose)
+
+              ondisk <- .check_es_memory_requirements(filtDataMatrix,
+                                                      filtMappedGeneSets,
+                                                      ondisk, maxmem)
+
+              if (verbose) {
+                  n <- length(filtMappedGeneSets)
+                  cli_alert_info("Calculating PLAGE scores for {n} gene sets")
               }
 
-              if(verbose)
-                  cli_alert_info(sprintf("Calculating PLAGE scores for %d gene sets",
-                                         length(filteredMappedGeneSets)))
-
-              plageScores <- plage(X=filteredDataMatrix,
-                                   geneSets=filteredMappedGeneSets,
-                                   verbose=verbose,
-                                   BPPARAM=BPPARAM)
+              plage_es <- plage(X=filtDataMatrix,
+                                geneSets=filtMappedGeneSets,
+                                ondisk=ondisk, verbose=verbose,
+                                BPPARAM=BPPARAM, maxmem=maxmem)
 
               gs <- .geneSetsIndices2Names(
-                  indices=filteredMappedGeneSets,
-                  names=rownames(filteredDataMatrix))
-              rval <- wrapData(get_exprData(param), plageScores, gs)
+                  indices=filtMappedGeneSets,
+                  names=rownames(filtDataMatrix))
+              rval <- wrapData(get_exprData(param), plage_es, gs)
 
               if (verbose)
                   cli_alert_success("Calculations finished")
@@ -94,6 +108,14 @@ setMethod("gsva", signature(param="plageParam"),
 #' @param maxSize Numeric vector of length 1.  Maximum size of the resulting gene
 #' sets after gene identifier mapping. By default, the maximum size is `Inf`.
 #'
+#' @param ondisk Character vector of length 1 denoting whether an on-disk backend
+#' should be used to reduce the memory footprint. The default value
+#' `ondisk="auto"` will attempt to load all the data in main memory when the
+#' input nonzero values fit in main memory, otherwise it will attempt working
+#' with an on-disk data structure that reduces de memory footprint. When
+#' `ondisk="yes"` it will attempt to work with an on-disk data structure, while
+#' when `ondisk="no"` it will attempt to load all the data in main memory.
+#'
 #' @param verbose Logical vector of length 1. It gives information about some
 #' decisions made by the software during parameter object construction when
 #' `verbose=TRUE` (default) and remains silent otherwise.
@@ -130,9 +152,12 @@ setMethod("gsva", signature(param="plageParam"),
 #' @export
 plageParam <- function(exprData, geneSets,
                        assay=NA_character_, annotation=NULL,
-                       minSize=1, maxSize=Inf, verbose=TRUE) {
+                       minSize=1, maxSize=Inf, ondisk=c("auto", "yes", "no"),
+                       verbose=TRUE) {
 
     .check_input_expr_gene_sets(exprData, geneSets)
+
+    ondisk <- match.arg(ondisk)
 
     ## check assay parameter and assay names
     assay <- .check_assayNames(assay, exprData, verbose)
@@ -157,9 +182,11 @@ plageParam <- function(exprData, geneSets,
         }
     }
 
+    nzc <- .estimate_nzcount(exprData, assay, verbose)
+
     new("plageParam", exprData=exprData, geneSets=geneSets,
         assay=assay, annotation=annotation,
-        minSize=minSize, maxSize=maxSize)
+        minSize=minSize, maxSize=maxSize, nzcount=nzc, ondisk=ondisk)
 }
 
 
@@ -205,9 +232,26 @@ setValidity("plageParam", function(object) {
     if(object@maxSize < object@minSize) {
         inv <- c(inv, "@maxSize must be at least @minSize or greater")
     }
+    if(length(object@nzcount) != 1) {
+        inv <- c(inv, "@nzcount must be of length 1")
+    }
+    if(is.na(object@nzcount)) {
+        inv <- c(inv, "@nzcount must not be NA")
+    }
+    if(!.isCharLength1(object@ondisk)) {
+        inv <- c(inv, "@ondisk must be a single character string")
+    }
     return(if(length(inv) == 0) TRUE else inv)
 })
 
+#' @param x An object of class [`zscoreParam-class`].
+#'
+#' @importFrom SparseArray nzcount
+#' @aliases nzcount,zscoreParam-method
+#' @rdname zscoreParam-class
+setMethod("nzcount", signature=c("zscoreParam"),
+          function(x)
+            return(x@nzcount))
 
 ## ------ internal functions ------
 
@@ -227,8 +271,8 @@ rightsingularsvdvectorgset <- function(gSetIdx, Z, verbose, idpb) {
 #' @importFrom cli cli_alert_info
 #' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
 #' @importFrom BiocParallel bpnworkers SerialParam bplapply
-plage <- function(X, geneSets, verbose=TRUE,
-                  BPPARAM=SerialParam(progressbar=verbose)) {
+plage <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
+                  BPPARAM=NULL, maxmem=Inf) {
     Z <- NULL
     if (is(X, "dgCMatrix")){
         if (verbose)
@@ -243,7 +287,7 @@ plage <- function(X, geneSets, verbose=TRUE,
     } else
         stop(sprintf("Matrix class %s cannot be handled yet.", class(X)))
 
-    if (bpnworkers(BPPARAM) > 1) {
+    if (!is.null(BPPARAM)) {
         if (verbose)
             cli_progress_bar("Calculating PLAGE scores")
         es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,

@@ -13,6 +13,7 @@ plageParam(
   annotation = NULL,
   minSize = 1,
   maxSize = Inf,
+  ondisk = c("auto", "yes", "no"),
   verbose = TRUE
 )
 }
@@ -49,6 +50,14 @@ sets after gene identifier mapping. By default, the minimum size is 1.}
 \item{maxSize}{Numeric vector of length 1.  Maximum size of the resulting gene
 sets after gene identifier mapping. By default, the maximum size is \code{Inf}.}
 
+\item{ondisk}{Character vector of length 1 denoting whether an on-disk backend
+should be used to reduce the memory footprint. The default value
+\code{ondisk="auto"} will attempt to load all the data in main memory when the
+input nonzero values fit in main memory, otherwise it will attempt working
+with an on-disk data structure that reduces de memory footprint. When
+\code{ondisk="yes"} it will attempt to work with an on-disk data structure, while
+when \code{ondisk="no"} it will attempt to load all the data in main memory.}
+
 \item{verbose}{Logical vector of length 1. It gives information about some
 decisions made by the software during parameter object construction when
 \code{verbose=TRUE} (default) and remains silent otherwise.}
@@ -71,6 +80,21 @@ class does not add any slots to the common slots inherited from
 implemented by package GSVA but does not take any method-specific parameters.
 These parameters are described in detail below.
 }
+\section{Slots}{
+
+\describe{
+\item{\code{nzcount}}{Numeric vector of length 1. Number of non-zero values in the
+selected assay, if there is more than one, of the 'exprData' slot.}
+
+\item{\code{ondisk}}{Character vector of length 1 denoting whether an on-disk backend
+should be used to reduce the memory footprint. The default value
+\code{ondisk="auto"} will attempt to load all the data in main memory when the
+input nonzero values fit in main memory, otherwise it will attempt working
+with an on-disk data structure that reduces de memory footprint. When
+\code{ondisk="yes"} it will attempt to work with an on-disk data structure, while
+when \code{ondisk="no"} it will attempt to load all the data in main memory.}
+}}
+
 \examples{
 suppressPackageStartupMessages({
 library(GSEABase)

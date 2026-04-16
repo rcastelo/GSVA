@@ -234,6 +234,70 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     }
 }
 
+.check_bpparam <- function(BPPARAM) {
+    if (!is(BPPARAM, "BiocParallelParam")) {
+        msg <- paste("Argument 'BPPARAM' must be a",
+                     "'BiocParallelParam' derivative. Please",
+                     "consult the BiocParallel package.")
+        cli_abort(c("x"=msg))
+    }
+}
+
+.check_sparse_load_input_expr <- function(expr, method, ondisk, verbose) {
+    if (method != "GSVA" && is_sparse(expr)) { 
+        msg <- paste("Input expression data is sparse, but the {method}",
+                     "algorithm does not deal with sparsity",
+                     "in any specific way, and data will be",
+                     "converted into a dense matrix format")
+        cli_alert_warning(msg)
+    }
+
+    if (is(expr, "DelayedMatrix") && !ondisk) {
+        if (verbose)
+            cli_alert_info("Loading input expression data into main memory")
+
+        if (method == "GSVA" && is_sparse(expr))
+            expr <- as(expr, "SVT_SparseMatrix")
+        else
+            expr <- as.matrix(expr)
+    } 
+ 
+    expr
+}
+
+#' @importFrom BiocParallel bpnworkers
+#' @importFrom cli cli_alert_info
+.check_open_parallelism <- function(expr, BPPARAM, minparrows, minparcols,
+                                    verbose) {
+    if (bpnworkers(BPPARAM) > 1 && nrow(expr) > 100 && ncol(expr) > 100) {
+        if (verbose) {
+            msg <- sprintf("Using a %s parallel back-end with %d workers",
+                           class(BPPARAM), bpnworkers(BPPARAM))
+                      cli_alert_info(msg)
+        }
+    } else
+        BPPARAM <- NULL
+
+    BPPARAM
+}
+
+#' @importFrom memuse howbig
+#' @importFrom cli cli_alert_warning
+.check_es_memory_requirements <- function(expr, gsets, ondisk, maxmem) {
+    esreqmem <- howbig(as.numeric(length(gsets)), as.numeric(ncol(expr)),
+                       representation="dense", sparsity=1, type="double")
+
+    if (esreqmem > maxmem) {
+        msg <- paste("The resulting (dense) matrix of enrichment scores will",
+                     "not fit in the given maximum main memory size, and it",
+                     "will be returned using an on-disk data structure")
+        cli_alert_warning(msg)
+        ondisk <- TRUE
+    }
+
+    ondisk
+}
+
 ## generate dummy names, e.g. row/col names for object M that knows 'nrow()'
 .dummyNames <- function(M, n=nrow(M), prefix="row") {
     fmt <- sprintf("%s%%0%dd", prefix, floor(log10(n)) + 1)
@@ -413,7 +477,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 .get_ondisk <- function(object) {
   stopifnot(inherits(object, "ssgseaParam") ||
             inherits(object, "gsvaParam") ||
-            inherits(object, "zscoreParam"))
+            inherits(object, "zscoreParam") ||
+            inherits(object, "plageParam"))
   return(object@ondisk)
 }
 
