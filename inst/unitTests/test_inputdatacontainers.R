@@ -70,7 +70,7 @@ test_inputdatacontainers <- function() {
     checkTrue(identical(gsets.mat, gsets.se))
 
     out <- cli_fmt(gsvaParam(se, gsets))
-    checkTrue(substr(out, 13, nchar(out)) == "No assay name provided; using default assay 'counts'")
+    checkTrue(substr(out, 3, nchar(out)) == "No assay name provided; using default assay 'counts'")
     checkException(gsvaParam(se, gsets, assay="dummy"))
 
     ## estimate GSVA enrichment scores with input as a dgCMatrix object
