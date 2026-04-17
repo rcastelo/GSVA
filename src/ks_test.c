@@ -159,14 +159,14 @@ gsva_rnd_walk_nas(int* gsetidx, int k, int* decordstat, double* symrnkstat, int 
   R_Free(gsetidx_wonas);
 }
 
-/* fetch column from a dense matrix XR
+/* fetch integer column from a dense matrix XR of type integer
  * nr - number of rows
  * j - 0-based column to fetch
  * col - array where to store the column, assuming is initialized to zeroes
  * returned value - number of rows
  */
 int
-fetch_col_matrix(SEXP XR, int nr, int j, int* col) {
+fetch_intcol_intmatrix(SEXP XR, int nr, int j, int* col) {
   int* X=INTEGER(XR);
 
   Memcpy(col, X+nr*j, (size_t) nr);
@@ -174,14 +174,30 @@ fetch_col_matrix(SEXP XR, int nr, int j, int* col) {
   return nr;
 }
 
-/* fetch column from a sparse dgCMatrix XR
+/* fetch integer column from a dense matrix XR of type double
+ * nr - number of rows
+ * j - 0-based column to fetch
+ * col - array where to store the column, assuming is initialized to zeroes
+ * returned value - number of rows
+ */
+int
+fetch_intcol_dblmatrix(SEXP XR, int nr, int j, int* col) {
+  double* X=REAL(XR);
+
+  for (int i=0; i < nr; i++)
+    col[i] = (int) X[nr*j+i];
+
+  return nr;
+}
+
+/* fetch integer column from a sparse dgCMatrix XR (always of type double)
  * nr - number of rows
  * j - 0-based column to fetch
  * col - array where to store the column, assuming is initialized to zeroes
  * returned value - number of nonzero values
  */
 int
-fetch_col_dgCMatrix(SEXP XCspR, int nr, int j, int* col) {
+fetch_intcol_dgCMatrix(SEXP XCspR, int nr, int j, int* col) {
   int*    XCsp_i;
   int*    XCsp_p;
   double* XCsp_x;
@@ -197,14 +213,14 @@ fetch_col_dgCMatrix(SEXP XCspR, int nr, int j, int* col) {
   return XCsp_p[j+1]-XCsp_p[j];
 }
 
-/* fetch column from a sparse SVT_SparseMatrix XR
+/* fetch integer column from a sparse SVT_SparseMatrix XR of type integer
  * nr - number of rows
  * j - 0-based column to fetch
  * col - array where to store the column, assuming is initialized to zeroes
  * returned value - number of nonzero values
  */
 int
-fetch_col_SVT_SparseMatrix(SEXP XsvtR, int nr, int j, int* col) {
+fetch_intcol_intSVT_SparseMatrix(SEXP XsvtR, int nr, int j, int* col) {
   SEXP Xsvt_SVT;
   SEXP svtLeaf;
   int  nnz = 0;
@@ -235,22 +251,61 @@ fetch_col_SVT_SparseMatrix(SEXP XsvtR, int nr, int j, int* col) {
   return nnz;
 }
 
+/* fetch integer column from a sparse SVT_SparseMatrix XR of type double
+ * nr - number of rows
+ * j - 0-based column to fetch
+ * col - array where to store the column, assuming is initialized to zeroes
+ * returned value - number of nonzero values
+ */
+int
+fetch_intcol_dblSVT_SparseMatrix(SEXP XsvtR, int nr, int j, int* col) {
+  SEXP Xsvt_SVT;
+  SEXP svtLeaf;
+  int  nnz = 0;
+
+  Xsvt_SVT = GET_SLOT(XsvtR, SVT_SparseArray_svtSym);
+  svtLeaf = VECTOR_ELT(Xsvt_SVT, j);
+
+  /* put the sparse column into a dense vector */
+  if (svtLeaf != R_NilValue) {
+    SEXP    valsR = VECTOR_ELT(svtLeaf, 0);
+    SEXP    offsetsR = VECTOR_ELT(svtLeaf, 1);
+    int     nvals = length(valsR);
+    int     noffsets = length(offsetsR);
+    double* vals;
+    int*    offsets = INTEGER(offsetsR);
+
+    if (nvals > 0) {
+      vals = REAL(valsR);
+      for (int i=0; i < nvals; i++)
+        col[offsets[i]] = (int) vals[i];
+    } else { /* lacunar */
+      for (int i=0; i < noffsets; i++)
+        col[offsets[i]] = 1;
+    }
+    nnz = noffsets;
+  }
+
+  return nnz;
+}
+
 typedef int (*FetchColFunDef)(SEXP, int, int, int*);
 
 FetchColFunDef
-find_dim_and_fetchcolfun(SEXP XR, int** dim) {
+find_dim_and_fetchcolfun(SEXP XR, Rboolean intrnks, int** dim) {
   FetchColFunDef fetch_col;
   SEXP        classR = eval(lang2(install("class"), XR), R_BaseEnv);
   const char* class = CHAR(STRING_ELT(classR, 0));
 
   if (!strcmp(class, "matrix")) {
-    fetch_col = &fetch_col_matrix;
+    fetch_col = intrnks ? &fetch_intcol_intmatrix : &fetch_intcol_dblmatrix;
     *dim = INTEGER(getAttrib(XR, R_DimSymbol));
   } else if (!strcmp(class, "dgCMatrix")) {
-    fetch_col = &fetch_col_dgCMatrix;
+    fetch_col = &fetch_intcol_dgCMatrix;
     *dim = INTEGER(GET_SLOT(XR, Matrix_DimSym));
   } else if (!strcmp(class, "SVT_SparseMatrix")) {
-    fetch_col = &fetch_col_SVT_SparseMatrix;
+    fetch_col = intrnks ? &fetch_intcol_intSVT_SparseMatrix :
+                          &fetch_intcol_dblSVT_SparseMatrix;
     *dim = INTEGER(GET_SLOT(XR, SVT_SparseArray_dimSym));
   } else
     error("input class %s cannot be handled yet.", class);
@@ -269,12 +324,13 @@ ranks2stats_nas(SEXP ranksR, int p, int n, int j, Rboolean sparse,
                 int* decordstat_col, double* symrnkstat_col);
 
 SEXP
-gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP sparseR,
-                      SEXP maxdiffR, SEXP absrnkR, SEXP tauR, SEXP anynaR,
-                      SEXP nauseR, SEXP minsizeR, SEXP verboseR) {
+gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
+                      SEXP sparseR, SEXP maxdiffR, SEXP absrnkR, SEXP tauR,
+                      SEXP anynaR, SEXP nauseR, SEXP minsizeR, SEXP verboseR) {
   int*     dimranks;
   int      p, n;
   int      m = length(genesetsidxR);
+  Rboolean intrnks=asLogical(intrnksR);
   Rboolean sparse=asLogical(sparseR);
   Rboolean maxdiff=asLogical(maxdiffR);
   Rboolean absrnk=asLogical(absrnkR);
@@ -293,7 +349,7 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP sparseR,
   double*  symrnkstat_col;
   FetchColFunDef fetch_col;
 
-  fetch_col = find_dim_and_fetchcolfun(ranksR, &dimranks);
+  fetch_col = find_dim_and_fetchcolfun(ranksR, intrnks, &dimranks);
   p = dimranks[0]; /* number of rows/genes/features */
   n = dimranks[1]; /* number of columns/samples/cells/spots */
 

@@ -89,12 +89,8 @@ setMethod("spatCor", signature("SpatialExperiment"),
              alternative="two.sided", squared=TRUE, verbose=TRUE,
              BPPARAM=SerialParam(progressbar = verbose)) {
 
-        nworkers <- 1L
-        if (!is.null(BPPARAM)) {
-            if (!is(BPPARAM, "BiocParallelParam"))
-                cli_abort(c("x"="'Argument BPPARAM' must be a 'BiocParallelParam' derivative. Please consult the BiocParallel package."))
-            nworkers <- bpnworkers(BPPARAM)
-        }
+        .check_bpparam(BPPARAM)
+        nworkers <- bpnworkers(BPPARAM)
 
         assay <- .check_assayNames(assay, spe, verbose)
         weight_list <- .spe_dist_weight_matrix(spe,squared)
@@ -115,7 +111,7 @@ setMethod("spatCor", signature("SpatialExperiment"),
                     progressmsg <- sprintf("Sample %s", sample)
                     assign("idpb", cli_progress_bar(progressmsg,
                                                     total=length(rowns)),
-                            envir=env)
+                           envir=env)
                 }
                 spe_Moran <- lapply(rowns, function(x, idpbe) {
                     res <- list(observed=NA, expected=NA, sd=NA, p.value=NA)

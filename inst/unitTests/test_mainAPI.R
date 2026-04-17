@@ -16,6 +16,7 @@ test_mainAPI <- function() {
 
     checkException(g <- gsvaRanks(gsvaParam(exprData=xf, geneSets=gs),
 				  verbose=FALSE, maxmem=c(1, 2)))
+
     g <- gsvaRanks(gsvaParam(exprData=xf, geneSets=gs), verbose=FALSE,
 		   maxmem="1M")
 

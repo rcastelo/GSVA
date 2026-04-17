@@ -1487,6 +1487,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     es <- NULL
     if (sparse && !is_sparse(R))
         sparse <- FALSE
+    intrnks <- is.integer(R[1, 1])
 
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
@@ -1509,10 +1510,9 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
         ## avp_es - ArrayViewport for writing the enrichment dense scores matrix
         colScores_byBlock <- function(avp, avp_es, sink) {
             block <- read_block(R, avp)
-            block <- .gsva_score_genesets(block, geneSetsIdx, sparse,
-                                          maxDiff, absRanking, tau,
-                                          any_na, na_use, minSize,
-                                          wna_env, verbose=verbose)
+            block <- .gsva_score_genesets(block, geneSetsIdx, intrnks, sparse,
+                                          maxDiff, absRanking, tau, any_na,
+                                          na_use, minSize, wna_env, verbose)
             write_block(sink, avp_es, block)
         }
 
@@ -1523,9 +1523,9 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
         es <- as(sink, "DelayedArray")
 
     } else {
-        es <- .gsva_score_genesets(R, geneSetsIdx, sparse,
-                                   maxDiff, absRanking, tau, any_na,
-                                   na_use, minSize, wna_env, verbose=verbose)
+        es <- .gsva_score_genesets(R, geneSetsIdx, intrnks, sparse, maxDiff,
+                                   absRanking, tau, any_na, na_use, minSize,
+                                   wna_env, verbose)
     }
 
     if (any_na && na_use == "na.rm")
@@ -1922,13 +1922,14 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 }
 
 #' @importFrom cli cli_abort
-.gsva_score_genesets <- function(R, geneSetsIdx, sparse, maxDiff, absRanking,
-                                 tau, any_na, na_use, minSize, wna_env,
-                                 verbose) {
+.gsva_score_genesets <- function(R, geneSetsIdx, intrnks, sparse, maxDiff,
+                                 absRanking, tau, any_na, na_use, minSize,
+                                 wna_env, verbose) {
     minSize <- as.integer(minSize)
     stopifnot(is.list(geneSetsIdx)) ## QC
     stopifnot(length(geneSetsIdx) > 0) ## QC
     stopifnot(is.integer(geneSetsIdx[[1]])) ## QC
+    stopifnot(is.logical(intrnks)) ## QC
     stopifnot(is.logical(sparse)) ## QC
     stopifnot(is.logical(maxDiff)) ## QC
     stopifnot(is.logical(absRanking)) ## QC
@@ -1939,8 +1940,9 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     stopifnot(is.logical(verbose)) ## QC
     na_use <- as.integer(factor(na_use, levels=c("everything", "all.obs",
                                                  "na.rm")))
-    sco <- .Call("gsva_score_genesets_R", R, geneSetsIdx, sparse, maxDiff,
-                 absRanking, as.double(tau), any_na, na_use, minSize, verbose)
+    sco <- .Call("gsva_score_genesets_R", R, geneSetsIdx, intrnks, sparse,
+                 maxDiff, absRanking, as.double(tau), any_na, na_use, minSize,
+                 verbose)
 
     if (any_na) {
       if (na_use == 2 && !is.null(attr(sco, "attrNAs")))

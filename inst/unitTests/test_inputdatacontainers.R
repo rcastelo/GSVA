@@ -24,6 +24,10 @@ test_inputdatacontainers <- function() {
     es.mat <- gsva(gsvaParam(y, gsets, verbose=FALSE), verbose=FALSE)
     gsets.mat <- geneSets(es.mat)
 
+    library(cli)
+    out <- cli_fmt(gsvaParam(y, gsets, assay="dummy"))
+    checkTrue(substr(out, 3, nchar(out)) == "argument assay='dummy' ignored since input argument 'exprData' has no assay names.")
+
     ## estimate GSVA enrichment scores with input as an ExpressionSet object
     suppressPackageStartupMessages(library(Biobase))
 
@@ -48,19 +52,26 @@ test_inputdatacontainers <- function() {
     checkTrue(identical(gsets.mat, gsets.eSet))
 
     ## estimate GSVA enrichment scores with input as a SummarizedExperiment object
-    suppressPackageStartupMessages(library(S4Vectors))
-    suppressPackageStartupMessages(library(SummarizedExperiment))
+    suppressPackageStartupMessages({
+        library(S4Vectors)
+	library(SummarizedExperiment)
+    })
 
     se <- SummarizedExperiment(assay=list(counts=y2),
                                rowData=DataFrame(data.frame(dummy=1:nrow(y),
                                                             row.names=rownames(y))),
                                colData=DataFrame(data.frame(dummy=1:ncol(y),
                                                             row.names=colnames(y))))
-    es.se <- gsva(gsvaParam(se, gsets, verbose=FALSE), verbose=FALSE)
+    gsvapar <- gsvaParam(se, gsets, verbose=FALSE)
+    es.se <- gsva(gsvapar, verbose=FALSE)
     gsets.se <- geneSets(es.se)
 
     checkTrue(identical(es.mat2, assay(es.se)))
     checkTrue(identical(gsets.mat, gsets.se))
+
+    out <- cli_fmt(gsvaParam(se, gsets))
+    checkTrue(substr(out, 13, nchar(out)) == "No assay name provided; using default assay 'counts'")
+    checkException(gsvaParam(se, gsets, assay="dummy"))
 
     ## estimate GSVA enrichment scores with input as a dgCMatrix object
     suppressPackageStartupMessages(library(Matrix))

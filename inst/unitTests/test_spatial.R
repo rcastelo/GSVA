@@ -4,6 +4,7 @@ test_spatial <- function() {
     suppressPackageStartupMessages({
         library(Matrix)
         library(SpatialExperiment)
+	library(cli)
     })
 
     ## build a SpatialExperiment object
@@ -41,6 +42,9 @@ test_spatial <- function() {
     checkTrue(is(es, "SpatialExperiment"))
     checkTrue(all(dim(es) == c(length(gsets), ncol(spe))))
     checkTrue(all(colnames(es) == colnames(spe)))
+    out <- cli_fmt(es <- gsva(gsvapar, verbose=FALSE, maxmem="100K"))
+    checkTrue(is(assay(es), "DelayedMatrix"))
+    checkTrue(grepl("on-disk", out))
 
     ## calculate spatial autocorrelation on the GSVA enrichment scores
     r <- spatCor(es, verbose=FALSE)

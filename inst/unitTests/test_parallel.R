@@ -33,4 +33,8 @@ test_parallel <- function() {
     es_parallel <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE,
                         BPPARAM=MulticoreParam(workers=2))
     checkIdentical(es_serial, es_parallel)
+
+    M[1, 2] <- NA
+    checkException(gsva(gsvaParam(M, gsets, kcdf="Gaussian", verbose=FALSE),
+			verbose=FALSE, BPPARAM=MulticoreParam(workers=2)))
 }

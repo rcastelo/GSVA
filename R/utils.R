@@ -356,7 +356,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         } else {                       # i.e. there is exactly one unnamed assay
             if(verbose && !is.na(a)) { # and the provided name is useless but harmless
                 msg <- paste("argument assay='{a}' ignored since input argument",
-                             "'exprData' has not assay names.")
+                             "'exprData' has no assay names.")
                 cli_alert_info(msg)
             }
 
