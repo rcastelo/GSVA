@@ -66,13 +66,25 @@
     rir
 }
 
+#' @importFrom cli cli_alert_warning
+.report_parallel_errors <- function(res) {
+    bpokmask <- bpok(res)
+    msg <- paste("{sum(!bpokmask)} execution thread(s) gave an error,",
+                 "reporting the first one.")
+    cli_alert_warning(msg)
+    msg <- attr(res[[which(!bpokmask)]], "traceback")
+    msg <- gsub("\\}", "]", gsub("\\{", "[", msg))
+    out <- lapply(msg, cli_alert_warning)
+}
+
 ## process the rows of a matrix with a given function FUN, opening parallelism
 ## through a BiocParallelParam object BPPARAM, when different from NULL, and
 ## reporting progress using the 'cli' package when possible
 
 #' @importFrom BiocGenerics type
 #' @importFrom cli cli_abort cli_progress_bar cli_alert_warning
-#' @importFrom BiocParallel bplapply bpnworkers bpprogressbar bptry bpok
+#' @importFrom BiocParallel bplapply bpnworkers "bpprogressbar<-" bptry
+#' @importFrom BiocParallel bpok "bpstopOnError<-"
 #' @importFrom memuse howbig
 #' @importClassesFrom IRanges IRanges
 #' @importFrom IRanges start end width
@@ -93,9 +105,10 @@
     if (length(rir) > 1 && verbose) {
         sze <- howbig(as.numeric(width(rir[[1]])), as.numeric(ncol(X)),
                       representation="dense", type=type(X))
-        cli_alert_info(sprintf("Splitting calculations in %d chunks of [%d, %d] and %s",
-                               length(rir), width(rir[[1]]), ncol(X), as.character(sze)))
-    } else if (length(rir) == 1)                     ## serial execution in one single call
+        msg <- sprintf("Splitting calculations in %d chunks of [%d, %d] and %s",
+                       length(rir), width(rir[[1]]), ncol(X), as.character(sze))
+        cli_alert_info(msg)
+    } else if (length(rir) == 1)          ## serial execution in one single call
         return(FUN(X, ..., verbose=verbose))
 
     FUN_WRAPPER <- function(rowsrng, verbose, idpbe, WRAPPED_FUN, ...) {
@@ -124,25 +137,20 @@
     } else {                                  ## parallel execution in chunks
         if (verbose)
             bpprogressbar(BPPARAM) <- TRUE    ## reporting progress wo/ cli
-        bptry(res <- bplapply(rir, FUN=FUN_WRAPPER, verbose=FALSE,
+        bpstopOnError(BPPARAM) <- FALSE
+        res <- bptry(bplapply(rir, FUN=FUN_WRAPPER, verbose=FALSE,
                               idpbe=NULL, WRAPPED_FUN=FUN, ...,
                               BPPARAM=BPPARAM))
         bpokmask <- bpok(res)
         if (any(!bpokmask)) {
-            msg <- paste("{sum(!bpokmask)} execution thread(s) give an error,",
-                         "reporting the first one.")
-            cli_alert_warning(msg)
-            print(attr(res[[which(!bpokmask)]], "traceback"))
+            .report_parallel_errors(res)
             cli_alert_warning("Trying to execute again the failing thread(s)")
-            bptry(res <- bplapply(rir, FUN=FUN_WRAPPER, verbose=FALSE,
+            res <- bptry(bplapply(rir, FUN=FUN_WRAPPER, verbose=FALSE,
                                   idpbe=NULL, WRAPPED_FUN=FUN, ...,
                                   BPREDO=res, BPPARAM=BPPARAM))
             bpokmask <- bpok(res)
             if (any(!bpokmask)) {
-                msg <- paste("{sum(!bpokmask)} execution thread(s) give an",
-                             "error, reporting the first one.")
-                cli_alert_warning(msg)
-                print(attr(res[[which(!bpokmask)]], "traceback"))
+                .report_parallel_errors(res)
                 cli_abort(c("x"="Cancelling execution"))
             }
         }
@@ -165,7 +173,8 @@
 
 #' @importFrom BiocGenerics type
 #' @importFrom cli cli_abort
-#' @importFrom BiocParallel bplapply bpnworkers bptry bpok
+#' @importFrom BiocParallel bplapply bpnworkers "bpprogressbar<-" bptry
+#' @importFrom BiocParallel bpok "bpstopOnError<-"
 #' @importClassesFrom IRanges IRanges
 #' @importFrom IRanges start end width
 .processMatrixCols <- function(X, FUN, ..., verbose=TRUE,
@@ -216,25 +225,20 @@
     } else {                                  ## parallel execution in chunks
         if (verbose)
             bpprogressbar(BPPARAM) <- TRUE    ## reporting progress wo/ cli
+        bpstopOnError(BPPARAM) <- FALSE
         bptry(res <- bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
                               idpbe=NULL, WRAPPED_FUN=FUN, ...,
                               BPPARAM=BPPARAM))
         bpokmask <- bpok(res)
         if (any(!bpokmask)) {
-            msg <- paste("{sum(!bpokmask)} execution thread(s) give an error,",
-                         "reporting the first one.")
-            cli_alert_warning(msg)
-            print(attr(res[[which(!bpokmask)]], "traceback"))
+            .report_parallel_errors(res)
             cli_alert_warning("Trying to execute again the failing thread(s)")
             bptry(res <- bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
                                   idpbe=NULL, WRAPPED_FUN=FUN, ...,
                                   BPREDO=res, BPPARAM=BPPARAM))
             bpokmask <- bpok(res)
             if (any(!bpokmask)) {
-                msg <- paste("{sum(!bpokmask)} execution thread(s) give an",
-                             "error, reporting the first one.")
-                cli_alert_warning(msg)
-                print(attr(res[[which(!bpokmask)]], "traceback"))
+                .report_parallel_errors(res)
                 cli_abort(c("x"="Cancelling execution"))
             }
         }

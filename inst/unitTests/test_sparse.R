@@ -32,7 +32,7 @@ test_sparseMethods <- function(){
     out <- cli_fmt(mg <- gsva(gsvaParam(m, gsets), verbose=TRUE))
     out <- cli_fmt(Mg <- gsva(gsvaParam(M, gsets, sparse=FALSE), verbose=TRUE))
     checkEqualsNumeric(mg, Mg)
-    
+
     out <- cli_fmt(mp <- gsva(plageParam(m, gsets), verbose=TRUE))
     out <- cli_fmt(Mp <- gsva(plageParam(M, gsets), verbose=TRUE))
     checkEqualsNumeric(mp, Mp)
@@ -44,6 +44,10 @@ test_sparseMethods <- function(){
     out <- cli_fmt(ms <- gsva(ssgseaParam(m, gsets), verbose=TRUE))
     out <- cli_fmt(Ms <- gsva(ssgseaParam(M, gsets), verbose=TRUE))
     checkEqualsNumeric(ms, Ms)
+
+    M[1, 1] <- NA
+    checkException(Mg <- gsva(gsvaParam(M, gsets), verbose=TRUE))
+    
 }
 
 test_ecdfvals <- function() {

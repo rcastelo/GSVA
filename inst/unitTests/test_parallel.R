@@ -1,8 +1,10 @@
 test_parallel <- function() {
     message("Running unit tests for parallel execution.")
 
-    library(BiocParallel)
-    library(Matrix)
+    suppressPackageStartupMessages({
+        library(BiocParallel)
+        library(Matrix)
+    })
 
     p <- 150 ## number of genes
     n <- 150 ## number of samples
@@ -29,6 +31,6 @@ test_parallel <- function() {
     ## and check that they are identical
     es_serial <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE)
     es_parallel <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE,
-			BPPARAM=MulticoreParam(workers=2))
+                        BPPARAM=MulticoreParam(workers=2))
     checkIdentical(es_serial, es_parallel)
 }

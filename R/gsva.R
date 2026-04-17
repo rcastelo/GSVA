@@ -1199,8 +1199,14 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 .sufficient_ssize <- function(expr, kcdf.min.ssize) {
   ## in the sparse case stored in a 'dgCMatrix' or a 'SVT_SparseMatrix',
   ## by now, use the average nonzero values per row
-  if (is(expr, "dgCMatrix") || is(expr, "SVT_SparseMatrix"))
-    return((nnzero(expr) / nrow(expr)) >= kcdf.min.ssize)
+  if (is_sparse(expr)) {
+    nnz <- nnzero(expr)
+    if (is.na(nnz)) {
+        msg <- "The input sparse matrix of expression contains NA values."
+        cli_abort(c("x"=msg))
+    }
+    return((nnz / nrow(expr)) >= kcdf.min.ssize)
+  }
 
   ## in every other case, including the dense case, by now,
   ## just look at the number of columns
