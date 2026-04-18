@@ -185,11 +185,7 @@
     FUN <- match.fun(FUN)
     nworkers <- 1L
     if (!is.null(BPPARAM) && nrow(X) > minparrows && ncol(X) > minparcols) {
-        if (!is(BPPARAM, "BiocParallelParam")) {
-            msg <- paste("'BPPARAM' must be a BiocParallelParam derivative.",
-                         "Please consult the 'BiocParallel' package.")
-            cli_abort(c("x"=msg))
-        }
+        stopifnot(is(BPPARAM, "BiocParallelParam"))
         nworkers <- bpnworkers(BPPARAM)
     }
 
