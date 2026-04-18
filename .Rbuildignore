@@ -3,3 +3,4 @@
 ^\.Rproj\.user$
 ^docs$
 ^\.covrignore
+^\.codecov.yml
