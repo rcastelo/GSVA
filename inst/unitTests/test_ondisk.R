@@ -65,5 +65,7 @@ test_ondisk <- function() {
     ## test the block processing of the HDF5 input and output by setting a small block size and
     ## maximum available memory
     setAutoBlockSize(1024)
-    es_h5ondisk <- gsva(gsvaParam(H5, gsets, ondisk="yes", verbose=FALSE), verbose=TRUE, maxmem="10K")
+    es_noh5 <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE)
+    es_chunks <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE, maxmem="25K")
+    checkEqualsNumeric(es_noh5, es_chunks)
 }
