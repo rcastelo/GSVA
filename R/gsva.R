@@ -776,9 +776,9 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
               rownames(gsvarnks) <- rownames(filtDataMatrix)
               colnames(gsvarnks) <- colnames(filtDataMatrix)
 
-              rnkcontainer <- wrapData(get_exprData(param), gsvarnks)
+              rnkscontainer <- wrapData(get_exprData(param), gsvarnks)
               rval <- new("gsvaRanksParam",
-                          exprData=rnkcontainer, geneSets=get_geneSets(param),
+                          exprData=rnkscontainer, geneSets=get_geneSets(param),
                           assay="gsvaranks", annotation=get_annotation(param),
                           minSize=get_minSize(param), maxSize=get_maxSize(param),
                           kcdf=.get_kcdf(param),
