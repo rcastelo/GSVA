@@ -93,7 +93,7 @@ saveGSVAranks <- function(x, dir) {
     knmss <- .get_kcdfNoneMinSampleSize(x)
     metadata(edata) <- c(metadata(edata),
                          list(gsvaRanksParam=list(originalClass=originalclass,
-                                                  geneSets=geneSets(x),
+                                                  geneSets=get_geneSets(x),
                                                   assay=get_assay(x),
                                                   annotation=get_annotation(x),
                                                   minSize=get_minSize(x),
