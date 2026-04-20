@@ -137,7 +137,7 @@ loadHDF5GSVAranks <- function(dir, ...) {
     rnksmdata <- metadata(x)$gsvaRanksParam
     if (is.null(rnksmdata)) {
         msg <- "The given directory does not contain valid GSVA ranks data"
-        cli_abort(msg)
+        cli_abort(c("x"=msg))
     }
     md <- metadata(x)
     md$gsvaRanksParam <- NULL
@@ -149,7 +149,7 @@ loadHDF5GSVAranks <- function(dir, ...) {
     if (!rnksmdata$originalClassWasSE) {
         if (!"gsvaranks" %in% assayNames(x)) {
             msg <- "The given directory does not contain valid GSVA ranks data"
-            cli_abort(msg)
+            cli_abort(c("x"=msg))
         }
         rnkscontainer <- assay(x, "gsvaranks")
         if (!is.null(gsvaAnnotation(x)))

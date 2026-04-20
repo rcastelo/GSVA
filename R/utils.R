@@ -325,7 +325,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 
     if(length(a) != 1) {
         msg <- "argument 'assay' must be of length 1 (it is {length(a)})"
-        cli_abort(msg)
+        cli_abort(c("x"=msg))
     }
     
     if(.isCharNonEmpty(an)) {   # we have assay names
@@ -346,13 +346,13 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             } else {            # assay name provided but not found: ERROR
                 msg <- paste("invalid argument assay='{a}': not part of",
                              "assay names in input argument 'exprData'.")
-                cli_abort(msg)
+                cli_abort(c("x"=msg))
             }
         }
     } else {                    # we don't have no assay names at all
         if(.isMultiAssayContainer(xd)) {  # these must have assay names: ERROR
             msg <- "exprData object of class '{class(xd)}' has no assay names."
-            cli_abort(msg)
+            cli_abort(c("x"=msg))
         } else {                       # i.e. there is exactly one unnamed assay
             if(verbose && !is.na(a)) { # and the provided name is useless but harmless
                 msg <- paste("argument assay='{a}' ignored since input argument",

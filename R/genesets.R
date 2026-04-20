@@ -74,11 +74,12 @@ NULL
 
 
 ## access to gene set attribute without explicit use of attributes
+#' @importFrom cli cli_abort
 .geneSets <- function(obj) {
     gs <- attr(obj, "geneSets", exact=TRUE)
 
     if (is.null(gs))
-        stop("The object does not contain information about gene sets.")
+        cli_abort(c("x"="The object does not contain information about gene sets."))
 
     return(gs)
 }
@@ -883,40 +884,6 @@ setMethod("mapGeneSetsToAnno",
           function(geneSets, anno, verbose=FALSE) {
               return(geneIds(geneSets))
           })
-
-#' @importFrom cli cli_alert_info cli_alert_warning
-#' @importFrom GSEABase AnnoOrEntrezIdentifier mapIdentifiers
-## setMethod("mapGeneSetsToAnno",
-##           signature(geneSets="GeneSetCollection", anno="character"),
-##           function(geneSets, anno, verbose=FALSE) {
-##               if(.isAnnoPkgValid(anno)) {
-##                   if(!.isAnnoPkgInstalled(anno)) {
-##                       msg <- "Please install the annotation package {anno}."
-##                       cli_abort(c("x"=msg, anno))
-##                   }
-##
-##                   if (verbose)
-##                       cli_alert_info("Mapping identifiers")
-## 
-##                   mappedGeneSets <- mapIdentifiers(geneSets,
-##                                                    AnnoOrEntrezIdentifier(anno))
-##                   rval <- geneIds(mappedGeneSets)
-## 
-##               } else {
-##                   if (verbose) {
-##                       msg <- paste("No annotation metadata available in the",
-##                                    "input expression data object")
-##                       cli_alert_warning(msg)
-##                       msg <- paste("Attempting to directly match identifiers",
-##                                    "in expression data to gene sets")
-##                       cli_alert_warning(msg)
-##                   }
-## 
-##                   rval <- geneIds(geneSets)
-##               }
-## 
-##               return(rval)
-##           })
 
 #' @importFrom cli cli_alert_info cli_alert_warning
 #' @importFrom GSEABase mapIdentifiers geneIds

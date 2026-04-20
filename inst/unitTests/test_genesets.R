@@ -1,6 +1,9 @@
 test_genesets <- function() {
     message("Running unit tests for input gene sets")
 
+    suppressPackageStartupMessages(library(GSEABase))
+    suppressPackageStartupMessages(library(SummarizedExperiment))
+
     p <- 10 ## number of genes
     n <- 30 ## number of samples
     nGrp1 <- 15 ## number of samples in group 1
@@ -16,9 +19,12 @@ test_genesets <- function() {
     set.seed(123)
     y <- matrix(rnorm(n*p), nrow=p, ncol=n,
                 dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+    gsvaAnnotation(y) <- SymbolIdentifier("org.Hs.eg.db")
+    se <- SummarizedExperiment(assays=list(logcounts=y))
+    gsvaAnnotation(se) <- SymbolIdentifier("org.Hs.eg.db")
     
-    ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
-    y[gsets$set1, (nGrp1+1):n] <- y[gsets$set1, (nGrp1+1):n] + 2
+    ## check error is thrown when trying to access missing gene sets
+    checkException(geneSets(y))
 
     ## estimate GSVA enrichment scores with gene sets input as a list
     gsvapar <- gsvaParam(y, gsets, verbose=FALSE)
@@ -26,11 +32,23 @@ test_genesets <- function() {
 
     ## check that gene sets are correctly propagated to the parameter object
     checkIdentical(geneSets(gsvapar), gsets)
-    ## check that gene sets are correctly propagated to the output enrichment score matrix
+    ## check that gene set sizes are correctly propagated to the parameter object
+    checkIdentical(geneSetSizes(gsvapar), lengths(gsets))
+    ## check that gene sets are correctly propagated to the output enrichment
+    ## score matrix
     checkIdentical(geneSets(es.mat), gsets)
+    ## check that gene set sizes are correctly propagated to the output
+    ## enrichment score matrix
+    checkIdentical(geneSetSizes(es.mat), geneSetSizes(gsvapar))
 
     ## convert input gene sets into a GeneSetCollection object
     gsc <- geneIdsToGeneSetCollection(gsets)
+
+    ## check gene identifier metadata
+    checkTrue(identical(gsvaAnnotation(gsc), SymbolIdentifier()))
+
+    ## check filtering method
+    checkTrue(identical(filterGeneSets(gsc), geneIds(gsc)))
 
     ## estimate GSVA enrichment scores with gene sets input as a GeneSetCollection object
     es.mat2 <- gsva(gsvaParam(y, gsc), verbose=FALSE)
@@ -75,12 +93,29 @@ test_readGMT <- function() {
     suppressWarnings(c2.dupgenesets <- readGMT(fname, deduplUse="union",
                                                valueType="list"))
     checkTrue(!any(duplicated(names(c2.dupgenesets))))
+    suppressWarnings(c2.dupgenesets <- readGMT(fname, deduplUse="smallest",
+                                               valueType="GeneSetCollection"))
+    checkTrue(!any(duplicated(names(c2.dupgenesets))))
     suppressWarnings(c2.dupgenesets <- readGMT(fname, deduplUse="largest",
                                                valueType="list"))
     suppressWarnings(c2.dupgenesets <- readGMT(fname, deduplUse="drop",
                                                valueType="list"))
     checkTrue(!any(duplicated(names(c2.dupgenesets))))
-    suppressWarnings(c2.dupgenesets <- readGMT(fname, deduplUse="smallest",
-                                               valueType="GeneSetCollection"))
-    checkTrue(!any(duplicated(names(c2.dupgenesets))))
+
+    gsets <- c2.dupgenesets[1:2]
+    fname <- tempfile()
+    con <- file(fname, "w")
+    writeLines(c(names(gsets)[1],
+		 paste(names(gsets)[2], "desc2", paste(gsets[[2]], collapse="\t"), sep="\t")), con)
+    close(con)
+    checkException(gsets.read <- readGMT(fname, deduplUse="drop", valueType="list"))
+
+    gsets[[1]][2] <- gsets[[1]][1]
+    con <- file(fname, "w")
+    writeLines(c(paste(names(gsets)[1], "desc1", paste(paste0("ENSG", gsets[[1]]), collapse="\t"), sep="\t"),
+		 paste(names(gsets)[2], "desc2", paste(paste0("ENSG", gsets[[2]]), collapse="\t"), sep="\t")), con)
+    close(con)
+    library(cli)
+    gsets.read <- readGMT(fname, deduplUse="drop", valueType="list")
+    checkTrue(!any(duplicated(gsets.read[[1]])))
 }

@@ -1,8 +1,9 @@
 test_ondisk <- function() {
+
     message("Running unit tests for ondisk input.")
 
     suppressPackageStartupMessages({
-	library(Matrix)
+        library(Matrix)
         library(HDF5Array)
         library(SparseArray)
     })
@@ -62,10 +63,12 @@ test_ondisk <- function() {
     attributes(es_h5ondiskmat) <- c(attributes(es_h5ondiskmat)[c("dim", "dimnames")], attributes(es_h5ondisk)["geneSets"])
     checkEqualsNumeric(es_noh5, es_h5ondiskmat) ## not identical due to the rowSds() vs sd() differences
 
-    ## test the block processing of the HDF5 input and output by setting a small block size and
+    ## test the block processing of a small toy HDF5 input and output by setting a small block size and
     ## maximum available memory
-    ## setAutoBlockSize(1024)
-    ## es_noh5 <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE)
-    ## es_chunks <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=TRUE, maxmem="25K")
-    ## checkEqualsNumeric(es_noh5, es_chunks)
+    oldautoblocksize <- getAutoBlockSize()
+    setAutoBlockSize(1024)
+    es_noh5 <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE)
+    es_chunks <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=TRUE, maxmem="25K")
+    checkEqualsNumeric(es_noh5, es_chunks)
+    setAutoBlockSize(oldautoblocksize)
 }

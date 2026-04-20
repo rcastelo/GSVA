@@ -17,8 +17,14 @@ test_mainAPI <- function() {
     checkException(g <- gsvaRanks(gsvaParam(exprData=xf, geneSets=gs),
 				  verbose=FALSE, maxmem=c(1, 2)))
 
-    g <- gsvaRanks(gsvaParam(exprData=xf, geneSets=gs), verbose=FALSE,
-		   maxmem="1M")
+    g <- gsvaRanks(gsvaParam(xf, gs), verbose=FALSE, maxmem="1M")
+
+    ## check discarding rows with constant values
+    library(cli)
+    xf2 <- rbind(rep(1, 30), xf)
+    gsvapar <- gsvaParam(xf2, gs)
+    out <- cli_fmt(g1 <- gsva(gsvapar, verbose=TRUE))
+    checkTrue(grepl("1 rows with constant values throughout the columns", out[3]))
 
     g1 <- gsva(gsvaParam(exprData=xf, geneSets=gs), verbose=FALSE)
     checkIdentical(class(xf), class(g1))
