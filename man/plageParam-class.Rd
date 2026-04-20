@@ -4,7 +4,6 @@
 \name{plageParam-class}
 \alias{plageParam-class}
 \alias{plageParam}
-\alias{nzcount,plageParam-method}
 \title{\code{plageParam} class}
 \usage{
 plageParam(
@@ -17,8 +16,6 @@ plageParam(
   ondisk = c("auto", "yes", "no"),
   verbose = TRUE
 )
-
-\S4method{nzcount}{plageParam}(x)
 }
 \arguments{
 \item{exprData}{The expression data set.  Must be one of the classes
@@ -64,8 +61,6 @@ when \code{ondisk="no"} it will attempt to load all the data in main memory.}
 \item{verbose}{Logical vector of length 1. It gives information about some
 decisions made by the software during parameter object construction when
 \code{verbose=TRUE} (default) and remains silent otherwise.}
-
-\item{x}{An object of class \code{\linkS4class{plageParam}}.}
 }
 \value{
 A new \code{\linkS4class{plageParam}} object.

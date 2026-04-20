@@ -244,15 +244,6 @@ setValidity("plageParam", function(object) {
     return(if(length(inv) == 0) TRUE else inv)
 })
 
-#' @param x An object of class [`plageParam-class`].
-#'
-#' @importFrom SparseArray nzcount
-#' @aliases nzcount,plageParam-method
-#' @rdname plageParam-class
-setMethod("nzcount", signature=c("plageParam"),
-          function(x)
-            return(x@nzcount))
-
 ## ------ internal functions ------
 
 #' @importFrom BiocSingular runExactSVD
