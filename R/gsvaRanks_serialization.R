@@ -68,7 +68,7 @@ saveGSVAranks <- function(x, dir) {
       cli_abort("The input object in 'x' must be of class 'gsvaRanksParam'")
 
     edata <- get_exprData(x)
-    originalclass <- class(edata)
+    wasse <- is(edata, "SummarizedExperiment")
 
     if (is(edata, "SummarizedExperiment")) {
         an <- assayNames(edata)
@@ -92,7 +92,7 @@ saveGSVAranks <- function(x, dir) {
 
     knmss <- .get_kcdfNoneMinSampleSize(x)
     metadata(edata) <- c(metadata(edata),
-                         list(gsvaRanksParam=list(originalClass=originalclass,
+                         list(gsvaRanksParam=list(originalClassWasSE=wasse,
                                                   geneSets=get_geneSets(x),
                                                   assay=get_assay(x),
                                                   annotation=get_annotation(x),
@@ -130,15 +130,21 @@ loadGSVAranks <- function(dir) {
     x <- loadHDF5SummarizedExperiment(dir)
     rnksmdata <- metadata(x)$gsvaRanksParam
     if (is.null(rnksmdata)) {
-        msg <- "The specified directory does not contain valid GSVA ranks data"
+        msg <- "The given directory does not contain valid GSVA ranks data"
         cli_abort(msg)
     }
-    metadata(x)$gsvaRanksParam <- NULL
-    if (is.null(rnksmdata$originalClass))
+    md <- metadata(x)
+    md$gsvaRanksParam <- NULL
+    metadata(x) <- md
+    if (is.null(rnksmdata$originalClassWasSE))
         cli_abort("Metadata is missing the original class information")
 
     rnkscontainer <- x
-    if (!is(rnksmdata$originalClass, "SummarizedExperiment")) {
+    if (!rnksmdata$originalClassWasSE) {
+        if (!"gsvaranks" %in% assayNames(x)) {
+            msg <- "The given directory does not contain valid GSVA ranks data"
+            cli_abort(msg)
+        }
         rnkscontainer <- assay(x, "gsvaranks")
         if (!is.null(gsvaAnnotation(x)))
             gsvaAnnotation(rnkscontainer) <- gsvaAnnotation(x)
