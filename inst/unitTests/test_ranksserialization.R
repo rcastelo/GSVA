@@ -24,10 +24,10 @@ test_ranksserialization <- function() {
  
     ## save the GSVA ranks to disk
     dir <- tempfile()     
-    saveGSVAranks(gsvarankspar, dir)               
+    saveHDF5GSVAranks(gsvarankspar, dir)               
                                                
     ## load the GSVA ranks from disk               
-    loaded_gsvarankspar <- loadGSVAranks(dir)      
+    loaded_gsvarankspar <- loadHDF5GSVAranks(dir)      
                                                
     ## check that the loaded ranks provide the
     ## same scores as the original ranks

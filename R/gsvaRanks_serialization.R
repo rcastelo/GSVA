@@ -1,22 +1,28 @@
-#' @title Save/load GSVA rank values to a file
+#' @title Save/load GSVA rank values to disk using HDF5 format
 #'
-#' @description The functions `saveGSVAranks` and `loadGSVAranks` can be used
-#' to save and load the GSVA rank values to/from disk, respectively. The
-#' `saveGSVAranks` function takes a `gsvaRanksParam` object and saves the rank
-#' values along with the relevant metadata to a specified directory. The
-#' `loadGSVAranks` function reads the saved data from the specified directory
-#' and reconstructs the `gsvaRanksParam` object with the rank values and their
-#' corresponding metadata.
+#' @description The functions `saveHDF5GSVAranks` and `loadHDF5GSVAranks` can
+#' be used to save and load the GSVA rank values to/from disk, respectively.
+#' The `saveHDF5GSVAranks` function takes a `gsvaRanksParam` object and saves
+#' the rank values along with the relevant metadata to a specified directory.
+#' The `loadHDF5GSVAranks` function reads the saved data from the specified
+#' directory and reconstructs the `gsvaRanksParam` object with the rank values
+#' and their corresponding metadata.
 #'
 #' @param x A [`gsvaRanksParam-class`] object to save to disk.
 #'
 #' @param dir The path to the directory where to save or load the GSVA ranks
 #' data.
 #'
-#' @return For `saveGSVAranks`, the path to the directory where the data has
-#' been saved is returned invisibly. For `loadGSVAranks`, a `gsvaRanksParam`
-#' object is returned containing the loaded GSVA rank values and their
-#' corresponding metadata.
+#' @param ... Additional arguments to be passed to the underlying HDF5
+#' saving/loading functions
+#' [`saveHDF5SummarizedExperiment`][HDF5Array::saveHDF5SummarizedExperiment]
+#' and [`loadHDF5SummarizedExperiment`][HDF5Array::loadHDF5SummarizedExperiment],
+#' respectively.
+#'
+#' @return For `saveHDF5GSVAranks`, the path to the directory where the data
+#' has been saved is returned invisibly. For `loadHDF5GSVAranks`, a
+#' `gsvaRanksParam` object is returned containing the loaded GSVA rank values
+#' and their corresponding metadata.
 #'
 #' @examples
 #'
@@ -45,10 +51,10 @@
 #'
 #' ## save the GSVA ranks to disk
 #' dir <- tempfile()
-#' saveGSVAranks(gsvarankspar, dir)
+#' saveHDF5GSVAranks(gsvarankspar, dir)
 #'
 #' ## load the GSVA ranks from disk
-#' loaded_gsvarankspar <- loadGSVAranks(dir)
+#' loaded_gsvarankspar <- loadHDF5GSVAranks(dir)
 #'
 #' ## check that the loaded ranks provide the
 #' ## same scores as the original ranks
@@ -63,7 +69,7 @@
 #' @rdname gsvaRanks_serialization
 #'
 #' @export
-saveGSVAranks <- function(x, dir) {
+saveHDF5GSVAranks <- function(x, dir, ...) {
     if (!inherits(x, "gsvaRanksParam"))
       cli_abort("The input object in 'x' must be of class 'gsvaRanksParam'")
 
@@ -113,7 +119,7 @@ saveGSVAranks <- function(x, dir) {
                                                   ondisk=.get_ondisk(x))
   ))
 
-  saveHDF5SummarizedExperiment(edata, dir)
+  saveHDF5SummarizedExperiment(edata, dir, ...)
 
   invisible(dir)
 }
@@ -125,9 +131,9 @@ saveGSVAranks <- function(x, dir) {
 #' @rdname gsvaRanks_serialization
 #'
 #' @export
-loadGSVAranks <- function(dir) {
+loadHDF5GSVAranks <- function(dir, ...) {
 
-    x <- loadHDF5SummarizedExperiment(dir)
+    x <- loadHDF5SummarizedExperiment(dir, ...)
     rnksmdata <- metadata(x)$gsvaRanksParam
     if (is.null(rnksmdata)) {
         msg <- "The given directory does not contain valid GSVA ranks data"
