@@ -54,30 +54,12 @@ alternative. It also tests for spatial autocorrelation assuming normality.
 }
 \examples{
 
-library(Matrix)
-library(SpatialExperiment)
+suppressPackageStartupMessages({
+    library(Matrix)
+    library(GSVAdata)
+})
 
-## build a SpatialExperiment object
-syspath <- system.file("extdata", package="GSVA")
-fname <- "human_cerebellum_norm_logcounts_250x4816.mtx.gz"
-logcounts <- as(readMM(gzfile(file.path(syspath, fname))), "CsparseMatrix")
-fname <- "human_cerebellum_rowdata_250x4816.csv.gz"
-rowdata <- read.csv(gzfile(file.path(syspath, fname)), row.names=1)
-fname <- "human_cerebellum_coldata_250x4816.csv.gz"
-coldata <- read.csv(gzfile(file.path(syspath, fname)), row.names=1)
-fname <- "human_cerebellum_spatialcoords_250x4816.csv.gz"
-spatialcoords <- as.matrix(read.csv(gzfile(file.path(syspath, fname)),
-                                    row.names=1))
-
-spe <- SpatialExperiment(assays=list(logcounts=logcounts),
-                         rowData=rowdata,
-                         colData=coldata,
-                         spatialCoords=spatialcoords,
-                         sample_id="HumanCerebellum_WholeTranscriptome")
-spe <- addImg(spe, sample_id="HumanCerebellum_WholeTranscriptome",
-              image_id="lowres",
-              imageSource=file.path(syspath, "human_cerebellum_lowres.png"),
-              scaleFactor=0.0450045, load=TRUE)
+spe <- HumanCerebellumNormSubset()
 
 set.seed(123) ## for reproducibility of the random gene sets
 ## build two gene sets with 4 randomly chosen genes and one
