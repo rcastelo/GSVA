@@ -312,14 +312,7 @@ produce a plot using "base R", but either when we do it non-interactively, or
 when we set `plot="no"` it will return a `data.frame` object with the enrichment
 data.
 
-# Forthcoming features
-
-These are features that we are working on and we expect to have them implemented
-in the near future (e.g., next release):
-
-* A specific implementation of the other methods ssGSEA, PLAGE and zscore to
-  work on large datasets stored using a `DelayedArray` backend, such as HDF5,
-  is not yet available.
+# Benchmarking
 
 We are still benchmarking and testing this version of GSVA for single-cell
 data. If you encounter problems or have suggestions, do not hesitate to
