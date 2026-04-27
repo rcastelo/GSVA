@@ -1,3 +1,40 @@
+CHANGES IN VERSION 2.6
+----------------------
+
+USER VISIBLE CHANGES
+
+  o Performance improvement in the calculation of GSVA scores from ranks.
+
+  o Replaced trend=gssizes by trend=sqrt(gssizes) in the vignette that illustrates the limma-trend pipeline with GSVA scores.
+
+  o Added support for ssGSEA, PLAGE and Z-score to work with large datasets stored using a DelayedArray backend, such as HDF5.
+
+  o Moving from scuttle/scran used in the single-cell vignette to scrapper/bluster to fix deprecation warnings.
+
+  o *Param() functions report more informative errors when the input expression data or gene sets do not correspond to one of the expected object classes.
+
+  o Added new functions saveHDF5GSVAranks() and loadHDF5GSVAranks() to first save on disk the output of the gsvaRanks() function, and second, load that output from disk to callthe gsvaScores() function with it.
+
+  o Improved unit test coverage to > 85%.
+
+BUG FIXES
+
+  o Fix on the handing of missing data with the GSVA method. Bug reported in issue #257.
+
+  o Fix on the propagation of NA values with the GSVA method.
+
+  o Fix in detecting rows with constant (nonzero) values.
+
+  o Fix in kcdf="Gaussian" when input is SparseArray.
+
+  o Fix in fetching rows from SVT_SparseArray matrices.
+
+  o Fix on handling NaN values, which were causing a core dump, they are now treated as NA values. Bug reported in issue #258.
+
+  o Removed non-API calls from C code.
+
+  o Code reorganization and multiple improvements and vulnerability fixes.
+
 CHANGES IN VERSION 2.4
 ----------------------
 
