@@ -17,6 +17,8 @@ USER VISIBLE CHANGES
 
   o Improved unit test coverage to > 85%.
 
+  o Added a vignette on how to use GSVA on proteomics data with missing values.
+
 BUG FIXES
 
   o Fix on the handing of missing data with the GSVA method. Bug reported in issue #257.

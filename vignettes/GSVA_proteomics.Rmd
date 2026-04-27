@@ -1,0 +1,237 @@
+---
+title: "GSVA on proteomics data"
+author:
+- name: Robert Castelo
+  affiliation:
+  - &idupf Dept. of Medicine and Life Sciences, Universitat Pompeu Fabra, Barcelona, Spain
+  email: robert.castelo@upf.edu
+- name: Axel Klenk
+  affiliation: *idupf
+  email: axel.klenk@gmail.com
+- name: Justin Guinney 
+  affiliation: 
+  - Tempus Labs, Inc.
+  email: justin.guinney@tempus.com
+abstract: >
+  Here we illustrate how to use GSVA with proteomics data.
+date: "`r BiocStyle::doc_date()`"
+package: "`r pkg_ver('GSVA')`"
+vignette: >
+  %\VignetteIndexEntry{GSVA on proteomics data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteKeywords{GeneExpression, Microarray, RNAseq, GeneSetEnrichment, Pathway}
+output:
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    fig_captions: yes
+bibliography: GSVA.bib
+---
+
+**License**: `r packageDescription("GSVA")[["License"]]`
+
+```{r setup, include=FALSE}
+options(width=80)
+knitr::opts_chunk$set(collapse=TRUE,
+                      message=FALSE,
+                      warning=FALSE,
+                      comment="",
+                      fig.align="center",
+                      fig.wide=TRUE)
+```
+
+# Introduction
+
+Proteomics data, such as the one produced through the Clinical Proteomic Tumor
+Analysis Consortium
+([CPTAC](https://www.cancer.gov/research/resources/resource/176)), can have
+a massive amount of missing values, in which imputing can result in regressing
+to the mean, underestimating protein expression variability. In such a setting,
+skipping missing values from the calculations may constitute a suitable
+alternative to imputation. The GSVA package provides a missing data policy for
+the GSVA and ssGSEA methods, which we illustrate here with the proteomics
+data from @costa2021genome and available in the `r Biocpkg("GSVAdata")`
+experiment data package. We start loading the data as follows.
+
+```{r, message=FALSE}
+library(SummarizedExperiment)
+library(GSVA)
+library(GSVAdata)
+
+data(geneprotExpCostaEtAl2021)
+ls()
+protExpCostaEtAl2021
+assayNames(protExpCostaEtAl2021)
+```
+The data is stored in a `SummarizedExperiment` object called
+`protExpCostaEtAl2021` with three assays:
+
+* `logCPM` with the normalized log-CPM RNA-seq expression values for the
+`r nrow(protExpCostaEtAl2021)` genes encoding the quantified proteins.
+* `log2protexp` with the normalized protein units of expression, and
+the missing quantifications specified by `NA` values.
+* `log2protexpimp` with the normalized protein units of expression, but
+where the missing quantifications have been imputed.
+
+Please consult the publication in [@costa2021genome] for details on how
+these data have been produced.
+
+# Load gene sets
+
+We will use the MSigDB C7 collection of immunologic genesets, reading them
+with the `readGMT()` function of the GSVA package.
+
+```{r, eval=FALSE}
+library(GSEABase)
+
+URL <- "https://data.broadinstitute.org/gsea-msigdb/msigdb/release/2024.1.Hs/c7.immunesigdb.v2024.1.Hs.symbols.gmt"
+c7.genesets <- readGMT(URL)
+```
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(GSEABase)
+
+gmtfname <- system.file("extdata", "c7.immunesigdb.v2024.1.Hs.symbols.gmt.gz",
+                        package="GSVAdata")
+c7.genesets <- readGMT(gmtfname)
+c7.genesets
+```
+We filter this collection of gene sets to those formed by gene upregulated in
+innate leukocytes and adaptive mature lymphocytes, excluding those reported in
+studies on myeloid cells and the lupus autoimmune disease.
+
+```{r}
+innatepat <- c("NKCELL_VS_.+_UP", "MAST_CELL_VS_.+_UP",
+               "EOSINOPHIL_VS_.+_UP", "BASOPHIL_VS_.+_UP",
+               "MACROPHAGE_VS_.+_UP", "NEUTROPHIL_VS_.+_UP")
+innatepat <- paste(innatepat, collapse="|")
+innategsets <- names(c7.genesets)[grep(innatepat, names(c7.genesets))]
+length(innategsets)
+
+adaptivepat <- c("CD4_TCELL_VS_.+_UP", "CD8_TCELL_VS_.+_UP", "BCELL_VS_.+_UP")
+adaptivepat <- paste(adaptivepat, collapse="|")
+adaptivegsets <- names(c7.genesets)[grep(adaptivepat, names(c7.genesets))]
+excludepat <- c("NAIVE", "LUPUS", "MYELOID")
+excludepat <- paste(excludepat, collapse="|")
+adaptivegsets <- adaptivegsets[-grep(excludepat, adaptivegsets)]
+length(adaptivegsets)
+
+c7.genesets.filt <- c7.genesets[c(innategsets, adaptivegsets)]
+length(c7.genesets.filt)
+```
+
+# Usage and benchmark with the RNA-seq data
+
+Here we show first a quick benchmarking using the logCPM expression
+profiles, which are complete, by introducing `NA` values with the pattern
+of missing data observed in the corresponding proteins.
+
+```{r}
+logCPMsWithNAs <- assay(protExpCostaEtAl2021, "logCPM")
+logCPMsWithNAs[1:5, 1:5]
+logCPMsWithNAs[is.na(assay(protExpCostaEtAl2021, "log2protexp"))] <- NA
+logCPMsWithNAs[1:5, 1:5]
+```
+We need to add the annotation metadata to this new matrix of expression
+profiles with missing values.
+
+```{r}
+gsvaAnnotation(logCPMsWithNAs) <- EntrezIdentifier("org.Hs.eg.db")
+```
+
+When building the parameter object, GSVA will check automatically for the
+presence of missing values whenever the input expression data container is a
+non-sparse container of expression values, such as a base matrix object or a
+`SummarizedExperiment` object.
+
+
+```{r}
+gsvapar <- gsvaParam(logCPMsWithNAs, c7.genesets.filt, minSize=5)
+```
+We can force the `gsvaParam()` function to check for missing values irrespective
+of the input expression data container by setting the argument `checkNA="yes"`,
+or disable that check altogether with `checkNA="no"`. By default
+`checkNA="auto"`. Once missing values have been detected when we build the
+parameter object, the `gsva()` function (or `gsvaRanks()` and `gsvaScores()`)
+will apply a missing data policy specified through a parameter called `use`,
+which takes one of the following three possible character string values:
+`everything`, `all.obs` or `na.rm`. The first value (`everything`) is the
+default value and it propagates the missing `NA` values through the
+calculations.
+
+```{r}
+es_gsva_everything <- gsva(gsvapar)
+es_gsva_everything[1:10, 1:4]
+all(is.na(es_gsva_everything))
+```
+So, in this case, there are so many missing values that the resulting
+enrichment scores are all `NA` values. If we try the second option
+`use="all.obs"` it will immediately produce an error at the parameter
+building step.
+
+```{r, eval=FALSE}
+gsvapar <- gsvaParam(logCPMsWithNAs, c7.genesets.filt, minSize=5,
+                     use="all.obs")
+```
+Finally, if we set `use="na.rm"`, missing `NA` values will be skipped
+during calculations, giving the chance to obtain non-missing enrichment
+scores for those gene sets with enough genes with non-missing expression
+values.
+
+```{r}
+gsvapar <- gsvaParam(logCPMsWithNAs, c7.genesets.filt, minSize=5,
+                     use="na.rm")
+es_gsva_narm <- gsva(gsvapar)
+round(es_gsva_narm[1:10, 1:4], digits=2)
+```
+These parameters work exactly in the same way with the ssGSEA method.
+
+```{r}
+ssgseapar <- ssgseaParam(logCPMsWithNAs, c7.genesets.filt, minSize=5,
+                         use="na.rm")
+es_ssgsea_narm <- gsva(ssgseapar)
+round(es_ssgsea_narm[1:10, 1:4], digits=2)
+```
+Since we are doing calculations on the RNA-seq data, for which we have the
+complete logCPM values, we can compare how close are the enrichment scores
+obtained by skpping `NA` values from the ones obtained with the complete
+data, for both GSVA and ssGSEA. First, we calculate the enrichment scores with
+the complete data for each of the two methods.
+
+```{r}
+gsvaAnnotation(protExpCostaEtAl2021) <- EntrezIdentifier("org.Hs.eg.db")
+gsvapar <- gsvaParam(protExpCostaEtAl2021, c7.genesets.filt, assay="logCPM",
+		     minSize=5)
+es_gsva <- gsva(gsvapar)
+ssgseapar <- ssgseaParam(protExpCostaEtAl2021, c7.genesets.filt, assay="logCPM",
+		         minSize=5)
+es_ssgsea <- gsva(ssgseapar)
+```
+Second, we calculate and plot the correlations between the enrichment scores
+obtained from the data with missing values with the ones obtained from the
+complete data.
+
+```{r missingdatacomp, echo=TRUE, fig.width=5, fig.height=5, out.width="600px", dpi=150, fig.cap="Correlation between enrichment scores calculated from RNA-seq expression profiles with missing values, and those calculated from the complete version of the same data."}
+r_es_gsva <- r_es_ssgsea <- numeric(nrow(es_gsva))
+for (i in 1:nrow(es_gsva)) {
+    r_es_gsva[i] <- cor(assay(es_gsva)[i, ], es_gsva_narm[i, ], use="complete.obs")
+    r_es_ssgsea[i] <- cor(assay(es_ssgsea)[i, ], es_ssgsea_narm[i, ], use="complete.obs")
+}
+boxplot(list(GSVA=r_es_gsva, ssGSEA=r_es_ssgsea),
+	ylab="Correlation with complete data", las=1)
+```
+As we can see in Figure \@ref(fig:missingdatacomp) GSVA scores calculated by skipping
+missing values correlate better with those calculated from the complete data, than
+ssGSEA scores.
+
+# Session information {.unnumbered}
+
+Here is the output of `sessionInfo()` on the system on which this document was
+compiled running pandoc `r rmarkdown::pandoc_version()`:
+
+```{r session_info, cache=FALSE}
+sessionInfo()
+```
+
+# References
