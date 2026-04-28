@@ -35,8 +35,8 @@ bibliography: GSVA.bib
 ```{r setup, include=FALSE}
 options(width=80)
 knitr::opts_chunk$set(collapse=TRUE,
-                      message=FALSE,
-                      warning=FALSE,
+                      message=TRUE,
+                      warning=TRUE,
                       comment="",
                       fig.align="center",
                       fig.wide=TRUE)
@@ -170,7 +170,7 @@ enrichment scores are all `NA` values. If we try the second option
 `use="all.obs"` it will immediately produce an error at the parameter
 building step.
 
-```{r, eval=FALSE}
+```{r, error=TRUE}
 gsvapar <- gsvaParam(logCPMsWithNAs, c7.genesets.filt, minSize=5,
                      use="all.obs")
 ```
@@ -195,24 +195,24 @@ round(es_ssgsea_narm[1:10, 1:4], digits=2)
 ```
 Since we are doing calculations on the RNA-seq data, for which we have the
 complete logCPM values, we can compare how close are the enrichment scores
-obtained by skpping `NA` values from the ones obtained with the complete
+obtained by skipping `NA` values from the ones obtained with the complete
 data, for both GSVA and ssGSEA. First, we calculate the enrichment scores with
 the complete data for each of the two methods.
 
 ```{r}
 gsvaAnnotation(protExpCostaEtAl2021) <- EntrezIdentifier("org.Hs.eg.db")
-gsvapar <- gsvaParam(protExpCostaEtAl2021, c7.genesets.filt, assay="logCPM",
-		     minSize=5)
+gsvapar <- gsvaParam(protExpCostaEtAl2021, c7.genesets.filt,
+                     assay="logCPM", minSize=5)
 es_gsva <- gsva(gsvapar)
-ssgseapar <- ssgseaParam(protExpCostaEtAl2021, c7.genesets.filt, assay="logCPM",
-		         minSize=5)
+ssgseapar <- ssgseaParam(protExpCostaEtAl2021, c7.genesets.filt,
+                         assay="logCPM", minSize=5)
 es_ssgsea <- gsva(ssgseapar)
 ```
 Second, we calculate and plot the correlations between the enrichment scores
 obtained from the data with missing values with the ones obtained from the
 complete data.
 
-```{r missingdatacomp, echo=TRUE, fig.width=5, fig.height=5, out.width="600px", dpi=150, fig.cap="Correlation between enrichment scores calculated from RNA-seq expression profiles with missing values, and those calculated from the complete version of the same data."}
+```{r missingdatacomp, echo=TRUE, fig.width=5, fig.height=5, out.width="600px", dpi=100, fig.cap="Correlation between enrichment scores calculated from RNA-seq expression profiles with missing values, and those calculated from the complete version of the same data."}
 r_es_gsva <- r_es_ssgsea <- numeric(nrow(es_gsva))
 for (i in 1:nrow(es_gsva)) {
     r_es_gsva[i] <- cor(assay(es_gsva)[i, ], es_gsva_narm[i, ], use="complete.obs")
@@ -223,7 +223,7 @@ boxplot(list(GSVA=r_es_gsva, ssGSEA=r_es_ssgsea),
 ```
 As we can see in Figure \@ref(fig:missingdatacomp) GSVA scores calculated by skipping
 missing values correlate better with those calculated from the complete data, than
-ssGSEA scores.
+ssGSEA scores calculated in the same way.
 
 # Session information {.unnumbered}
 
