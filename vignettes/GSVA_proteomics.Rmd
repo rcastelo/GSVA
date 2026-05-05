@@ -33,6 +33,7 @@ bibliography: GSVA.bib
 **License**: `r packageDescription("GSVA")[["License"]]`
 
 ```{r setup, include=FALSE}
+rm(list=ls())
 options(width=80)
 knitr::opts_chunk$set(collapse=TRUE,
                       message=TRUE,
@@ -121,7 +122,7 @@ c7.genesets.filt <- c7.genesets[c(innategsets, adaptivegsets)]
 length(c7.genesets.filt)
 ```
 
-# Usage and benchmark with the RNA-seq data
+# Usage and benchmark with RNA-seq data
 
 Here we show first a quick benchmarking using the logCPM expression
 profiles, which are complete, by introducing `NA` values with the pattern
@@ -215,15 +216,83 @@ complete data.
 ```{r missingdatacomp, echo=TRUE, fig.width=5, fig.height=5, out.width="600px", dpi=100, fig.cap="Correlation between enrichment scores calculated from RNA-seq expression profiles with missing values, and those calculated from the complete version of the same data."}
 r_es_gsva <- r_es_ssgsea <- numeric(nrow(es_gsva))
 for (i in 1:nrow(es_gsva)) {
-    r_es_gsva[i] <- cor(assay(es_gsva)[i, ], es_gsva_narm[i, ], use="complete.obs")
-    r_es_ssgsea[i] <- cor(assay(es_ssgsea)[i, ], es_ssgsea_narm[i, ], use="complete.obs")
+  r_es_gsva[i] <- cor(assay(es_gsva)[i, ], es_gsva_narm[i, ],
+		      use="complete.obs")
+  r_es_ssgsea[i] <- cor(assay(es_ssgsea)[i, ], es_ssgsea_narm[i, ],
+			use="complete.obs")
 }
 boxplot(list(GSVA=r_es_gsva, ssGSEA=r_es_ssgsea),
 	ylab="Correlation with complete data", las=1)
 ```
 As we can see in Figure \@ref(fig:missingdatacomp) GSVA scores calculated by skipping
 missing values correlate better with those calculated from the complete data, than
-ssGSEA scores calculated in the same way.
+ssGSEA scores between incomplete and complete data.
+
+# Usage and benchmark with proteomics data
+
+Here we show the usage of GSVA with the actual proteomics data from
+@costa2021genome, comparing the results obtained by skipping missing values
+with the results calculated from the imputed data. The normalized proteomics
+expression values before imputation are stored in the `log2protexp` assay, and
+after imputation in the `log2protexpimp` assay.
+
+```{r}
+assays(protExpCostaEtAl2021)$log2protexp[1:5, 1:5]
+assays(protExpCostaEtAl2021)$log2protexpimp[1:5, 1:5]
+```
+We first create the parameter objects for the proteomics data before
+imputation.
+
+```{r}
+gsvapar <- gsvaParam(protExpCostaEtAl2021, c7.genesets.filt,
+		     assay="log2protexp", minSize=5, use="na.rm")
+ssgseapar <- ssgseaParam(protExpCostaEtAl2021, c7.genesets.filt,
+		         assay="log2protexp", minSize=5, use="na.rm")
+```
+We can use the method `anyNA()` on the parameter object to programmatically
+confirm anytime the presence of missing values.
+
+```{r}
+anyNA(gsvapar)
+anyNA(ssgseapar)
+```
+Next, we calculate enrichment scores skipping missing values.
+
+```{r}
+es_gsva <- gsva(gsvapar)
+es_ssgsea <- gsva(ssgseapar)
+```
+Now we do calculations again on the imputed proteomics data stored in the
+`log2protexpimp` assay.
+
+```{r}
+gsvapar <- gsvaParam(protExpCostaEtAl2021, c7.genesets.filt,
+		     assay="log2protexpimp", minSize=5)
+anyNA(gsvapar)
+es_gsva_imp <- gsva(gsvapar)
+ssgseapar <- ssgseaParam(protExpCostaEtAl2021, c7.genesets.filt,
+		         assay="log2protexpimp", minSize=5)
+anyNA(ssgseapar)
+es_ssgsea_imp <- gsva(ssgseapar)
+```
+Finally, in a similar way we did in the previous section, we compare the
+enrichment scores calculated before and after imputation. As shown in
+Figure \@ref(fig:missingdatacomp2) below, GSVA scores calculated by skipping
+missing values correlated better with those calculated from the imputed data,
+than ssGSEA scores calculated by skipping missing values before imputation and
+on the imputed data.
+
+```{r missingdatacomp2, echo=TRUE, fig.width=5, fig.height=5, out.width="600px", dpi=100, fig.cap="Correlation between enrichment scores calculated from normalized MS proteomics data before and after imputing missing values."}
+r_es_gsva <- r_es_ssgsea <- numeric(nrow(es_gsva))
+for (i in 1:nrow(es_gsva)) {
+  r_es_gsva[i] <- cor(assay(es_gsva)[i, ], assay(es_gsva_imp)[i, ],
+		      use="complete.obs")
+  r_es_ssgsea[i] <- cor(assay(es_ssgsea)[i, ], assay(es_ssgsea_imp)[i, ],
+			use="complete.obs")
+}
+boxplot(list(GSVA=r_es_gsva, ssGSEA=r_es_ssgsea),
+	ylab="Correlation before/after imputation", las=1)
+```
 
 # Session information {.unnumbered}
 
