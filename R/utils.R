@@ -226,6 +226,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             expr <- as(expr, "SVT_SparseMatrix")
         else
             expr <- as.matrix(expr)
+
+        if (ncol(expr) > 10000) ## free up ASAP memory we need not anymore
+          out <- gc()           ## and was allocated when reading a big object
     } 
  
     expr

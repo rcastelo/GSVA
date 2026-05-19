@@ -1167,6 +1167,9 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
         }
     }
 
+    if (ncol(expr) > 10000) ## free up ASAP memory we need not anymore and was
+        out <- gc()         ## allocated during ECDF calculations on a big expr
+
     return(gene.cdf)	
 }
 
@@ -1191,6 +1194,9 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     } else {
         R <- colRanks(Z, ties.method=ties.method, preserveShape=TRUE)
     }
+
+    if (ncol(expr) > 10000) ## free up ASAP memory we need not anymore and was
+        out <- gc()         ## allocated during rank calculations on a big expr
 
     return(R)
 }
@@ -1534,6 +1540,9 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
                          "than {minSize} genes after removing missing values")
             cli_alert_warning(msg)
         }
+
+    if (ncol(expr) > 10000) ## free up ASAP memory we need not anymore and was
+        out <- gc()         ## allocated during score calculations on a big expr
 
     return(es)
 }
