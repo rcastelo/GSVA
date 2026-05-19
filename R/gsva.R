@@ -1195,8 +1195,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
         R <- colRanks(Z, ties.method=ties.method, preserveShape=TRUE)
     }
 
-    if (ncol(expr) > 10000) ## free up ASAP memory we need not anymore and was
-        out <- gc()         ## allocated during rank calculations on a big expr
+    if (ncol(Z) > 10000) ## free up ASAP memory we need not anymore and was
+        out <- gc()      ## allocated during rank calculations on a big Z
 
     return(R)
 }
@@ -1541,8 +1541,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
             cli_alert_warning(msg)
         }
 
-    if (ncol(expr) > 10000) ## free up ASAP memory we need not anymore and was
-        out <- gc()         ## allocated during score calculations on a big expr
+    if (ncol(R) > 10000) ## free up ASAP memory we need not anymore and was
+        out <- gc()      ## allocated during score calculations on a big R
 
     return(es)
 }
