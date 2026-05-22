@@ -658,6 +658,44 @@ setMethod("show",
     return(lst)
 }
 
+## by now this is only called from gsvaColRanks(), i.e., no need
+## to care about other methods
+#' @importFrom S4Vectors metadata
+.pull_param <- function(exprData, assay) {
+
+    p <- NULL
+    if (is(exprData, "matrix") || is(exprData, "dgCMatrix") ||
+        is(exprData, "SVT_SparseMatrix") || is(exprData("delayedMatrix")) ||
+        is(exprData, "HDF5Matrix") || is(exprData("ExpressionSet"))) {
+        mask <- is.null(attr(exprData, "gsvaParam")) ||
+                is.null(attr(exprData, "assay"))
+	if (any(mask))
+            cli_abort(c("x"="Missing metadata in the input expression data."))
+        p <- attr(exprData, "gsvaParam")
+        a <- attr(exprData, "assay")
+        if (!a %in% c("gsvarownr", "gsvaranks"))
+            cli_abort(c("x"="Wrong metadata in the input expression data."))
+    } else { ## a SummarizedExperiment derivative
+        if (is.null(metadata(exprData)$gsvaParam))
+            cli_abort(c("x"="Missing metadata in the input expression data"))
+        p <- metadata(exprData)$gsvaParam
+        if (!any(assayNames(exprData) %in% c("gsvarownr", "gsvaranks"))) 
+            cli_abort(c("x"="Wrong metadata in the input expression data."))
+    }
+
+    param <- new("gsvaParam",
+                 exprData=exprData, geneSets=p$geneSets,
+                 assay=p$assay, annotation=p$annotation,
+                 minSize=p$minSize, maxSize=p$maxSize,
+                 kcdf=p$kcdf, kcdfNoneMinSampleSize=p$kcdfNoneMinSampleSize,
+                 tau=p$tau, maxDiff=p$maxDiff, absRanking=p$absRanking,
+                 sparse=p$sparse, checkNA=p$checkNA, didCheckNA=p$didCheckNA,
+                 anyNA=p$anyNA, use=p$use, filterRows=p$filterRows,
+                 nzcount=p$nzcount, ondisk=p$ondisk)
+
+    return(param)
+}
+
 
 #' @title GSVA ranks and scores
 #'
@@ -709,8 +747,6 @@ setMethod("show",
 #'
 #' p <- 10 ## number of genes
 #' n <- 30 ## number of samples
-#' nGrp1 <- 15 ## number of samples in group 1
-#' nGrp2 <- n - nGrp1 ## number of samples in group 2
 #'
 #' ## consider three disjoint gene sets
 #' geneSets <- list(gset1=paste0("g", 1:3),
@@ -721,18 +757,17 @@ setMethod("show",
 #' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
 #'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
 #'
-#' ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
-#' y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
-#'
 #' ## build GSVA parameter object
 #' gsvapar <- gsvaParam(y, geneSets)
 #'
-#' ## calculate GSVA ranks
-#' gsvarankspar <- gsvaRanks(gsvapar)
-#' gsvarankspar
+#' ## calculate row-normalized expression values
+#' gsvarownormexpr <- gsvaRowNorm(gsvapar)
+#'
+#' ## calculate GSVA column ranks
+#' gsvarankspar <- gsvaColRanks(gsvarownormexpr)
+#'
 #' ## calculate GSVA scores
 #' gsva_es <- gsvaScores(gsvarankspar)
-#' gsva_es
 #'
 #' ## calculate now GSVA scores in a single step
 #' gsva_es1 <- gsva(gsvapar)
@@ -798,20 +833,21 @@ setMethod("gsvaRowNorm", signature(param="gsvaParam"),
                   cli_alert_info(sprintf("Normalizing rows"))
 
               kcdfminssize <- .get_kcdfNoneMinSampleSize(param)
-              gsvarows <- .compute_row_norm(expr=filtDataMatrix,
-                                            kcdf=.get_kcdf(param),
-                                            kcdf.min.ssize=kcdfminssize,
-                                            sparse=.get_sparse(param),
-                                            any_na=anyNA(param),
-                                            na_use=.get_NAuse(param),
-                                            verbose=verbose,
-                                            BPPARAM=BPPARAM,
-                                            maxmem=maxmem)
+              gsvarownr <- .compute_row_norm(expr=filtDataMatrix,
+                                             kcdf=.get_kcdf(param),
+                                             kcdf.min.ssize=kcdfminssize,
+                                             sparse=.get_sparse(param),
+                                             any_na=anyNA(param),
+                                             na_use=.get_NAuse(param),
+                                             verbose=verbose,
+                                             BPPARAM=BPPARAM,
+                                             maxmem=maxmem)
 
-              rownames(gsvarows) <- rownames(filtDataMatrix)
-              colnames(gsvarows) <- colnames(filtDataMatrix)
+              rownames(gsvarownr) <- rownames(filtDataMatrix)
+              colnames(gsvarownr) <- colnames(filtDataMatrix)
 
-              rval <- wrapData(get_exprData(param), gsvarows, param, "gsvarows")
+              rval <- wrapData(get_exprData(param), gsvarownr, param,
+                               "gsvarownr")
 
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")
@@ -819,6 +855,61 @@ setMethod("gsvaRowNorm", signature(param="gsvaParam"),
               return(rval)
           })
 
+
+
+#'
+#' @param rowNormExprData A row-normalized expression data set obtained with
+#' [`gsvaRowNorm`].  Must be one of the classes
+#' supported by [`GsvaExprData-class`].  For a list of these classes, see its
+#' help page using `help(GsvaExprData)`.
+#'
+#' @return In the case of the `gsvaColRanks()` method, an object of class
+#' [`gsvaRanksParam-class`].
+#'
+#' @aliases gsvaColRanks,GsvaExprData-method
+#' @name gsvaColRanks
+#' @rdname gsvaRanks
+#'
+#' @importFrom cli cli_alert_info cli_alert_success
+#' @exportMethod gsvaColRanks
+setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
+          function(rowNormExprData,
+                   verbose=TRUE,
+                   BPPARAM=SerialParam(progressbar=verbose),
+                   maxmem="auto") {
+
+              param <- .pull_param(rowNormExprData, "gsvarownr")
+
+              if (verbose && gsva_global$show_start_and_end_messages) {
+                  pkgversion <- packageDescription("GSVA")[["Version"]]
+                  cli_alert_info("GSVA version {pkgversion}")
+              }
+
+              .check_bpparam(BPPARAM)
+
+              dataMatrix <- unwrapData(rowNormExprData, get_assay(param))
+              maxmem <- .check_maxmem(param, maxmem, verbose)
+              ondisk <- .check_ondisk(param, maxmem, verbose)
+
+              dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
+                                                          ondisk, verbose)
+
+              gsvarnks <- .compute_gsva_ranks(Z=rowNormExprData,
+                                              verbose=verbose,
+                                              BPPARAM=BPPARAM,
+                                              maxmem=maxmem)
+
+              rownames(gsvarnks) <- rownames(dataMatrix)
+              colnames(gsvarnks) <- colnames(dataMatrix)
+
+              rval <- wrapData(get_exprData(param), gsvarnks, param,
+                               "gsvaranks")
+
+              if (verbose && gsva_global$show_start_and_end_messages)
+                  cli_alert_success("Calculations finished")
+
+              return(rval)
+          })
 
 
 #'
@@ -872,17 +963,17 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                   cli_alert_info(sprintf("Calculating GSVA ranks"))
 
               kcdfminssize <- .get_kcdfNoneMinSampleSize(param)
-              gsvarows <- .compute_row_norm(expr=filtDataMatrix,
-                                            kcdf=.get_kcdf(param),
-                                            kcdf.min.ssize=kcdfminssize,
-                                            sparse=.get_sparse(param),
-                                            any_na=anyNA(param),
-                                            na_use=.get_NAuse(param),
-                                            verbose=verbose,
-                                            BPPARAM=BPPARAM,
-                                            maxmem=maxmem)
+              gsvarownr <- .compute_row_norm(expr=filtDataMatrix,
+                                             kcdf=.get_kcdf(param),
+                                             kcdf.min.ssize=kcdfminssize,
+                                             sparse=.get_sparse(param),
+                                             any_na=anyNA(param),
+                                             na_use=.get_NAuse(param),
+                                             verbose=verbose,
+                                             BPPARAM=BPPARAM,
+                                             maxmem=maxmem)
 
-              gsvarnks <- .compute_gsva_ranks(Z=gsvarows,
+              gsvarnks <- .compute_gsva_ranks(Z=gsvarownr,
                                               verbose=verbose,
                                               BPPARAM=BPPARAM,
                                               maxmem=maxmem)
@@ -970,6 +1061,93 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
               ## assuming rows in the rank data have been already filtered
               exprData <- get_exprData(param)
               filtDataMatrix <- unwrapData(exprData, get_assay(param))
+
+              filtMappedGeneSets <- .filterAndMapGeneSets(param=param,
+                                           filteredDataMatrix=filtDataMatrix,
+                                           verbose=verbose)
+
+              sparse <- .get_sparse(param)
+              if (sparse && !is_sparse(filtDataMatrix))
+                  sparse <- FALSE
+
+              if (verbose) {
+                if (sparse)
+                    cli_alert_info("GSVA sparse algorithm")
+                  else
+                    cli_alert_info("GSVA dense (classical) algorithm")
+              }
+
+              maxmem <- .check_maxmem(param, maxmem, verbose)
+              ondisk <- .check_ondisk(param, maxmem, verbose)
+
+              filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
+                                                              "GSVA", ondisk,
+                                                              verbose)
+
+              BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
+                                                 minparrows=100, minparcols=100,
+                                                 verbose)
+
+              ondisk <- .check_es_memory_requirements(filtDataMatrix,
+                                                      filtMappedGeneSets,
+                                                      ondisk, maxmem)
+              if (verbose) {
+                  n <- length(filtMappedGeneSets)
+                  cli_alert_info("Calculating GSVA scores for {n} gene sets")
+              }
+
+              gsva_es <- .processMatrixCols(filtDataMatrix,
+                                            FUN=.compute_gsva_scores,
+                                            geneSetsIdx=filtMappedGeneSets,
+                                            tau=.get_tau(param),
+                                            maxDiff=.get_maxDiff(param),
+                                            absRanking=.get_absRanking(param),
+                                            sparse=sparse, any_na=anyNA(param),
+                                            na_use=.get_NAuse(param),
+                                            minSize=get_minSize(param),
+                                            ondisk=ondisk, verbose=verbose,
+                                            minparrows=100, minparcols=100,
+                                            BPPARAM=BPPARAM,
+                                            maxmem=ceiling(maxmem/100)) ## use
+                                            ## of memory increases here about
+                                            ## 10-fold over block size memory
+
+              rownames(gsva_es) <- names(filtMappedGeneSets)
+              colnames(gsva_es) <- colnames(filtDataMatrix)
+
+              gs <- .geneSetsIndices2Names(indices=filtMappedGeneSets,
+                                           names=rownames(filtDataMatrix))
+              rval <- wrapData(get_exprData(param), gsva_es, param, "es", gs)
+
+              if (verbose && gsva_global$show_start_and_end_messages)
+                  cli_alert_success("Calculations finished")
+
+              return(rval)
+          })
+
+#' @aliases gsvaColScores,GsvaExprData-method
+#' @name gsvaColScores
+#' @rdname gsvaRanks
+#'
+#' @importFrom S4Arrays is_sparse
+#' @importFrom cli cli_alert_info cli_alert_success
+#' @exportMethod gsvaColScores
+setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
+          function(rankExprData, verbose=TRUE,
+                   BPPARAM=SerialParam(progressbar=verbose),
+                   maxmem="auto") {
+
+              param <- .pull_param(rankExprData, "gsvaranks")
+
+              if (verbose && gsva_global$show_start_and_end_messages) {
+                  pkgversion <- packageDescription("GSVA")[["Version"]]
+                  cli_alert_info("GSVA version {pkgversion}")
+              }
+
+              .check_bpparam(BPPARAM)
+
+              ## assuming rows in the rank data have been already filtered
+              filtDataMatrix <- unwrapData(rankExprData, "gsvaranks")
 
               filtMappedGeneSets <- .filterAndMapGeneSets(param=param,
                                            filteredDataMatrix=filtDataMatrix,
@@ -1603,7 +1781,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 ## written into an on-disk data structure (HDF5) instead of being returned in
 ## main memory.
 #' @importFrom cli cli_alert_info cli_alert_warning
-#' @importFrom S4Arrays is_sparse refdim DummyArrayGrid
+#' @importFrom S4Arrays is_sparse refdim DummyArrayGrid read_block write_block
+#' @importFrom DelayedArray close
 .compute_gsva_scores <- function(R, geneSetsIdx, tau, maxDiff, absRanking,
                                  sparse, any_na, na_use, minSize, ondisk,
                                  verbose) {
@@ -1861,7 +2040,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 
 #' @importFrom HDF5Array HDF5RealizationSink
 #' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom DelayedArray seed gridReduce
+#' @importFrom DelayedArray seed gridReduce close
 .ecdfvals_sparseh5_to_sparseh5 <- function(X, grid=NULL, verbose=FALSE) {
   stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
 
@@ -1882,7 +2061,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 
 #' @importFrom HDF5Array HDF5RealizationSink
 #' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom DelayedArray seed gridReduce
+#' @importFrom DelayedArray seed gridReduce close
 .ecdfvals_sparseh5_to_denseh5 <- function(X, grid=NULL, verbose) {
   stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
 
@@ -1903,7 +2082,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 
 #' @importFrom S4Arrays DummyArrayGrid
 #' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom DelayedArray seed rowAutoGrid blockReduce
+#' @importFrom DelayedArray seed rowAutoGrid blockReduce close
 .ecdfvals_denseh5_to_denseh5 <- function(X, grid=NULL, verbose) {
   stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
 
@@ -1980,7 +2159,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 
 #' @importFrom S4Arrays DummyArrayGrid
 #' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom DelayedArray seed rowAutoGrid blockReduce
+#' @importFrom DelayedArray seed rowAutoGrid blockReduce close
 .kcdfvals_sparseh5_to_sparseh5 <- function(X, Gaussk, grid=NULL, verbose) {
   stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
 
@@ -2001,7 +2180,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 
 #' @importFrom S4Arrays DummyArrayGrid
 #' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom DelayedArray seed rowAutoGrid blockReduce
+#' @importFrom DelayedArray seed rowAutoGrid blockReduce close
 .kcdfvals_sparseh5_to_denseh5 <- function(X, Gaussk, grid=NULL, verbose) {
   stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
 
@@ -2022,7 +2201,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 
 #' @importFrom S4Arrays DummyArrayGrid
 #' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom DelayedArray seed rowAutoGrid blockReduce
+#' @importFrom DelayedArray seed rowAutoGrid blockReduce close
 .kcdfvals_denseh5_to_denseh5 <- function(X, Gaussk, grid=NULL, verbose) {
   stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
 
@@ -2106,6 +2285,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 #' @importFrom S4Arrays DummyArrayGrid
 #' @importFrom MatrixGenerics colRanks
 #' @importFrom BiocParallel SerialParam
+#' @importFrom DelayedArray close
 .colRanksHDF5 <- function(X, grid=NULL, ties.method="last",
                           drop.sparsity=FALSE) {
     stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC

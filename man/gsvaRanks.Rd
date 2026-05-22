@@ -3,14 +3,25 @@
 \name{gsvaRowNorm}
 \alias{gsvaRowNorm}
 \alias{gsvaRowNorm,gsvaParam-method}
+\alias{gsvaColRanks}
+\alias{gsvaColRanks,GsvaExprData-method}
 \alias{gsvaRanks}
 \alias{gsvaRanks,gsvaParam-method}
 \alias{gsvaScores}
 \alias{gsvaScores,gsvaRanksParam-method}
+\alias{gsvaColScores}
+\alias{gsvaColScores,GsvaExprData-method}
 \title{GSVA ranks and scores}
 \usage{
 \S4method{gsvaRowNorm}{gsvaParam}(
   param,
+  verbose = TRUE,
+  BPPARAM = SerialParam(progressbar = verbose),
+  maxmem = "auto"
+)
+
+\S4method{gsvaColRanks}{GsvaExprData}(
+  rowNormExprData,
   verbose = TRUE,
   BPPARAM = SerialParam(progressbar = verbose),
   maxmem = "auto"
@@ -25,6 +36,13 @@
 
 \S4method{gsvaScores}{gsvaRanksParam}(
   param,
+  verbose = TRUE,
+  BPPARAM = SerialParam(progressbar = verbose),
+  maxmem = "auto"
+)
+
+\S4method{gsvaColScores}{GsvaExprData}(
+  rankExprData,
   verbose = TRUE,
   BPPARAM = SerialParam(progressbar = verbose),
   maxmem = "auto"
@@ -51,9 +69,17 @@ By default \code{maxmem="auto"}, indicating that the maximum memory will be the
 maximum memory, use \code{maxmem=Inf}. Note that the amount of main memory used
 in an R session or script may depend on other commands and packages used in
 that same session or script.}
+
+\item{rowNormExprData}{A row-normalized expression data set obtained with
+\code{\link{gsvaRowNorm}}.  Must be one of the classes
+supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.  For a list of these classes, see its
+help page using \code{help(GsvaExprData)}.}
 }
 \value{
 In the case of the \code{gsvaRowNorm()} method, an object of class
+\code{\link[=gsvaRanksParam-class]{gsvaRanksParam}}.
+
+In the case of the \code{gsvaColRanks()} method, an object of class
 \code{\link[=gsvaRanksParam-class]{gsvaRanksParam}}.
 
 In the case of the \code{gsvaRanks()} method, an object of class
@@ -97,18 +123,17 @@ geneSets <- list(gset1=paste0("g", 1:3),
 y <- matrix(rnorm(n*p), nrow=p, ncol=n,
             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
 
-## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
-y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
-
 ## build GSVA parameter object
 gsvapar <- gsvaParam(y, geneSets)
 
-## calculate GSVA ranks
-gsvarankspar <- gsvaRanks(gsvapar)
-gsvarankspar
+## calculate row-normalized expression values
+gsvarownormexpr <- gsvaRowNorm(gsvapar)
+
+## calculate GSVA column ranks
+gsvarankspar <- gsvaColRanks(gsvarownormexpr)
+
 ## calculate GSVA scores
 gsva_es <- gsvaScores(gsvarankspar)
-gsva_es
 
 ## calculate now GSVA scores in a single step
 gsva_es1 <- gsva(gsvapar)

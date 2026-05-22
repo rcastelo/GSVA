@@ -336,7 +336,7 @@ setValidity("zscoreParam", function(object) {
 #' @importFrom cli cli_alert_info
 #' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
 #' @importFrom BiocParallel bpnworkers bplapply bpprogressbar
-#' @importFrom Matrix colSums
+#' @importFrom MatrixGenerics colSums
 zscore <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
                    BPPARAM=NULL, maxmem=Inf) {
 

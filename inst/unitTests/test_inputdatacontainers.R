@@ -44,9 +44,7 @@ test_inputdatacontainers <- function() {
     gsets.eSet <- geneSets(es.eset)
 
     es.mat2 <- es.mat
-    attr(es.mat2, "geneSets") <- NULL
-    attr(es.mat2, "gsvaParam") <- NULL
-    checkTrue(identical(es.mat2, exprs(es.eset)))
+    checkEqualsNumeric(es.mat2, exprs(es.eset))
     checkTrue(identical(gsets.mat, gsets.eSet))
 
     ## estimate GSVA enrichment scores with input as a SummarizedExperiment object
@@ -64,7 +62,7 @@ test_inputdatacontainers <- function() {
     es.se <- gsva(gsvapar, verbose=FALSE)
     gsets.se <- geneSets(es.se)
 
-    checkTrue(identical(es.mat2, assay(es.se)))
+    checkEqualsNumeric(es.mat2, assay(es.se))
     checkTrue(identical(gsets.mat, gsets.se))
 
     out <- cli_fmt(gsvaParam(se, gsets))
@@ -85,15 +83,14 @@ test_inputdatacontainers <- function() {
     es.dgCMat <- gsva(param, verbose=FALSE)
     gsets.dgCMat <- geneSets(es.dgCMat)
 
-    attr(es.dgCMat, "geneSets") <- NULL
-    attr(es.dgCMat, "gsvaParam") <- NULL
-    checkTrue(identical(es.mat2, es.dgCMat))
+    checkEqualsNumeric(es.mat2, es.dgCMat)
     checkTrue(identical(gsets.mat, gsets.dgCMat))
 
     ## testing geneIdsToGeneSetCollection()
     suppressPackageStartupMessages(library(GSEABase))
 
-    suppressWarnings(gsc <- geneIdsToGeneSetCollection(gsets.dgCMat, geneIdType="whatever"))
+    suppressWarnings(gsc <- geneIdsToGeneSetCollection(gsets.dgCMat,
+						       geneIdType="whatever"))
     checkTrue(is(gsc, "GeneSetCollection"))
 
     sp <- 0.5 * prod(dim(y))
@@ -119,9 +116,7 @@ test_inputdatacontainers <- function() {
     es.sce <- gsva(param, verbose=FALSE)
     gsets.sce <- geneSets(es.sce)
 
-    attr(es.dgCMatSp, "geneSets") <- NULL
-    attr(es.dgCMatSp, "gsvaParam") <- NULL
-    checkTrue(identical(es.dgCMatSp, assay(es.sce)))
+    checkEqualsNumeric(es.dgCMatSp, assay(es.sce))
     checkTrue(identical(gsets.mat, gsets.sce))
 
     gsets.ov.list <- computeGeneSetsOverlap(gsets.sce, rownames(sce))

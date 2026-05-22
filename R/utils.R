@@ -56,8 +56,10 @@ setMethod("unwrapData", signature("SpatialExperiment"),
 ## wrapData: put the resulting data and gene sets into the original data container type
 setMethod("wrapData", signature(container="matrix"),
           function(container, dataMatrix, param, assay, geneSets) {
+              stopifnot(!missing(assay))
               stopifnot(!missing(param))
               attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
+              attr(dataMatrix, "assay") <- assay
               if (!missing(geneSets))
                   attr(dataMatrix, "geneSets") <- geneSets
               return(dataMatrix)
@@ -65,8 +67,10 @@ setMethod("wrapData", signature(container="matrix"),
 
 setMethod("wrapData", signature(container="dgCMatrix"),
           function(container, dataMatrix, param, assay, geneSets) {
+              stopifnot(!missing(assay))
               stopifnot(!missing(param))
               attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
+              attr(dataMatrix, "assay") <- assay
               if (!missing(geneSets))
                   attr(dataMatrix, "geneSets") <- geneSets
               return(dataMatrix)
@@ -74,8 +78,10 @@ setMethod("wrapData", signature(container="dgCMatrix"),
 
 setMethod("wrapData", signature(container="SVT_SparseMatrix"),
           function(container, dataMatrix, param, assay, geneSets) {
+              stopifnot(!missing(assay))
               stopifnot(!missing(param))
               attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
+              attr(dataMatrix, "assay") <- assay
               if (!missing(geneSets))
                   attr(dataMatrix, "geneSets") <- geneSets
               return(dataMatrix)
@@ -83,8 +89,10 @@ setMethod("wrapData", signature(container="SVT_SparseMatrix"),
 
 setMethod("wrapData", signature(container="DelayedMatrix"),
           function(container, dataMatrix, param, assay, geneSets) {
+              stopifnot(!missing(assay))
               stopifnot(!missing(param))
               attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
+              attr(dataMatrix, "assay") <- assay
               if (!missing(geneSets))
                   attr(dataMatrix, "geneSets") <- geneSets
               return(dataMatrix)
@@ -92,12 +100,14 @@ setMethod("wrapData", signature(container="DelayedMatrix"),
 
 setMethod("wrapData", signature(container="ExpressionSet"),
           function(container, dataMatrix, param, assay, geneSets) {
+              stopifnot(!missing(assay))
               stopifnot(!missing(param))
               rval <- new("ExpressionSet", exprs=dataMatrix,
                           phenoData=phenoData(container),
                           experimentData=experimentData(container),
                           annotation="")
               attr(rval, "gsvaParam") <- .gsvaParam_as_list(param)
+              attr(dataMatrix, "assay") <- assay
               if (!missing(geneSets))
                   attr(rval, "geneSets") <- geneSets
               

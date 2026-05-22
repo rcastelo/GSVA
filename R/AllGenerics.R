@@ -8,6 +8,14 @@ setGeneric("gsvaRowNorm",
            function(param, ...) standardGeneric("gsvaRowNorm"))
 
 #' @export 
+setGeneric("gsvaColRanks",
+           function(rowNormExprData, ...) standardGeneric("gsvaColRanks"))
+
+#' @export 
+setGeneric("gsvaColScores",
+           function(rankExprData, ...) standardGeneric("gsvaColScores"))
+
+#' @export 
 setGeneric("gsvaRanks",
            function(param, ...) standardGeneric("gsvaRanks"))
 
