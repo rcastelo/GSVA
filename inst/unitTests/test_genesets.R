@@ -52,6 +52,7 @@ test_genesets <- function() {
 
     ## estimate GSVA enrichment scores with gene sets input as a GeneSetCollection object
     es.mat2 <- gsva(gsvaParam(y, gsc), verbose=FALSE)
+    attr(es.mat2, "gsvaParam")$geneSets <- geneSets(es.mat2) ## this is obviously different
     checkTrue(identical(es.mat, es.mat2))
 
     ## check that when input expression data has no rownames and gene sets
@@ -60,13 +61,12 @@ test_genesets <- function() {
     rownames(y) <- NULL
     gsvapar <- gsvaParam(y, gsets, verbose=FALSE)
     es.mat3 <- gsva(gsvapar, verbose=FALSE)
-    attr(es.mat, "geneSets") <- attr(es.mat3, "geneSets") <- NULL
-    checkTrue(identical(es.mat, es.mat3))
+    checkEqualsNumeric(es.mat, es.mat3)
+
     gsets$gset3 <- c(gsets$gset3, 11)
     gsvapar <- gsvaParam(y, gsets, verbose=FALSE)
     es.mat4 <- gsva(gsvapar, verbose=FALSE)
-    attr(es.mat4, "geneSets") <- NULL
-    checkTrue(identical(es.mat, es.mat4))
+    checkEqualsNumeric(es.mat, es.mat4)
 }
 
 test_geneSetDeDuplication <- function() {

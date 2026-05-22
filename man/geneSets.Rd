@@ -30,9 +30,9 @@
 \item{obj}{An object of one of the following classes:
 \itemize{
 \item An expression data object of one of the classes described in
-\code{\linkS4class{GsvaExprData}} that is the return value of a call to \code{gsva()}.
+\code{\link[=GsvaExprData-class]{GsvaExprData}} that is the return value of a call to \code{gsva()}.
 \item A parameter object of one of the classes described in
-\code{\linkS4class{GsvaMethodParam}} that could be used in a call to \code{gsva()}.
+\code{\link[=GsvaMethodParam-class]{GsvaMethodParam}} that could be used in a call to \code{gsva()}.
 }}
 }
 \value{

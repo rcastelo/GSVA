@@ -43,11 +43,9 @@ test_inputdatacontainers <- function() {
     es.eset <- gsva(gsvaParam(eset, gsets, verbose=FALSE), verbose=FALSE)
     gsets.eSet <- geneSets(es.eset)
 
-    ## as of 1.51.9, gene sets will be returned as attributes for containers not
-    ## inheriting from SummarizedExperiment and interfere with the check
     es.mat2 <- es.mat
     attr(es.mat2, "geneSets") <- NULL
-    attr(es.eset, "geneSets") <- NULL
+    attr(es.mat2, "gsvaParam") <- NULL
     checkTrue(identical(es.mat2, exprs(es.eset)))
     checkTrue(identical(gsets.mat, gsets.eSet))
 
@@ -79,7 +77,7 @@ test_inputdatacontainers <- function() {
     yMat <- Matrix(y, sparse=TRUE)
 
     ## check show() method for a gsvaParam object
-    param <- gsvaParam(yMat, gsets, verbose=FALSE)
+    param <- gsvaParam(yMat, gsets, sparse=FALSE, checkNA="auto", verbose=FALSE)
     out <- capture.output(show(param))
     checkTrue(length(out) > 0 && sum(nchar(out)) > 0,
 	      "gsvaParam object show method output is empty")
@@ -87,7 +85,9 @@ test_inputdatacontainers <- function() {
     es.dgCMat <- gsva(param, verbose=FALSE)
     gsets.dgCMat <- geneSets(es.dgCMat)
 
-    checkTrue(identical(es.mat, es.dgCMat))
+    attr(es.dgCMat, "geneSets") <- NULL
+    attr(es.dgCMat, "gsvaParam") <- NULL
+    checkTrue(identical(es.mat2, es.dgCMat))
     checkTrue(identical(gsets.mat, gsets.dgCMat))
 
     ## testing geneIdsToGeneSetCollection()
@@ -120,6 +120,7 @@ test_inputdatacontainers <- function() {
     gsets.sce <- geneSets(es.sce)
 
     attr(es.dgCMatSp, "geneSets") <- NULL
+    attr(es.dgCMatSp, "gsvaParam") <- NULL
     checkTrue(identical(es.dgCMatSp, assay(es.sce)))
     checkTrue(identical(gsets.mat, gsets.sce))
 

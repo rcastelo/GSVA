@@ -58,7 +58,7 @@ setMethod("gsva", signature(param="plageParam"),
               gs <- .geneSetsIndices2Names(
                   indices=filtMappedGeneSets,
                   names=rownames(filtDataMatrix))
-              rval <- wrapData(get_exprData(param), plage_es, gs)
+              rval <- wrapData(get_exprData(param), plage_es, param, "es", gs)
 
               if (verbose)
                   cli_alert_success("Calculations finished")

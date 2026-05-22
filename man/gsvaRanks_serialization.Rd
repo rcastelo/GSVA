@@ -10,7 +10,7 @@ saveHDF5GSVAranks(x, dir, ...)
 loadHDF5GSVAranks(dir, ...)
 }
 \arguments{
-\item{x}{A \code{\linkS4class{gsvaRanksParam}} object to save to disk.}
+\item{x}{A \code{\link[=gsvaRanksParam-class]{gsvaRanksParam}} object to save to disk.}
 
 \item{dir}{The path to the directory where to save or load the GSVA ranks
 data.}
@@ -18,7 +18,7 @@ data.}
 \item{...}{Additional arguments to be passed to the underlying HDF5
 saving/loading functions
 \code{\link[HDF5Array:saveHDF5SummarizedExperiment]{saveHDF5SummarizedExperiment}}
-and \code{\link[HDF5Array:saveHDF5SummarizedExperiment]{loadHDF5SummarizedExperiment}},
+and \code{\link[HDF5Array:loadHDF5SummarizedExperiment]{loadHDF5SummarizedExperiment}},
 respectively.}
 }
 \value{

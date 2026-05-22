@@ -16,11 +16,11 @@ of another class as well as defining common methods for all of them.
 \seealso{
 \code{\link{matrix}},
 \code{\link[Matrix:dgCMatrix-class]{dgCMatrix}},
-\code{\link[SparseArray:SVT_SparseArray-class]{SVT_SparseMatrix}},
-\code{\link[DelayedArray:DelayedArray-class]{DelayedMatrix}},
+\code{\link[SparseArray:SVT_SparseMatrix-class]{SVT_SparseMatrix}},
+\code{\link[DelayedArray:DelayedMatrix-class]{DelayedMatrix}},
 \code{\link[Biobase]{ExpressionSet}},
 \code{\link[SummarizedExperiment:SummarizedExperiment-class]{SummarizedExperiment}},
-\code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}},
-\code{\link[SpatialExperiment:SpatialExperiment]{SpatialExperiment}},
+\code{\link[SingleCellExperiment:SingleCellExperiment-class]{SingleCellExperiment}},
+\code{\link[SpatialExperiment:SpatialExperiment-class]{SpatialExperiment}},
 \code{\link[HDF5Array:HDF5Array-class]{HDF5Array}}
 }

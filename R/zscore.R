@@ -58,7 +58,7 @@ setMethod("gsva", signature(param="zscoreParam"),
               gs <- .geneSetsIndices2Names(
                   indices=filtMappedGeneSets,
                   names=rownames(filtDataMatrix))
-              rval <- wrapData(get_exprData(param), zscore_es, gs)
+              rval <- wrapData(get_exprData(param), zscore_es, param, "es", gs)
               
               if (verbose)
                   cli_alert_success("Calculations finished")

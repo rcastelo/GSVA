@@ -64,7 +64,7 @@ setMethod("gsva", signature(param="ssgseaParam"),
               gs <- .geneSetsIndices2Names(
                   indices=filtMappedGeneSets,
                   names=rownames(filtDataMatrix))
-              rval <- wrapData(get_exprData(param), ssgsea_es, gs)
+              rval <- wrapData(get_exprData(param), ssgsea_es, param, "es", gs)
               
               if (verbose)
                   cli_alert_success("Calculations finished")
@@ -440,7 +440,6 @@ setMethod("show",
     walkStat
 }
 
-#' @importFrom IRanges IntegerList match
 #' @importFrom BiocParallel bpnworkers
 #' @importFrom BiocGenerics "type<-"
 #' @importFrom MatrixGenerics colRanks

@@ -74,8 +74,6 @@ saveHDF5GSVAranks <- function(x, dir, ...) {
       cli_abort("The input object in 'x' must be of class 'gsvaRanksParam'")
 
     edata <- get_exprData(x)
-    wasse <- is(edata, "SummarizedExperiment")
-
     if (is(edata, "SummarizedExperiment")) {
         an <- assayNames(edata)
         if (!"gsvaranks" %in% an)
@@ -96,28 +94,8 @@ saveHDF5GSVAranks <- function(x, dir, ...) {
           gsvaAnnotation(edata) <- annot
     }
 
-    knmss <- .get_kcdfNoneMinSampleSize(x)
     metadata(edata) <- c(metadata(edata),
-                         list(gsvaRanksParam=list(originalClassWasSE=wasse,
-                                                  geneSets=get_geneSets(x),
-                                                  assay=get_assay(x),
-                                                  annotation=get_annotation(x),
-                                                  minSize=get_minSize(x),
-                                                  maxSize=get_maxSize(x),
-                                                  kcdf=.get_kcdf(x),
-                                                  kcdfNoneMinSampleSize=knmss,
-                                                  tau=.get_tau(x),
-                                                  maxDiff=.get_maxDiff(x),
-                                                  absRanking=.get_absRanking(x),
-                                                  sparse=.get_sparse(x),
-                                                  checkNA=.get_checkNA(x),
-                                                  didCheckNA=.get_didCheckNA(x),
-                                                  anyNA=anyNA(x),
-                                                  use=.get_NAuse(x),
-                                                  filterRows=.get_filterRows(x),
-                                                  nzcount=nzcount(x),
-                                                  ondisk=.get_ondisk(x))
-  ))
+                         list(gsvaRanksParam=.gsvaParam_as_list(x)))
 
   saveHDF5SummarizedExperiment(edata, dir, ...)
 

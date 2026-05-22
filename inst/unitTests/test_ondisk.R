@@ -38,7 +38,9 @@ test_ondisk <- function() {
     ## estimate GSVA enrichment scores with HDF5 input and output and check that they are identical
     es_h5ondisk <- gsva(gsvaParam(H5, gsets, ondisk="yes", verbose=FALSE), verbose=FALSE)
     es_h5ondiskmat <- as.matrix(es_h5ondisk)
-    attributes(es_h5ondiskmat) <- c(attributes(es_h5ondiskmat)[c("dim", "dimnames")], attributes(es_h5ondisk)["geneSets"])
+    attributes(es_h5ondiskmat) <- c(attributes(es_h5ondiskmat)[c("dim", "dimnames")],
+                                    attributes(es_h5ondisk)["geneSets"])
+    attr(es_noh5, "gsvaParam") <- NULL
     checkIdentical(es_noh5, es_h5ondiskmat)
 
     ## estimate ssGSEA enrichment scores with and without HDF5 input and check that they are identical
@@ -49,7 +51,9 @@ test_ondisk <- function() {
     ## estimate ssGSEA enrichment scores with HDF5 input and output and check that they are identical
     es_h5ondisk <- gsva(ssgseaParam(H5, gsets, ondisk="yes", verbose=FALSE), verbose=FALSE)
     es_h5ondiskmat <- as.matrix(es_h5ondisk)
-    attributes(es_h5ondiskmat) <- c(attributes(es_h5ondiskmat)[c("dim", "dimnames")], attributes(es_h5ondisk)["geneSets"])
+    attributes(es_h5ondiskmat) <- c(attributes(es_h5ondiskmat)[c("dim", "dimnames")],
+                                    attributes(es_h5ondisk)["geneSets"])
+    attr(es_noh5, "gsvaParam") <- NULL
     checkIdentical(es_noh5, es_h5ondiskmat)
 
     ## estimate Z-scores enrichment scores with and without HDF5 input and check that they are identical
@@ -60,7 +64,8 @@ test_ondisk <- function() {
     ## estimate Z-scores enrichment scores with HDF5 input and output and check that they are identical
     es_h5ondisk <- gsva(zscoreParam(H5, gsets, ondisk="yes", verbose=FALSE), verbose=FALSE)
     es_h5ondiskmat <- as.matrix(es_h5ondisk)
-    attributes(es_h5ondiskmat) <- c(attributes(es_h5ondiskmat)[c("dim", "dimnames")], attributes(es_h5ondisk)["geneSets"])
+    attributes(es_h5ondiskmat) <- c(attributes(es_h5ondiskmat)[c("dim", "dimnames")],
+                                    attributes(es_h5ondisk)["geneSets"])
     checkEqualsNumeric(es_noh5, es_h5ondiskmat) ## not identical due to the rowSds() vs sd() differences
 
     ## test the block processing of a small toy HDF5 input and output by setting a small block size and
