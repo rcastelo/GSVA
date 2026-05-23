@@ -163,11 +163,15 @@ setMethod("gsva", signature(param="gsvaParam"),
 
               .check_bpparam(BPPARAM)
 
-              rankspar <- gsvaRanks(param=param, verbose=verbose,
-                                    BPPARAM=BPPARAM, maxmem=maxmem)
+              gsvarownr <- gsvaRowNorm(param=param, verbose=verbose,
+                                       BPPARAM=BPPARAM, maxmem=maxmem)
 
-              es <- gsvaScores(param=rankspar, verbose=verbose,
-                               BPPARAM=BPPARAM, maxmem=maxmem)
+              gsvaranks <- gsvaColRanks(rowNormExprData=gsvarownr,
+                                        verbose=verbose, BPPARAM=BPPARAM,
+                                        maxmem=maxmem)
+
+              es <- gsvaColScores(rankExprData=gsvaranks, verbose=verbose,
+                                  BPPARAM=BPPARAM, maxmem=maxmem)
 
               if (verbose) {
                   cli_alert_success("Calculations finished")
@@ -665,11 +669,11 @@ setMethod("show",
 
     p <- NULL
     if (is(exprData, "matrix") || is(exprData, "dgCMatrix") ||
-        is(exprData, "SVT_SparseMatrix") || is(exprData("delayedMatrix")) ||
-        is(exprData, "HDF5Matrix") || is(exprData("ExpressionSet"))) {
+        is(exprData, "SVT_SparseMatrix") || is(exprData, "DelayedMatrix") ||
+        is(exprData, "HDF5Matrix") || is(exprData, "ExpressionSet")) {
         mask <- is.null(attr(exprData, "gsvaParam")) ||
                 is.null(attr(exprData, "assay"))
-	if (any(mask))
+        if (any(mask))
             cli_abort(c("x"="Missing metadata in the input expression data."))
         p <- attr(exprData, "gsvaParam")
         a <- attr(exprData, "assay")
@@ -764,10 +768,10 @@ setMethod("show",
 #' gsvarownormexpr <- gsvaRowNorm(gsvapar)
 #'
 #' ## calculate GSVA column ranks
-#' gsvarankspar <- gsvaColRanks(gsvarownormexpr)
+#' gsvacolranks <- gsvaColRanks(gsvarownormexpr)
 #'
 #' ## calculate GSVA scores
-#' gsva_es <- gsvaScores(gsvarankspar)
+#' gsva_es <- gsvaColScores(gsvacolranks)
 #'
 #' ## calculate now GSVA scores in a single step
 #' gsva_es1 <- gsva(gsvapar)
@@ -780,8 +784,8 @@ setMethod("show",
 #'                   gset2=paste0("g", c(1, 2, 7, 8)))
 #'
 #' ## note that there is no need to calculate the GSVA ranks again
-#' geneSets(gsvarankspar) <- geneSets2
-#' gsvaScores(gsvarankspar)
+#' ## geneSets(gsvarankspar) <- geneSets2
+#' ## gsvaScores(gsvarankspar)
 #'
 #' @return In the case of the `gsvaRowNorm()` method, an object of class
 #' [`gsvaRanksParam-class`].
@@ -887,14 +891,14 @@ setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
 
               .check_bpparam(BPPARAM)
 
-              dataMatrix <- unwrapData(rowNormExprData, get_assay(param))
+              dataMatrix <- unwrapData(rowNormExprData, "gsvarownr")
               maxmem <- .check_maxmem(param, maxmem, verbose)
               ondisk <- .check_ondisk(param, maxmem, verbose)
 
               dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                           ondisk, verbose)
 
-              gsvarnks <- .compute_gsva_ranks(Z=rowNormExprData,
+              gsvarnks <- .compute_gsva_ranks(Z=dataMatrix,
                                               verbose=verbose,
                                               BPPARAM=BPPARAM,
                                               maxmem=maxmem)
@@ -1125,6 +1129,11 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
               return(rval)
           })
 
+#' @param rankExprData A column-rank expression data set obtained with
+#' [`gsvaColRanks`].  Must be one of the classes
+#' supported by [`GsvaExprData-class`].  For a list of these classes, see its
+#' help page using `help(GsvaExprData)`.
+#'
 #' @aliases gsvaColScores,GsvaExprData-method
 #' @name gsvaColScores
 #' @rdname gsvaRanks

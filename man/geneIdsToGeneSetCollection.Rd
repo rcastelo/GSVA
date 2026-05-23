@@ -54,7 +54,7 @@ geneIdsToGeneSetCollection(gsets)
 \seealso{
 \code{\link[GSEABase:GeneSetCollection-class]{GeneSetCollection}},
 \code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}},
-\code{\link[GSEABase:geneIds]{geneIds}},
+\code{\link[GSEABase:GeneSet-class]{geneIds}},
 \code{\link{deduplicateGeneSets}},
 \code{\link{guessGeneIdType}},
 \code{\link[GSEABase:GeneSet-class]{GeneSet}}

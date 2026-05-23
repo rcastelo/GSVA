@@ -107,7 +107,7 @@ setMethod("wrapData", signature(container="ExpressionSet"),
                           experimentData=experimentData(container),
                           annotation="")
               attr(rval, "gsvaParam") <- .gsvaParam_as_list(param)
-              attr(dataMatrix, "assay") <- assay
+              attr(rval, "assay") <- assay
               if (!missing(geneSets))
                   attr(rval, "geneSets") <- geneSets
               

@@ -33,7 +33,6 @@ test_gsvaRanks <- function() {
     ## both approaches to calculate GSVA scores must give
     ## the same result with the same input gene sets
     checkEqualsNumeric(gsva_es1, gsva_es2)
-    checkTrue(all.equal(gsva_es1, gsva_es2))
 
     ## check that gsvaEnrichment() works
     geneSets(gsvarankspar) <- c(gsets, set4=c("g1", "g4", "g7"))

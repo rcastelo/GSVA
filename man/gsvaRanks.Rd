@@ -49,7 +49,7 @@
 )
 }
 \arguments{
-\item{param}{A parameter object of the \code{\link[=gsvaRanksParam-class]{gsvaRanksParam}} class.}
+\item{param}{A parameter object of the \code{\linkS4class{gsvaRanksParam}} class.}
 
 \item{verbose}{Gives information about each calculation step. Default:
 \code{TRUE}.}
@@ -65,25 +65,30 @@ or terabytes (T), which GSVA will use to attempt bounding the maximum amount
 of main memory used across all threads of execution to that given quantity.
 By default \code{maxmem="auto"}, indicating that the maximum memory will be the
 90\% of the total main memory, as calculated by
-\code{\link[memuse:Sys.meminfo]{Sys.meminfo()}}. To avoid setting any bound on the
+\code{\link[memuse:meminfo]{Sys.meminfo()}}. To avoid setting any bound on the
 maximum memory, use \code{maxmem=Inf}. Note that the amount of main memory used
 in an R session or script may depend on other commands and packages used in
 that same session or script.}
 
 \item{rowNormExprData}{A row-normalized expression data set obtained with
 \code{\link{gsvaRowNorm}}.  Must be one of the classes
-supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.  For a list of these classes, see its
+supported by \code{\linkS4class{GsvaExprData}}.  For a list of these classes, see its
+help page using \code{help(GsvaExprData)}.}
+
+\item{rankExprData}{A column-rank expression data set obtained with
+\code{\link{gsvaColRanks}}.  Must be one of the classes
+supported by \code{\linkS4class{GsvaExprData}}.  For a list of these classes, see its
 help page using \code{help(GsvaExprData)}.}
 }
 \value{
 In the case of the \code{gsvaRowNorm()} method, an object of class
-\code{\link[=gsvaRanksParam-class]{gsvaRanksParam}}.
+\code{\linkS4class{gsvaRanksParam}}.
 
 In the case of the \code{gsvaColRanks()} method, an object of class
-\code{\link[=gsvaRanksParam-class]{gsvaRanksParam}}.
+\code{\linkS4class{gsvaRanksParam}}.
 
 In the case of the \code{gsvaRanks()} method, an object of class
-\code{\link[=gsvaRanksParam-class]{gsvaRanksParam}}.
+\code{\linkS4class{gsvaRanksParam}}.
 
 In the case of the \code{gsvaScores()} method, a gene-set by sample matrix
 of GSVA enrichment scores stored in a container object of the same type as
@@ -111,8 +116,6 @@ library(GSVA)
 
 p <- 10 ## number of genes
 n <- 30 ## number of samples
-nGrp1 <- 15 ## number of samples in group 1
-nGrp2 <- n - nGrp1 ## number of samples in group 2
 
 ## consider three disjoint gene sets
 geneSets <- list(gset1=paste0("g", 1:3),
@@ -130,10 +133,10 @@ gsvapar <- gsvaParam(y, geneSets)
 gsvarownormexpr <- gsvaRowNorm(gsvapar)
 
 ## calculate GSVA column ranks
-gsvarankspar <- gsvaColRanks(gsvarownormexpr)
+gsvacolranks <- gsvaColRanks(gsvarownormexpr)
 
 ## calculate GSVA scores
-gsva_es <- gsvaScores(gsvarankspar)
+gsva_es <- gsvaColScores(gsvacolranks)
 
 ## calculate now GSVA scores in a single step
 gsva_es1 <- gsva(gsvapar)
@@ -146,8 +149,8 @@ geneSets2 <- list(gset1=paste0("g", 3:6),
                   gset2=paste0("g", c(1, 2, 7, 8)))
 
 ## note that there is no need to calculate the GSVA ranks again
-geneSets(gsvarankspar) <- geneSets2
-gsvaScores(gsvarankspar)
+## geneSets(gsvarankspar) <- geneSets2
+## gsvaScores(gsvarankspar)
 
 }
 \references{
@@ -157,9 +160,9 @@ variation analysis for microarray and RNA-Seq data.
 \doi{10.1186/1471-2105-14-7}
 }
 \seealso{
-\code{\link[=gsvaParam-class]{gsvaParam}}, \code{\link[=gsvaRanksParam-class]{gsvaRanksParam}}, \code{\link{gsva}},
+\code{\linkS4class{gsvaParam}}, \code{\linkS4class{gsvaRanksParam}}, \code{\link{gsva}},
 \code{\link[BiocParallel:BiocParallelParam-class]{BiocParallelParam}},
 \code{\link[Matrix:dgCMatrix-class]{dgCMatrix}},
 \code{\link[Biobase]{ExpressionSet}},
-\code{\link[SingleCellExperiment:SingleCellExperiment-class]{SingleCellExperiment}}
+\code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}}
 }

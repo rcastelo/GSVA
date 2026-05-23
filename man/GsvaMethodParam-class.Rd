@@ -89,12 +89,12 @@ is(gsvapar, "GsvaMethodParam")
 
 }
 \seealso{
-\code{\link[=GsvaExprData-class]{GsvaExprData}},
-\code{\link[=GsvaGeneSets-class]{GsvaGeneSets}},
-\code{\link[=zscoreParam-class]{zscoreParam}},
-\code{\link[=plageParam-class]{plageParam}},
-\code{\link[=ssgseaParam-class]{ssgseaParam}},
-\code{\link[=gsvaParam-class]{gsvaParam}},
+\code{\linkS4class{GsvaExprData}},
+\code{\linkS4class{GsvaGeneSets}},
+\code{\linkS4class{zscoreParam}},
+\code{\linkS4class{plageParam}},
+\code{\linkS4class{ssgseaParam}},
+\code{\linkS4class{gsvaParam}},
 \code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}}
 
 \code{\link{plageParam}}, \code{\link{zscoreParam}}, \code{\link{ssgseaParam}}, \code{\link{gsvaParam}}

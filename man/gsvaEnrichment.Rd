@@ -14,7 +14,7 @@
 )
 }
 \arguments{
-\item{param}{A \code{\link[=gsvaRanksParam-class]{gsvaRanksParam}} object obtained with the method
+\item{param}{A \code{\linkS4class{gsvaRanksParam}} object obtained with the method
 \code{\link{gsvaRanks}}.}
 
 \item{column}{The column for which we want to retrieve the enrichment data.

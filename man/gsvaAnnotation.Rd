@@ -49,7 +49,7 @@
 }
 \arguments{
 \item{object}{An expression data object of one of the classes described in
-\code{\link[=GsvaExprData-class]{GsvaExprData}}.  Simple \code{matrix} and \code{dgCMatrix} objects are not
+\code{\linkS4class{GsvaExprData}}.  Simple \code{matrix} and \code{dgCMatrix} objects are not
 capable of storing annotation metadata and will return \code{NULL}.}
 
 \item{value}{For the replacement methods, the annotation metadata to be

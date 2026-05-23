@@ -36,11 +36,11 @@ gsvaParam(
 }
 \arguments{
 \item{exprData}{The expression data set.  Must be one of the classes
-supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.  For a list of these classes, see its
+supported by \code{\linkS4class{GsvaExprData}}.  For a list of these classes, see its
 help page using \code{help(GsvaExprData)}.}
 
 \item{geneSets}{The gene sets.  Must be one of the classes supported by
-\code{\link[=GsvaGeneSets-class]{GsvaGeneSets}}.  For a list of these classes, see its help page using
+\code{\linkS4class{GsvaGeneSets}}.  For a list of these classes, see its help page using
 \code{help(GsvaGeneSets)}.}
 
 \item{assay}{Character vector of length 1.  The name of the assay to use in
@@ -163,19 +163,19 @@ when \code{ondisk="no"} it will attempt to load all the data in main memory.}
 decisions made by the software during parameter object construction when
 \code{verbose=TRUE} (default) and remains silent otherwise.}
 
-\item{x}{An object of class \code{\link[=gsvaParam-class]{gsvaParam}}.}
+\item{x}{An object of class \code{\linkS4class{gsvaParam}}.}
 
 \item{recursive}{Not used with \code{x} being an object of
-class \code{\link[=gsvaParam-class]{gsvaParam}}.}
+class \code{\linkS4class{gsvaParam}}.}
 
 \item{object}{For the replacement method, an object of class
-\code{\link[=gsvaRanksParam-class]{gsvaRanksParam}}.}
+\code{\linkS4class{gsvaRanksParam}}.}
 
 \item{value}{For the replacement method, an object of the classes supported by
-\code{\link[=GsvaGeneSets-class]{GsvaGeneSets}}.}
+\code{\linkS4class{GsvaGeneSets}}.}
 }
 \value{
-A new \code{\link[=gsvaParam-class]{gsvaParam}} object.
+A new \code{\linkS4class{gsvaParam}} object.
 }
 \description{
 S4 class for GSVA method parameter objects.
@@ -294,16 +294,16 @@ variation analysis for microarray and RNA-Seq data.
 \doi{10.1186/1471-2105-14-7}
 }
 \seealso{
-\code{\link[=GsvaExprData-class]{GsvaExprData}},
-\code{\link[=GsvaGeneSets-class]{GsvaGeneSets}},
-\code{\link[=GsvaMethodParam-class]{GsvaMethodParam}},
-\code{\link[=plageParam-class]{plageParam}},
-\code{\link[=zscoreParam-class]{zscoreParam}},
-\code{\link[=ssgseaParam-class]{ssgseaParam}}
+\code{\linkS4class{GsvaExprData}},
+\code{\linkS4class{GsvaGeneSets}},
+\code{\linkS4class{GsvaMethodParam}},
+\code{\linkS4class{plageParam}},
+\code{\linkS4class{zscoreParam}},
+\code{\linkS4class{ssgseaParam}}
 
 \code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}},
 \code{\link{matrix}},
 \code{\link[Biobase]{ExpressionSet}},
 \code{\link[SummarizedExperiment:SummarizedExperiment-class]{SummarizedExperiment}},
-\code{\link[SingleCellExperiment:SingleCellExperiment-class]{SingleCellExperiment}}
+\code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}}
 }
