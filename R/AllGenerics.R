@@ -25,7 +25,7 @@ setGeneric("gsvaScores",
 
 #' @export 
 setGeneric("gsvaEnrichment",
-           function(param, ranks, ...) standardGeneric("gsvaEnrichment"))
+           function(rankExprData, ...) standardGeneric("gsvaEnrichment"))
 
 #' @export 
 setGeneric("filterGeneSets",

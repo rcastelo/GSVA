@@ -350,9 +350,13 @@ setMethod("anyNA", signature=c("ssgseaParam"),
             return(x@anyNA))
 
 
-## ----- show -----
+## ----- details method -----
 
-setMethod("show",
+#' @importFrom GSEABase details
+#' @aliases details,ssgseaParam-method
+#' @rdname GsvaMethodParam-class
+#' @exportMethod details
+setMethod("details",
           signature=signature(object="ssgseaParam"),
           function(object) {
               callNextMethod(object)

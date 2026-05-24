@@ -23,24 +23,30 @@ test_gsvaRanks <- function() {
     ## calculate GSVA scores in one step
     gsva_es1 <- gsva(gsvapar, verbose=FALSE)
 
-    ## calculate GSVA scores in two steps
-    ## first calculate GSVA ranks
-    gsvarankspar <- gsvaRanks(gsvapar, verbose=FALSE)
+    ## calculate GSVA scores in three steps
+    ## first calculate row-normalized expression values
+    gsvarownorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
 
-    ## second calculate GSVA scores using GSVA ranks
-    gsva_es2 <- gsvaScores(gsvarankspar, verbose=FALSE)
+    ## second calculate GSVA column ranks
+    gsvaranks <- gsvaColRanks(gsvarownorm, verbose=FALSE)
+
+    ## third calculate GSVA scores from column ranks
+    gsva_es2 <- gsvaColScores(gsvaranks, verbose=FALSE)
 
     ## both approaches to calculate GSVA scores must give
     ## the same result with the same input gene sets
     checkEqualsNumeric(gsva_es1, gsva_es2)
 
     ## check that gsvaEnrichment() works
-    geneSets(gsvarankspar) <- c(gsets, set4=c("g1", "g4", "g7"))
-    gsvaenrich <- gsvaEnrichment(gsvarankspar, plot="no")
+    gsvaenrich <- gsvaEnrichment(gsvaranks, plot="no")
     checkEqualsNumeric(gsva_es1[1, 1], gsvaenrich$score)
+    gsvaenrich2 <- gsvaEnrichment(gsvaranks,
+                                  geneSet=c("g1", "g4", "g7"),
+                                  plot="no")
+    checkTrue(!is.na(gsvaenrich2$score))
 
     ## test the ggplotting from gsvaEnrichment()
-    ggp <- gsvaEnrichment(gsvarankspar, plot="ggplot")
+    ggp <- gsvaEnrichment(gsvaranks, plot="ggplot")
     checkTrue(is(ggp, "ggplot"))
     checkTrue(identical(gsvaenrich$stats, ggp@data))
 }

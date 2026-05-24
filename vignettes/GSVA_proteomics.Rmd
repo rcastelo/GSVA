@@ -154,12 +154,12 @@ We can force the `gsvaParam()` function to check for missing values irrespective
 of the input expression data container by setting the argument `checkNA="yes"`,
 or disable that check altogether with `checkNA="no"`. By default
 `checkNA="auto"`. Once missing values have been detected when we build the
-parameter object, the `gsva()` function (or `gsvaRanks()` and `gsvaScores()`)
-will apply a missing data policy specified through a parameter called `use`,
-which takes one of the following three possible character string values:
-`everything`, `all.obs` or `na.rm`. The first value (`everything`) is the
-default value and it propagates the missing `NA` values through the
-calculations.
+parameter object, the `gsva()` function (or `gsvaRowNorm()`, `gsvaColRanks()`
+and `gsvaColScores()`) will apply a missing data policy specified through a
+parameter called `use`, which takes one of the following three possible
+character string values: `everything`, `all.obs` or `na.rm`. The first value
+(`everything`) is the default value and it propagates the missing `NA` values
+through the calculations.
 
 ```{r}
 es_gsva_everything <- gsva(gsvapar)

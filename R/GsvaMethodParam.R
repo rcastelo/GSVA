@@ -2,7 +2,10 @@
 #' @title The `GsvaMethodParam` class
 #'
 #' @description A virtual superclass of the `GSVA` packages' method-specific
-#' parameter classes.
+#' parameter classes. The method 'details()' provides a detailed summary of the
+#' parameter values stored in this class and its subclasses.
+#'
+#' @param object An object of class `GsvaMethodParam` or one of its subclasses.
 #'
 #' @details The `GSVA` package implements four single-sample gene set analysis
 #' methods (PLAGE, combined z-scores, ssGSEA, and GSVA) and a respective
@@ -21,7 +24,23 @@ NULL
 setMethod("show",
           signature=signature(object="GsvaMethodParam"),
           function(object) {
-              cat("A ", .objPkgClass(object), " object\n",
+              cat("class: ", .objPkgClass(object), "\n", sep="")
+              expr <- get_exprData(object)
+              cat(sprintf("expression data dim: %d %d\n",
+                          nrow(expr), ncol(expr)))
+              cat(sprintf("number of gene sets: %d\n",
+                          length(get_geneSets(object))))
+              cat("details: use 'details(object)'\n")
+          })
+
+#' @aliases details,GsvaMethodParam-method
+#' @rdname GsvaMethodParam-class
+#' @exportMethod details
+#' @importFrom GSEABase details
+setMethod("details",
+          signature=signature(object="GsvaMethodParam"),
+          function(object) {
+              cat("class: ", .objPkgClass(object), "\n",
                   "expression data:\n", sep="")
               .catObj(get_exprData(object))
               oa <- if(is.na(get_assay(object))) "none" else get_assay(object)
@@ -38,6 +57,8 @@ setMethod("show",
               cat(nzcmsg)
               cat("ondisk: ", .get_ondisk(object), "\n")
           })
+
+
 
 
 ## ----- getters -----

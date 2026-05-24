@@ -79,6 +79,9 @@ test_inputdatacontainers <- function() {
     out <- capture.output(show(param))
     checkTrue(length(out) > 0 && sum(nchar(out)) > 0,
 	      "gsvaParam object show method output is empty")
+    out <- capture.output(details(param))
+    checkTrue(length(out) > 0 && sum(nchar(out)) > 0,
+	      "gsvaParam object details method output is empty")
 
     es.dgCMat <- gsva(param, verbose=FALSE)
     gsets.dgCMat <- geneSets(es.dgCMat)

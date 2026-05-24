@@ -602,9 +602,14 @@ setMethod("anyNA", signature=c("gsvaParam"),
             return(x@anyNA))
 
 
-## ----- show -----
+## ----- details method -----
 
-setMethod("show",
+#' @importFrom methods callNextMethod
+#' @importFrom GSEABase details
+#' @aliases details,gsvaParam-method
+#' @rdname GsvaMethodParam-class
+#' @exportMethod details
+setMethod("details",
           signature=signature(object="gsvaParam"),
           function(object) {
               callNextMethod(object)
@@ -1010,16 +1015,16 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 ## ----- setters for gsvaRanksParam -----
 
 #' @param object For the replacement method, an object of class
-#' [`gsvaRanksParam-class`].
+#' [`gsvaParam-class`].
 #'
-#' @param value For the replacement method, an object of the classes supported by
-#' [`GsvaGeneSets-class`].
+#' @param value For the replacement method, an object of the classes supported
+#' by [`GsvaGeneSets-class`].
 #'
 #' @aliases geneSets<-
-#' @aliases geneSets<-,gsvaRanksParam,GsvaGeneSets-method
+#' @aliases geneSets<-,gsvaParam,GsvaGeneSets-method
 #' @rdname gsvaParam-class
 #' @exportMethod geneSets
-setReplaceMethod("geneSets", signature=signature(object="gsvaRanksParam",
+setReplaceMethod("geneSets", signature=signature(object="gsvaParam",
                                                  value="GsvaGeneSets"),
                  function(object, value) {
                    object@geneSets <- value
@@ -1134,6 +1139,10 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
 #' supported by [`GsvaExprData-class`].  For a list of these classes, see its
 #' help page using `help(GsvaExprData)`.
 #'
+#' @param geneSets An object of the classes supported by [`GsvaGeneSets-class`].
+#' Currently, either a [`GeneSetCollection`][GSEABase::GeneSetCollection-class]
+#' object or a `list` object.
+#'
 #' @aliases gsvaColScores,GsvaExprData-method
 #' @name gsvaColScores
 #' @rdname gsvaRanks
@@ -1142,11 +1151,20 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
 #' @importFrom cli cli_alert_info cli_alert_success
 #' @exportMethod gsvaColScores
 setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
-          function(rankExprData, verbose=TRUE,
+          function(rankExprData, geneSets, verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose),
                    maxmem="auto") {
 
               param <- .pull_param(rankExprData, "gsvaranks")
+
+              if (!missing(geneSets)) {
+                  if (!is(geneSets, "GsvaGeneSets"))
+                      cli_abort(c("x"=paste("'geneSets' must be a",
+                                            "'GsvaGeneSets' object. See",
+                                            "class ? GsvaGeneSets.")))
+                  geneSets(param) <- geneSets
+              }
+
 
               if (verbose && gsva_global$show_start_and_end_messages) {
                   pkgversion <- packageDescription("GSVA")[["Version"]]
@@ -1225,15 +1243,21 @@ setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
 #'
 #' @description Extract and plot enrichment data from GSVA scores.
 #'
-#' @param param A [`gsvaRanksParam-class`] object obtained with the method
-#' [`gsvaRanks`].
+#' @param rankExprData A column-rank expression data set obtained with
+#' [`gsvaColRanks`].  Must be one of the classes
+#' supported by [`GsvaExprData-class`].  For a list of these classes, see its
+#' help page using `help(GsvaExprData)`.
+#'
 #'
 #' @param column The column for which we want to retrieve the enrichment data.
 #' This parameter is only available in the `gsvaEnrichment()` method.
 #'
-#' @param geneSet Either a positive integer number between 1 and the number of
-#' available gene sets in `param`, or a character string with the name of
-#' one of the gene sets available in `param`.
+#' @param geneSet Either a single positive integer number between 1 and the
+#' number of available gene sets in parameter object stored in `rankExprData`,
+#' or a single character string with the name of one of the gene sets available
+#' in that object, or a vector of integers or character strings with the index
+#' values or names of rows in `rankExprData` that should be considered as the
+#' gene set for which the enrichment data should be retrieved.
 #'
 #' @param plot A character string indicating whether an enrichment plot should
 #' be produced using either base R graphics (`plot="base"`) or the ggplot2 package
@@ -1249,7 +1273,7 @@ setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
 #' `plot="ggplot"`, this method returns a `ggplot` object. When `plot="base"`
 #' no value is returned.
 #'
-#' @aliases gsvaEnrichment,gsvaRanksParam-method
+#' @aliases gsvaEnrichment,GsvaExprData-method
 #' @name gsvaEnrichment
 #' @rdname gsvaEnrichment
 #'
@@ -1275,52 +1299,90 @@ setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
 #' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
 #'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
 #'
-#' ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
-#' y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
-#'
 #' ## build GSVA parameter object
 #' gsvapar <- gsvaParam(y, geneSets)
 #'
 #' ## calculate GSVA ranks
-#' gsvarankspar <- gsvaRanks(gsvapar)
-#' gsvarankspar
+#' gsvarownorm <- gsvaRowNorm(gsvapar)
+#' gsvaranks <- gsvaColRanks(gsvarownorm)
 #'
 #' ## by default the enrichment data for the first column and the first
-#' ## gene set are retrieved
-#' gsvaEnrichment(gsvarankspar)
+#' ## gene set in the input parameter object, are retrieved
+#' gsvaEnrichment(gsvaranks)
+#'
+#' ## we can calculate the enrichment data for any of the gene sets given
+#' ## in the input parameter object
+#' gsvaEnrichment(gsvaranks, geneSet="gset2")
+#'
+#' ## we can calculate the enrichment data for a new gene set that did not
+#' ## form part of the input parameter object
+#' gsvaEnrichment(gsvaranks, geneSet=c("g1", "g4", "g7"))
 #'
 #' @importFrom cli cli_alert_info cli_abort cli_alert_danger
 #' @importFrom utils installed.packages
 #' @exportMethod gsvaEnrichment
-setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
-          function(param, column=1, geneSet=1,
+setMethod("gsvaEnrichment", signature(rankExprData="GsvaExprData"),
+          function(rankExprData, column=1, geneSet=1,
                    plot=c("auto", "base", "ggplot", "no"), ...) {
+
+              if (length(column) != 1)
+                  cli_abort(c("x"="'column' should be of length 1."))
+
+              if (is.numeric(column) && !is.na(column)) {
+                  if (column != as.integer(column) ||
+                      column < 1 || column > ncol(rankExprData))
+                      cli_abort(c("x"=paste("'column' should be a positive",
+                                            "integer between 1 and the number",
+                                            "of columns in the input data.")))
+              } else
+                  cli_abort(c("x"="'column' should be a positive integer."))
+                    
+              param <- .pull_param(rankExprData, "gsvaranks")
 
               plot <- match.arg(plot)
 
               geneSets <- get_geneSets(param)
-              if (length(geneSet) > 1) {
-                  msg <- paste("Please provide only the name or position of a",
-                               "single gene set.")
-                  cli_abort(c("x"=msg))
-              }
-              if (is.character(geneSet)) {
+              if (is.character(geneSet) && length(geneSet) == 1) {
                   if (!geneSet %in% names(geneSets)) {
                       msg <- paste("Gene set {geneSet} is missing from the input",
                                    "parameter object.")
                       cli_abort(c("x"=msg))
                   }
-              } else if (is.numeric(geneSet)) {
+              } else if (is.numeric(geneSet) && length(geneSet) == 1 && !is.na(geneSet)) {
                   if (geneSet < 1 || geneSet > length(geneSets)) {
-                       msg <- paste("When 'geneSet' is numeric, it should be a",
-                                    "number between 1 and the number of gene",
-                                    "sets ({length(geneSets)}).")
+                       msg <- paste("When 'geneSet' is a single number, it",
+                                    "should be a number between 1 and the",
+                                    "number of gene sets ({length(geneSets)}).")
                        cli_abort(c("x"=msg))
                   }
-              } else {
+              } else if (!is.character(geneSet) && !is.numeric(geneSet)) {
                   msg <- paste("input argument 'geneSet' should be either",
                                "numeric or character.")
                   cli_abort(c("x"=msg))
+              }
+
+              if (is.numeric(geneSet) && length(geneSet) > 1) {
+                  if (any(geneSet != as.integer(geneSet)) || any(geneSet < 1) ||
+                      any(geneSet > nrow(rankExprData))) {
+                       msg <- paste("When 'geneSet' is a numeric vector,",
+                                    "it should contain positive integers",
+                                    "between 1 and the number of rows in the",
+                                    "input data.")
+                       cli_abort(c("x"=msg))
+                  }
+                  geneSets(param) <- list(geneSet)
+                  geneSet <- 1
+              }
+
+              if (is.character(geneSet) && length(geneSet) > 1) {
+                  if (!all(geneSet %in% rownames(rankExprData))) {
+                      msg <- paste("When 'geneSet' is a character vector, all",
+                                   "its values should be present in the row",
+                                   "names of the input data.")
+                      cli_abort(c("x"=msg))
+                  }
+                  geneSets(param) <- list(geneSet)
+                  geneSet <- 1
               }
 
               tau <- .get_tau(param)
@@ -1332,11 +1394,11 @@ setMethod("gsvaEnrichment", signature(param="gsvaRanksParam"),
               minsize <- get_minSize(param)
 
               exprData <- get_exprData(param)
-              filtDataMatrix <- unwrapData(exprData, get_assay(param))
+              filtDataMatrix <- unwrapData(rankExprData, "gsvaranks")
 
               ## no need for verbosity when mapping a single gene set
               filtMappedGeneSets <- .filterAndMapGeneSets(param,
-                                           wgset=geneSet,
+                                           wgset=geneSet, ## use that gene set
                                            filteredDataMatrix=filtDataMatrix,
                                            verbose=FALSE)
 
