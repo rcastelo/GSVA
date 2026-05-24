@@ -5,10 +5,6 @@
 \alias{gsvaRowNorm,gsvaParam-method}
 \alias{gsvaColRanks}
 \alias{gsvaColRanks,GsvaExprData-method}
-\alias{gsvaRanks}
-\alias{gsvaRanks,gsvaParam-method}
-\alias{gsvaScores}
-\alias{gsvaScores,gsvaRanksParam-method}
 \alias{gsvaColScores}
 \alias{gsvaColScores,GsvaExprData-method}
 \title{GSVA ranks and scores}
@@ -27,20 +23,6 @@
   maxmem = "auto"
 )
 
-\S4method{gsvaRanks}{gsvaParam}(
-  param,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose),
-  maxmem = "auto"
-)
-
-\S4method{gsvaScores}{gsvaRanksParam}(
-  param,
-  verbose = TRUE,
-  BPPARAM = SerialParam(progressbar = verbose),
-  maxmem = "auto"
-)
-
 \S4method{gsvaColScores}{GsvaExprData}(
   rankExprData,
   geneSets,
@@ -50,7 +32,8 @@
 )
 }
 \arguments{
-\item{param}{A parameter object of the \code{\link[=gsvaRanksParam-class]{gsvaRanksParam}} class.}
+\item{param}{A \code{\link[=gsvaParam-class]{gsvaParam}} object built using the constructor
+function \code{\link{gsvaParam}}.}
 
 \item{verbose}{Gives information about each calculation step. Default:
 \code{TRUE}.}
@@ -86,29 +69,29 @@ Currently, either a \code{\link[GSEABase:GeneSetCollection-class]{GeneSetCollect
 object or a \code{list} object.}
 }
 \value{
-In the case of the \code{gsvaRowNorm()} method, an object of class
-\code{\link[=gsvaRanksParam-class]{gsvaRanksParam}}.
+In the case of 'gsvaRowNorm()', an object of the same class as the
+input expresssion data given in the argument \code{exprData} of the \code{gsvaParam}
+object, containing the row-normalized expression values. The resulting
+object will have metadata with a copy of the input \code{gsvaParam} object,
+except for the \code{exprData} slot, and in the case of being a derivative of a
+\code{\link[SummarizedExperiment:SummarizedExperiment]{SummarizedExperiment}} object,
+an additional assay called "gsvarownr" storing the row-normalized expression
+values.
 
-In the case of the \code{gsvaColRanks()} method, an object of class
-\code{\link[=gsvaRanksParam-class]{gsvaRanksParam}}.
+In the case of 'gsvaColRanks()', an object of the same class as the
+input expresssion data given in the argument \code{exprData} of the \code{gsvaParam}
+object, containing the column rank values. The resulting object will have
+metadata with a copy of the input \code{gsvaParam} object, except for the
+\code{exprData} slot, and in the case of being a derivative of a
+\code{\link[SummarizedExperiment:SummarizedExperiment]{SummarizedExperiment}} object,
+an additional assay called "gsvaranks" storing the column rank values.
 
-In the case of the \code{gsvaRanks()} method, an object of class
-\code{\link[=gsvaRanksParam-class]{gsvaRanksParam}}.
-
-In the case of the \code{gsvaScores()} method, a gene-set by sample matrix
-of GSVA enrichment scores stored in a container object of the same type as
-the input ranks data container. If
-the input was a base matrix or a \code{dgCMatrix} object, then the output will
-be a base matrix object with the gene sets employed in the calculations
-stored in an attribute called \code{geneSets}. If the input was an
-\code{ExpressionSet} object, then the output will be also an \code{ExpressionSet}
-object with the gene sets employed in the calculations stored in an
-attributed called \code{geneSets}. If the input was an object of one of the
-classes described in \code{\link{GsvaExprData}}, such as a \code{SingleCellExperiment},
-then the output will be of the same class, where enrichment scores will be
-stored in an assay called \code{es} and the gene sets employed in the
-calculations will be stored in the \code{rowData} slot of the object under the
-column name \code{gs}.
+In the case of 'gsvaColScores()', an object of the same class as the
+input expression data given in the argument \code{exprData} of the \code{gsvaParam}
+object, containing the enrichment scores for the given gene sets. Note that
+while it will have the same columns as the input expression data, the rows
+will correspond to the gene sets for which the enrichment scores were
+calculated.
 }
 \description{
 Calculate GSVA scores in three steps: (1) normalize values of
@@ -165,9 +148,6 @@ variation analysis for microarray and RNA-Seq data.
 \doi{10.1186/1471-2105-14-7}
 }
 \seealso{
-\code{\link[=gsvaParam-class]{gsvaParam}}, \code{\link[=gsvaRanksParam-class]{gsvaRanksParam}}, \code{\link{gsva}},
+\code{\link[=gsvaParam-class]{gsvaParam}}, \code{\link{gsva}}, \code{\link{gsvaEnrichment}},
 \code{\link[BiocParallel:BiocParallelParam-class]{BiocParallelParam}},
-\code{\link[Matrix:dgCMatrix-class]{dgCMatrix}},
-\code{\link[Biobase]{ExpressionSet}},
-\code{\link[SingleCellExperiment:SingleCellExperiment-class]{SingleCellExperiment}}
 }

@@ -171,9 +171,7 @@ using singular value decomposition.
 \doi{10.1186/1471-2105-6-225}
 }
 \seealso{
-\code{\link{plageParam}}, \code{\link{zscoreParam}}, \code{\link{ssgseaParam}}, \code{\link{gsvaParam}},
+\code{\link{gsvaParam}}, \code{\link{plageParam}}, \code{\link{zscoreParam}}, \code{\link{ssgseaParam}},
 \code{\link[BiocParallel:BiocParallelParam-class]{BiocParallelParam}},
-\code{\link[Matrix:dgCMatrix-class]{dgCMatrix}},
-\code{\link[Biobase]{ExpressionSet}},
-\code{\link[SingleCellExperiment:SingleCellExperiment-class]{SingleCellExperiment}}
+\code{\link{gsvaRowNorm}}, \code{\link{gsvaColRanks}}, \code{\link{gsvaColScores}}
 }

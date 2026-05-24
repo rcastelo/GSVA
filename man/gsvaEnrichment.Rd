@@ -15,7 +15,7 @@
 }
 \arguments{
 \item{rankExprData}{A column-rank expression data set obtained with
-\code{\link{gsvaColRanks}}.  Must be one of the classes
+\code{\link{gsvaColRanks}}. Must be one of the classes
 supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.  For a list of these classes, see its
 help page using \code{help(GsvaExprData)}.}
 
@@ -89,4 +89,7 @@ Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
 variation analysis for microarray and RNA-Seq data.
 \emph{BMC Bioinformatics}, 14:7, 2013.
 \doi{10.1186/1471-2105-14-7}
+}
+\seealso{
+\code{\link{gsvaColRanks}}, \code{\link[=GsvaExprData-class]{GsvaExprData}}
 }
