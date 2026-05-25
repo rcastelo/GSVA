@@ -37,8 +37,8 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
-              maxmem <- .check_maxmem(param, maxmem, verbose)
-              ondisk <- .check_ondisk(param, maxmem, verbose)
+              maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+              ondisk <- .check_ondisk(param, maxmem=maxmem, verbose=verbose)
 
               dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                           ondisk, verbose)
@@ -82,7 +82,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
               colnames(gsvarnks) <- colnames(filtDataMatrix)
 
               rnkscontainer <- wrapData(get_exprData(param), gsvarnks, param,
-                                        "gsvaranks")
+                                        "gsvaranks", FALSE)
               rval <- new("gsvaRanksParam",
                           exprData=rnkscontainer, geneSets=get_geneSets(param),
                           assay="gsvaranks", annotation=get_annotation(param),
@@ -151,8 +151,8 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                     cli_alert_info("GSVA dense (classical) algorithm")
               }
 
-              maxmem <- .check_maxmem(param, maxmem, verbose)
-              ondisk <- .check_ondisk(param, maxmem, verbose)
+              maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+              ondisk <- .check_ondisk(param, maxmem=maxmem, verbose=verbose)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "GSVA", ondisk,
@@ -191,7 +191,8 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
 
               gs <- .geneSetsIndices2Names(indices=filtMappedGeneSets,
                                            names=rownames(filtDataMatrix))
-              rval <- wrapData(get_exprData(param), gsva_es, param, "es", gs)
+              rval <- wrapData(get_exprData(param), gsva_es, param, "es",
+                               FALSE, gs)
 
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")

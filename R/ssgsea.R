@@ -31,8 +31,8 @@ setMethod("gsva", signature(param="ssgseaParam"),
               filtDataMatrix <- famGaGS[["filteredDataMatrix"]]
               filtMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
-              maxmem <- .check_maxmem(param, maxmem, verbose)
-              ondisk <- .check_ondisk(param, maxmem, verbose)
+              maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+              ondisk <- .check_ondisk(param, maxmem=maxmem, verbose=verbose)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "ssGSEA",
@@ -64,7 +64,9 @@ setMethod("gsva", signature(param="ssgseaParam"),
               gs <- .geneSetsIndices2Names(
                   indices=filtMappedGeneSets,
                   names=rownames(filtDataMatrix))
-              rval <- wrapData(get_exprData(param), ssgsea_es, param, "es", gs)
+              rval <- wrapData(get_exprData(param), ssgsea_es, param, "es",
+                               TRUE, gs) ## dropExistingAssays=TRUE for
+                                         ## consistency but doesn't apply here
               
               if (verbose)
                   cli_alert_success("Calculations finished")

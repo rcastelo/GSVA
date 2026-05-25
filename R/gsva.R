@@ -157,10 +157,13 @@ setMethod("gsva", signature(param="gsvaParam"),
               .check_bpparam(BPPARAM)
 
               gsvarownr <- gsvaRowNorm(param=param, verbose=verbose,
+                                       dropExistingAssays=TRUE,
                                        BPPARAM=BPPARAM, maxmem=maxmem)
 
               gsvaranks <- gsvaColRanks(rowNormExprData=gsvarownr,
-                                        verbose=verbose, BPPARAM=BPPARAM,
+                                        verbose=verbose,
+                                        dropExistingAssays=TRUE,
+                                        BPPARAM=BPPARAM,
                                         maxmem=maxmem)
 
               es <- gsvaColScores(rankExprData=gsvaranks, verbose=verbose,
@@ -418,8 +421,8 @@ gsvaParam <- function(exprData, geneSets,
                  anyNA=naparam$any_na, use=use, filterRows=filterRows,
                  nzcount=nzc, ondisk=ondisk)
 
-    maxmem <- .check_maxmem(param, "auto", verbose)
-    .check_ondisk(param, maxmem, verbose)
+    maxmem <- .check_maxmem(param, maxmem="auto", verbose=verbose)
+    .check_ondisk(param, maxmem=maxmem, verbose=verbose)
 
     return(param)
 }
@@ -431,7 +434,7 @@ setValidity("gsvaParam", function(object) {
     inv <- NULL
     xd <- object@exprData
     dd <- dim(xd)
-    an <- gsvaAssayNames(xd)
+    ## an <- gsvaAssayNames(xd)
     oa <- object@assay
     
     if(dd[1] == 0) {
@@ -446,9 +449,10 @@ setValidity("gsvaParam", function(object) {
     if(length(oa) != 1) {
         inv <- c(inv, "@assay must be of length 1")
     }
-    if(.isCharLength1(oa) && .isCharNonEmpty(an) && (!(oa %in% an))) {
-        inv <- c(inv, "@assay must be one of assayNames(@exprData)")
-    }
+    ## this is incompatible with using dropExistingAssays=TRUE
+    ## if(.isCharLength1(oa) && .isCharNonEmpty(an) && (!(oa %in% an))) {
+    ##     inv <- c(inv, "@assay must be one of assayNames(@exprData)")
+    ## }
     if(length(object@annotation) != 1) {
         inv <- c(inv, "@annotation must be of length 1")
     }
@@ -685,6 +689,9 @@ setMethod("details",
         if (!any(assayNames(exprData) %in% c("gsvarownr", "gsvaranks"))) 
             cli_abort(c("x"="Wrong metadata in the input expression data."))
     }
+    ## an <- gsvaAssayNames(exprData)
+    ## if (!is.na(an) && p$assay %in% an) ## original assay have been dropped
+    ##     p$assay <- assay
 
     param <- new("gsvaParam",
                  exprData=exprData, geneSets=p$geneSets,
@@ -712,6 +719,16 @@ setMethod("details",
 #'
 #' @param verbose Gives information about each calculation step. Default:
 #' `TRUE`.
+#'
+#' @param dropExistingAssays Logical vector of length 1. It only applies when
+#' the input expression data is stored using a
+#' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment]
+#' derivative, which allows one to store more than one matrix of expression
+#' values in different assay slots. By default `dropExistingAssays=FALSE` and
+#' the new assay with the row-normalized expression values or the column ranks
+#' will be stored as a new assay in the same input object. When
+#' `dropExistingAssays=TRUE`, any existing assay will be dropped before adding
+#' the new assay with the row-normalized expression values or the column ranks.
 #'
 #' @param BPPARAM An object of class `BiocParallelParam` specifying parameters
 #' related to the parallel execution of some of the tasks and calculations
@@ -796,6 +813,7 @@ setMethod("details",
 setMethod("gsvaRowNorm", signature(param="gsvaParam"),
           function(param,
                    verbose=TRUE,
+                   dropExistingAssays=FALSE,
                    BPPARAM=SerialParam(progressbar=verbose),
                    maxmem="auto") {
 
@@ -808,8 +826,8 @@ setMethod("gsvaRowNorm", signature(param="gsvaParam"),
 
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
-              maxmem <- .check_maxmem(param, maxmem, verbose)
-              ondisk <- .check_ondisk(param, maxmem, verbose)
+              maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+              ondisk <- .check_ondisk(param, maxmem=maxmem, verbose=verbose)
 
               dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                           ondisk, verbose)
@@ -848,7 +866,7 @@ setMethod("gsvaRowNorm", signature(param="gsvaParam"),
               colnames(gsvarownr) <- colnames(filtDataMatrix)
 
               rval <- wrapData(get_exprData(param), gsvarownr, param,
-                               "gsvarownr")
+                               "gsvarownr", dropExistingAssays)
 
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")
@@ -881,6 +899,7 @@ setMethod("gsvaRowNorm", signature(param="gsvaParam"),
 setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
           function(rowNormExprData,
                    verbose=TRUE,
+                   dropExistingAssays=FALSE,
                    BPPARAM=SerialParam(progressbar=verbose),
                    maxmem="auto") {
 
@@ -894,8 +913,10 @@ setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
               .check_bpparam(BPPARAM)
 
               dataMatrix <- unwrapData(rowNormExprData, "gsvarownr")
-              maxmem <- .check_maxmem(param, maxmem, verbose)
-              ondisk <- .check_ondisk(param, maxmem, verbose)
+              maxmem <- .check_maxmem(param, assay="gsvarownr", maxmem=maxmem,
+                                      verbose=verbose)
+              ondisk <- .check_ondisk(param, assay="gsvarownr", maxmem=maxmem,
+                                      verbose=verbose)
 
               dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                           ondisk, verbose)
@@ -909,7 +930,7 @@ setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
               colnames(gsvarnks) <- colnames(dataMatrix)
 
               rval <- wrapData(get_exprData(param), gsvarnks, param,
-                               "gsvaranks")
+                               "gsvaranks", dropExistingAssays)
 
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")
@@ -1001,8 +1022,10 @@ setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
                     cli_alert_info("GSVA dense (classical) algorithm")
               }
 
-              maxmem <- .check_maxmem(param, maxmem, verbose)
-              ondisk <- .check_ondisk(param, maxmem, verbose)
+              maxmem <- .check_maxmem(param, assay="gsvaranks", maxmem=maxmem,
+                                      verbose=verbose)
+              ondisk <- .check_ondisk(param, assay="gsvaranks", maxmem=maxmem,
+                                      verbose=verbose)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "GSVA", ondisk,
@@ -1041,7 +1064,9 @@ setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
 
               gs <- .geneSetsIndices2Names(indices=filtMappedGeneSets,
                                            names=rownames(filtDataMatrix))
-              rval <- wrapData(get_exprData(param), gsva_es, param, "es", gs)
+              rval <- wrapData(get_exprData(param), gsva_es, param, "es",
+                               TRUE, gs) ## dropExistingAssays=TRUE for
+                                         ## consistency but doesn't apply here
 
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")

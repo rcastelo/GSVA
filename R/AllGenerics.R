@@ -62,7 +62,7 @@ setGeneric("unwrapData",
            function(container, ...) standardGeneric("unwrapData"))
 
 setGeneric("wrapData",
-           function(container, dataMatrix, param, assay, geneSets)
+           function(container, dataMatrix, param, assay, dropAssays, geneSets)
                standardGeneric("wrapData"))
 
 setGeneric("mapGeneSetsToAnno",

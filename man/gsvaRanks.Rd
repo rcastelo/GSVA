@@ -12,6 +12,7 @@
 \S4method{gsvaRowNorm}{gsvaParam}(
   param,
   verbose = TRUE,
+  dropExistingAssays = FALSE,
   BPPARAM = SerialParam(progressbar = verbose),
   maxmem = "auto"
 )
@@ -19,6 +20,7 @@
 \S4method{gsvaColRanks}{GsvaExprData}(
   rowNormExprData,
   verbose = TRUE,
+  dropExistingAssays = FALSE,
   BPPARAM = SerialParam(progressbar = verbose),
   maxmem = "auto"
 )
@@ -37,6 +39,16 @@ function \code{\link{gsvaParam}}.}
 
 \item{verbose}{Gives information about each calculation step. Default:
 \code{TRUE}.}
+
+\item{dropExistingAssays}{Logical vector of length 1. It only applies when
+the input expression data is stored using a
+\code{\link[SummarizedExperiment:SummarizedExperiment]{SummarizedExperiment}}
+derivative, which allows one to store more than one matrix of expression
+values in different assay slots. By default \code{dropExistingAssays=FALSE} and
+the new assay with the row-normalized expression values or the column ranks
+will be stored as a new assay in the same input object. When
+\code{dropExistingAssays=TRUE}, any existing assay will be dropped before adding
+the new assay with the row-normalized expression values or the column ranks.}
 
 \item{BPPARAM}{An object of class \code{BiocParallelParam} specifying parameters
 related to the parallel execution of some of the tasks and calculations

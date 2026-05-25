@@ -50,7 +50,7 @@ test_inputdatacontainers <- function() {
     ## estimate GSVA enrichment scores with input as a SummarizedExperiment object
     suppressPackageStartupMessages({
         library(S4Vectors)
-	library(SummarizedExperiment)
+        library(SummarizedExperiment)
     })
 
     se <- SummarizedExperiment(assay=list(counts=y2),
@@ -68,6 +68,11 @@ test_inputdatacontainers <- function() {
     out <- cli_fmt(gsvaParam(se, gsets))
     checkTrue(substr(out, 3, nchar(out)) == "No assay name provided; using default assay 'counts'")
     checkException(gsvaParam(se, gsets, assay="dummy"))
+
+    gsvarownr <- gsvaRowNorm(gsvapar, dropExistingAssays=TRUE, verbose=FALSE)
+    gsvaranks <- gsvaColRanks(gsvarownr, dropExistingAssays=TRUE, verbose=FALSE)
+    es.se2 <- gsvaColScores(gsvaranks, verbose=FALSE)
+    checkEqualsNumeric(assay(es.se), assay(es.se2))
 
     ## estimate GSVA enrichment scores with input as a dgCMatrix object
     suppressPackageStartupMessages(library(Matrix))

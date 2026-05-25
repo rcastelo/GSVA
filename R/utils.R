@@ -55,9 +55,10 @@ setMethod("unwrapData", signature("SpatialExperiment"),
 
 ## wrapData: put the resulting data and gene sets into the original data container type
 setMethod("wrapData", signature(container="matrix"),
-          function(container, dataMatrix, param, assay, geneSets) {
-              stopifnot(!missing(assay))
+          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
               stopifnot(!missing(param))
+              stopifnot(!missing(assay))
+              stopifnot(!missing(dropAssays))
               attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
               attr(dataMatrix, "assay") <- assay
               if (!missing(geneSets))
@@ -66,9 +67,10 @@ setMethod("wrapData", signature(container="matrix"),
           })
 
 setMethod("wrapData", signature(container="dgCMatrix"),
-          function(container, dataMatrix, param, assay, geneSets) {
-              stopifnot(!missing(assay))
+          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
               stopifnot(!missing(param))
+              stopifnot(!missing(assay))
+              stopifnot(!missing(dropAssays))
               attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
               attr(dataMatrix, "assay") <- assay
               if (!missing(geneSets))
@@ -77,9 +79,10 @@ setMethod("wrapData", signature(container="dgCMatrix"),
           })
 
 setMethod("wrapData", signature(container="SVT_SparseMatrix"),
-          function(container, dataMatrix, param, assay, geneSets) {
-              stopifnot(!missing(assay))
+          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
               stopifnot(!missing(param))
+              stopifnot(!missing(assay))
+              stopifnot(!missing(dropAssays))
               attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
               attr(dataMatrix, "assay") <- assay
               if (!missing(geneSets))
@@ -88,9 +91,10 @@ setMethod("wrapData", signature(container="SVT_SparseMatrix"),
           })
 
 setMethod("wrapData", signature(container="DelayedMatrix"),
-          function(container, dataMatrix, param, assay, geneSets) {
-              stopifnot(!missing(assay))
+          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
               stopifnot(!missing(param))
+              stopifnot(!missing(assay))
+              stopifnot(!missing(dropAssays))
               attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
               attr(dataMatrix, "assay") <- assay
               if (!missing(geneSets))
@@ -99,9 +103,10 @@ setMethod("wrapData", signature(container="DelayedMatrix"),
           })
 
 setMethod("wrapData", signature(container="ExpressionSet"),
-          function(container, dataMatrix, param, assay, geneSets) {
-              stopifnot(!missing(assay))
+          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
               stopifnot(!missing(param))
+              stopifnot(!missing(assay))
+              stopifnot(!missing(dropAssays))
               rval <- new("ExpressionSet", exprs=dataMatrix,
                           phenoData=phenoData(container),
                           experimentData=experimentData(container),
@@ -114,21 +119,30 @@ setMethod("wrapData", signature(container="ExpressionSet"),
               return(rval)
           })
 
+.check_existing_assay <- function(container, assay) {
+    if (assay %in% assayNames(container))
+        cli_abort(c("x"=paste("Assay {assay} already exists in the input",
+                              "container object.")))
+}
+
 #' @importFrom IRanges CharacterList
 #' @importFrom S4Vectors SimpleList
 setMethod("wrapData", signature(container="SummarizedExperiment"),
-          function(container, dataMatrix, param, assay, geneSets) {
-              stopifnot(!missing(assay))
+          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
               stopifnot(!missing(param))
+              stopifnot(!missing(assay))
+              stopifnot(!missing(dropAssays))
               rdata <- NULL
               adata <- SimpleList(dataMatrix)
               names(adata) <- assay
               if (!missing(geneSets)) { ## storing enrichment scores only
                   rdata <- DataFrame(gs=CharacterList(geneSets))
               } else { ## missing geneSets implies adding an assay
+                  .check_existing_assay(container, assay)
                   stopifnot(all(rownames(dataMatrix) %in% rownames(container)))
                   mask <- rownames(container) %in% rownames(dataMatrix)
-                  adata <- c(assays(container[mask, ]), adata)
+                  if (!dropAssays)
+                      adata <- c(assays(container[mask, ]), adata)
                   rdata <- rowData(container)[mask, ]
               }
               rval <- SummarizedExperiment(
@@ -147,18 +161,21 @@ setMethod("wrapData", signature(container="SummarizedExperiment"),
 #' @importFrom S4Vectors SimpleList
 #' @importFrom SingleCellExperiment SingleCellExperiment
 setMethod("wrapData", signature(container="SingleCellExperiment"),
-          function(container, dataMatrix, param, assay, geneSets) {
-              stopifnot(!missing(assay))
+          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
               stopifnot(!missing(param))
+              stopifnot(!missing(assay))
+              stopifnot(!missing(dropAssays))
               rdata <- NULL
               adata <- SimpleList(dataMatrix)
               names(adata) <- assay
               if (!missing(geneSets)) { ## storing enrichment scores only
                   rdata <- DataFrame(gs=CharacterList(geneSets))
               } else { ## missing geneSets implies adding an assay
+                  .check_existing_assay(container, assay)
                   stopifnot(all(rownames(dataMatrix) %in% rownames(container)))
                   mask <- rownames(container) %in% rownames(dataMatrix)
-                  adata <- c(assays(container[mask, ]), adata)
+                  if (!dropAssays)
+                      adata <- c(assays(container[mask, ]), adata)
                   rdata <- rowData(container)[mask, ]
               }
               rval <- SingleCellExperiment(
@@ -177,18 +194,21 @@ setMethod("wrapData", signature(container="SingleCellExperiment"),
 #' @importFrom S4Vectors SimpleList
 #' @importFrom SingleCellExperiment SingleCellExperiment
 setMethod("wrapData", signature(container="SpatialExperiment"),
-          function(container, dataMatrix, param, assay, geneSets) {
-              stopifnot(!missing(assay))
+          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
               stopifnot(!missing(param))
+              stopifnot(!missing(assay))
+              stopifnot(!missing(dropAssays))
               rdata <- NULL
               adata <- SimpleList(dataMatrix)
               names(adata) <- assay
               if (!missing(geneSets)) { ## storing enrichment scores only
                   rdata <- DataFrame(gs=CharacterList(geneSets))
               } else { ## missing geneSets implies adding an assay
+                  .check_existing_assay(container, assay)
                   stopifnot(all(rownames(dataMatrix) %in% rownames(container)))
                   mask <- rownames(container) %in% rownames(dataMatrix)
-                  adata <- c(assays(container[mask, ]), adata)
+                  if (!dropAssays)
+                      adata <- c(assays(container[mask, ]), adata)
                   rdata <- rowData(container)[mask, ]
               }
               rval <- SpatialExperiment(
@@ -588,19 +608,18 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 
 #' @importFrom cli cli_abort cli_alert_info
 #' @importFrom memuse Sys.meminfo
-.check_maxmem <- function(param, x, verbose) {
-    if (length(x) > 1 || (!is.numeric(x) && !is.character(x))) {
+.check_maxmem <- function(param, assay=get_assay(param), maxmem, verbose) {
+    if (length(maxmem) > 1 || (!is.numeric(maxmem) && !is.character(maxmem))) {
         msg <- paste("'maxmem' should be a vector of length 1 of either a",
                      "number in bytes or a character string formed by a",
                      "number followed by the suffix K, M, G or T.")
         cli_abort(c("x"=msg))
     }
 
-    maxmem <- x
-    if (is.character(x) && x == "auto") {
+    if (is.character(maxmem) && maxmem == "auto") {
         totalram <- Sys.meminfo()$totalram
         maxmem <- as.numeric(totalram * 0.9) ## auto takes 90% of RAM
-        X <- unwrapData(get_exprData(param), get_assay(param))
+        X <- unwrapData(get_exprData(param), assay)
         if (verbose && is(X, "DelayedArray") &&
             gsva_global$show_start_and_end_messages)
             cli_alert_info(sprintf("Maximum available main memory (90%%): %s",
@@ -623,10 +642,10 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
 #' @importFrom memuse howbig
-.check_ondisk <- function(param, maxmem, verbose) {
+.check_ondisk <- function(param, assay=get_assay(param), maxmem, verbose) {
     ondisk <- .get_ondisk(param)
     if (ondisk == "auto") {
-        X <- unwrapData(get_exprData(param), get_assay(param))
+        X <- unwrapData(get_exprData(param), assay)
         tot <- as.numeric(nrow(X)) * as.numeric(ncol(X))
         rep <- "dense"
         spa <- 1
