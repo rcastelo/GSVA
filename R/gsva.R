@@ -961,7 +961,7 @@ setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
               maxmem <- .check_maxmem(param, assay="gsvarownr", maxmem=maxmem,
                                       verbose=verbose)
               ondisk <- .check_ondisk(param, assay="gsvarownr", first=first,
-                                      last=last, whdim=1, maxmem=maxmem,
+                                      last=last, whdim=2, maxmem=maxmem,
                                       verbose=verbose)
 
               dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
