@@ -5,12 +5,15 @@
 \alias{loadHDF5GSVAranks}
 \title{Save/load GSVA rank values to disk using HDF5 format}
 \usage{
-saveHDF5GSVAranks(x, dir, ...)
+saveHDF5GSVAranks(rankExprData, dir, ...)
 
 loadHDF5GSVAranks(dir, ...)
 }
 \arguments{
-\item{x}{A \code{\link[=gsvaRanksParam-class]{gsvaRanksParam}} object to save to disk.}
+\item{rankExprData}{A column-rank expression data set obtained with
+\code{\link{gsvaColRanks}}. Must be one of the classes supported by
+\code{\link[=GsvaExprData-class]{GsvaExprData}}. For a list of these classes, see its help page
+using \code{help(GsvaExprData)}.}
 
 \item{dir}{The path to the directory where to save or load the GSVA ranks
 data.}
@@ -24,16 +27,21 @@ respectively.}
 \value{
 For \code{saveHDF5GSVAranks}, the path to the directory where the data
 has been saved is returned invisibly. For \code{loadHDF5GSVAranks}, a
-\code{gsvaRanksParam} object is returned containing the loaded GSVA rank values
-and their corresponding metadata.
+an object is returned containing the loaded GSVA rank values and their
+corresponding metadata. If the saved ranks were originally stored in a
+\code{\link[SummarizedExperiment:SummarizedExperiment]{SummarizedExperiment}} object
+or one of its derived classes, then the returned object will be a
+\code{\link[SummarizedExperiment:SummarizedExperiment]{SummarizedExperiment}}.
+Otherwise, the returned object will be a
+\code{\link[DelayedArray:DelayedMatrix]{DelayedMatrix}} object.
 }
 \description{
 The functions \code{saveHDF5GSVAranks} and \code{loadHDF5GSVAranks} can
 be used to save and load the GSVA rank values to/from disk, respectively.
-The \code{saveHDF5GSVAranks} function takes a \code{gsvaRanksParam} object and saves
-the rank values along with the relevant metadata to a specified directory.
-The \code{loadHDF5GSVAranks} function reads the saved data from the specified
-directory and reconstructs the \code{gsvaRanksParam} object with the rank values
+The \code{saveHDF5GSVAranks()} function takes the output of \code{\link{gsvaColRanks}} as
+input, and saves the rank values along with the relevant metadata to a
+specified directory. The \code{loadHDF5GSVAranks()} function reads the saved data
+from the specified directory and returns an object with the GSVA rank values
 and their corresponding metadata.
 }
 \examples{
@@ -55,22 +63,25 @@ y <- matrix(rnorm(n*p), nrow=p, ncol=n,
 ## build GSVA parameter object
 gsvapar <- gsvaParam(y, geneSets)
 
-## calculate GSVA ranks
-gsvarankspar <- gsvaRanks(gsvapar)
+## calculate row-normalized expression values
+gsvarownorm <- gsvaRowNorm(gsvapar)
+
+## calculate GSVA column ranks
+gsvacolranks <- gsvaColRanks(gsvarownorm)
 
 ## calculate GSVA scores
-es <- gsvaScores(gsvarankspar)
+es <- gsvaColScores(gsvacolranks)
 
 ## save the GSVA ranks to disk
 dir <- tempfile()
-saveHDF5GSVAranks(gsvarankspar, dir)
+saveHDF5GSVAranks(gsvacolranks, dir)
 
 ## load the GSVA ranks from disk
-loaded_gsvarankspar <- loadHDF5GSVAranks(dir)
+loaded_gsvacolranks <- loadHDF5GSVAranks(dir)
 
 ## check that the loaded ranks provide the
 ## same scores as the original ranks
-loaded_es <- gsvaScores(loaded_gsvarankspar)
+loaded_es <- gsvaColScores(loaded_gsvacolranks)
 identical(es, loaded_es)
 
 }

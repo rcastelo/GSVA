@@ -6,14 +6,26 @@
 #' Virtual superclass of expression data classes supported by `GSVA`.
 #'
 #' `GSVA` supports expression data matrices in a growing number of containers
-#' and representations.  This class union allows to store any of these in a slot
-#' of another class as well as defining common methods for all of them.
+#' and representations. This class union allows to store any of these in a slot
+#' of another class as well as defining common methods for all of them. The
+#' current list of supported classes is:
+#'
+#' * `matrix`
+#' * `dgCMatrix` from package `Matrix`
+#' * `SVT_SparseMatrix` from package `SparseArray`
+#' * `DelayedMatrix` from package `DelayedArray`
+#' * `HDF5Matrix` from package `HDF5Array`
+#' * `ExpressionSet` from package `Biobase`
+#' * `SummarizedExperiment` from package `SummarizedExperiment`
+#' * `SingleCellExperiment` from package `SingleCellExperiment`
+#' * `SpatialExperiment` from package `SpatialExperiment`
 #'
 #' @seealso
 #' [`matrix`],
 #' [`dgCMatrix`][Matrix::dgCMatrix-class],
 #' [`SVT_SparseMatrix`][SparseArray::SVT_SparseMatrix-class],
 #' [`DelayedMatrix`][DelayedArray::DelayedMatrix-class],
+#' [`HDF5Array`][HDF5Array::HDF5Array-class],
 #' \code{\link[Biobase]{ExpressionSet}},
 ### we are using the plain Rd above because
 ###  #' [`ExpressionSet`][Biobase::ExpressionSet-class],
@@ -22,8 +34,7 @@
 ###  ‘[Biobase:class.ExpressionSet]{ExpressionSet}’
 #' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment-class],
 #' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class],
-#' [`SpatialExperiment`][SpatialExperiment::SpatialExperiment-class],
-#' [`HDF5Array`][HDF5Array::HDF5Array-class]
+#' [`SpatialExperiment`][SpatialExperiment::SpatialExperiment-class]
 #'
 #' @importClassesFrom Matrix dgCMatrix
 #' @importClassesFrom Biobase ExpressionSet

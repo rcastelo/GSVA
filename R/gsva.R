@@ -967,10 +967,12 @@ setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
               dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                           first, last, whdim=2,
                                                           ondisk, verbose)
+              sparse <- .get_sparse(param)
+              if (sparse && !is_sparse(dataMatrix))
+                  sparse <- FALSE
 
-              gsvarnks <- .compute_gsva_ranks(Z=dataMatrix,
-                                              verbose=verbose,
-                                              BPPARAM=BPPARAM,
+              gsvarnks <- .compute_gsva_ranks(Z=dataMatrix, sparse=sparse,
+                                              verbose=verbose, BPPARAM=BPPARAM,
                                               maxmem=maxmem)
 
               rownames(gsvarnks) <- rownames(dataMatrix)
@@ -1533,9 +1535,13 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 
 #' @importFrom cli cli_alert_info
 #' @importFrom cli cli_progress_done cli_abort
-.compute_gsva_ranks <- function(Z, verbose, BPPARAM=NULL, maxmem=Inf) {
-    if (verbose)
-        cli_alert_info("Calculating column ranks")
+.compute_gsva_ranks <- function(Z, sparse, verbose, BPPARAM=NULL, maxmem=Inf) {
+    if (verbose) {
+        if (sparse)
+            cli_alert_info("Calculating sparse column ranks")
+        else
+            cli_alert_info("Calculating column ranks")
+    }
  
     ## here 'ties.method="last"' allows one to obtain the result
     ## from 'order()' based on ranks
