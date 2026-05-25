@@ -14,10 +14,10 @@ test_mainAPI <- function() {
     gs <- replicate(ngs, sample(rownames(xf), 25, replace=FALSE), simplify=FALSE)
     names(gs) <- paste0("gs", seq_len(ngs))
 
-    checkException(g <- gsvaRanks(gsvaParam(exprData=xf, geneSets=gs),
-				  verbose=FALSE, maxmem=c(1, 2)))
+    checkException(g <- gsvaRowNorm(gsvaParam(exprData=xf, geneSets=gs),
+				                            verbose=FALSE, maxmem=c(1, 2)))
 
-    g <- gsvaRanks(gsvaParam(xf, gs), verbose=FALSE, maxmem="1M")
+    g <- gsvaRowNorm(gsvaParam(xf, gs), verbose=FALSE, maxmem="1M")
 
     ## check discarding rows with constant values
     library(cli)

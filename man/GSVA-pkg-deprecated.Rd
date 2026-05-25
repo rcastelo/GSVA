@@ -2,10 +2,38 @@
 % Please edit documentation in R/GSVA-pkg-deprecated.R
 \name{GSVA-pkg-deprecated}
 \alias{GSVA-pkg-deprecated}
+\alias{gsvaRanks}
+\alias{gsvaRanks,gsvaParam-method}
+\alias{gsvaScores}
+\alias{gsvaScores,gsvaRanksParam-method}
 \title{Deprecated functions in package \code{GSVA}.}
+\usage{
+\S4method{gsvaRanks}{gsvaParam}(
+  param,
+  verbose = TRUE,
+  BPPARAM = SerialParam(progressbar = verbose),
+  maxmem = "auto"
+)
+
+\S4method{gsvaScores}{gsvaRanksParam}(
+  param,
+  verbose = TRUE,
+  BPPARAM = SerialParam(progressbar = verbose),
+  maxmem = "auto"
+)
+}
+\arguments{
+\item{param}{A parameter object of the \code{\link[=gsvaRanksParam-class]{gsvaRanksParam}} class.}
+}
 \description{
 The functions listed below are deprecated and will be defunct in
 the near future. When possible, alternative functions with similar
 functionality are also mentioned.
+
+The \code{gsvaRanks()} method is deprecated. Please use \code{gsvaRowNorm()}
+and \code{gsvaColRanks()} instead.
+
+The \code{gsvaScores()} method is deprecated. Please use
+\code{gsvaColScores()} instead.
 }
 \keyword{internal}

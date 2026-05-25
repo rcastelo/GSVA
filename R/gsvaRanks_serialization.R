@@ -2,13 +2,16 @@
 #'
 #' @description The functions `saveHDF5GSVAranks` and `loadHDF5GSVAranks` can
 #' be used to save and load the GSVA rank values to/from disk, respectively.
-#' The `saveHDF5GSVAranks` function takes a `gsvaRanksParam` object and saves
-#' the rank values along with the relevant metadata to a specified directory.
-#' The `loadHDF5GSVAranks` function reads the saved data from the specified
-#' directory and reconstructs the `gsvaRanksParam` object with the rank values
+#' The `saveHDF5GSVAranks()` function takes the output of [`gsvaColRanks`] as
+#' input, and saves the rank values along with the relevant metadata to a
+#' specified directory. The `loadHDF5GSVAranks()` function reads the saved data
+#' from the specified directory and returns an object with the GSVA rank values
 #' and their corresponding metadata.
 #'
-#' @param x A [`gsvaRanksParam-class`] object to save to disk.
+#' @param rankExprData A column-rank expression data set obtained with
+#' [`gsvaColRanks`]. Must be one of the classes supported by
+#' [`GsvaExprData-class`]. For a list of these classes, see its help page
+#' using `help(GsvaExprData)`.
 #'
 #' @param dir The path to the directory where to save or load the GSVA ranks
 #' data.
@@ -21,8 +24,13 @@
 #'
 #' @return For `saveHDF5GSVAranks`, the path to the directory where the data
 #' has been saved is returned invisibly. For `loadHDF5GSVAranks`, a
-#' `gsvaRanksParam` object is returned containing the loaded GSVA rank values
-#' and their corresponding metadata.
+#' an object is returned containing the loaded GSVA rank values and their
+#' corresponding metadata. If the saved ranks were originally stored in a
+#' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment] object
+#' or one of its derived classes, then the returned object will be a
+#' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment].
+#' Otherwise, the returned object will be a
+#' [`DelayedMatrix`][DelayedArray::DelayedMatrix] object.
 #'
 #' @examples
 #'
@@ -43,22 +51,25 @@
 #' ## build GSVA parameter object
 #' gsvapar <- gsvaParam(y, geneSets)
 #'
-#' ## calculate GSVA ranks
-#' gsvarankspar <- gsvaRanks(gsvapar)
+#' ## calculate row-normalized expression values
+#' gsvarownorm <- gsvaRowNorm(gsvapar)
+#'
+#' ## calculate GSVA column ranks
+#' gsvacolranks <- gsvaColRanks(gsvarownorm)
 #'
 #' ## calculate GSVA scores
-#' es <- gsvaScores(gsvarankspar)
+#' es <- gsvaColScores(gsvacolranks)
 #'
 #' ## save the GSVA ranks to disk
 #' dir <- tempfile()
-#' saveHDF5GSVAranks(gsvarankspar, dir)
+#' saveHDF5GSVAranks(gsvacolranks, dir)
 #'
 #' ## load the GSVA ranks from disk
-#' loaded_gsvarankspar <- loadHDF5GSVAranks(dir)
+#' loaded_gsvacolranks <- loadHDF5GSVAranks(dir)
 #'
 #' ## check that the loaded ranks provide the
 #' ## same scores as the original ranks
-#' loaded_es <- gsvaScores(loaded_gsvarankspar)
+#' loaded_es <- gsvaColScores(loaded_gsvacolranks)
 #' identical(es, loaded_es)
 #'
 #' @importFrom cli cli_abort
@@ -69,57 +80,55 @@
 #' @rdname gsvaRanks_serialization
 #'
 #' @export
-saveHDF5GSVAranks <- function(x, dir, ...) {
-    if (!inherits(x, "gsvaRanksParam"))
-      cli_abort("The input object in 'x' must be of class 'gsvaRanksParam'")
-
-    edata <- get_exprData(x)
-    wasse <- is(edata, "SummarizedExperiment")
-
-    if (is(edata, "SummarizedExperiment")) {
-        an <- assayNames(edata)
-        if (!"gsvaranks" %in% an)
-            cli_abort("Cannot find the ranks in the input object 'x'")
-
-        for (a in an)
-            if (a != "gsvaranks")
-                assay(edata, a) <- NULL
-    } else {
-        annot <- NULL
-        if (!is.null(attributes(edata)$annotation) &&
-            is(attributes(edata)$annotation, "GeneIdentifierType")) {
-          annot <- attributes(edata)$annotation
-          attributes(edata)$annotation <- NULL
-        }
-        edata <- SummarizedExperiment(assays=list(gsvaranks=edata))
-        if (!is.null(annot))
-          gsvaAnnotation(edata) <- annot
+saveHDF5GSVAranks <- function(rankExprData, dir, ...) {
+    if (!is(rankExprData, "GsvaExprData")) {
+        msg <- paste("The input object in 'rankExprData' must a subclass of",
+                     "'GsvaExprData'. See 'help(GsvaExprData)' for details.")
+        cli_abort(msg)
     }
 
-    knmss <- .get_kcdfNoneMinSampleSize(x)
-    metadata(edata) <- c(metadata(edata),
-                         list(gsvaRanksParam=list(originalClassWasSE=wasse,
-                                                  geneSets=get_geneSets(x),
-                                                  assay=get_assay(x),
-                                                  annotation=get_annotation(x),
-                                                  minSize=get_minSize(x),
-                                                  maxSize=get_maxSize(x),
-                                                  kcdf=.get_kcdf(x),
-                                                  kcdfNoneMinSampleSize=knmss,
-                                                  tau=.get_tau(x),
-                                                  maxDiff=.get_maxDiff(x),
-                                                  absRanking=.get_absRanking(x),
-                                                  sparse=.get_sparse(x),
-                                                  checkNA=.get_checkNA(x),
-                                                  didCheckNA=.get_didCheckNA(x),
-                                                  anyNA=anyNA(x),
-                                                  use=.get_NAuse(x),
-                                                  filterRows=.get_filterRows(x),
-                                                  nzcount=nzcount(x),
-                                                  ondisk=.get_ondisk(x))
-  ))
+    se <- rankExprData
+    if (!is(se, "SummarizedExperiment")) {
+        param <- .pull_param(rankExprData, "gsvaranks")
+        first <- last <- NA_real_
+        whdim <- NA_integer_
+        annot <- NULL
+        if (!is.null(attributes(rankExprData)$annotation) &&
+            is(attributes(rankExprData)$annotation, "GeneIdentifierType")) {
+            annot <- attributes(rankExprData)$annotation
+            attributes(rankExprData)$annotation <- NULL
+        }
+        if (!is.null(attributes(rankExprData)$restrict)) {
+            first <- attributes(rankExprData)$restrict$first
+            last <- attributes(rankExprData)$restrict$last
+            whdim <- attributes(rankExprData)$restrict$whdim
+            attributes(rankExprData)$restrict <- NULL
+        }
+        se <- SummarizedExperiment(assays=list(dummy=rankExprData))
+        if (!is.null(annot))
+            gsvaAnnotation(se) <- annot
+        se <- wrapData(se, rankExprData, param, "gsvaranks", first=first,
+                       last=last, whdim=whdim, dropAssays=TRUE)
 
-  saveHDF5SummarizedExperiment(edata, dir, ...)
+    } else { ## 'SummarizedExperiment' object, remove all assays except 'gsvaranks'
+        an <- assayNames(se)
+        if (!"gsvaranks" %in% an) {
+            msg <- paste("Cannot find the ranks in the input object given in the",
+                         "'rankExprData' parameter.")
+            cli_abort(c("x"=msg))
+        }
+        if (is.null(metadata(se)$gsvaParam)) {
+            msg <- paste("Cannot find the GSVA parameters in the metadata of the",
+                         "input object given in the 'rankExprData' parameter.")
+            cli_abort(c("x"=msg))
+        }
+
+        for (a in an) ## remove all assays except the one with the ranks
+            if (a != "gsvaranks")
+                assay(se, a) <- NULL
+    }
+
+  saveHDF5SummarizedExperiment(se, dir, ...)
 
   invisible(dir)
 }
@@ -133,47 +142,36 @@ saveHDF5GSVAranks <- function(x, dir, ...) {
 #' @export
 loadHDF5GSVAranks <- function(dir, ...) {
 
-    x <- loadHDF5SummarizedExperiment(dir, ...)
-    rnksmdata <- metadata(x)$gsvaRanksParam
-    if (is.null(rnksmdata)) {
-        msg <- "The given directory does not contain valid GSVA ranks data"
+    rankscontainer <- loadHDF5SummarizedExperiment(dir, ...)
+
+    an <- assayNames(rankscontainer)
+    if (!"gsvaranks" %in% an)
+            cli_abort("Cannot find the ranks in the loaded object.")
+
+    if (is.null(metadata(rankscontainer)$gsvaParam)) {
+        msg <- paste("Cannot find the GSVA parameters in the metadata of the",
+                     "loaded GSVA ranks object.")
         cli_abort(c("x"=msg))
     }
-    md <- metadata(x)
-    md$gsvaRanksParam <- NULL
-    metadata(x) <- md
-    if (is.null(rnksmdata$originalClassWasSE))
-        cli_abort("Metadata is missing the original class information")
 
-    rnkscontainer <- x
-    if (!rnksmdata$originalClassWasSE) {
-        if (!"gsvaranks" %in% assayNames(x)) {
-            msg <- "The given directory does not contain valid GSVA ranks data"
-            cli_abort(c("x"=msg))
-        }
-        rnkscontainer <- assay(x, "gsvaranks")
-        if (!is.null(gsvaAnnotation(x)))
-            gsvaAnnotation(rnkscontainer) <- gsvaAnnotation(x)
+    if (is.null(metadata(rankscontainer)$gsvaParam$originalClassWasSE)) {
+        msg <- paste("Cannot find the GSVA parameters in the metadata of the",
+                     "loaded GSVA ranks object.")
+        cli_abort(c("x"=msg))
     }
 
-    new("gsvaRanksParam",
-        exprData=rnkscontainer,
-        geneSets=rnksmdata$geneSets,
-        assay=rnksmdata$assay,
-        annotation=rnksmdata$annotation,
-        minSize=rnksmdata$minSize,
-        maxSize=rnksmdata$maxSize,
-        kcdf=rnksmdata$kcdf,
-        kcdfNoneMinSampleSize=rnksmdata$kcdfNoneMinSampleSize,
-        tau=rnksmdata$tau,
-        maxDiff=rnksmdata$maxDiff,
-        absRanking=rnksmdata$absRanking,
-        sparse=rnksmdata$sparse,
-        checkNA=rnksmdata$checkNA,
-        didCheckNA=rnksmdata$didCheckNA,
-        anyNA=rnksmdata$anyNA,
-        use=rnksmdata$use,
-        filterRows=rnksmdata$filterRows,
-        nzcount=rnksmdata$nzcount,
-        ondisk=rnksmdata$ondisk)
+    if (!metadata(rankscontainer)$gsvaParam$originalClassWasSE) {
+        gsvapar <- metadata(rankscontainer)$gsvaParam
+        restrict <- metadata(rankscontainer)$restrict
+        annotation <- metadata(rankscontainer)$annotation
+        rankscontainer <- unwrapData(rankscontainer, "gsvaranks")
+        attr(rankscontainer, "gsvaParam") <- gsvapar
+        attr(rankscontainer, "assay") <- "gsvaranks"
+        if (!is.null(annotation))
+            attr(rankscontainer, "geneIdType") <- annotation
+        if (!is.null(restrict))
+            attr(rankscontainer, "restrict") <- restrict
+    }
+
+    return(rankscontainer)
 }

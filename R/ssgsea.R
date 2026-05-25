@@ -31,11 +31,13 @@ setMethod("gsva", signature(param="ssgseaParam"),
               filtDataMatrix <- famGaGS[["filteredDataMatrix"]]
               filtMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
-              maxmem <- .check_maxmem(param, maxmem, verbose)
-              ondisk <- .check_ondisk(param, maxmem, verbose)
+              maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+              ondisk <- .check_ondisk(param, maxmem=maxmem, first=NA, last=NA,
+                                      whdim=2, verbose=verbose)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
-                                                              "ssGSEA",
+                                                              "ssGSEA", first=NA,
+                                                              last=NA, whdim=2,
                                                               ondisk, verbose)
 
               BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
@@ -64,7 +66,9 @@ setMethod("gsva", signature(param="ssgseaParam"),
               gs <- .geneSetsIndices2Names(
                   indices=filtMappedGeneSets,
                   names=rownames(filtDataMatrix))
-              rval <- wrapData(get_exprData(param), ssgsea_es, gs)
+              ## dropAssays=TRUE for consistency but doesn't apply here
+              rval <- wrapData(get_exprData(param), ssgsea_es, param, "es",
+                               first=NA, last=NA, whdim=2, dropAssays=TRUE, gs)
               
               if (verbose)
                   cli_alert_success("Calculations finished")
@@ -350,9 +354,13 @@ setMethod("anyNA", signature=c("ssgseaParam"),
             return(x@anyNA))
 
 
-## ----- show -----
+## ----- details method -----
 
-setMethod("show",
+#' @importFrom GSEABase details
+#' @aliases details,ssgseaParam-method
+#' @rdname GsvaMethodParam-class
+#' @exportMethod details
+setMethod("details",
           signature=signature(object="ssgseaParam"),
           function(object) {
               callNextMethod(object)
@@ -440,7 +448,6 @@ setMethod("show",
     walkStat
 }
 
-#' @importFrom IRanges IntegerList match
 #' @importFrom BiocParallel bpnworkers
 #' @importFrom BiocGenerics "type<-"
 #' @importFrom MatrixGenerics colRanks

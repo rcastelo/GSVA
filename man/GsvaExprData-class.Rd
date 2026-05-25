@@ -10,17 +10,29 @@ Virtual superclass of expression data classes supported by \code{GSVA}.
 }
 \details{
 \code{GSVA} supports expression data matrices in a growing number of containers
-and representations.  This class union allows to store any of these in a slot
-of another class as well as defining common methods for all of them.
+and representations. This class union allows to store any of these in a slot
+of another class as well as defining common methods for all of them. The
+current list of supported classes is:
+\itemize{
+\item \code{matrix}
+\item \code{dgCMatrix} from package \code{Matrix}
+\item \code{SVT_SparseMatrix} from package \code{SparseArray}
+\item \code{DelayedMatrix} from package \code{DelayedArray}
+\item \code{HDF5Matrix} from package \code{HDF5Array}
+\item \code{ExpressionSet} from package \code{Biobase}
+\item \code{SummarizedExperiment} from package \code{SummarizedExperiment}
+\item \code{SingleCellExperiment} from package \code{SingleCellExperiment}
+\item \code{SpatialExperiment} from package \code{SpatialExperiment}
+}
 }
 \seealso{
 \code{\link{matrix}},
 \code{\link[Matrix:dgCMatrix-class]{dgCMatrix}},
-\code{\link[SparseArray:SVT_SparseArray-class]{SVT_SparseMatrix}},
-\code{\link[DelayedArray:DelayedArray-class]{DelayedMatrix}},
+\code{\link[SparseArray:SVT_SparseMatrix-class]{SVT_SparseMatrix}},
+\code{\link[DelayedArray:DelayedMatrix-class]{DelayedMatrix}},
+\code{\link[HDF5Array:HDF5Array-class]{HDF5Array}},
 \code{\link[Biobase]{ExpressionSet}},
 \code{\link[SummarizedExperiment:SummarizedExperiment-class]{SummarizedExperiment}},
-\code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}},
-\code{\link[SpatialExperiment:SpatialExperiment]{SpatialExperiment}},
-\code{\link[HDF5Array:HDF5Array-class]{HDF5Array}}
+\code{\link[SingleCellExperiment:SingleCellExperiment-class]{SingleCellExperiment}},
+\code{\link[SpatialExperiment:SpatialExperiment-class]{SpatialExperiment}}
 }

@@ -31,11 +31,13 @@ setMethod("gsva", signature(param="zscoreParam"),
               filtDataMatrix <- famGaGS[["filteredDataMatrix"]]
               filtMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
-              maxmem <- .check_maxmem(param, maxmem, verbose)
-              ondisk <- .check_ondisk(param, maxmem, verbose)
+              maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+              ondisk <- .check_ondisk(param, maxmem=maxmem, first=NA, last=NA,
+                                      whdim=2, verbose=verbose)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
-                                                              "Z-score",
+                                                              "Z-score", first=NA,
+                                                              last=NA, whdim=2,
                                                               ondisk, verbose)
 
               BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
@@ -58,7 +60,9 @@ setMethod("gsva", signature(param="zscoreParam"),
               gs <- .geneSetsIndices2Names(
                   indices=filtMappedGeneSets,
                   names=rownames(filtDataMatrix))
-              rval <- wrapData(get_exprData(param), zscore_es, gs)
+              ## dropAssays=TRUE for consistency but doesn't apply here
+              rval <- wrapData(get_exprData(param), zscore_es, param, "es",
+                               first=NA, last=NA, whdim=2, dropAssays=TRUE, gs)
               
               if (verbose)
                   cli_alert_success("Calculations finished")
@@ -336,7 +340,7 @@ setValidity("zscoreParam", function(object) {
 #' @importFrom cli cli_alert_info
 #' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
 #' @importFrom BiocParallel bpnworkers bplapply bpprogressbar
-#' @importFrom Matrix colSums
+#' @importFrom MatrixGenerics colSums
 zscore <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
                    BPPARAM=NULL, maxmem=Inf) {
 

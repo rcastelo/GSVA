@@ -52,7 +52,7 @@ test_genesets <- function() {
 
     ## estimate GSVA enrichment scores with gene sets input as a GeneSetCollection object
     es.mat2 <- gsva(gsvaParam(y, gsc), verbose=FALSE)
-    checkTrue(identical(es.mat, es.mat2))
+    checkEqualsNumeric(es.mat, es.mat2)
 
     ## check that when input expression data has no rownames and gene sets
     ## are made out of indexes to the rows, the results do not change
@@ -60,13 +60,12 @@ test_genesets <- function() {
     rownames(y) <- NULL
     gsvapar <- gsvaParam(y, gsets, verbose=FALSE)
     es.mat3 <- gsva(gsvapar, verbose=FALSE)
-    attr(es.mat, "geneSets") <- attr(es.mat3, "geneSets") <- NULL
-    checkTrue(identical(es.mat, es.mat3))
+    checkEqualsNumeric(es.mat, es.mat3)
+
     gsets$gset3 <- c(gsets$gset3, 11)
     gsvapar <- gsvaParam(y, gsets, verbose=FALSE)
     es.mat4 <- gsva(gsvapar, verbose=FALSE)
-    attr(es.mat4, "geneSets") <- NULL
-    checkTrue(identical(es.mat, es.mat4))
+    checkEqualsNumeric(es.mat, es.mat4)
 }
 
 test_geneSetDeDuplication <- function() {
@@ -106,14 +105,21 @@ test_readGMT <- function() {
     fname <- tempfile()
     con <- file(fname, "w")
     writeLines(c(names(gsets)[1],
-		 paste(names(gsets)[2], "desc2", paste(gsets[[2]], collapse="\t"), sep="\t")), con)
+               paste(names(gsets)[2], "desc2",
+		     paste(gsets[[2]], collapse="\t"),
+		     sep="\t")), con)
     close(con)
-    checkException(gsets.read <- readGMT(fname, deduplUse="drop", valueType="list"))
+    checkException(gsets.read <- readGMT(fname, deduplUse="drop",
+					 valueType="list"))
 
     gsets[[1]][2] <- gsets[[1]][1]
     con <- file(fname, "w")
-    writeLines(c(paste(names(gsets)[1], "desc1", paste(paste0("ENSG", gsets[[1]]), collapse="\t"), sep="\t"),
-		 paste(names(gsets)[2], "desc2", paste(paste0("ENSG", gsets[[2]]), collapse="\t"), sep="\t")), con)
+    writeLines(c(paste(names(gsets)[1], "desc1",
+		       paste(paste0("ENSG", gsets[[1]]),
+			     collapse="\t"), sep="\t"),
+		 paste(names(gsets)[2], "desc2",
+		       paste(paste0("ENSG", gsets[[2]]),
+			     collapse="\t"), sep="\t")), con)
     close(con)
     library(cli)
     gsets.read <- readGMT(fname, deduplUse="drop", valueType="list")

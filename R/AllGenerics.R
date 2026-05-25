@@ -4,6 +4,18 @@ setGeneric("gsva",
            function(param, ...) standardGeneric("gsva"))
 
 #' @export 
+setGeneric("gsvaRowNorm",
+           function(param, ...) standardGeneric("gsvaRowNorm"))
+
+#' @export 
+setGeneric("gsvaColRanks",
+           function(rowNormExprData, ...) standardGeneric("gsvaColRanks"))
+
+#' @export 
+setGeneric("gsvaColScores",
+           function(rankExprData, ...) standardGeneric("gsvaColScores"))
+
+#' @export 
 setGeneric("gsvaRanks",
            function(param, ...) standardGeneric("gsvaRanks"))
 
@@ -13,7 +25,7 @@ setGeneric("gsvaScores",
 
 #' @export 
 setGeneric("gsvaEnrichment",
-           function(param, ranks, ...) standardGeneric("gsvaEnrichment"))
+           function(rankExprData, ...) standardGeneric("gsvaEnrichment"))
 
 #' @export 
 setGeneric("filterGeneSets",
@@ -50,7 +62,7 @@ setGeneric("unwrapData",
            function(container, ...) standardGeneric("unwrapData"))
 
 setGeneric("wrapData",
-           function(container, dataMatrix, geneSets) standardGeneric("wrapData"))
+           function(container, ...) standardGeneric("wrapData"))
 
 setGeneric("mapGeneSetsToAnno",
            function(geneSets, anno, ...) standardGeneric("mapGeneSetsToAnno"))

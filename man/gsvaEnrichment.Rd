@@ -2,11 +2,11 @@
 % Please edit documentation in R/gsva.R
 \name{gsvaEnrichment}
 \alias{gsvaEnrichment}
-\alias{gsvaEnrichment,gsvaRanksParam-method}
+\alias{gsvaEnrichment,GsvaExprData-method}
 \title{GSVA enrichment data and visualization}
 \usage{
-\S4method{gsvaEnrichment}{gsvaRanksParam}(
-  param,
+\S4method{gsvaEnrichment}{GsvaExprData}(
+  rankExprData,
   column = 1,
   geneSet = 1,
   plot = c("auto", "base", "ggplot", "no"),
@@ -14,15 +14,20 @@
 )
 }
 \arguments{
-\item{param}{A \code{\linkS4class{gsvaRanksParam}} object obtained with the method
-\code{\link{gsvaRanks}}.}
+\item{rankExprData}{A column-rank expression data set obtained with
+\code{\link{gsvaColRanks}}. Must be one of the classes
+supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.  For a list of these classes, see its
+help page using \code{help(GsvaExprData)}.}
 
 \item{column}{The column for which we want to retrieve the enrichment data.
 This parameter is only available in the \code{gsvaEnrichment()} method.}
 
-\item{geneSet}{Either a positive integer number between 1 and the number of
-available gene sets in \code{param}, or a character string with the name of
-one of the gene sets available in \code{param}.}
+\item{geneSet}{Either a single positive integer number between 1 and the
+number of available gene sets in parameter object stored in \code{rankExprData},
+or a single character string with the name of one of the gene sets available
+in that object, or a vector of integers or character strings with the index
+values or names of rows in \code{rankExprData} that should be considered as the
+gene set for which the enrichment data should be retrieved.}
 
 \item{plot}{A character string indicating whether an enrichment plot should
 be produced using either base R graphics (\code{plot="base"}) or the ggplot2 package
@@ -59,19 +64,24 @@ geneSets <- list(gset1=paste0("g", 1:3),
 y <- matrix(rnorm(n*p), nrow=p, ncol=n,
             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
 
-## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
-y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2
-
 ## build GSVA parameter object
 gsvapar <- gsvaParam(y, geneSets)
 
 ## calculate GSVA ranks
-gsvarankspar <- gsvaRanks(gsvapar)
-gsvarankspar
+gsvarownorm <- gsvaRowNorm(gsvapar)
+gsvaranks <- gsvaColRanks(gsvarownorm)
 
 ## by default the enrichment data for the first column and the first
-## gene set are retrieved
-gsvaEnrichment(gsvarankspar)
+## gene set in the input parameter object, are retrieved
+gsvaEnrichment(gsvaranks)
+
+## we can calculate the enrichment data for any of the gene sets given
+## in the input parameter object
+gsvaEnrichment(gsvaranks, geneSet="gset2")
+
+## we can calculate the enrichment data for a new gene set that did not
+## form part of the input parameter object
+gsvaEnrichment(gsvaranks, geneSet=c("g1", "g4", "g7"))
 
 }
 \references{
@@ -79,4 +89,7 @@ Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
 variation analysis for microarray and RNA-Seq data.
 \emph{BMC Bioinformatics}, 14:7, 2013.
 \doi{10.1186/1471-2105-14-7}
+}
+\seealso{
+\code{\link{gsvaColRanks}}, \code{\link[=GsvaExprData-class]{GsvaExprData}}
 }
