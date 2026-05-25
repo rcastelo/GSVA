@@ -5,9 +5,9 @@
 \alias{gsvaParam-class}
 \alias{gsvaRanksParam-class}
 \alias{gsvaParam}
-\alias{anyNA,gsvaParam-method}
 \alias{geneSets<-,gsvaParam,GsvaGeneSets-method}
 \alias{geneSets<-}
+\alias{anyNA,gsvaParam-method}
 \title{\code{gsvaParam} class}
 \usage{
 gsvaParam(
@@ -30,9 +30,9 @@ gsvaParam(
   verbose = TRUE
 )
 
-\S4method{anyNA}{gsvaParam}(x, recursive = FALSE)
-
 \S4method{geneSets}{gsvaParam,GsvaGeneSets}(object) <- value
+
+\S4method{anyNA}{gsvaParam}(x, recursive = FALSE)
 }
 \arguments{
 \item{exprData}{The expression data set.  Must be one of the classes
@@ -163,16 +163,16 @@ when \code{ondisk="no"} it will attempt to load all the data in main memory.}
 decisions made by the software during parameter object construction when
 \code{verbose=TRUE} (default) and remains silent otherwise.}
 
-\item{x}{An object of class \code{\link[=gsvaParam-class]{gsvaParam}}.}
-
-\item{recursive}{Not used with \code{x} being an object of
-class \code{\link[=gsvaParam-class]{gsvaParam}}.}
-
 \item{object}{For the replacement method, an object of class
 \code{\link[=gsvaParam-class]{gsvaParam}}.}
 
 \item{value}{For the replacement method, an object of the classes supported
 by \code{\link[=GsvaGeneSets-class]{GsvaGeneSets}}.}
+
+\item{x}{An object of class \code{\link[=gsvaParam-class]{gsvaParam}}.}
+
+\item{recursive}{Not used with \code{x} being an object of
+class \code{\link[=gsvaParam-class]{gsvaParam}}.}
 }
 \value{
 A new \code{\link[=gsvaParam-class]{gsvaParam}} object.

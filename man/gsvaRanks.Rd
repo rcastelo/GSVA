@@ -13,6 +13,8 @@
   param,
   verbose = TRUE,
   dropExistingAssays = FALSE,
+  first = NA_real_,
+  last = NA_real_,
   BPPARAM = SerialParam(progressbar = verbose),
   maxmem = "auto"
 )
@@ -21,6 +23,8 @@
   rowNormExprData,
   verbose = TRUE,
   dropExistingAssays = FALSE,
+  first = NA_real_,
+  last = NA_real_,
   BPPARAM = SerialParam(progressbar = verbose),
   maxmem = "auto"
 )
@@ -29,6 +33,8 @@
   rankExprData,
   geneSets,
   verbose = TRUE,
+  first = NA_real_,
+  last = NA_real_,
   BPPARAM = SerialParam(progressbar = verbose),
   maxmem = "auto"
 )
@@ -49,6 +55,18 @@ the new assay with the row-normalized expression values or the column ranks
 will be stored as a new assay in the same input object. When
 \code{dropExistingAssays=TRUE}, any existing assay will be dropped before adding
 the new assay with the row-normalized expression values or the column ranks.}
+
+\item{first}{Numeric vector of length 1. First row, in the case of
+\code{gsvaRowNorm()}, or first column, in the case of \code{gsvaColRanks()} and
+\code{gsvaColScores()}, to which calculations should be restricted. By default,
+\code{first=NA_real_}, which implies that calculations start at the first row or
+column of the input expression data.}
+
+\item{last}{Numeric vector of length 1. Last row, in the case of
+\code{gsvaRowNorm()}, or last column, in the case of \code{gsvaColRanks()} and
+\code{gsvaColScores()}, to which calculations should be restricted. By default,
+\code{last=NA_real_}, which implies that calculations end at the last row or
+column of the input expression data.}
 
 \item{BPPARAM}{An object of class \code{BiocParallelParam} specifying parameters
 related to the parallel execution of some of the tasks and calculations

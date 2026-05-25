@@ -22,10 +22,12 @@ test_gsvaCcode <- function() {
     gsvapar <- gsvaParam(y, geneSets)
 
     ## calculate GSVA ranks
-    gsvarankspar <- gsvaRanks(gsvapar, verbose=FALSE)
-    exprData <- GSVA:::get_exprData(gsvarankspar)
-    R <- GSVA:::unwrapData(exprData, get_assay(gsvarankspar))
-    geneSetsIdx <- GSVA:::.filterAndMapGeneSets(param=gsvarankspar,
+    gsvarownorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
+    gsvacolranks <- gsvaColRanks(gsvarownorm, verbose=FALSE)
+    param <- GSVA:::.pull_param(gsvacolranks)
+    exprData <- GSVA:::get_exprData(param)
+    R <- GSVA:::unwrapData(exprData, get_assay(param))
+    geneSetsIdx <- GSVA:::.filterAndMapGeneSets(param=param,
                                                 filteredDataMatrix=R,
                                                 verbose=FALSE)
 
@@ -35,12 +37,12 @@ test_gsvaCcode <- function() {
         GSVA:::.gsva_score_genesets_Rimp(geneSetsIdx,
                                          decOrdStat=rnkstats$dos,
                                          symRnkStat=rnkstats$srs,
-                                         maxDiff=GSVA:::.get_maxDiff(gsvarankspar),
-                                         absRanking=GSVA:::.get_absRanking(gsvarankspar),
-                                         tau=GSVA:::.get_tau(gsvarankspar),
-                                         any_na=anyNA(gsvarankspar),
-                                         na_use=GSVA:::.get_NAuse(gsvarankspar),
-                                         minSize=GSVA:::get_minSize(gsvarankspar))
+                                         maxDiff=GSVA:::.get_maxDiff(param),
+                                         absRanking=GSVA:::.get_absRanking(param),
+                                         tau=GSVA:::.get_tau(param),
+                                         any_na=anyNA(param),
+                                         na_use=GSVA:::.get_NAuse(param),
+                                         minSize=GSVA:::get_minSize(param))
     }, R=R)
     sco_R <- do.call("cbind", sco_R)
 
@@ -48,13 +50,13 @@ test_gsvaCcode <- function() {
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
     sco_C <- GSVA:::.gsva_score_genesets(R, geneSetsIdx, is.integer(R[1, 1]),
-					 sparse=GSVA:::.get_sparse(gsvarankspar), 
-                                         maxDiff=GSVA:::.get_maxDiff(gsvarankspar),
-                                         absRanking=GSVA:::.get_absRanking(gsvarankspar),
-                                         tau=GSVA:::.get_tau(gsvarankspar),
-                                         any_na=anyNA(gsvarankspar),
-                                         na_use=GSVA:::.get_NAuse(gsvarankspar),
-                                         minSize=GSVA:::get_minSize(gsvarankspar),
+					 sparse=GSVA:::.get_sparse(param), 
+                                         maxDiff=GSVA:::.get_maxDiff(param),
+                                         absRanking=GSVA:::.get_absRanking(param),
+                                         tau=GSVA:::.get_tau(param),
+                                         any_na=anyNA(param),
+                                         na_use=GSVA:::.get_NAuse(param),
+                                         minSize=GSVA:::get_minSize(param),
                                          wna_env=wna_env, verbose=FALSE)
 
     ## both approaches to calculate GSVA scores must give
@@ -73,15 +75,17 @@ test_gsvaCcode <- function() {
     gsvapar <- gsvaParam(y, geneSets, use="na.rm")
 
     ## calculate GSVA ranks
-    gsvarankspar <- gsvaRanks(gsvapar, verbose=FALSE)
-    exprData <- GSVA:::get_exprData(gsvarankspar)
-    R <- GSVA:::unwrapData(exprData, get_assay(gsvarankspar))
-    geneSetsIdx <- GSVA:::.filterAndMapGeneSets(param=gsvarankspar,
+    gsvarownorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
+    gsvacolranks <- gsvaColRanks(gsvarownorm, verbose=FALSE)
+    param <- GSVA:::.pull_param(gsvacolranks)
+    exprData <- GSVA:::get_exprData(param)
+    R <- GSVA:::unwrapData(exprData, get_assay(param))
+    geneSetsIdx <- GSVA:::.filterAndMapGeneSets(param=param,
                                                 filteredDataMatrix=R,
                                                 verbose=FALSE)
 
     sco_R <- lapply(as.list(1:ncol(R)), function(j, R) {
-        if (anyNA(gsvarankspar))
+        if (anyNA(param))
             rnkstats <- GSVA:::.ranks2stats_nas(R[, j], sparse=FALSE)
         else
             rnkstats <- GSVA:::.ranks2stats(R[, j], sparse=FALSE)
@@ -90,12 +94,12 @@ test_gsvaCcode <- function() {
         sco_R <- GSVA:::.gsva_score_genesets_Rimp(geneSetsIdx,
                                                   decOrdStat=rnkstats$dos,
                                                   symRnkStat=rnkstats$srs,
-                                                  maxDiff=GSVA:::.get_maxDiff(gsvarankspar),
-                                                  absRanking=GSVA:::.get_absRanking(gsvarankspar),
-                                                  tau=GSVA:::.get_tau(gsvarankspar),
-                                                  any_na=anyNA(gsvarankspar),
-                                                  na_use=GSVA:::.get_NAuse(gsvarankspar),
-                                                  minSize=GSVA:::get_minSize(gsvarankspar))
+                                                  maxDiff=GSVA:::.get_maxDiff(param),
+                                                  absRanking=GSVA:::.get_absRanking(param),
+                                                  tau=GSVA:::.get_tau(param),
+                                                  any_na=anyNA(param),
+                                                  na_use=GSVA:::.get_NAuse(param),
+                                                  minSize=GSVA:::get_minSize(param))
     }, R=R)
     sco_R <- do.call("cbind", sco_R)
 
@@ -103,13 +107,13 @@ test_gsvaCcode <- function() {
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
     sco_C <- GSVA:::.gsva_score_genesets(R, geneSetsIdx, is.integer(R[1, 1]),
-					 sparse=GSVA:::.get_sparse(gsvarankspar), 
-                                         maxDiff=GSVA:::.get_maxDiff(gsvarankspar),
-                                         absRanking=GSVA:::.get_absRanking(gsvarankspar),
-                                         tau=GSVA:::.get_tau(gsvarankspar),
-                                         any_na=anyNA(gsvarankspar),
-                                         na_use=GSVA:::.get_NAuse(gsvarankspar),
-                                         minSize=GSVA:::get_minSize(gsvarankspar),
+					 sparse=GSVA:::.get_sparse(param), 
+                                         maxDiff=GSVA:::.get_maxDiff(param),
+                                         absRanking=GSVA:::.get_absRanking(param),
+                                         tau=GSVA:::.get_tau(param),
+                                         any_na=anyNA(param),
+                                         na_use=GSVA:::.get_NAuse(param),
+                                         minSize=GSVA:::get_minSize(param),
                                          wna_env=wna_env, verbose=FALSE)
 
     ## both approaches to calculate GSVA scores must give
@@ -120,15 +124,17 @@ test_gsvaCcode <- function() {
     gsvapar <- gsvaParam(y, geneSets, use="everything")
 
     ## calculate GSVA ranks
-    gsvarankspar <- gsvaRanks(gsvapar, verbose=FALSE)
-    exprData <- GSVA:::get_exprData(gsvarankspar)
-    R <- GSVA:::unwrapData(exprData, get_assay(gsvarankspar))
-    geneSetsIdx <- GSVA:::.filterAndMapGeneSets(param=gsvarankspar,
+    gsvarownorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
+    gsvacolranks <- gsvaColRanks(gsvarownorm, verbose=FALSE)
+    param <- GSVA:::.pull_param(gsvacolranks)
+    exprData <- GSVA:::get_exprData(param)
+    R <- GSVA:::unwrapData(exprData, get_assay(param))
+    geneSetsIdx <- GSVA:::.filterAndMapGeneSets(param=param,
                                                 filteredDataMatrix=R,
                                                 verbose=FALSE)
 
     sco_R <- lapply(as.list(1:ncol(R)), function(j, R) {
-        if (anyNA(gsvarankspar))
+        if (anyNA(param))
             rnkstats <- GSVA:::.ranks2stats_nas(R[, j], sparse=FALSE)
         else
             rnkstats <- GSVA:::.ranks2stats(R[, j], sparse=FALSE)
@@ -137,12 +143,12 @@ test_gsvaCcode <- function() {
         sco_R <- GSVA:::.gsva_score_genesets_Rimp(geneSetsIdx,
                                                   decOrdStat=rnkstats$dos,
                                                   symRnkStat=rnkstats$srs,
-                                                  maxDiff=GSVA:::.get_maxDiff(gsvarankspar),
-                                                  absRanking=GSVA:::.get_absRanking(gsvarankspar),
-                                                  tau=GSVA:::.get_tau(gsvarankspar),
-                                                  any_na=anyNA(gsvarankspar),
-                                                  na_use=GSVA:::.get_NAuse(gsvarankspar),
-                                                  minSize=GSVA:::get_minSize(gsvarankspar))
+                                                  maxDiff=GSVA:::.get_maxDiff(param),
+                                                  absRanking=GSVA:::.get_absRanking(param),
+                                                  tau=GSVA:::.get_tau(param),
+                                                  any_na=anyNA(param),
+                                                  na_use=GSVA:::.get_NAuse(param),
+                                                  minSize=GSVA:::get_minSize(param))
     }, R=R)
     sco_R <- do.call("cbind", sco_R)
 
@@ -150,13 +156,13 @@ test_gsvaCcode <- function() {
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
     sco_C <- GSVA:::.gsva_score_genesets(R, geneSetsIdx, is.integer(R[1, 1]),
-					 sparse=GSVA:::.get_sparse(gsvarankspar), 
-                                         maxDiff=GSVA:::.get_maxDiff(gsvarankspar),
-                                         absRanking=GSVA:::.get_absRanking(gsvarankspar),
-                                         tau=GSVA:::.get_tau(gsvarankspar),
-                                         any_na=anyNA(gsvarankspar),
-                                         na_use=GSVA:::.get_NAuse(gsvarankspar),
-                                         minSize=GSVA:::get_minSize(gsvarankspar),
+					 sparse=GSVA:::.get_sparse(param), 
+                                         maxDiff=GSVA:::.get_maxDiff(param),
+                                         absRanking=GSVA:::.get_absRanking(param),
+                                         tau=GSVA:::.get_tau(param),
+                                         any_na=anyNA(param),
+                                         na_use=GSVA:::.get_NAuse(param),
+                                         minSize=GSVA:::get_minSize(param),
                                          wna_env=wna_env, verbose=FALSE)
 
     ## both approaches to calculate GSVA scores must give

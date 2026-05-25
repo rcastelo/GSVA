@@ -38,10 +38,13 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
-              ondisk <- .check_ondisk(param, maxmem=maxmem, verbose=verbose)
+              ondisk <- .check_ondisk(param, maxmem=maxmem, first=NA, last=NA,
+                                      whdim=2, verbose=verbose)
 
               dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
-                                                          ondisk, verbose)
+                                                          first=NA, last=NA,
+                                                          whdim=2, ondisk,
+                                                          verbose)
 
               filtDataMatrix <- dataMatrix
               BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
@@ -82,7 +85,8 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
               colnames(gsvarnks) <- colnames(filtDataMatrix)
 
               rnkscontainer <- wrapData(get_exprData(param), gsvarnks, param,
-                                        "gsvaranks", FALSE)
+                                        "gsvaranks", first=NA, last=NA, whdim=2,
+                                        dropAssays=FALSE)
               rval <- new("gsvaRanksParam",
                           exprData=rnkscontainer, geneSets=get_geneSets(param),
                           assay="gsvaranks", annotation=get_annotation(param),
@@ -152,11 +156,13 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
               }
 
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
-              ondisk <- .check_ondisk(param, maxmem=maxmem, verbose=verbose)
+              ondisk <- .check_ondisk(param, maxmem=maxmem, first=NA, last=NA,
+                                      whdim=2, verbose=verbose)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
-                                                              "GSVA", ondisk,
-                                                              verbose)
+                                                              "GSVA", first=NA,
+                                                              last=NA, whdim=2,
+                                                              ondisk, verbose)
 
               BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
                                                  minparrows=100, minparcols=100,
@@ -192,7 +198,7 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
               gs <- .geneSetsIndices2Names(indices=filtMappedGeneSets,
                                            names=rownames(filtDataMatrix))
               rval <- wrapData(get_exprData(param), gsva_es, param, "es",
-                               FALSE, gs)
+                               first=NA, last=NA, whdim=2, dropAssays=FALSE, gs)
 
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")

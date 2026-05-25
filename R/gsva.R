@@ -422,11 +422,30 @@ gsvaParam <- function(exprData, geneSets,
                  nzcount=nzc, ondisk=ondisk)
 
     maxmem <- .check_maxmem(param, maxmem="auto", verbose=verbose)
-    .check_ondisk(param, maxmem=maxmem, verbose=verbose)
+    .check_ondisk(param, maxmem=maxmem, first=NA, last=NA, whdim=1,
+                  verbose=verbose)
 
     return(param)
 }
 
+## ----- setters for gsvaParam -----
+
+#' @param object For the replacement method, an object of class
+#' [`gsvaParam-class`].
+#'
+#' @param value For the replacement method, an object of the classes supported
+#' by [`GsvaGeneSets-class`].
+#'
+#' @aliases geneSets<-
+#' @aliases geneSets<-,gsvaParam,GsvaGeneSets-method
+#' @rdname gsvaParam-class
+#' @exportMethod geneSets
+setReplaceMethod("geneSets", signature=signature(object="gsvaParam",
+                                                 value="GsvaGeneSets"),
+                 function(object, value) {
+                   object@geneSets <- value
+                   object
+                 })
 
 ## ----- validator -----
 
@@ -689,9 +708,6 @@ setMethod("details",
         if (!any(assayNames(exprData) %in% c("gsvarownr", "gsvaranks"))) 
             cli_abort(c("x"="Wrong metadata in the input expression data."))
     }
-    ## an <- gsvaAssayNames(exprData)
-    ## if (!is.na(an) && p$assay %in% an) ## original assay have been dropped
-    ##     p$assay <- assay
 
     param <- new("gsvaParam",
                  exprData=exprData, geneSets=p$geneSets,
@@ -729,6 +745,18 @@ setMethod("details",
 #' will be stored as a new assay in the same input object. When
 #' `dropExistingAssays=TRUE`, any existing assay will be dropped before adding
 #' the new assay with the row-normalized expression values or the column ranks.
+#'
+#' @param first Numeric vector of length 1. First row, in the case of
+#' `gsvaRowNorm()`, or first column, in the case of `gsvaColRanks()` and
+#' `gsvaColScores()`, to which calculations should be restricted. By default,
+#' `first=NA_real_`, which implies that calculations start at the first row or
+#' column of the input expression data.
+#'
+#' @param last Numeric vector of length 1. Last row, in the case of
+#' `gsvaRowNorm()`, or last column, in the case of `gsvaColRanks()` and
+#' `gsvaColScores()`, to which calculations should be restricted. By default,
+#' `last=NA_real_`, which implies that calculations end at the last row or
+#' column of the input expression data.
 #'
 #' @param BPPARAM An object of class `BiocParallelParam` specifying parameters
 #' related to the parallel execution of some of the tasks and calculations
@@ -814,6 +842,7 @@ setMethod("gsvaRowNorm", signature(param="gsvaParam"),
           function(param,
                    verbose=TRUE,
                    dropExistingAssays=FALSE,
+                   first=NA_real_, last=NA_real_,
                    BPPARAM=SerialParam(progressbar=verbose),
                    maxmem="auto") {
 
@@ -826,10 +855,18 @@ setMethod("gsvaRowNorm", signature(param="gsvaParam"),
 
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
+
+              checkedfl <- .check_first_last_values(dataMatrix, nrow, "rows",
+                                                    first, last)
+              first <- checkedfl$first
+              last <- checkedfl$last
+
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
-              ondisk <- .check_ondisk(param, maxmem=maxmem, verbose=verbose)
+              ondisk <- .check_ondisk(param, first=first, last=last, whdim=1,
+                                      maxmem=maxmem, verbose=verbose)
 
               dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
+                                                          first, last, whdim=1,
                                                           ondisk, verbose)
 
               filtDataMatrix <- dataMatrix
@@ -866,7 +903,8 @@ setMethod("gsvaRowNorm", signature(param="gsvaParam"),
               colnames(gsvarownr) <- colnames(filtDataMatrix)
 
               rval <- wrapData(get_exprData(param), gsvarownr, param,
-                               "gsvarownr", dropExistingAssays)
+                               "gsvarownr", first, last, whdim=1,
+                               dropExistingAssays)
 
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")
@@ -900,6 +938,7 @@ setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
           function(rowNormExprData,
                    verbose=TRUE,
                    dropExistingAssays=FALSE,
+                   first=NA_real_, last=NA_real_,
                    BPPARAM=SerialParam(progressbar=verbose),
                    maxmem="auto") {
 
@@ -913,12 +952,20 @@ setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
               .check_bpparam(BPPARAM)
 
               dataMatrix <- unwrapData(rowNormExprData, "gsvarownr")
+
+              checkedfl <- .check_first_last_values(dataMatrix, ncol, "columns",
+                                                    first, last)
+              first <- checkedfl$first
+              last <- checkedfl$last
+
               maxmem <- .check_maxmem(param, assay="gsvarownr", maxmem=maxmem,
                                       verbose=verbose)
-              ondisk <- .check_ondisk(param, assay="gsvarownr", maxmem=maxmem,
+              ondisk <- .check_ondisk(param, assay="gsvarownr", first=first,
+                                      last=last, whdim=1, maxmem=maxmem,
                                       verbose=verbose)
 
               dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
+                                                          first, last, whdim=2,
                                                           ondisk, verbose)
 
               gsvarnks <- .compute_gsva_ranks(Z=dataMatrix,
@@ -930,7 +977,8 @@ setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
               colnames(gsvarnks) <- colnames(dataMatrix)
 
               rval <- wrapData(get_exprData(param), gsvarnks, param,
-                               "gsvaranks", dropExistingAssays)
+                               "gsvaranks", first, last, whdim=2,
+                               dropExistingAssays)
 
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")
@@ -938,25 +986,6 @@ setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
               return(rval)
           })
 
-
-## ----- setters for gsvaParam -----
-
-#' @param object For the replacement method, an object of class
-#' [`gsvaParam-class`].
-#'
-#' @param value For the replacement method, an object of the classes supported
-#' by [`GsvaGeneSets-class`].
-#'
-#' @aliases geneSets<-
-#' @aliases geneSets<-,gsvaParam,GsvaGeneSets-method
-#' @rdname gsvaParam-class
-#' @exportMethod geneSets
-setReplaceMethod("geneSets", signature=signature(object="gsvaParam",
-                                                 value="GsvaGeneSets"),
-                 function(object, value) {
-                   object@geneSets <- value
-                   object
-                 })
 
 #' @param rankExprData A column-rank expression data set obtained with
 #' [`gsvaColRanks`].  Must be one of the classes
@@ -983,6 +1012,7 @@ setReplaceMethod("geneSets", signature=signature(object="gsvaParam",
 #' @exportMethod gsvaColScores
 setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
           function(rankExprData, geneSets, verbose=TRUE,
+                   first=NA_real_, last=NA_real_,
                    BPPARAM=SerialParam(progressbar=verbose),
                    maxmem="auto") {
 
@@ -1022,14 +1052,22 @@ setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
                     cli_alert_info("GSVA dense (classical) algorithm")
               }
 
+              checkedfl <- .check_first_last_values(filtDataMatrix, ncol,
+                                                    "columns", first, last)
+              first <- checkedfl$first
+              last <- checkedfl$last
+
               maxmem <- .check_maxmem(param, assay="gsvaranks", maxmem=maxmem,
                                       verbose=verbose)
-              ondisk <- .check_ondisk(param, assay="gsvaranks", maxmem=maxmem,
+              ondisk <- .check_ondisk(param, assay="gsvaranks", first=first,
+                                      last=last, whdim=1, maxmem=maxmem,
                                       verbose=verbose)
 
+
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
-                                                              "GSVA", ondisk,
-                                                              verbose)
+                                                              "GSVA", first,
+                                                              last, whdim=2,
+                                                              ondisk, verbose)
 
               BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
                                                  minparrows=100, minparcols=100,
@@ -1064,9 +1102,10 @@ setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
 
               gs <- .geneSetsIndices2Names(indices=filtMappedGeneSets,
                                            names=rownames(filtDataMatrix))
+
+              ## dropAssays=TRUE for consistency but doesn't apply here
               rval <- wrapData(get_exprData(param), gsva_es, param, "es",
-                               TRUE, gs) ## dropExistingAssays=TRUE for
-                                         ## consistency but doesn't apply here
+                               first, last, whdim=2, dropAssays=TRUE, gs)
 
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")
@@ -1264,7 +1303,6 @@ setMethod("gsvaEnrichment", signature(rankExprData="GsvaExprData"),
                       .plot_enrichment_ggplot(edata)
               }
           })
-
 
 
 

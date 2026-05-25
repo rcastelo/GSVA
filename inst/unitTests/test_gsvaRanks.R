@@ -49,4 +49,24 @@ test_gsvaRanks <- function() {
     ggp <- gsvaEnrichment(gsvaranks, plot="ggplot")
     checkTrue(is(ggp, "ggplot"))
     checkTrue(identical(gsvaenrich$stats, ggp@data))
+
+    ## calculate again row-normalized expression values,
+    ## but this time in chunks
+    gsvarownorm1 <- gsvaRowNorm(gsvapar, first=1, last=5, verbose=FALSE)
+    gsvarownorm2 <- gsvaRowNorm(gsvapar, first=6, last=10, verbose=FALSE)
+    checkEqualsNumeric(gsvarownorm, rbind(gsvarownorm1, gsvarownorm2))
+    checkException(gsvaRowNorm(gsvapar, first=10, last=6, verbose=FALSE))
+    checkException(gsvaRowNorm(gsvapar, first=11, last=20, verbose=FALSE))
+
+    ## calculate again GSVA column ranks, but this time in chunks
+    gsvaranks1 <- gsvaColRanks(gsvarownorm, first=1, last=10, verbose=FALSE)
+    gsvaranks2 <- gsvaColRanks(gsvarownorm, first=11, last=20, verbose=FALSE)
+    gsvaranks3 <- gsvaColRanks(gsvarownorm, first=21, last=30, verbose=FALSE)
+    checkEqualsNumeric(gsvaranks, cbind(gsvaranks1, gsvaranks2, gsvaranks3))
+
+    ## calculate again GSVA scores from column ranks, but this time in chunks
+    gsva_es_c1 <- gsvaColScores(gsvaranks, first=1, last=10, verbose=FALSE)
+    gsva_es_c2 <- gsvaColScores(gsvaranks, first=11, last=20, verbose=FALSE)
+    gsva_es_c3 <- gsvaColScores(gsvaranks, first=21, last=30, verbose=FALSE)
+    checkEqualsNumeric(gsva_es1, cbind(gsva_es_c1, gsva_es_c2, gsva_es_c3))
 }

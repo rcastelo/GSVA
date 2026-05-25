@@ -53,59 +53,61 @@ setMethod("unwrapData", signature("SpatialExperiment"),
           })
 
 
+.wrapdata_nonSE <- function(dataMatrix, param, assay, first, last, whdim,
+                            dropAssays, geneSets) {
+    stopifnot(!missing(param))
+    stopifnot(!missing(assay))
+    stopifnot(!missing(first))
+    stopifnot(!missing(last))
+    stopifnot(!missing(whdim))
+    stopifnot(!missing(dropAssays))
+    attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
+    attr(dataMatrix, "assay") <- assay
+    if (!is.na(first) || !is.na(last))
+        attr(dataMatrix, "restrict") <- list(first=first, last=last,
+                                             whdim=whdim)
+    if (!missing(geneSets))
+        attr(dataMatrix, "geneSets") <- geneSets
+    return(dataMatrix)
+}
+
 ## wrapData: put the resulting data and gene sets into the original data container type
 setMethod("wrapData", signature(container="matrix"),
-          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
-              stopifnot(!missing(param))
-              stopifnot(!missing(assay))
-              stopifnot(!missing(dropAssays))
-              attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
-              attr(dataMatrix, "assay") <- assay
-              if (!missing(geneSets))
-                  attr(dataMatrix, "geneSets") <- geneSets
-              return(dataMatrix)
+          function(container, dataMatrix, param, assay, first, last, whdim,
+                   dropAssays, geneSets) {
+              .wrapdata_nonSE(dataMatrix, param, assay, first, last, whdim,
+                              dropAssays, geneSets)
           })
 
 setMethod("wrapData", signature(container="dgCMatrix"),
-          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
-              stopifnot(!missing(param))
-              stopifnot(!missing(assay))
-              stopifnot(!missing(dropAssays))
-              attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
-              attr(dataMatrix, "assay") <- assay
-              if (!missing(geneSets))
-                  attr(dataMatrix, "geneSets") <- geneSets
-              return(dataMatrix)
+          function(container, dataMatrix, param, assay, first, last, whdim,
+                   dropAssays, geneSets) {
+              .wrapdata_nonSE(dataMatrix, param, assay, first, last, whdim,
+                              dropAssays, geneSets)
           })
 
 setMethod("wrapData", signature(container="SVT_SparseMatrix"),
-          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
-              stopifnot(!missing(param))
-              stopifnot(!missing(assay))
-              stopifnot(!missing(dropAssays))
-              attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
-              attr(dataMatrix, "assay") <- assay
-              if (!missing(geneSets))
-                  attr(dataMatrix, "geneSets") <- geneSets
-              return(dataMatrix)
+          function(container, dataMatrix, param, assay, first, last, whdim,
+                   dropAssays, geneSets) {
+              .wrapdata_nonSE(dataMatrix, param, assay, first, last, whdim,
+                              dropAssays, geneSets)
           })
 
 setMethod("wrapData", signature(container="DelayedMatrix"),
-          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
-              stopifnot(!missing(param))
-              stopifnot(!missing(assay))
-              stopifnot(!missing(dropAssays))
-              attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
-              attr(dataMatrix, "assay") <- assay
-              if (!missing(geneSets))
-                  attr(dataMatrix, "geneSets") <- geneSets
-              return(dataMatrix)
+          function(container, dataMatrix, param, assay, first, last, whdim,
+                   dropAssays, geneSets) {
+              .wrapdata_nonSE(dataMatrix, param, assay, first, last, whdim,
+                              dropAssays, geneSets)
           })
 
 setMethod("wrapData", signature(container="ExpressionSet"),
-          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
+          function(container, dataMatrix, param, assay, first, last, whdim,
+                   dropAssays, geneSets) {
               stopifnot(!missing(param))
               stopifnot(!missing(assay))
+              stopifnot(!missing(first))
+              stopifnot(!missing(last))
+              stopifnot(!missing(whdim))
               stopifnot(!missing(dropAssays))
               rval <- new("ExpressionSet", exprs=dataMatrix,
                           phenoData=phenoData(container),
@@ -113,6 +115,9 @@ setMethod("wrapData", signature(container="ExpressionSet"),
                           annotation="")
               attr(rval, "gsvaParam") <- .gsvaParam_as_list(param)
               attr(rval, "assay") <- assay
+              if (!is.na(first) || !is.na(last))
+                  attr(rval, "restrict") <- list(first=first, last=last,
+                                                 whdim=whdim)
               if (!missing(geneSets))
                   attr(rval, "geneSets") <- geneSets
               
@@ -128,9 +133,13 @@ setMethod("wrapData", signature(container="ExpressionSet"),
 #' @importFrom IRanges CharacterList
 #' @importFrom S4Vectors SimpleList
 setMethod("wrapData", signature(container="SummarizedExperiment"),
-          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
+          function(container, dataMatrix, param, assay, first, last, whdim,
+                   dropAssays, geneSets) {
               stopifnot(!missing(param))
               stopifnot(!missing(assay))
+              stopifnot(!missing(first))
+              stopifnot(!missing(last))
+              stopifnot(!missing(whdim))
               stopifnot(!missing(dropAssays))
               rdata <- NULL
               adata <- SimpleList(dataMatrix)
@@ -151,6 +160,9 @@ setMethod("wrapData", signature(container="SummarizedExperiment"),
                   rowData=rdata,
                   metadata=metadata(container))
               metadata(rval)$gsvaParam <- .gsvaParam_as_list(param)
+              if (!is.na(first) || !is.na(last))
+                  metadata(rval)$restrict <- list(first=first, last=last,
+                                                  whdim=whdim)
               if (!missing(geneSets)) ## row data has been replaced
                   metadata(rval)$annotation <- NULL
 
@@ -159,11 +171,15 @@ setMethod("wrapData", signature(container="SummarizedExperiment"),
 
 #' @importFrom IRanges CharacterList
 #' @importFrom S4Vectors SimpleList
-#' @importFrom SingleCellExperiment SingleCellExperiment
+#' @importFrom SingleCellExperiment SingleCellExperiment reducedDims altExps
 setMethod("wrapData", signature(container="SingleCellExperiment"),
-          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
+          function(container, dataMatrix, param, assay, first, last, whdim,
+                   dropAssays, geneSets) {
               stopifnot(!missing(param))
               stopifnot(!missing(assay))
+              stopifnot(!missing(first))
+              stopifnot(!missing(last))
+              stopifnot(!missing(whdim))
               stopifnot(!missing(dropAssays))
               rdata <- NULL
               adata <- SimpleList(dataMatrix)
@@ -182,8 +198,13 @@ setMethod("wrapData", signature(container="SingleCellExperiment"),
                   assays=adata,
                   colData=colData(container),
                   rowData=rdata,
+                  reducedDims=reducedDims(container),
+                  altExps=altExps(container),
                   metadata=metadata(container))
               metadata(rval)$gsvaParam <- .gsvaParam_as_list(param)
+              if (!is.na(first) || !is.na(last))
+                  metadata(rval)$restrict <- list(first=first, last=last,
+                                                  whdim=whdim)
               if (!missing(geneSets)) ## row data has been replaced
                   metadata(rval)$annotation <- NULL
               
@@ -194,9 +215,13 @@ setMethod("wrapData", signature(container="SingleCellExperiment"),
 #' @importFrom S4Vectors SimpleList
 #' @importFrom SingleCellExperiment SingleCellExperiment
 setMethod("wrapData", signature(container="SpatialExperiment"),
-          function(container, dataMatrix, param, assay, dropAssays, geneSets) {
+          function(container, dataMatrix, param, assay, first, last, whdim,
+                   dropAssays, geneSets) {
               stopifnot(!missing(param))
               stopifnot(!missing(assay))
+              stopifnot(!missing(first))
+              stopifnot(!missing(last))
+              stopifnot(!missing(whdim))
               stopifnot(!missing(dropAssays))
               rdata <- NULL
               adata <- SimpleList(dataMatrix)
@@ -215,10 +240,15 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                   assays=adata,
                   colData=colData(container),
                   rowData=rdata,
+                  reducedDims=reducedDims(container),
+                  altExps=altExps(container),
                   metadata=metadata(container),
                   imgData=imgData(container),
                   spatialCoords=spatialCoords(container))
               metadata(rval)$gsvaParam <- .gsvaParam_as_list(param)
+              if (!is.na(first) || !is.na(last))
+                  metadata(rval)$restrict <- list(first=first, last=last,
+                                                  whdim=whdim)
               if (!missing(geneSets)) ## row data has been replaced
                   metadata(rval)$annotation <- NULL
               
@@ -269,13 +299,35 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     }
 }
 
-.check_sparse_load_input_expr <- function(expr, method, ondisk, verbose) {
+.check_sparse_load_input_expr <- function(expr, method, first, last, whdim,
+                                          ondisk, verbose) {
     if (method != "GSVA" && is_sparse(expr)) { 
         msg <- paste("Input expression data is sparse, but the {method}",
                      "algorithm does not deal with sparsity",
                      "in any specific way, and data will be",
                      "converted into a dense matrix format")
         cli_alert_warning(msg)
+    }
+
+    if (!is.na(first) || !is.na(last)) {
+        if (is.na(first))
+            first <- 1
+        if (is.na(last))
+            last <- if (whdim == 1) nrow(expr) else ncol(expr)
+        if (whdim == 1) {
+            if (verbose) {
+                msg <- "Restricting to rows {first}:{last}"
+                cli_alert_info(msg)
+            }
+            expr <- expr[first:last, , drop=FALSE]
+        } else if (whdim == 2) {
+            if (verbose) {
+                msg <- "Restricting to columns {first}:{last}"
+                cli_alert_info(msg)
+            }
+            expr <- expr[, first:last, drop=FALSE]
+        } else
+            cli_abort(c("x"="Invalid internal value for 'whdim' argument."))
     }
 
     if (is(expr, "DelayedMatrix") && !ondisk) {
@@ -642,7 +694,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
 #' @importFrom memuse howbig
-.check_ondisk <- function(param, assay=get_assay(param), maxmem, verbose) {
+.check_ondisk <- function(param, assay=get_assay(param), first, last, whdim,
+                          maxmem, verbose) {
     ondisk <- .get_ondisk(param)
     if (ondisk == "auto") {
         X <- unwrapData(get_exprData(param), assay)
@@ -653,8 +706,21 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             rep <- "sparse"
             spa <- nzcount(param) / tot
         }
-        sze <- howbig(as.numeric(nrow(X)), as.numeric(ncol(X)),
-                      representation=rep, sparsity=spa, type=type(X))
+        sze <- 0
+        if (is.na(first) && is.na(last))
+            sze <- howbig(as.numeric(nrow(X)), as.numeric(ncol(X)),
+                          representation=rep, sparsity=spa, type=type(X))
+        else {
+            if (whdim == 1) {
+                sze <- howbig(as.numeric(last - first + 1), as.numeric(ncol(X)),
+                              representation=rep, sparsity=spa, type=type(X))
+            } else if (whdim == 2) {
+                sze <- howbig(as.numeric(nrow(X)), as.numeric(last - first + 1),
+                              representation=rep, sparsity=spa, type=type(X))
+            } else
+                cli_abort(c("x"="Invalid internal value for 'whdim' argument."))
+        }
+
         ondisk <- "no"
         if (as.numeric(sze) > maxmem) {
             ondisk <- "yes"
@@ -736,6 +802,57 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 
 .isCharLength1 <- function(x) {
     return((.isCharNonEmpty(x)) && (length(x) == 1))
+}
+
+.isNumNonEmpty <- function(x) {
+    return((!is.null(x)) &&
+           (length(x) > 0) &&
+           (is.numeric(x)) &&
+           (!all(is.na(x))) &&
+           (!all(is.nan(x))))
+}
+
+.isNumLength1 <- function(x) {
+    return((.isNumNonEmpty(x)) && (length(x) == 1))
+}
+
+#' @importFrom cli cli_abort
+.check_first_last_values <- function(X, dimfun, dimname, first, last) {
+    dimfun <- match.fun(dimfun)
+
+    if (all(is.na(first)) && all(is.na(last)))
+        return(list(first=NA_real_, last=NA_real_))
+
+    if (all(is.na(first)))
+        first <- 1
+    if (all(is.na(last)))
+        last <- dimfun(X)
+
+    if (.isNumLength1(first) && .isNumLength1(last)) {
+        if (first < 1 || last < 1 || first != as.integer(first) ||
+            last != as.integer(last)) {
+            msg <- paste("arguments 'first' and 'last' must be",
+                         "positive integers.")
+            cli_abort(c("x"=msg))
+        }
+        if (first >= last) {
+            msg <- paste("argument 'first' must be smaller than",
+                         "argument 'last'.")
+            cli_abort(c("x"=msg))
+        }
+    } else {
+        msg <- paste("arguments 'first' and 'last' must be numeric vectors of",
+                     "length 1.")
+        cli_abort(c("x"=msg))
+    }
+
+    if (first > dimfun(X) || last > dimfun(X)) {
+        msg <- paste("arguments 'first' and 'last' must be smaller than or equal",
+                     "to the number of {dimname} of the input expression data.")
+        cli_abort(c("x"=msg))
+    }
+
+    return(list(first=first, last=last))
 }
 
 ## annotation package checks

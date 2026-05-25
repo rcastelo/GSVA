@@ -32,10 +32,12 @@ setMethod("gsva", signature(param="zscoreParam"),
               filtMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
-              ondisk <- .check_ondisk(param, maxmem=maxmem, verbose=verbose)
+              ondisk <- .check_ondisk(param, maxmem=maxmem, first=NA, last=NA,
+                                      whdim=2, verbose=verbose)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
-                                                              "Z-score",
+                                                              "Z-score", first=NA,
+                                                              last=NA, whdim=2,
                                                               ondisk, verbose)
 
               BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
@@ -58,9 +60,9 @@ setMethod("gsva", signature(param="zscoreParam"),
               gs <- .geneSetsIndices2Names(
                   indices=filtMappedGeneSets,
                   names=rownames(filtDataMatrix))
+              ## dropAssays=TRUE for consistency but doesn't apply here
               rval <- wrapData(get_exprData(param), zscore_es, param, "es",
-                               TRUE, gs) ## dropExistingAssays=TRUE for
-                                         ## consistency but doesn't apply here
+                               first=NA, last=NA, whdim=2, dropAssays=TRUE, gs)
               
               if (verbose)
                   cli_alert_success("Calculations finished")
