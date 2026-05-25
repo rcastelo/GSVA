@@ -1062,7 +1062,7 @@ setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
               maxmem <- .check_maxmem(param, assay="gsvaranks", maxmem=maxmem,
                                       verbose=verbose)
               ondisk <- .check_ondisk(param, assay="gsvaranks", first=first,
-                                      last=last, whdim=1, maxmem=maxmem,
+                                      last=last, whdim=2, maxmem=maxmem,
                                       verbose=verbose)
 
 
