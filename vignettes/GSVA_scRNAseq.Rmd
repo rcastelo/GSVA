@@ -75,7 +75,7 @@ specific support consists of the following features:
     typical single-cell data set will result in longer running times and larger
     memory consumption than running it in the default sparse regime for this
     type of data.
-  * The GSVA algorithm can be run either at once through a called to `gsva()`
+  * The GSVA algorithm can be run either at once through a call to `gsva()`
     with a parameter object or in three steps: (1) row normalization with
     `gsvaRowNorm()`; (2) column rank transformation with `gsvaColRanks()`;
     and (3) column enrichment scores calculation with `gsvaColScores()`.

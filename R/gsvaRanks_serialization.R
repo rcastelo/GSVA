@@ -112,12 +112,16 @@ saveHDF5GSVAranks <- function(rankExprData, dir, ...) {
 
     } else { ## 'SummarizedExperiment' object, remove all assays except 'gsvaranks'
         an <- assayNames(se)
-        if (!"gsvaranks" %in% an)
-            cli_abort("Cannot find the ranks in the input object given in the",
-                      "'rankExprData' parameter.")
-        if (is.null(metadata(se)$gsvaParam))
-            cli_abort("Cannot find the GSVA parameters in the metadata of the",
-                      "input object given in the 'rankExprData' parameter.")
+        if (!"gsvaranks" %in% an) {
+            msg <- paste("Cannot find the ranks in the input object given in the",
+                         "'rankExprData' parameter.")
+            cli_abort(c("x"=msg))
+        }
+        if (is.null(metadata(se)$gsvaParam)) {
+            msg <- paste("Cannot find the GSVA parameters in the metadata of the",
+                         "input object given in the 'rankExprData' parameter.")
+            cli_abort(c("x"=msg))
+        }
 
         for (a in an) ## remove all assays except the one with the ranks
             if (a != "gsvaranks")

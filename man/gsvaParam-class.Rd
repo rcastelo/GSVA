@@ -305,6 +305,6 @@ variation analysis for microarray and RNA-Seq data.
 \code{\link{matrix}},
 \code{\link[Biobase]{ExpressionSet}},
 \code{\link[SummarizedExperiment:SummarizedExperiment-class]{SummarizedExperiment}},
-\code{\link[SingleCellExperiment:SingleCellExperiment-class]{SingleCellExperiment}}
+\code{\link[SingleCellExperiment:SingleCellExperiment-class]{SingleCellExperiment}},
 \code{\link[SpatialExperiment:SpatialExperiment-class]{SpatialExperiment}}
 }
