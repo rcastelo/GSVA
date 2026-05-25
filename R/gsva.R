@@ -324,7 +324,7 @@ setMethod("gsva", signature(param="gsvaParam"),
 ### Non-topic package-anchored link(s) in Rd file 'gsvaParam-class.Rd':
 ###  ‘[Biobase:class.ExpressionSet]{ExpressionSet}’
 #' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment-class],
-#' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class]
+#' [`SingleCellExperiment`][SingleCellExperiment::SingleCellExperiment-class],
 #' [`SpatialExperiment`][SpatialExperiment::SpatialExperiment-class]
 #'
 #' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
