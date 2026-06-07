@@ -6,6 +6,8 @@
 \alias{gsvaRanks,gsvaParam-method}
 \alias{gsvaScores}
 \alias{gsvaScores,gsvaRanksParam-method}
+\alias{saveHDF5GSVAranks}
+\alias{loadHDF5GSVAranks}
 \title{Deprecated functions in package \code{GSVA}.}
 \usage{
 \S4method{gsvaRanks}{gsvaParam}(
@@ -21,9 +23,40 @@
   BPPARAM = SerialParam(progressbar = verbose),
   maxmem = "auto"
 )
+
+saveHDF5GSVAranks(rankExprData, dir, ...)
+
+loadHDF5GSVAranks(dir, ...)
 }
 \arguments{
 \item{param}{A parameter object of the \code{\link[=gsvaRanksParam-class]{gsvaRanksParam}} class.}
+
+\item{rankExprData}{A column-rank expression data set obtained with
+\code{\link{gsvaColRanks}}. Must be one of the classes supported by
+\code{\link[=GsvaExprData-class]{GsvaExprData}}. For a list of these classes, see its help page
+using \code{help(GsvaExprData)}.}
+
+\item{dir}{The path to the directory where to save or load the GSVA rank
+values.}
+
+\item{...}{Additional arguments to be passed to the underlying HDF5
+saving/loading functions
+\code{\link[HDF5Array:saveHDF5SummarizedExperiment]{saveHDF5SummarizedExperiment}}
+and \code{\link[HDF5Array:loadHDF5SummarizedExperiment]{loadHDF5SummarizedExperiment}},
+respectively.}
+}
+\value{
+For \code{saveHDF5GSVArnorm()} and \code{saveHDF5GSVAranks()}, the path to the
+directory where the data has been saved is returned invisibly. For
+\code{loadHDF5GSVArnorm()} and \code{loadHDF5GSVAranks()}, an object is returned
+containing the corresponding loaded GSVA row-normalized or rank expression
+values, and their corresponding metadata. If the saved GSVA output was
+originally stored in a
+\code{\link[SummarizedExperiment:SummarizedExperiment]{SummarizedExperiment}} object
+or one of its derived classes, then the returned object will be a
+\code{\link[SummarizedExperiment:SummarizedExperiment]{SummarizedExperiment}}.
+Otherwise, the returned object will be a
+\code{\link[DelayedArray:DelayedMatrix]{DelayedMatrix}} object.
 }
 \description{
 The functions listed below are deprecated and will be defunct in
@@ -35,5 +68,11 @@ and \code{gsvaColRanks()} instead.
 
 The \code{gsvaScores()} method is deprecated. Please use
 \code{gsvaColScores()} instead.
+
+The \code{saveHDF5GSVAranks()} function is deprecated. Please use
+\code{saveHDF5GSVA()} instead.
+
+The \code{loadHDF5GSVAranks()} function is deprecated. Please use
+\code{loadHDF5GSVA()} instead.
 }
 \keyword{internal}
