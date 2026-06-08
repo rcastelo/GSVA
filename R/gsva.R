@@ -684,8 +684,8 @@ setMethod("details",
     return(lst)
 }
 
-## by now this is only called from gsva*() functions, i.e., no need
-## to care about other methods
+## Internal helper used by gsva*() methods and serialization helpers; not intended
+## to support arbitrary external container types beyond those handled below
 #' @importFrom S4Vectors metadata
 .pull_param <- function(exprData) {
 
