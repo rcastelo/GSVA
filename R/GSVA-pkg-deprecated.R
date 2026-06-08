@@ -214,12 +214,11 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
 #' [`GsvaExprData-class`]. For a list of these classes, see its help page
 #' using `help(GsvaExprData)`.
 #'
-#' @return For `saveHDF5GSVArnorm()` and `saveHDF5GSVAranks()`, the path to the
-#' directory where the data has been saved is returned invisibly. For
-#' `loadHDF5GSVArnorm()` and `loadHDF5GSVAranks()`, an object is returned
-#' containing the corresponding loaded GSVA row-normalized or rank expression
-#' values, and their corresponding metadata. If the saved GSVA output was
-#' originally stored in a
+#' @return For `saveHDF5GSVAranks()`, the path to the directory where the data
+#' has been saved is returned invisibly. For `loadHDF5GSVAranks()`, an object
+#' is returned containing the corresponding loaded GSVA row-normalized or rank
+#' expression values, and their corresponding metadata. If the saved GSVA
+#' output was originally stored in a
 #' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment] object
 #' or one of its derived classes, then the returned object will be a
 #' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment].

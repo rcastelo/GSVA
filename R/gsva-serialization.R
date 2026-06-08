@@ -32,9 +32,8 @@
 #' and [`loadHDF5SummarizedExperiment`][HDF5Array::loadHDF5SummarizedExperiment],
 #' respectively.
 #'
-#' @return For `saveHDF5GSVArnorm()` and `saveHDF5GSVAranks()`, the path to the
-#' directory where the data has been saved is returned invisibly. For
-#' `loadHDF5GSVArnorm()` and `loadHDF5GSVAranks()`, an object is returned
+#' @return For `saveHDF5GSVA()` the path to the directory where the data has
+#' been saved is returned invisibly. For `loadHDF5GSVA()`, an object is returned
 #' containing the corresponding loaded GSVA row-normalized or rank expression
 #' values, and their corresponding metadata. If the saved GSVA output was
 #' originally stored in a

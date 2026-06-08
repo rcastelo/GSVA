@@ -32,9 +32,8 @@ and \code{\link[HDF5Array:loadHDF5SummarizedExperiment]{loadHDF5SummarizedExperi
 respectively.}
 }
 \value{
-For \code{saveHDF5GSVArnorm()} and \code{saveHDF5GSVAranks()}, the path to the
-directory where the data has been saved is returned invisibly. For
-\code{loadHDF5GSVArnorm()} and \code{loadHDF5GSVAranks()}, an object is returned
+For \code{saveHDF5GSVA()} the path to the directory where the data has
+been saved is returned invisibly. For \code{loadHDF5GSVA()}, an object is returned
 containing the corresponding loaded GSVA row-normalized or rank expression
 values, and their corresponding metadata. If the saved GSVA output was
 originally stored in a
