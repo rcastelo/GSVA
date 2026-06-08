@@ -9,7 +9,7 @@
 #' GSVA row-normalized or rank expression values, and their corresponding
 #' metadata.
 #'
-#' @param gsvaExprData An obtained either with [`gsvaRowNorm`] or
+#' @param gsvaExprData An object obtained with [`gsvaRowNorm`] or
 #' [`gsvaColRanks`]. Must be one of the classes supported by
 #' [`GsvaExprData-class`].  For a list of these classes, see its help page
 #' using `help(GsvaExprData)`.
@@ -22,7 +22,7 @@
 #' the case of saving and a `gsvaExprData` object that is a
 #' `SummarizedExperiment` or one of its derivatives, it will look for an assay
 #' named `gsvaranks`, and if not found, it will look for an assay named
-#' `gsvarnorm'. If `gsvaExprData` is not a `SummarizedExperiment` or one of its
+#' `gsvarnorm`. If `gsvaExprData` is not a `SummarizedExperiment` or one of its
 #' derivatives, then the assay to be saved will be determined by the `assay`
 #' attribute of the `gsvaExprData` object.
 #'
