@@ -105,7 +105,7 @@ object, containing the row-normalized expression values. The resulting
 object will have metadata with a copy of the input \code{gsvaParam} object,
 except for the \code{exprData} slot, and in the case of being a derivative of a
 \code{\link[SummarizedExperiment:SummarizedExperiment]{SummarizedExperiment}} object,
-an additional assay called "gsvarownr" storing the row-normalized expression
+an additional assay called "gsvarnorm" storing the row-normalized expression
 values.
 
 In the case of 'gsvaColRanks()', an object of the same class as the
