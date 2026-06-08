@@ -66,7 +66,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                   cli_alert_info(sprintf("Calculating GSVA ranks"))
 
               kcdfminssize <- .get_kcdfNoneMinSampleSize(param)
-              gsvarownr <- .compute_row_norm(expr=filtDataMatrix,
+              gsvarnorm <- .compute_row_norm(expr=filtDataMatrix,
                                              kcdf=.get_kcdf(param),
                                              kcdf.min.ssize=kcdfminssize,
                                              sparse=.get_sparse(param),
@@ -76,7 +76,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                                              BPPARAM=BPPARAM,
                                              maxmem=maxmem)
 
-              gsvarnks <- .compute_gsva_ranks(Z=gsvarownr,
+              gsvarnks <- .compute_gsva_ranks(Z=gsvarnorm,
                                               verbose=verbose,
                                               BPPARAM=BPPARAM,
                                               maxmem=maxmem)

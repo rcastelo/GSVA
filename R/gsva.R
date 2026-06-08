@@ -156,11 +156,11 @@ setMethod("gsva", signature(param="gsvaParam"),
 
               .check_bpparam(BPPARAM)
 
-              gsvarownr <- gsvaRowNorm(param=param, verbose=verbose,
+              gsvarnorm <- gsvaRowNorm(param=param, verbose=verbose,
                                        dropExistingAssays=TRUE,
                                        BPPARAM=BPPARAM, maxmem=maxmem)
 
-              gsvaranks <- gsvaColRanks(rowNormExprData=gsvarownr,
+              gsvaranks <- gsvaColRanks(rowNormExprData=gsvarnorm,
                                         verbose=verbose,
                                         dropExistingAssays=TRUE,
                                         BPPARAM=BPPARAM,
@@ -699,13 +699,13 @@ setMethod("details",
             cli_abort(c("x"="Missing metadata in the input expression data."))
         p <- attr(exprData, "gsvaParam")
         a <- attr(exprData, "assay")
-        if (!a %in% c("gsvarownr", "gsvaranks"))
+        if (!a %in% c("gsvarnorm", "gsvaranks"))
             cli_abort(c("x"="Wrong metadata in the input expression data."))
     } else { ## a SummarizedExperiment derivative
         if (is.null(metadata(exprData)$gsvaParam))
             cli_abort(c("x"="Missing metadata in the input expression data"))
         p <- metadata(exprData)$gsvaParam
-        if (!any(assayNames(exprData) %in% c("gsvarownr", "gsvaranks"))) 
+        if (!any(assayNames(exprData) %in% c("gsvarnorm", "gsvaranks"))) 
             cli_abort(c("x"="Wrong metadata in the input expression data."))
     }
 
@@ -829,7 +829,7 @@ setMethod("details",
 #' object will have metadata with a copy of the input `gsvaParam` object,
 #' except for the `exprData` slot, and in the case of being a derivative of a
 #' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment] object,
-#' an additional assay called "gsvarownr" storing the row-normalized expression
+#' an additional assay called "gsvarnorm" storing the row-normalized expression
 #' values.
 #'
 #' @aliases gsvaRowNorm,gsvaParam-method
@@ -889,7 +889,7 @@ setMethod("gsvaRowNorm", signature(param="gsvaParam"),
                   cli_alert_info(sprintf("Normalizing rows"))
 
               kcdfminssize <- .get_kcdfNoneMinSampleSize(param)
-              gsvarownr <- .compute_row_norm(expr=filtDataMatrix,
+              gsvarnorm <- .compute_row_norm(expr=filtDataMatrix,
                                              kcdf=.get_kcdf(param),
                                              kcdf.min.ssize=kcdfminssize,
                                              sparse=.get_sparse(param),
@@ -899,11 +899,11 @@ setMethod("gsvaRowNorm", signature(param="gsvaParam"),
                                              BPPARAM=BPPARAM,
                                              maxmem=maxmem)
 
-              rownames(gsvarownr) <- rownames(filtDataMatrix)
-              colnames(gsvarownr) <- colnames(filtDataMatrix)
+              rownames(gsvarnorm) <- rownames(filtDataMatrix)
+              colnames(gsvarnorm) <- colnames(filtDataMatrix)
 
-              rval <- wrapData(get_exprData(param), gsvarownr, param,
-                               "gsvarownr", first, last, whdim=1,
+              rval <- wrapData(get_exprData(param), gsvarnorm, param,
+                               "gsvarnorm", first, last, whdim=1,
                                dropExistingAssays)
 
               if (verbose && gsva_global$show_start_and_end_messages)
@@ -951,16 +951,16 @@ setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
 
               .check_bpparam(BPPARAM)
 
-              dataMatrix <- unwrapData(rowNormExprData, "gsvarownr")
+              dataMatrix <- unwrapData(rowNormExprData, "gsvarnorm")
 
               checkedfl <- .check_first_last_values(dataMatrix, ncol, "columns",
                                                     first, last)
               first <- checkedfl$first
               last <- checkedfl$last
 
-              maxmem <- .check_maxmem(param, assay="gsvarownr", maxmem=maxmem,
+              maxmem <- .check_maxmem(param, assay="gsvarnorm", maxmem=maxmem,
                                       verbose=verbose)
-              ondisk <- .check_ondisk(param, assay="gsvarownr", first=first,
+              ondisk <- .check_ondisk(param, assay="gsvarnorm", first=first,
                                       last=last, whdim=2, maxmem=maxmem,
                                       verbose=verbose)
 
