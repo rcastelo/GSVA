@@ -140,7 +140,7 @@ saveHDF5GSVA <- function(gsvaExprData, dir, assay="auto", ...) {
                        last=last, whdim=whdim, dropAssays=TRUE)
 
     } else {
-        ## 'SummarizedExperiment' object, remove all assays except 'gsvarnorm'
+        ## 'SummarizedExperiment' object, remove all assays except the selected GSVA assay
         an <- assayNames(se)
         assay <- .check_assay_ranks_rnorm(an, assay)
 
