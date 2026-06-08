@@ -82,12 +82,25 @@ gsvacolranks <- gsvaColRanks(gsvarownorm)
 ## calculate GSVA scores
 es <- gsvaColScores(gsvacolranks)
 
-## save the GSVA ranks to disk
-dir <- tempfile()
-saveHDF5GSVAranks(gsvacolranks, dir)
+## save the GSVA row-normalized expression values to disk
+rnormdir <- tempfile()
+saveHDF5GSVA(gsvarownorm, rnormdir)
+
+## save the GSVA rank values to disk
+ranksdir <- tempfile()
+saveHDF5GSVA(gsvacolranks, ranksdir)
+
+## load the GSVA row-normalized values from disk               
+loaded_gsvarownorm <- loadHDF5GSVA(rnormdir)
+
+## check that the loaded row-normalized values provide the
+## same ranks as the ones calculated from the original values
+gsvacolranks_from_loaded_gsvarownorm <- gsvaColRanks(loaded_gsvarownorm)
+
+identical(gsvacolranks, gsvacolranks_from_loaded_gsvarownorm)
 
 ## load the GSVA ranks from disk
-loaded_gsvacolranks <- loadHDF5GSVAranks(dir)
+loaded_gsvacolranks <- loadHDF5GSVA(ranksdir)
 
 ## check that the loaded ranks provide the
 ## same scores as the original ranks
