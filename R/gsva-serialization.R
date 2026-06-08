@@ -106,7 +106,7 @@ saveHDF5GSVA <- function(gsvaExprData, dir, assay="auto", ...) {
         if (!assay %in% c("gsvarnorm", "gsvaranks"))
             cli_abort(c("x"=paste("The object in 'gsvaExprData' does not have",
                                   "GSVA output.")))
-        param <- .pull_param(gsvaExprData, "dummy")
+        param <- .pull_param(gsvaExprData)
         first <- last <- NA_real_
         whdim <- NA_integer_
         annot <- NULL

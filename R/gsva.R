@@ -684,10 +684,10 @@ setMethod("details",
     return(lst)
 }
 
-## by now this is only called from gsvaColRanks(), i.e., no need
+## by now this is only called from gsva*() functions, i.e., no need
 ## to care about other methods
 #' @importFrom S4Vectors metadata
-.pull_param <- function(exprData, assay) {
+.pull_param <- function(exprData) {
 
     p <- NULL
     if (is(exprData, "matrix") || is(exprData, "dgCMatrix") ||
@@ -942,7 +942,7 @@ setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
                    BPPARAM=SerialParam(progressbar=verbose),
                    maxmem="auto") {
 
-              param <- .pull_param(rowNormExprData, "gsvarownr")
+              param <- .pull_param(rowNormExprData)
 
               if (verbose && gsva_global$show_start_and_end_messages) {
                   pkgversion <- packageDescription("GSVA")[["Version"]]
@@ -1018,7 +1018,7 @@ setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
                    BPPARAM=SerialParam(progressbar=verbose),
                    maxmem="auto") {
 
-              param <- .pull_param(rankExprData, "gsvaranks")
+              param <- .pull_param(rankExprData)
 
               if (!missing(geneSets)) {
                   if (!is(geneSets, "GsvaGeneSets"))
@@ -1215,7 +1215,7 @@ setMethod("gsvaEnrichment", signature(rankExprData="GsvaExprData"),
               } else
                   cli_abort(c("x"="'column' should be a positive integer."))
                     
-              param <- .pull_param(rankExprData, "gsvaranks")
+              param <- .pull_param(rankExprData)
 
               plot <- match.arg(plot)
 
