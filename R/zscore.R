@@ -26,6 +26,7 @@ setMethod("gsva", signature(param="zscoreParam"),
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=TRUE,
                                                        removeNzConstant=TRUE,
+                                                       errorOnTooFewRows=TRUE,
                                                        verbose=verbose,
                                                        BPPARAM=BPPARAM)
               filtDataMatrix <- famGaGS[["filteredDataMatrix"]]

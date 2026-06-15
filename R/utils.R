@@ -835,8 +835,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                          "positive integers.")
             cli_abort(c("x"=msg))
         }
-        if (first >= last) {
-            msg <- paste("argument 'first' must be smaller than",
+        if (first > last) {
+            msg <- paste("argument 'first' must be smaller or equal than",
                          "argument 'last'.")
             cli_abort(c("x"=msg))
         }
@@ -847,8 +847,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     }
 
     if (first > dimfun(X) || last > dimfun(X)) {
-        msg <- paste("arguments 'first' and 'last' must be smaller than or equal",
-                     "to the number of {dimname} of the input expression data.")
+        msg <- paste("arguments 'first' and 'last' must be smaller or equal",
+                     "than the number of {dimname} of the input expression",
+		     "data.")
         cli_abort(c("x"=msg))
     }
 

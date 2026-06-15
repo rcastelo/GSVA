@@ -55,8 +55,9 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                   filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
                                                  removeConstant=TRUE,
                                                  removeNzConstant=TRUE,
-                                                 verbose, BPPARAM=BPPARAM,
-                                                 maxmem=maxmem)
+                                                 errorOnTooFewRows=TRUE,
+                                                 verbose=verbose,
+                                                 BPPARAM=BPPARAM, maxmem=maxmem)
               else if (verbose) {
                   msg <- "Skipping filtering of constant rows (filterRows=FALSE)"
                   cli_alert_warning(msg)

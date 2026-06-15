@@ -158,6 +158,7 @@ setMethod("gsva", signature(param="gsvaParam"),
 
               gsvarnorm <- gsvaRowNorm(param=param, verbose=verbose,
                                        dropExistingAssays=TRUE,
+                                       errorOnTooFewRows=TRUE,
                                        BPPARAM=BPPARAM, maxmem=maxmem)
 
               gsvaranks <- gsvaColRanks(rowNormExprData=gsvarnorm,
@@ -690,9 +691,17 @@ setMethod("details",
 .pull_param <- function(exprData) {
 
     p <- NULL
-    if (is(exprData, "matrix") || is(exprData, "dgCMatrix") ||
-        is(exprData, "SVT_SparseMatrix") || is(exprData, "DelayedMatrix") ||
-        is(exprData, "HDF5Matrix") || is(exprData, "ExpressionSet")) {
+    if (is(exprData, "SummarizedExperiment")) {
+        if (is.null(metadata(exprData)$gsvaParam))
+            cli_abort(c("x"="Missing metadata in the input expression data"))
+        p <- metadata(exprData)$gsvaParam
+        if (!any(assayNames(exprData) %in% c("gsvarnorm", "gsvaranks"))) 
+            cli_abort(c("x"="Wrong metadata in the input expression data."))
+	metadata(exprData)$geneSets <- NULL
+	metadata(exprData)$assay <- NULL
+	metadata(exprData)$gsvaParam <- NULL
+	metadata(exprData)$restrict <- NULL
+    } else {
         mask <- is.null(attr(exprData, "gsvaParam")) ||
                 is.null(attr(exprData, "assay"))
         if (any(mask))
@@ -701,12 +710,10 @@ setMethod("details",
         a <- attr(exprData, "assay")
         if (!a %in% c("gsvarnorm", "gsvaranks"))
             cli_abort(c("x"="Wrong metadata in the input expression data."))
-    } else { ## a SummarizedExperiment derivative
-        if (is.null(metadata(exprData)$gsvaParam))
-            cli_abort(c("x"="Missing metadata in the input expression data"))
-        p <- metadata(exprData)$gsvaParam
-        if (!any(assayNames(exprData) %in% c("gsvarnorm", "gsvaranks"))) 
-            cli_abort(c("x"="Wrong metadata in the input expression data."))
+	attr(exprData, "geneSets") <- NULL
+	attr(exprData, "assay") <- NULL
+	attr(exprData, "gsvaParam") <- NULL
+	attr(exprData, "restrict") <- NULL
     }
 
     param <- new("gsvaParam",
@@ -745,6 +752,12 @@ setMethod("details",
 #' will be stored as a new assay in the same input object. When
 #' `dropExistingAssays=TRUE`, any existing assay will be dropped before adding
 #' the new assay with the row-normalized expression values or the column ranks.
+#'
+#' @param errorOnTooFewRows Logical vector of length 1. When `TRUE` (default),
+#' an error will be thrown if the number of rows in the input expression data
+#' is less then 2 after filtering out rows with constant values across columns.
+#' When `FALSE`, a warning will be given instead, and the returned object will
+#' either have one or no rows.
 #'
 #' @param first Numeric vector of length 1. First row, in the case of
 #' `gsvaRowNorm()`, or first column, in the case of `gsvaColRanks()` and
@@ -842,6 +855,7 @@ setMethod("gsvaRowNorm", signature(param="gsvaParam"),
           function(param,
                    verbose=TRUE,
                    dropExistingAssays=FALSE,
+                   errorOnTooFewRows=TRUE,
                    first=NA_real_, last=NA_real_,
                    BPPARAM=SerialParam(progressbar=verbose),
                    maxmem="auto") {
@@ -876,10 +890,11 @@ setMethod("gsvaRowNorm", signature(param="gsvaParam"),
 
               if (.get_filterRows(param))
                   filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
-                                                 removeConstant=TRUE,
-                                                 removeNzConstant=TRUE,
-                                                 verbose, BPPARAM=BPPARAM,
-                                                 maxmem=maxmem)
+                                           removeConstant=TRUE,
+                                           removeNzConstant=TRUE,
+                                           errorOnTooFewRows=errorOnTooFewRows,
+                                           verbose=verbose,
+                                           BPPARAM=BPPARAM, maxmem=maxmem)
               else if (verbose) {
                   msg <- "Skipping filtering of constant rows (filterRows=FALSE)"
                   cli_alert_warning(msg)
@@ -1416,20 +1431,24 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
 
 #' @importFrom Matrix nnzero
 .sufficient_ssize <- function(expr, kcdf.min.ssize) {
-  ## in the sparse case stored in a 'dgCMatrix' or a 'SVT_SparseMatrix',
-  ## by now, use the average nonzero values per row
-  if (is_sparse(expr)) {
-    nnz <- nnzero(expr)
-    if (is.na(nnz)) {
-        msg <- "The input sparse matrix of expression contains NA values."
-        cli_abort(c("x"=msg))
-    }
-    return((nnz / nrow(expr)) >= kcdf.min.ssize)
-  }
 
-  ## in every other case, including the dense case, by now,
-  ## just look at the number of columns
-  return(ncol(expr) >= kcdf.min.ssize)
+    if (nrow(expr) == 0) ## this should not happen but just in case,
+        return(TRUE) ## bypass later checking if values are integer or not
+
+    ## in the sparse case stored in a 'dgCMatrix' or a 'SVT_SparseMatrix',
+    ## by now, use the average nonzero values per row
+    if (is_sparse(expr)) {
+      nnz <- nnzero(expr)
+      if (is.na(nnz)) {
+          msg <- "The input sparse matrix of expression contains NA values."
+          cli_abort(c("x"=msg))
+      }
+      return((nnz / nrow(expr)) >= kcdf.min.ssize)
+    }
+
+    ## in every other case, including the dense case, by now,
+    ## just look at the number of columns
+    return(ncol(expr) >= kcdf.min.ssize)
 }
 
 #' @importFrom S4Arrays is_sparse
@@ -1487,12 +1506,15 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                               sparse, any_na, na_use, verbose,
                               BPPARAM=NULL, maxmem=Inf) {
 
+    if (verbose)
+       cli_alert_info("Calculating row ECDFs")
+
+    if (nrow(expr) == 0) ## this may happen when errorOnTooFewRows=FALSE
+        return(expr[0, , drop=FALSE])
+
     kcdfparam <- .parse_kcdf_param(expr, kcdf, kcdf.min.ssize, sparse, verbose)
     kernel <- kcdfparam$kernel
     Gaussk <- kcdfparam$Gaussk
-
-    if (verbose)
-       cli_alert_info("Calculating row ECDFs")
 
     Z <- .processMatrixRows(expr, FUN=compute.gene.cdf, Gaussk=Gaussk,
                             kernel=kernel, sparse=sparse, any_na=any_na,

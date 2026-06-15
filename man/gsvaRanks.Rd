@@ -13,6 +13,7 @@
   param,
   verbose = TRUE,
   dropExistingAssays = FALSE,
+  errorOnTooFewRows = TRUE,
   first = NA_real_,
   last = NA_real_,
   BPPARAM = SerialParam(progressbar = verbose),
@@ -55,6 +56,12 @@ the new assay with the row-normalized expression values or the column ranks
 will be stored as a new assay in the same input object. When
 \code{dropExistingAssays=TRUE}, any existing assay will be dropped before adding
 the new assay with the row-normalized expression values or the column ranks.}
+
+\item{errorOnTooFewRows}{Logical vector of length 1. When \code{TRUE} (default),
+an error will be thrown if the number of rows in the input expression data
+is less then 2 after filtering out rows with constant values across columns.
+When \code{FALSE}, a warning will be given instead, and the returned object will
+either have one or no rows.}
 
 \item{first}{Numeric vector of length 1. First row, in the case of
 \code{gsvaRowNorm()}, or first column, in the case of \code{gsvaColRanks()} and

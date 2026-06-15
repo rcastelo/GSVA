@@ -10,7 +10,7 @@ saveHDF5GSVA(gsvaExprData, dir, assay = "auto", ...)
 loadHDF5GSVA(dir, assay = "auto", ...)
 }
 \arguments{
-\item{gsvaExprData}{An obtained either with \code{\link{gsvaRowNorm}} or
+\item{gsvaExprData}{An object obtained with \code{\link{gsvaRowNorm}} or
 \code{\link{gsvaColRanks}}. Must be one of the classes supported by
 \code{\link[=GsvaExprData-class]{GsvaExprData}}.  For a list of these classes, see its help page
 using \code{help(GsvaExprData)}.}
@@ -23,7 +23,9 @@ the GSVA output to be saved or loaded. By default, \code{assay="auto"}, which in
 the case of saving and a \code{gsvaExprData} object that is a
 \code{SummarizedExperiment} or one of its derivatives, it will look for an assay
 named \code{gsvaranks}, and if not found, it will look for an assay named
-\verb{gsvarnorm'. If }gsvaExprData\verb{is not a}SummarizedExperiment\verb{or one of its derivatives, then the assay to be saved will be determined by the}assay\verb{attribute of the}gsvaExprData` object.}
+\code{gsvarnorm}. If \code{gsvaExprData} is not a \code{SummarizedExperiment} or one of its
+derivatives, then the assay to be saved will be determined by the \code{assay}
+attribute of the \code{gsvaExprData} object.}
 
 \item{...}{Additional arguments to be passed to the underlying HDF5
 saving/loading functions

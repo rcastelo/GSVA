@@ -1056,8 +1056,8 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 #' @importFrom cli cli_progress_bar cli_progress_done
 #' @importFrom BiocParallel SerialParam bpnworkers bpprogressbar
 .filterGenes <- function(expr, anyna=FALSE, removeConstant=TRUE,
-                         removeNzConstant=TRUE, verbose=TRUE, BPPARAM=NULL,
-                         maxmem=Inf) {
+                         removeNzConstant=TRUE, errorOnTooFewRows=TRUE,
+			 verbose=TRUE, BPPARAM=NULL, maxmem=Inf) {
     rowrngs <- NULL
 
     if (verbose) {
@@ -1116,10 +1116,13 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
     if (any(removemask)) {
         if (nrow(expr) - sum(removemask) < 2) {
             msg <- "Less than two rows left in the input assay object."
-            cli_abort(c("x"=msg))
+            if (errorOnTooFewRows)
+                cli_abort(c("x"=msg))
+            else
+                cli_alert_warning(msg)
         }
 
-        expr <- expr[!removemask, ]
+        expr <- expr[!removemask, , drop=FALSE]
     }
 
     return(expr)
@@ -1223,6 +1226,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 .filterAndMapGenesAndGeneSets <- function(param,
                                           removeConstant=TRUE,
                                           removeNzConstant=TRUE,
+                                          errorOnTooFewRows=TRUE,
                                           verbose=FALSE,
                                           BPPARAM=SerialParam()) {
     exprData <- get_exprData(param)
@@ -1233,7 +1237,8 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
     filtDataMatrix <- .filterGenes(dataMatrix, anyna=anyNA(param),
                                    removeConstant=removeConstant,
                                    removeNzConstant=removeNzConstant,
-                                   verbose, BPPARAM=BPPARAM)
+                                   errorOnTooFewRows=errorOnTooFewRows,
+                                   verbose=verbose, BPPARAM=BPPARAM)
 
     filtMappedGeneSets <- .filterAndMapGeneSets(param=param,
                                                 filteredDataMatrix=filtDataMatrix,

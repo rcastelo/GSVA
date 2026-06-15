@@ -23,6 +23,10 @@ setGeneric("gsvaRanks",
 setGeneric("gsvaScores",
            function(param, ...) standardGeneric("gsvaScores"))
 
+#' @export
+setGeneric("gsvaMap",
+           function(paramOrGsvaExprData, ...) standardGeneric("gsvaMap"))
+
 #' @export 
 setGeneric("gsvaEnrichment",
            function(rankExprData, ...) standardGeneric("gsvaEnrichment"))
