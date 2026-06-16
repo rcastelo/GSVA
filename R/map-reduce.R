@@ -55,7 +55,7 @@
 gsvaMap <- function(paramOrGsvaExprData, verbose=TRUE,
                     BTPARAM=BatchtoolsParam(workers=2, progressbar=verbose)) {
 
-              if (!is(param, "gsvaParam")) {
+              if (!is(paramOrGsvaExprData, "gsvaParam")) {
                   msg <- paste("'param' must be an object of class",
                                "'gsvaParam'; see class ? gsvaParam.")
                   cli_abort(c("x"=msg))
