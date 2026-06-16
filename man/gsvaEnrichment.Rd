@@ -2,10 +2,9 @@
 % Please edit documentation in R/gsva.R
 \name{gsvaEnrichment}
 \alias{gsvaEnrichment}
-\alias{gsvaEnrichment,GsvaExprData-method}
 \title{GSVA enrichment data and visualization}
 \usage{
-\S4method{gsvaEnrichment}{GsvaExprData}(
+gsvaEnrichment(
   rankExprData,
   column = 1,
   geneSet = 1,

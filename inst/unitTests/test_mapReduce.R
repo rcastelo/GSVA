@@ -28,7 +28,7 @@ test_mapReduce <- function() {
 
     sce <- SingleCellExperiment(assays=list(counts=cnt))
 
-    ## process as if it were single-cell RNA-seq data
+    ## process it as if it were single-cell RNA-seq data
     sce <- quickRnaQc.se(sce, subsets=list(mito=rep(FALSE, nrow(sce))))
     sce <- sce[, sce$keep]
     sce <- normalizeRnaCounts.se(sce, size.factors=sce$sum)

@@ -2,14 +2,11 @@
 % Please edit documentation in R/gsva.R
 \name{gsvaRowNorm}
 \alias{gsvaRowNorm}
-\alias{gsvaRowNorm,gsvaParam-method}
 \alias{gsvaColRanks}
-\alias{gsvaColRanks,GsvaExprData-method}
 \alias{gsvaColScores}
-\alias{gsvaColScores,GsvaExprData-method}
 \title{GSVA ranks and scores}
 \usage{
-\S4method{gsvaRowNorm}{gsvaParam}(
+gsvaRowNorm(
   param,
   verbose = TRUE,
   dropExistingAssays = FALSE,
@@ -20,7 +17,7 @@
   maxmem = "auto"
 )
 
-\S4method{gsvaColRanks}{GsvaExprData}(
+gsvaColRanks(
   rowNormExprData,
   verbose = TRUE,
   dropExistingAssays = FALSE,
@@ -30,7 +27,7 @@
   maxmem = "auto"
 )
 
-\S4method{gsvaColScores}{GsvaExprData}(
+gsvaColScores(
   rankExprData,
   geneSets,
   verbose = TRUE,
@@ -92,7 +89,7 @@ in an R session or script may depend on other commands and packages used in
 that same session or script.}
 
 \item{rowNormExprData}{A row-normalized expression data set obtained with
-\code{\link{gsvaRowNorm}}.  Must be one of the classes
+\code{\link{gsvaRowNorm}}.  Must be an object of one of the classes
 supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.  For a list of these classes, see its
 help page using \code{help(GsvaExprData)}.}
 

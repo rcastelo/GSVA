@@ -845,20 +845,23 @@ setMethod("details",
 #' an additional assay called "gsvarnorm" storing the row-normalized expression
 #' values.
 #'
-#' @aliases gsvaRowNorm,gsvaParam-method
-#' @name gsvaRowNorm
 #' @rdname gsvaRanks
 #'
 #' @importFrom cli cli_alert_info cli_alert_success
-#' @exportMethod gsvaRowNorm
-setMethod("gsvaRowNorm", signature(param="gsvaParam"),
-          function(param,
-                   verbose=TRUE,
-                   dropExistingAssays=FALSE,
-                   errorOnTooFewRows=TRUE,
-                   first=NA_real_, last=NA_real_,
-                   BPPARAM=SerialParam(progressbar=verbose),
-                   maxmem="auto") {
+#' @export gsvaRowNorm
+gsvaRowNorm <- function(param,
+                        verbose=TRUE,
+                        dropExistingAssays=FALSE,
+                        errorOnTooFewRows=TRUE,
+                        first=NA_real_, last=NA_real_,
+                        BPPARAM=SerialParam(progressbar=verbose),
+                        maxmem="auto") {
+
+              if (!is(param, "gsvaParam")) {
+                  msg <- paste("'param' must be an object of class",
+                               "'gsvaParam'; see class ? gsvaParam.")
+                  cli_abort(c("x"=msg))
+              }
 
               if (verbose && gsva_global$show_start_and_end_messages) {
                   pkgversion <- packageDescription("GSVA")[["Version"]]
@@ -925,13 +928,13 @@ setMethod("gsvaRowNorm", signature(param="gsvaParam"),
                   cli_alert_success("Calculations finished")
 
               return(rval)
-          })
+          }
 
 
 
 #'
 #' @param rowNormExprData A row-normalized expression data set obtained with
-#' [`gsvaRowNorm`].  Must be one of the classes
+#' [`gsvaRowNorm`].  Must be an object of one of the classes
 #' supported by [`GsvaExprData-class`].  For a list of these classes, see its
 #' help page using `help(GsvaExprData)`.
 #'
@@ -943,19 +946,23 @@ setMethod("gsvaRowNorm", signature(param="gsvaParam"),
 #' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment] object,
 #' an additional assay called "gsvaranks" storing the column rank values.
 #'
-#' @aliases gsvaColRanks,GsvaExprData-method
-#' @name gsvaColRanks
 #' @rdname gsvaRanks
 #'
 #' @importFrom cli cli_alert_info cli_alert_success
-#' @exportMethod gsvaColRanks
-setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
-          function(rowNormExprData,
-                   verbose=TRUE,
-                   dropExistingAssays=FALSE,
-                   first=NA_real_, last=NA_real_,
-                   BPPARAM=SerialParam(progressbar=verbose),
-                   maxmem="auto") {
+#' @export gsvaColRanks
+gsvaColRanks <- function(rowNormExprData,
+                         verbose=TRUE,
+                         dropExistingAssays=FALSE,
+                         first=NA_real_, last=NA_real_,
+                         BPPARAM=SerialParam(progressbar=verbose),
+                         maxmem="auto") {
+
+              if (!is(rowNormExprData, "GsvaExprData")) {
+                  msg <- paste("'rowNormExprData' must be an object of one",
+                               "of the classes supported by 'GsvaExprData';",
+                               "See class ? GsvaExprData.")
+                  cli_abort(c("x"=msg))
+              }
 
               param <- .pull_param(rowNormExprData)
 
@@ -1001,7 +1008,8 @@ setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
                   cli_alert_success("Calculations finished")
 
               return(rval)
-          })
+          }
+
 
 
 #' @param rankExprData A column-rank expression data set obtained with
@@ -1020,18 +1028,22 @@ setMethod("gsvaColRanks", signature(rowNormExprData="GsvaExprData"),
 #' will correspond to the gene sets for which the enrichment scores were
 #' calculated.
 #'
-#' @aliases gsvaColScores,GsvaExprData-method
-#' @name gsvaColScores
 #' @rdname gsvaRanks
 #'
 #' @importFrom S4Arrays is_sparse
 #' @importFrom cli cli_alert_info cli_alert_success
-#' @exportMethod gsvaColScores
-setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
-          function(rankExprData, geneSets, verbose=TRUE,
-                   first=NA_real_, last=NA_real_,
-                   BPPARAM=SerialParam(progressbar=verbose),
-                   maxmem="auto") {
+#' @export gsvaColScores
+gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
+                          first=NA_real_, last=NA_real_,
+                          BPPARAM=SerialParam(progressbar=verbose),
+                          maxmem="auto") {
+
+              if (!is(rankExprData, "GsvaExprData")) {
+                  msg <- paste("'rankExprData' must be an object of one",
+                               "of the classes supported by 'GsvaExprData';",
+                               "See class ? GsvaExprData.")
+                  cli_abort(c("x"=msg))
+              }
 
               param <- .pull_param(rankExprData)
 
@@ -1128,7 +1140,7 @@ setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
                   cli_alert_success("Calculations finished")
 
               return(rval)
-          })
+          }
 
 #' @title GSVA enrichment data and visualization
 #'
@@ -1166,8 +1178,6 @@ setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
 #'
 #' @seealso [`gsvaColRanks`], [`GsvaExprData-class`]
 #'
-#' @aliases gsvaEnrichment,GsvaExprData-method
-#' @name gsvaEnrichment
 #' @rdname gsvaEnrichment
 #'
 #' @references Hänzelmann, S., Castelo, R. and Guinney, J. GSVA: Gene set
@@ -1213,10 +1223,16 @@ setMethod("gsvaColScores", signature(rankExprData="GsvaExprData"),
 #'
 #' @importFrom cli cli_alert_info cli_abort cli_alert_danger
 #' @importFrom utils installed.packages
-#' @exportMethod gsvaEnrichment
-setMethod("gsvaEnrichment", signature(rankExprData="GsvaExprData"),
-          function(rankExprData, column=1, geneSet=1,
-                   plot=c("auto", "base", "ggplot", "no"), ...) {
+#' @export gsvaEnrichment
+gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
+                           plot=c("auto", "base", "ggplot", "no"), ...) {
+
+              if (!is(rankExprData, "GsvaExprData")) {
+                  msg <- paste("'rankExprData' must be an object of one",
+                               "of the classes supported by 'GsvaExprData';",
+                               "See class ? GsvaExprData.")
+                  cli_abort(c("x"=msg))
+              }
 
               if (length(column) != 1)
                   cli_abort(c("x"="'column' should be of length 1."))
@@ -1319,7 +1335,7 @@ setMethod("gsvaEnrichment", signature(rankExprData="GsvaExprData"),
                   else
                       .plot_enrichment_ggplot(edata)
               }
-          })
+          }
 
 
 

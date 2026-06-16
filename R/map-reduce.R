@@ -49,14 +49,18 @@
 #' ## compute nodes in a high-performance computing (HPC) environment
 #' gsvarownorm <- gsvaReduce(gsvaMap(gsvapar))
 #'
-#' @aliases gsvaMap
-#' @aliases gsvaMap,gsvaParam-method
 #' @importFrom BiocParallel BatchtoolsParam bpnworkers MulticoreParam bplapply
 #' @rdname map-reduce
-#' @exportMethod gsvaMap
-setMethod("gsvaMap", signature(paramOrGsvaExprData="gsvaParam"),
-          function(paramOrGsvaExprData, verbose=TRUE,
-                   BTPARAM=BatchtoolsParam(workers=2, progressbar=verbose)) {
+#' @export gsvaMap
+gsvaMap <- function(paramOrGsvaExprData, verbose=TRUE,
+                    BTPARAM=BatchtoolsParam(workers=2, progressbar=verbose)) {
+
+              if (!is(param, "gsvaParam")) {
+                  msg <- paste("'param' must be an object of class",
+                               "'gsvaParam'; see class ? gsvaParam.")
+                  cli_abort(c("x"=msg))
+              }
+
               ## check that the BatchtoolsParam object is valid
               BTPARAM <- .check_batchtools_param(BTPARAM, verbose)
 
@@ -78,7 +82,7 @@ setMethod("gsvaMap", signature(paramOrGsvaExprData="gsvaParam"),
               rir <- .splitRowsInRanges(grid)
 	      
               bplapply(rir, FUN=FUN_WRAPPER, BPPARAM=BTPARAM)
-	  })
+	  }
 
 #' @importFrom cli cli_abort
 #' @importFrom BiocGenerics rbind cbind

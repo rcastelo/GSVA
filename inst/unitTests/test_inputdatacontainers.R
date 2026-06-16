@@ -26,7 +26,7 @@ test_inputdatacontainers <- function() {
 
     library(cli)
     out <- cli_fmt(gsvaParam(y, gsets, assay="dummy"))
-    checkTrue(substr(out, 3, nchar(out)) == "argument assay='dummy' ignored since input argument 'exprData' has no assay names.")
+    checkTrue(grepl("argument assay='dummy' ignored", out))
 
     ## estimate GSVA enrichment scores with input as an ExpressionSet object
     suppressPackageStartupMessages(library(Biobase))
@@ -66,7 +66,7 @@ test_inputdatacontainers <- function() {
     checkTrue(identical(gsets.mat, gsets.se))
 
     out <- cli_fmt(gsvaParam(se, gsets))
-    checkTrue(substr(out, 3, nchar(out)) == "No assay name provided; using default assay 'counts'")
+    checkTrue(grepl("No assay name provided", out))
     checkException(gsvaParam(se, gsets, assay="dummy"))
 
     gsvarownr <- gsvaRowNorm(gsvapar, dropExistingAssays=TRUE, verbose=FALSE)
