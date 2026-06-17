@@ -6,7 +6,8 @@
 \title{MapReduce parallelization for HPC environments}
 \usage{
 gsvaMap(
-  paramOrGsvaExprData,
+  FUN,
+  inputData,
   verbose = TRUE,
   BTPARAM = BatchtoolsParam(workers = 2, progressbar = verbose)
 )
@@ -14,11 +15,16 @@ gsvaMap(
 gsvaReduce(..., verbose = TRUE)
 }
 \arguments{
-\item{paramOrGsvaExprData}{An object either of class \code{\link{gsvaParam}}, or
-obtained with \code{\link{gsvaRowNorm}} or \code{\link{gsvaColRanks}}, in this context run through
-\code{gsvaMap()}. In the latter case, it must be one of the classes supported by
-\code{\link[=GsvaExprData-class]{GsvaExprData}}.  For a list of these classes, see its help page
-using \code{help(GsvaExprData)}.}
+\item{FUN}{Function to map to the data in the \code{inputData} argument.}
+
+\item{inputData}{In \code{gsvaMap()}, input data for performing the calculations
+in parallel. It should be an object either of class \code{\link{gsvaParam}}, or one of
+the classes supported by \code{\link[=GsvaExprData-class]{GsvaExprData}} as output from
+\code{\link{gsvaRowNorm}} or \code{\link{gsvaColRanks}}; for a list of these classes consult
+\code{class ? GsvaExprData}. It can also be a list object with the output of
+\code{gsvaMap()} itself, to proceed through the three-step pipeline of calculating
+row-normalized expression values, column ranks, and GSVA scores without
+having to call to \code{gsvaReduce()} in between.}
 
 \item{verbose}{Gives information about the progress of the calculations.
 Default: \code{TRUE}.}
@@ -63,6 +69,14 @@ gsvapar <- gsvaParam(y, geneSets)
 
 ## calculate row-normalized expression values in parallel across multiple
 ## compute nodes in a high-performance computing (HPC) environment
-gsvarownorm <- gsvaReduce(gsvaMap(gsvapar))
+gsvarnorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar))
+
+## calculate column GSVA ranks in parallel across multiple
+## compute nodes in a high-performance computing (HPC) environment
+gsvaranks <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm))
+
+## calculate column GSVA scores in parallel across multiple
+## compute nodes in a high-performance computing (HPC) environment
+gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks))
 
 }

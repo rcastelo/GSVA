@@ -109,8 +109,11 @@ setMethod("wrapData", signature(container="ExpressionSet"),
               stopifnot(!missing(last))
               stopifnot(!missing(whdim))
               stopifnot(!missing(dropAssays))
+              pdata <- phenoData(container)
+              if (!is.na(first) && !is.na(last) && whdim == 2)
+                  pdata <- pdata[first:last, , drop=FALSE]
               rval <- new("ExpressionSet", exprs=dataMatrix,
-                          phenoData=phenoData(container),
+                          phenoData=pdata,
                           experimentData=experimentData(container),
                           annotation="")
               attr(rval, "gsvaParam") <- .gsvaParam_as_list(param)
@@ -124,14 +127,9 @@ setMethod("wrapData", signature(container="ExpressionSet"),
               return(rval)
           })
 
-.check_existing_assay <- function(container, assay) {
-    if (assay %in% assayNames(container))
-        cli_abort(c("x"=paste("Assay {assay} already exists in the input",
-                              "container object.")))
-}
-
 #' @importFrom IRanges CharacterList
 #' @importFrom S4Vectors SimpleList
+#' @importFrom SummarizedExperiment assayNames
 setMethod("wrapData", signature(container="SummarizedExperiment"),
           function(container, dataMatrix, param, assay, first, last, whdim,
                    dropAssays, geneSets) {
@@ -147,16 +145,21 @@ setMethod("wrapData", signature(container="SummarizedExperiment"),
               if (!missing(geneSets)) { ## storing enrichment scores only
                   rdata <- DataFrame(gs=CharacterList(geneSets))
               } else { ## missing geneSets implies adding an assay
-                  .check_existing_assay(container, assay)
+                  if (assay %in% assayNames(container))
+                      cli_abort(c("x"=paste("Assay {assay} already exists in",
+                                            "the input container object.")))
                   stopifnot(all(rownames(dataMatrix) %in% rownames(container)))
                   mask <- rownames(container) %in% rownames(dataMatrix)
                   if (!dropAssays)
                       adata <- c(assays(container[mask, ]), adata)
                   rdata <- rowData(container)[mask, ]
               }
+              cdata <- colData(container)
+              if (!is.na(first) && !is.na(last) && whdim == 2)
+                  cdata <- cdata[first:last, , drop=FALSE]
               rval <- SummarizedExperiment(
                   assays=adata,
-                  colData=colData(container),
+                  colData=cdata,
                   rowData=rdata,
                   metadata=metadata(container))
               metadata(rval)$gsvaParam <- .gsvaParam_as_list(param)
@@ -171,6 +174,7 @@ setMethod("wrapData", signature(container="SummarizedExperiment"),
 
 #' @importFrom IRanges CharacterList
 #' @importFrom S4Vectors SimpleList
+#' @importFrom SummarizedExperiment assayNames
 #' @importFrom SingleCellExperiment SingleCellExperiment reducedDims altExps
 setMethod("wrapData", signature(container="SingleCellExperiment"),
           function(container, dataMatrix, param, assay, first, last, whdim,
@@ -187,16 +191,21 @@ setMethod("wrapData", signature(container="SingleCellExperiment"),
               if (!missing(geneSets)) { ## storing enrichment scores only
                   rdata <- DataFrame(gs=CharacterList(geneSets))
               } else { ## missing geneSets implies adding an assay
-                  .check_existing_assay(container, assay)
+                  if (assay %in% assayNames(container))
+                      cli_abort(c("x"=paste("Assay {assay} already exists in",
+                                            "the input container object.")))
                   stopifnot(all(rownames(dataMatrix) %in% rownames(container)))
                   mask <- rownames(container) %in% rownames(dataMatrix)
                   if (!dropAssays)
                       adata <- c(assays(container[mask, ]), adata)
                   rdata <- rowData(container)[mask, ]
               }
+              cdata <- colData(container)
+              if (!is.na(first) && !is.na(last) && whdim == 2)
+                  cdata <- cdata[first:last, , drop=FALSE]
               rval <- SingleCellExperiment(
                   assays=adata,
-                  colData=colData(container),
+                  colData=cdata,
                   rowData=rdata,
                   reducedDims=reducedDims(container),
                   altExps=altExps(container),
@@ -213,7 +222,9 @@ setMethod("wrapData", signature(container="SingleCellExperiment"),
 
 #' @importFrom IRanges CharacterList
 #' @importFrom S4Vectors SimpleList
-#' @importFrom SingleCellExperiment SingleCellExperiment
+#' @importFrom SummarizedExperiment assayNames
+#' @importFrom SingleCellExperiment SingleCellExperiment reducedDims altExps
+#' @importFrom SpatialExperiment SpatialExperiment
 setMethod("wrapData", signature(container="SpatialExperiment"),
           function(container, dataMatrix, param, assay, first, last, whdim,
                    dropAssays, geneSets) {
@@ -229,16 +240,21 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
               if (!missing(geneSets)) { ## storing enrichment scores only
                   rdata <- DataFrame(gs=CharacterList(geneSets))
               } else { ## missing geneSets implies adding an assay
-                  .check_existing_assay(container, assay)
+                  if (assay %in% assayNames(container))
+                      cli_abort(c("x"=paste("Assay {assay} already exists in",
+                                            "the input container object.")))
                   stopifnot(all(rownames(dataMatrix) %in% rownames(container)))
                   mask <- rownames(container) %in% rownames(dataMatrix)
                   if (!dropAssays)
                       adata <- c(assays(container[mask, ]), adata)
                   rdata <- rowData(container)[mask, ]
               }
+              cdata <- colData(container)
+              if (!is.na(first) && !is.na(last) && whdim == 2)
+                  cdata <- cdata[first:last, , drop=FALSE]
               rval <- SpatialExperiment(
                   assays=adata,
-                  colData=colData(container),
+                  colData=cdata,
                   rowData=rdata,
                   reducedDims=reducedDims(container),
                   altExps=altExps(container),

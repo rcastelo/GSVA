@@ -37,12 +37,33 @@ test_mapReduce <- function() {
     gsvapar <- gsvaParam(sce, gsets, verbose=FALSE)
 
     ## calculate row-normalized expression values without map-reduce
-    gsvarownorm <- gsvaRowNorm(gsvapar, errorOnTooFewRows=FALSE, verbose=TRUE)
+    gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
 
     ## calculate row-normalized expression values with map-reduce
-    gsvarownorm2 <- gsvaReduce(gsvaMap(gsvapar, verbose=FALSE), verbose=FALSE)
+    gsvarnorm2 <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, verbose=FALSE), verbose=FALSE)
 
     ## check that both approaches yield the same row-normalized expression values
-    checkEqualsNumeric(assay(gsvarownorm, "gsvarnorm"),
-                       assay(gsvarownorm2, "gsvarnorm"))
+    checkEqualsNumeric(assay(gsvarnorm, "gsvarnorm"),
+                       assay(gsvarnorm2, "gsvarnorm"))
+
+    ## calculate column rank values without map-reduce
+    gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
+
+    ## calculate column rank values with map-reduce
+    gsvaranks2 <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE), verbose=FALSE)
+
+    ## check that both approaches yield the same column rank values
+    checkEqualsNumeric(assay(gsvaranks, "gsvaranks"),
+                       assay(gsvaranks2, "gsvaranks"))
+
+    ## calculate column GSVA scores without map-reduce
+    gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+
+    ## calculate column GSVA scores with map-reduce
+    gsvaes2 <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, verbose=FALSE), verbose=FALSE)
+
+    ## check that both approaches yield the same column GSVA scores
+    checkEqualsNumeric(assay(gsvaes, "es"),
+                       assay(gsvaes2, "es"))
+
 }

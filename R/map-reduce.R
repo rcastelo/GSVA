@@ -6,11 +6,16 @@
 #' GSVA calculations on each compute node, while the `gsvaReduce()` function is
 #' used to combine the results from all nodes into a single object.
 #'
-#' @param paramOrGsvaExprData An object either of class [`gsvaParam`], or
-#' obtained with [`gsvaRowNorm`] or [`gsvaColRanks`], in this context run through
-#' `gsvaMap()`. In the latter case, it must be one of the classes supported by
-#' [`GsvaExprData-class`].  For a list of these classes, see its help page
-#' using `help(GsvaExprData)`.
+#' @param FUN Function to map to the data in the `inputData` argument.
+#'
+#' @param inputData In `gsvaMap()`, input data for performing the calculations
+#' in parallel. It should be an object either of class [`gsvaParam`], or one of
+#' the classes supported by [`GsvaExprData-class`] as output from
+#' [`gsvaRowNorm`] or [`gsvaColRanks`]; for a list of these classes consult
+#' `class ? GsvaExprData`. It can also be a list object with the output of
+#' `gsvaMap()` itself, to proceed through the three-step pipeline of calculating
+#' row-normalized expression values, column ranks, and GSVA scores without
+#' having to call to `gsvaReduce()` in between.
 #'
 #' @param ... In `gsvaReduce()`, the output of `gsvaMap()`.
 #'
@@ -47,42 +52,98 @@
 #'
 #' ## calculate row-normalized expression values in parallel across multiple
 #' ## compute nodes in a high-performance computing (HPC) environment
-#' gsvarownorm <- gsvaReduce(gsvaMap(gsvapar))
+#' gsvarnorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar))
+#'
+#' ## calculate column GSVA ranks in parallel across multiple
+#' ## compute nodes in a high-performance computing (HPC) environment
+#' gsvaranks <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm))
+#'
+#' ## calculate column GSVA scores in parallel across multiple
+#' ## compute nodes in a high-performance computing (HPC) environment
+#' gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks))
 #'
 #' @importFrom BiocParallel BatchtoolsParam bpnworkers MulticoreParam bplapply
 #' @rdname map-reduce
 #' @export gsvaMap
-gsvaMap <- function(paramOrGsvaExprData, verbose=TRUE,
+gsvaMap <- function(FUN, inputData, verbose=TRUE,
                     BTPARAM=BatchtoolsParam(workers=2, progressbar=verbose)) {
 
-              if (!is(paramOrGsvaExprData, "gsvaParam")) {
-                  msg <- paste("'param' must be an object of class",
-                               "'gsvaParam'; see class ? gsvaParam.")
-                  cli_abort(c("x"=msg))
-              }
+    FUN <- match.fun(FUN)
+    if (!identical(FUN, gsvaRowNorm) && !identical(FUN, gsvaColRanks) &&
+        !identical(FUN, gsvaColScores)) {
+        msg <- paste("'FUN' must be one of 'gsvaRowNorm',",
+                     "'gsvaColRanks' or 'gsvaColScores'.")
+        cli_abort(c("x"=msg))
+    }
 
-              ## check that the BatchtoolsParam object is valid
-              BTPARAM <- .check_batchtools_param(BTPARAM, verbose)
+    if (!is(inputData, "gsvaParam") &&
+        !is(inputData, "GsvaExprData") && !is.list(inputData)) {
+        msg <- paste("'inputData' must be an object of class
+                     'gsvaParam', 'GsvaExprData' or 'list'.")
+        cli_abort(c("x"=msg))
+    } else if (is.list(inputData))
+        cli_abort(c("x"="Not implemented yet."))
 
-              param <- paramOrGsvaExprData
-              nworkers <- bpnworkers(BTPARAM)
-              ncpus <- BTPARAM$resources$ncpus
-              maxmem <- .memtext2bytes(BTPARAM$resources$memory)
+    BTPARAM <- .check_batchtools_param(BTPARAM, verbose)
 
-              FUN_WRAPPER <- function(rowsrng) {
-                  gsvaRowNorm(param, verbose=FALSE, dropExistingAssays=TRUE,
-                              errorOnTooFewRows=FALSE,
-                              first=start(rowsrng), last=end(rowsrng),
-                              BPPARAM=MulticoreParam(workers=ncpus),
-                              maxmem=maxmem)
-              }
+    param <- inputData
+    nworkers <- bpnworkers(BTPARAM)
+    ncpus <- BTPARAM$resources$ncpus
+    maxmem <- .memtext2bytes(BTPARAM$resources$memory)
 
-              X <- unwrapData(get_exprData(param))
-              grid <- .rowgridsize(X, nworkers, maxmem)
-              rir <- .splitRowsInRanges(grid)
-	      
-              bplapply(rir, FUN=FUN_WRAPPER, BPPARAM=BTPARAM)
-	  }
+    if (identical(FUN, gsvaRowNorm) && !is(inputData, "gsvaParam"))
+        cli_abort(c("x"=paste("FUN=gsvaRowNorm requires inputData of",
+                              "class 'gsvaParam'.")))
+
+    if ((identical(FUN, gsvaColRanks) || identical(FUN, gsvaColScores)) &&
+        !is(inputData, "GsvaExprData"))
+        cli_abort(c("x"=paste("FUN=gsvaColRanks or FUN=gsvaColScores",
+                              "requires inputData of class 'GsvaExprData'.")))
+
+    FUN_WRAPPER <- function(rng, WRAPPED_FUN, ncpus, maxmem, ...) {
+       WRAPPED_FUN(..., first=start(rng), last=end(rng), verbose=FALSE,
+                   BPPARAM=MulticoreParam(workers=ncpus), maxmem=maxmem)
+    }
+
+    gridsizefun <- .colgridsize
+    splitinrangesfun <- .splitColsInRanges
+
+    funargs <- list()
+
+    if (identical(FUN, gsvaRowNorm)) {
+
+        funargs <- c(funargs, list(param=inputData,
+                                   dropExistingAssays=TRUE,
+                                   errorOnTooFewRows=FALSE))
+        gridsizefun <- .rowgridsize
+        splitinrangesfun <- .splitRowsInRanges
+
+    } else if (identical(FUN, gsvaColRanks)) {
+        if (!"gsvarnorm" %in% gsvaAssayNames(inputData))
+            cli_abort(c("x"=paste("FUN=gsvaColRanks requires inputData with",
+                                  "row-normalized expression values.")))
+
+        funargs <- c(funargs, list(rowNormExprData=inputData,
+                                   dropExistingAssays=TRUE))
+
+    } else if (identical(FUN, gsvaColScores)) {
+        if (!"gsvaranks" %in% gsvaAssayNames(inputData))
+            cli_abort(c("x"=paste("FUN=gsvaColScores requires inputData with",
+                                  "column rank values.")))
+
+        funargs <- c(funargs, list(rankExprData=inputData))
+
+    } else
+        cli_abort(c("x"="Internal error, invalid FUN"))
+
+    X <- unwrapData(get_exprData(inputData))
+    grid <- gridsizefun(X, nworkers, maxmem)
+    rcir <- splitinrangesfun(grid)
+
+    do.call("bplapply", args=c(list(X=rcir, FUN=FUN_WRAPPER, WRAPPED_FUN=FUN,
+                                    ncpus=ncpus, maxmem=maxmem, BPPARAM=BTPARAM),
+                               funargs))
+}
 
 #' @importFrom cli cli_abort
 #' @importFrom BiocGenerics rbind cbind
@@ -130,7 +191,7 @@ gsvaReduce <- function(..., verbose=TRUE) {
 #' @importFrom S4Vectors "metadata<-"
 .add_metadata <- function(x, param, mdata) {
     if (is(x, "SummarizedExperiment")) {
-	metadata(x) <- mdata
+        metadata(x) <- mdata
         metadata(x)$gsvaParam <- .gsvaParam_as_list(param)
     } else {
         attributes(x) <- c(attributes(x), mdata)

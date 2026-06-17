@@ -454,7 +454,7 @@ setValidity("gsvaParam", function(object) {
     inv <- NULL
     xd <- object@exprData
     dd <- dim(xd)
-    ## an <- gsvaAssayNames(xd)
+    ## an <- gsvaAssayNames(xd) ## incompabitle w/ dropExistingAssays=TRUE
     oa <- object@assay
     
     if(dd[1] == 0) {
@@ -695,7 +695,7 @@ setMethod("details",
         if (is.null(metadata(exprData)$gsvaParam))
             cli_abort(c("x"="Missing metadata in the input expression data"))
         p <- metadata(exprData)$gsvaParam
-        if (!any(assayNames(exprData) %in% c("gsvarnorm", "gsvaranks"))) 
+        if (!any(assayNames(exprData) %in% c("gsvarnorm", "gsvaranks", "es"))) 
             cli_abort(c("x"="Wrong metadata in the input expression data."))
 	metadata(exprData)$geneSets <- NULL
 	metadata(exprData)$assay <- NULL
@@ -708,7 +708,7 @@ setMethod("details",
             cli_abort(c("x"="Missing metadata in the input expression data."))
         p <- attr(exprData, "gsvaParam")
         a <- attr(exprData, "assay")
-        if (!a %in% c("gsvarnorm", "gsvaranks"))
+        if (!a %in% c("gsvarnorm", "gsvaranks", "es"))
             cli_abort(c("x"="Wrong metadata in the input expression data."))
 	attr(exprData, "geneSets") <- NULL
 	attr(exprData, "assay") <- NULL
