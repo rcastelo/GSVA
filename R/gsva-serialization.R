@@ -209,6 +209,8 @@ loadHDF5GSVA <- function(dir, assay="auto", ...) {
             assay <- "gsvaranks"
         else if ("gsvarnorm" %in% an)
             assay <- "gsvarnorm"
+        else if ("es" %in% an)
+            assay <- "es"
         else
             cli_abort(c("x"="Cannot find a GSVA assay in the object."))
     } else

@@ -932,11 +932,11 @@ gsvaRowNorm <- function(param,
 
 
 
-#'
 #' @param rowNormExprData A row-normalized expression data set obtained with
-#' [`gsvaRowNorm`].  Must be an object of one of the classes
-#' supported by [`GsvaExprData-class`].  For a list of these classes, see its
-#' help page using `help(GsvaExprData)`.
+#' [`gsvaRowNorm`]. It can be either a single character string with path to
+#' a directory containing the column-rank data stored with [`saveHDF5GSVA`],
+#' or an object of one of the classes supported by [`GsvaExprData-class`].
+#' For a list of these classes, see `class ? GsvaExprData`.
 #'
 #' @return In the case of 'gsvaColRanks()', an object of the same class as the
 #' input expresssion data given in the argument `exprData` of the `gsvaParam`
@@ -957,11 +957,20 @@ gsvaColRanks <- function(rowNormExprData,
                          BPPARAM=SerialParam(progressbar=verbose),
                          maxmem="auto") {
 
-              if (!is(rowNormExprData, "GsvaExprData")) {
-                  msg <- paste("'rowNormExprData' must be an object of one",
-                               "of the classes supported by 'GsvaExprData';",
-                               "See class ? GsvaExprData.")
+              if (!is(rowNormExprData, "GsvaExprData") &&
+                  !is.character(rowNormExprData)) {
+                  msg <- paste("'rowNormExprData' must be either a character",
+                               "string or an object of one of the classes",
+                               "supported by 'GsvaExprData'; See class ?",
+                               "GsvaExprData.")
                   cli_abort(c("x"=msg))
+              } else if (is.character(rowNormExprData)) {
+                  if (!dir.exists(rowNormExprData))
+                      cli_abort(c("x"=paste("{rowNormExprData} cannot be found",
+                                            "in the filesystem")))
+                  if (verbose)
+                      cli_alert_info("Loading {basename(rankExprData)} from disk")
+                  rowNormExprData <- loadHDF5GSVA(rowNormExprData)
               }
 
               param <- .pull_param(rowNormExprData)
@@ -1013,9 +1022,10 @@ gsvaColRanks <- function(rowNormExprData,
 
 
 #' @param rankExprData A column-rank expression data set obtained with
-#' [`gsvaColRanks`].  Must be one of the classes
-#' supported by [`GsvaExprData-class`].  For a list of these classes, see its
-#' help page using `help(GsvaExprData)`.
+#' [`gsvaColRanks`]. It can be either a single character string with path to
+#' a directory containing the column-rank data stored with [`saveHDF5GSVA`],
+#' or an object of one of the classes supported by [`GsvaExprData-class`].
+#' For a list of these classes, see `class ? GsvaExprData`.
 #'
 #' @param geneSets An object of the classes supported by [`GsvaGeneSets-class`].
 #' Currently, either a [`GeneSetCollection`][GSEABase::GeneSetCollection-class]
@@ -1038,11 +1048,20 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                           BPPARAM=SerialParam(progressbar=verbose),
                           maxmem="auto") {
 
-              if (!is(rankExprData, "GsvaExprData")) {
-                  msg <- paste("'rankExprData' must be an object of one",
-                               "of the classes supported by 'GsvaExprData';",
-                               "See class ? GsvaExprData.")
+              if (!is(rankExprData, "GsvaExprData") &&
+                  !is.character(rankExprData)) {
+                  msg <- paste("'rankExprData' must be either a character",
+                               "string or an object of one of the classes",
+                               "supported by 'GsvaExprData'; See class ?",
+                               "GsvaExprData.")
                   cli_abort(c("x"=msg))
+              } else if (is.character(rankExprData)) {
+                  if (!dir.exists(rankExprData))
+                      cli_abort(c("x"=paste("{rankExprData} cannot be found",
+                                            "in the filesystem")))
+                  if (verbose)
+                      cli_alert_info("Loading {basename(rankExprData)} from disk")
+                  rankExprData <- loadHDF5GSVA(rankExprData)
               }
 
               param <- .pull_param(rankExprData)

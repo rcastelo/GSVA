@@ -8,6 +8,7 @@
 gsvaMap(
   FUN,
   inputData,
+  returnPath = FALSE,
   verbose = TRUE,
   BTPARAM = BatchtoolsParam(workers = 2, progressbar = verbose)
 )
@@ -25,6 +26,11 @@ the classes supported by \code{\link[=GsvaExprData-class]{GsvaExprData}} as outp
 \code{gsvaMap()} itself, to proceed through the three-step pipeline of calculating
 row-normalized expression values, column ranks, and GSVA scores without
 having to call to \code{gsvaReduce()} in between.}
+
+\item{returnPath}{In \code{gsvaMap()}, if \code{TRUE}, the output of the function will
+be a list of file paths where the resulting objects have been serialized
+using \code{\link{saveHDF5GSVA}}, instead returning the list of resulting objects
+themselves, which is the default behavior (\code{FALSE}).}
 
 \item{verbose}{Gives information about the progress of the calculations.
 Default: \code{TRUE}.}

@@ -89,14 +89,16 @@ in an R session or script may depend on other commands and packages used in
 that same session or script.}
 
 \item{rowNormExprData}{A row-normalized expression data set obtained with
-\code{\link{gsvaRowNorm}}.  Must be an object of one of the classes
-supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.  For a list of these classes, see its
-help page using \code{help(GsvaExprData)}.}
+\code{\link{gsvaRowNorm}}. It can be either a single character string with path to
+a directory containing the column-rank data stored with \code{\link{saveHDF5GSVA}},
+or an object of one of the classes supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.
+For a list of these classes, see \code{class ? GsvaExprData}.}
 
 \item{rankExprData}{A column-rank expression data set obtained with
-\code{\link{gsvaColRanks}}.  Must be one of the classes
-supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.  For a list of these classes, see its
-help page using \code{help(GsvaExprData)}.}
+\code{\link{gsvaColRanks}}. It can be either a single character string with path to
+a directory containing the column-rank data stored with \code{\link{saveHDF5GSVA}},
+or an object of one of the classes supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.
+For a list of these classes, see \code{class ? GsvaExprData}.}
 
 \item{geneSets}{An object of the classes supported by \code{\link[=GsvaGeneSets-class]{GsvaGeneSets}}.
 Currently, either a \code{\link[GSEABase:GeneSetCollection-class]{GeneSetCollection}}

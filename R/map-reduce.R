@@ -17,6 +17,11 @@
 #' row-normalized expression values, column ranks, and GSVA scores without
 #' having to call to `gsvaReduce()` in between.
 #'
+#' @param returnPath In `gsvaMap()`, if `TRUE`, the output of the function will
+#' be a list of file paths where the resulting objects have been serialized
+#' using [`saveHDF5GSVA`], instead returning the list of resulting objects
+#' themselves, which is the default behavior (`FALSE`).
+#'
 #' @param ... In `gsvaReduce()`, the output of `gsvaMap()`.
 #'
 #' @param verbose Gives information about the progress of the calculations.
@@ -65,10 +70,11 @@
 #' @importFrom BiocParallel BatchtoolsParam bpnworkers MulticoreParam bplapply
 #' @rdname map-reduce
 #' @export gsvaMap
-gsvaMap <- function(FUN, inputData, verbose=TRUE,
+gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
                     BTPARAM=BatchtoolsParam(workers=2, progressbar=verbose)) {
 
     FUN <- match.fun(FUN)
+
     if (!identical(FUN, gsvaRowNorm) && !identical(FUN, gsvaColRanks) &&
         !identical(FUN, gsvaColScores)) {
         msg <- paste("'FUN' must be one of 'gsvaRowNorm',",
@@ -86,7 +92,6 @@ gsvaMap <- function(FUN, inputData, verbose=TRUE,
 
     BTPARAM <- .check_batchtools_param(BTPARAM, verbose)
 
-    param <- inputData
     nworkers <- bpnworkers(BTPARAM)
     ncpus <- BTPARAM$resources$ncpus
     maxmem <- .memtext2bytes(BTPARAM$resources$memory)
@@ -100,9 +105,19 @@ gsvaMap <- function(FUN, inputData, verbose=TRUE,
         cli_abort(c("x"=paste("FUN=gsvaColRanks or FUN=gsvaColScores",
                               "requires inputData of class 'GsvaExprData'.")))
 
-    FUN_WRAPPER <- function(rng, WRAPPED_FUN, ncpus, maxmem, ...) {
-       WRAPPED_FUN(..., first=start(rng), last=end(rng), verbose=FALSE,
-                   BPPARAM=MulticoreParam(workers=ncpus), maxmem=maxmem)
+    FUN_WRAPPER <- function(rng, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
+       res <- WRAPPED_FUN(..., first=start(rng), last=end(rng), verbose=FALSE,
+                          BPPARAM=MulticoreParam(workers=ncpus), maxmem=maxmem)
+       if (nchar(path2save) > 0) {
+           fname <- file.path(path2save, sprintf("%s_%d_%d",
+                                                 basename(tempfile()),
+                                                 start(rng), end(rng)))
+           if (dir.exists(fname))
+               cli_abort(c("x"=paste("cannot save results to {fname} because",
+                                     "it already exists.")))
+           res <- saveHDF5GSVA(res, fname)
+       }
+       return(res)
     }
 
     gridsizefun <- .colgridsize
@@ -134,15 +149,20 @@ gsvaMap <- function(FUN, inputData, verbose=TRUE,
         funargs <- c(funargs, list(rankExprData=inputData))
 
     } else
-        cli_abort(c("x"="Internal error, invalid FUN"))
+        cli_abort(c("x"="Internal error, invalid FUN argument."))
+
+    path2save <- ""
+    if (returnPath)
+        path2save <- path.expand(BTPARAM$registryargs$work.dir)
 
     X <- unwrapData(get_exprData(inputData))
     grid <- gridsizefun(X, nworkers, maxmem)
     rcir <- splitinrangesfun(grid)
 
     do.call("bplapply", args=c(list(X=rcir, FUN=FUN_WRAPPER, WRAPPED_FUN=FUN,
-                                    ncpus=ncpus, maxmem=maxmem, BPPARAM=BTPARAM),
-                               funargs))
+                                    path2save=path2save, ncpus=ncpus,
+                                    maxmem=maxmem, BPPARAM=BTPARAM), funargs))
+
 }
 
 #' @importFrom cli cli_abort
@@ -152,11 +172,19 @@ gsvaMap <- function(FUN, inputData, verbose=TRUE,
 gsvaReduce <- function(..., verbose=TRUE) {
     args <- list(...)
     if (length(args) == 1 && is.list(args[[1]]))
-	args <- args[[1]]
+        args <- args[[1]]
 
     cls <- unique(lapply(args, class))
     if (length(cls) > 1)
         cli_abort(c("x"="All inputs must be of the same class."))
+
+    if (is.character(args[[1]])) {
+        args <- lapply(args, function(x) {
+            if (!dir.exists(x))
+                cli_abort(c("x"="Cannot find {x}."))
+            loadHDF5GSVA(x)
+        })
+    }
 
     param <- .pull_param(args[[1]])
     nrmdata <- .pull_nonrestrict_metadata(args[[1]])
@@ -314,8 +342,21 @@ gsvaReduce <- function(..., verbose=TRUE) {
         BTPARAM$resources$memory <- "1G"
     }
 
+    if (is.null(BTPARAM$registryargs))
+        cli_abort(c("x"="{.arg BTPARAM} must have a registryargs element."))
+    else {
+        if (is.null(BTPARAM$registryargs$work.dir))
+            cli_abort(c("x"="{.arg BTPARAM} must have a work.dir element in",
+                        "its registryargs element."))
+        BTPARAM$registryargs$work.dir <- eval(BTPARAM$registryargs$work.dir)
+        if (!dir.exists(BTPARAM$registryargs$work.dir))
+            cli_abort(c("x"=paste("{.arg BTPARAM} must have a work.dir element",
+                                  "in its registryargs element that points to",
+                                  "an existing directory.")))
+    }
+
     if (bpprogressbar(BTPARAM) != verbose)
-	bpprogressbar(BTPARAM) <- verbose
+        bpprogressbar(BTPARAM) <- verbose
 
     return(BTPARAM)
 }
