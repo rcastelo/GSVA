@@ -188,14 +188,9 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
         X <- splitinrangesfun(grid)
     }
 
-    ## do.call("bplapply", args=c(list(X=X, FUN=FUN_WRAPPER, WRAPPED_FUN=FUN,
-    ##                                 path2save=path2save, ncpus=ncpus,
-    ##                                 maxmem=maxmem, BPPARAM=BTPARAM), funargs))
-
-    do.call("lapply", args=c(list(X=X, FUN=FUN_WRAPPER, WRAPPED_FUN=FUN,
+    do.call("bplapply", args=c(list(X=X, FUN=FUN_WRAPPER, WRAPPED_FUN=FUN,
                                     path2save=path2save, ncpus=ncpus,
-                                    maxmem=maxmem), funargs))
-                                    ## maxmem=maxmem, BPPARAM=BTPARAM), funargs))
+                                    maxmem=maxmem, BPPARAM=BTPARAM), funargs))
 }
 
 #' @importFrom cli cli_abort
