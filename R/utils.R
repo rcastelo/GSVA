@@ -711,7 +711,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 #' @importFrom S4Arrays is_sparse
 #' @importFrom memuse howbig
 .check_ondisk <- function(param, assay=get_assay(param), first, last, whdim,
-                          maxmem, verbose) {
+                          recompute_nzcount=FALSE, maxmem, verbose) {
     ondisk <- .get_ondisk(param)
     if (ondisk == "auto") {
         X <- unwrapData(get_exprData(param), assay)
@@ -720,7 +720,10 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         spa <- 1
         if (is_sparse(X)) {
             rep <- "sparse"
-            spa <- nzcount(param) / tot
+            if (recompute_nzcount)
+                spa <- .estimate_nzcount(get_exprData(param), assay, FALSE) / tot
+            else
+                spa <- nzcount(param) / tot
         }
         sze <- 0
         if (is.na(first) && is.na(last))
@@ -833,11 +836,15 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 }
 
 #' @importFrom cli cli_abort
-.check_first_last_values <- function(X, dimfun, dimname, first, last) {
+.check_first_last_values <- function(X, dimfun, dimname, first, last, rmdt) {
     dimfun <- match.fun(dimfun)
 
     if (all(is.na(first)) && all(is.na(last)))
         return(list(first=NA_real_, last=NA_real_))
+
+    if (!is.null(rmdt))
+        cli_abort(c("x"=paste("Input expression already has chunk boundary",
+                              "metadata and 'first' and 'last' cannot be set.")))
 
     if (all(is.na(first)))
         first <- 1

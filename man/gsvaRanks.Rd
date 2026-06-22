@@ -33,6 +33,7 @@ gsvaColScores(
   verbose = TRUE,
   first = NA_real_,
   last = NA_real_,
+  recompute_nzcount = FALSE,
   BPPARAM = SerialParam(progressbar = verbose),
   maxmem = "auto"
 )
@@ -103,6 +104,10 @@ For a list of these classes, see \code{class ? GsvaExprData}.}
 \item{geneSets}{An object of the classes supported by \code{\link[=GsvaGeneSets-class]{GsvaGeneSets}}.
 Currently, either a \code{\link[GSEABase:GeneSetCollection-class]{GeneSetCollection}}
 object or a \code{list} object.}
+
+\item{recompute_nzcount}{Logical vector of length 1. When \code{TRUE}, the number
+of non-zero rows in the input expression data will be recomputed, internally
+used only.}
 }
 \value{
 In the case of 'gsvaRowNorm()', an object of the same class as the

@@ -38,8 +38,9 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
-              ondisk <- .check_ondisk(param, maxmem=maxmem, first=NA, last=NA,
-                                      whdim=2, verbose=verbose)
+              ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
+                                      recompute_nzcount=FALSE, maxmem=maxmem,
+                                      verbose=verbose)
 
               dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                           first=NA, last=NA,
@@ -157,8 +158,9 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
               }
 
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
-              ondisk <- .check_ondisk(param, maxmem=maxmem, first=NA, last=NA,
-                                      whdim=2, verbose=verbose)
+              ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
+                                      recompute_nzcount=FALSE, maxmem=maxmem,
+                                      verbose=verbose)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "GSVA", first=NA,

@@ -68,6 +68,7 @@
 #' gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks))
 #'
 #' @importFrom BiocParallel BatchtoolsParam bpnworkers MulticoreParam bplapply
+#' @importFrom IRanges IRanges start end
 #' @rdname map-reduce
 #' @export gsvaMap
 gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
@@ -75,20 +76,7 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
 
     FUN <- match.fun(FUN)
 
-    if (!identical(FUN, gsvaRowNorm) && !identical(FUN, gsvaColRanks) &&
-        !identical(FUN, gsvaColScores)) {
-        msg <- paste("'FUN' must be one of 'gsvaRowNorm',",
-                     "'gsvaColRanks' or 'gsvaColScores'.")
-        cli_abort(c("x"=msg))
-    }
-
-    if (!is(inputData, "gsvaParam") &&
-        !is(inputData, "GsvaExprData") && !is.list(inputData)) {
-        msg <- paste("'inputData' must be an object of class
-                     'gsvaParam', 'GsvaExprData' or 'list'.")
-        cli_abort(c("x"=msg))
-    } else if (is.list(inputData))
-        cli_abort(c("x"="Not implemented yet."))
+    .check_FUN_inputData(FUN, inputData)
 
     BTPARAM <- .check_batchtools_param(BTPARAM, verbose)
 
@@ -96,28 +84,63 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
     ncpus <- BTPARAM$resources$ncpus
     maxmem <- .memtext2bytes(BTPARAM$resources$memory)
 
-    if (identical(FUN, gsvaRowNorm) && !is(inputData, "gsvaParam"))
-        cli_abort(c("x"=paste("FUN=gsvaRowNorm requires inputData of",
-                              "class 'gsvaParam'.")))
-
-    if ((identical(FUN, gsvaColRanks) || identical(FUN, gsvaColScores)) &&
-        !is(inputData, "GsvaExprData"))
-        cli_abort(c("x"=paste("FUN=gsvaColRanks or FUN=gsvaColScores",
-                              "requires inputData of class 'GsvaExprData'.")))
-
-    FUN_WRAPPER <- function(rng, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
-       res <- WRAPPED_FUN(..., first=start(rng), last=end(rng), verbose=FALSE,
-                          BPPARAM=MulticoreParam(workers=ncpus), maxmem=maxmem)
-       if (nchar(path2save) > 0) {
-           fname <- file.path(path2save, sprintf("%s_%d_%d",
-                                                 basename(tempfile()),
-                                                 start(rng), end(rng)))
-           if (dir.exists(fname))
-               cli_abort(c("x"=paste("cannot save results to {fname} because",
-                                     "it already exists.")))
-           res <- saveHDF5GSVA(res, fname)
-       }
-       return(res)
+    FUN_WRAPPER <- function(X, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
+        rng <- X
+        res <- whdim <- NULL
+        if (is(X, "IRanges"))
+            res <- WRAPPED_FUN(..., first=start(rng), last=end(rng),
+                               verbose=FALSE,
+                               BPPARAM=MulticoreParam(workers=ncpus),
+                               maxmem=maxmem)
+        else {
+            if (is(X, "SummarizedExperiment")) {
+                if (is.null(metadata(X)$restrict))
+                    cli_abort(c("x"=paste("Input object must contain 'restrict'",
+                                          "metadata with chunk boundaries.")))
+                rng <- IRanges(start=metadata(X)$restrict$first,
+                               end=metadata(X)$restrict$last)
+                whdim <- metadata(X)$restrict$whdim
+            } else if (is(X, "GsvaExprData")) {
+                if (is.null(attributes(X)$restrict))
+                    cli_abort(c("x"=paste("Input object must contain 'restrict'",
+                                          "metadata with chunk boundaries.")))
+                rng <- IRanges(start=attributes(X)$restrict$first,
+                               end=attributes(X)$restrict$last)
+                whdim <- attributes(X)$restrict$whdim
+            } ## if X is path WRAPPED_FUN loads object and metadata from disk
+            res <- WRAPPED_FUN(X, ..., verbose=FALSE,
+                               BPPARAM=MulticoreParam(workers=ncpus),
+                               maxmem=maxmem)
+            if (is(X, "SummarizedExperiment")) {
+                metadata(res)$restrict <- list(first=start(rng),
+                                               last=end(rng),
+                                               whdim=whdim)
+            } else if (is(X, "GsvaExprData")) {
+                attributes(res)$restrict <- list(first=start(rng),
+                                                 last=end(rng),
+                                                 whdim=whdim)
+            } else { ## X is a path, restrict metadata is in the loaded object
+                if (is(res, "SummarizedExperiment")) {
+                    rng <- IRanges(start=metadata(res)$restrict$first,
+                                   end=metadata(res)$restrict$last)
+                    whdim <- metadata(res)$restrict$whdim
+                } else if (is(res, "GsvaExprData")) {
+                    rng <- IRanges(start=attributes(res)$restrict$first,
+                                   end=attributes(res)$restrict$last)
+                    whdim <- attributes(res)$restrict$whdim
+                }
+            }
+        }
+        if (nchar(path2save) > 0) {
+            fname <- file.path(path2save, sprintf("%s_%d_%d",
+                                                  basename(tempfile()),
+                                                  start(rng), end(rng)))
+            if (dir.exists(fname))
+                cli_abort(c("x"=paste("cannot save results to {fname} because",
+                                      "it already exists.")))
+            res <- saveHDF5GSVA(res, fname)
+        }
+        return(res)
     }
 
     gridsizefun <- .colgridsize
@@ -142,11 +165,14 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
                                    dropExistingAssays=TRUE))
 
     } else if (identical(FUN, gsvaColScores)) {
-        if (!"gsvaranks" %in% gsvaAssayNames(inputData))
-            cli_abort(c("x"=paste("FUN=gsvaColScores requires inputData with",
-                                  "column rank values.")))
+        if (!is.list(inputData)) {
+            if (!"gsvaranks" %in% gsvaAssayNames(inputData))
+                cli_abort(c("x"=paste("FUN=gsvaColScores requires inputData",
+                                      "with column rank values.")))
 
-        funargs <- c(funargs, list(rankExprData=inputData))
+            funargs <- c(funargs, list(rankExprData=inputData))
+        } else
+            funargs <- c(funargs, list(recompute_nzcount=TRUE))
 
     } else
         cli_abort(c("x"="Internal error, invalid FUN argument."))
@@ -155,14 +181,21 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
     if (returnPath)
         path2save <- path.expand(BTPARAM$registryargs$work.dir)
 
-    X <- unwrapData(get_exprData(inputData))
-    grid <- gridsizefun(X, nworkers, maxmem)
-    rcir <- splitinrangesfun(grid)
+    X <- inputData
+    if (!is.list(X)) {
+        grid <- gridsizefun(unwrapData(get_exprData(inputData)),
+                            nworkers, maxmem)
+        X <- splitinrangesfun(grid)
+    }
 
-    do.call("bplapply", args=c(list(X=rcir, FUN=FUN_WRAPPER, WRAPPED_FUN=FUN,
+    ## do.call("bplapply", args=c(list(X=X, FUN=FUN_WRAPPER, WRAPPED_FUN=FUN,
+    ##                                 path2save=path2save, ncpus=ncpus,
+    ##                                 maxmem=maxmem, BPPARAM=BTPARAM), funargs))
+
+    do.call("lapply", args=c(list(X=X, FUN=FUN_WRAPPER, WRAPPED_FUN=FUN,
                                     path2save=path2save, ncpus=ncpus,
-                                    maxmem=maxmem, BPPARAM=BTPARAM), funargs))
-
+                                    maxmem=maxmem), funargs))
+                                    ## maxmem=maxmem, BPPARAM=BTPARAM), funargs))
 }
 
 #' @importFrom cli cli_abort
@@ -188,7 +221,7 @@ gsvaReduce <- function(..., verbose=TRUE) {
 
     param <- .pull_param(args[[1]])
     nrmdata <- .pull_nonrestrict_metadata(args[[1]])
-    rmdata <- .pull_restrict_metadata(args)
+    rmdata <- .pull_restrict_metadata_list(args)
     ord <- .check_and_order_restrict_metadata(rmdata)
     args <- .strip_metadata(args)
     bfun <- "rbind"
@@ -203,7 +236,7 @@ gsvaReduce <- function(..., verbose=TRUE) {
 #' @importFrom S4Vectors metadata
 .pull_nonrestrict_metadata <- function(x) {
     if (is(x, "SummarizedExperiment")) {
-	nrmdata <- metadata(x)
+        nrmdata <- metadata(x)
         nrmdata$restrict <- NULL
     } else {
         nrmdata <- list()
@@ -229,17 +262,28 @@ gsvaReduce <- function(..., verbose=TRUE) {
     return(x)
 }
 
+.pull_restrict_metadata <- function(x) {
+    rmdt <- NULL
+    if (is(x, "SummarizedExperiment")) {
+        rmdt <- metadata(x)$restrict
+    } else {
+        rmdt <- attributes(x)$restrict
+    }
+
+    return(rmdt)
+}
+
 #' @importFrom cli cli_abort
-.pull_restrict_metadata <- function(args) {
+.pull_restrict_metadata_list <- function(args) {
     rmdt <- NULL
     if (is(args[[1]], "SummarizedExperiment")) {
-	rmdt <- lapply(args, function(x) {
-	    metadata(x)$restrict
-	})
+        rmdt <- lapply(args, function(x) {
+        metadata(x)$restrict
+        })
     } else {
-	rmdt <- lapply(args, function(x) {
-	    attributes(x)$restrict
-	})
+	    rmdt <- lapply(args, function(x) {
+            attributes(x)$restrict
+        })
     }
     if (any(vapply(rmdt, is.null, logical(1))))
         cli_abort(c("x"=paste("Missing 'restrict' metadata in at least",
@@ -359,4 +403,28 @@ gsvaReduce <- function(..., verbose=TRUE) {
         bpprogressbar(BTPARAM) <- verbose
 
     return(BTPARAM)
+}
+
+.check_FUN_inputData <- function(FUN, inputData) {
+
+    if (!identical(FUN, gsvaRowNorm) && !identical(FUN, gsvaColRanks) &&
+        !identical(FUN, gsvaColScores)) {
+        msg <- paste("'FUN' must be one of 'gsvaRowNorm',",
+                     "'gsvaColRanks' or 'gsvaColScores'.")
+        cli_abort(c("x"=msg))
+    }
+
+    if (identical(FUN, gsvaRowNorm) && !is(inputData, "gsvaParam"))
+        cli_abort(c("x"=paste("FUN=gsvaRowNorm requires inputData of",
+                              "class 'gsvaParam'.")))
+
+    if (identical(FUN, gsvaColRanks) && !is(inputData, "GsvaExprData"))
+        cli_abort(c("x"=paste("FUN=gsvaColRanks requires inputData of",
+                              "class 'GsvaExprData'.")))
+
+    if (identical(FUN, gsvaColScores) && (!is(inputData, "GsvaExprData") &&
+                                          !is.list(inputData)))
+        cli_abort(c("x"=paste("FUN=gsvaColScores requires inputData of",
+                              "class either 'GsvaExprData' or a 'list'",
+                              "output from gsvaMap(gsvaColRanks, ...)")))
 }

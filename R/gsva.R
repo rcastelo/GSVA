@@ -423,8 +423,8 @@ gsvaParam <- function(exprData, geneSets,
                  nzcount=nzc, ondisk=ondisk)
 
     maxmem <- .check_maxmem(param, maxmem="auto", verbose=verbose)
-    .check_ondisk(param, maxmem=maxmem, first=NA, last=NA, whdim=1,
-                  verbose=verbose)
+    .check_ondisk(param, first=NA, last=NA, whdim=1, recompute_nzcount=FALSE,
+                  maxmem=maxmem, verbose=verbose)
 
     return(param)
 }
@@ -873,14 +873,16 @@ gsvaRowNorm <- function(param,
               exprData <- get_exprData(param)
               dataMatrix <- unwrapData(exprData, get_assay(param))
 
+              rmdt <- .pull_restrict_metadata(exprData)
               checkedfl <- .check_first_last_values(dataMatrix, nrow, "rows",
-                                                    first, last)
+                                                    first, last, rmdt)
               first <- checkedfl$first
               last <- checkedfl$last
 
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
               ondisk <- .check_ondisk(param, first=first, last=last, whdim=1,
-                                      maxmem=maxmem, verbose=verbose)
+                                      recompute_nzcount=FALSE, maxmem=maxmem,
+                                      verbose=verbose)
 
               dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                           first, last, whdim=1,
@@ -969,7 +971,8 @@ gsvaColRanks <- function(rowNormExprData,
                       cli_abort(c("x"=paste("{rowNormExprData} cannot be found",
                                             "in the filesystem")))
                   if (verbose)
-                      cli_alert_info("Loading {basename(rankExprData)} from disk")
+                      cli_alert_info(paste("Loading {basename(rowNormExprData)}",
+                                           "from disk"))
                   rowNormExprData <- loadHDF5GSVA(rowNormExprData)
               }
 
@@ -984,15 +987,17 @@ gsvaColRanks <- function(rowNormExprData,
 
               dataMatrix <- unwrapData(rowNormExprData, "gsvarnorm")
 
+              rmdt <- .pull_restrict_metadata(rowNormExprData)
               checkedfl <- .check_first_last_values(dataMatrix, ncol, "columns",
-                                                    first, last)
+                                                    first, last, rmdt)
               first <- checkedfl$first
               last <- checkedfl$last
 
               maxmem <- .check_maxmem(param, assay="gsvarnorm", maxmem=maxmem,
                                       verbose=verbose)
-              ondisk <- .check_ondisk(param, assay="gsvarnorm", first=first,
-                                      last=last, whdim=2, maxmem=maxmem,
+              ondisk <- .check_ondisk(param, assay="gsvarnorm",
+                                      first=first, last=last, whdim=2,
+                                      recompute_nzcount=FALSE, maxmem=maxmem,
                                       verbose=verbose)
 
               dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
@@ -1031,6 +1036,10 @@ gsvaColRanks <- function(rowNormExprData,
 #' Currently, either a [`GeneSetCollection`][GSEABase::GeneSetCollection-class]
 #' object or a `list` object.
 #'
+#' @param recompute_nzcount Logical vector of length 1. When `TRUE`, the number
+#' of non-zero rows in the input expression data will be recomputed, internally
+#' used only.
+#'
 #' @return In the case of 'gsvaColScores()', an object of the same class as the
 #' input expression data given in the argument `exprData` of the `gsvaParam`
 #' object, containing the enrichment scores for the given gene sets. Note that
@@ -1044,7 +1053,7 @@ gsvaColRanks <- function(rowNormExprData,
 #' @importFrom cli cli_alert_info cli_alert_success
 #' @export gsvaColScores
 gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
-                          first=NA_real_, last=NA_real_,
+                          first=NA_real_, last=NA_real_, recompute_nzcount=FALSE,
                           BPPARAM=SerialParam(progressbar=verbose),
                           maxmem="auto") {
 
@@ -1085,6 +1094,13 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
               ## assuming rows in the rank data have been already filtered
               filtDataMatrix <- unwrapData(rankExprData, "gsvaranks")
 
+              rmdt <- .pull_restrict_metadata(rankExprData)
+              checkedfl <- .check_first_last_values(filtDataMatrix, ncol,
+                                                    "columns", first, last,
+                                                    rmdt)
+              first <- checkedfl$first
+              last <- checkedfl$last
+
               filtMappedGeneSets <- .filterAndMapGeneSets(param=param,
                                            filteredDataMatrix=filtDataMatrix,
                                            verbose=verbose)
@@ -1100,17 +1116,12 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                     cli_alert_info("GSVA dense (classical) algorithm")
               }
 
-              checkedfl <- .check_first_last_values(filtDataMatrix, ncol,
-                                                    "columns", first, last)
-              first <- checkedfl$first
-              last <- checkedfl$last
-
               maxmem <- .check_maxmem(param, assay="gsvaranks", maxmem=maxmem,
                                       verbose=verbose)
-              ondisk <- .check_ondisk(param, assay="gsvaranks", first=first,
-                                      last=last, whdim=2, maxmem=maxmem,
-                                      verbose=verbose)
-
+              ondisk <- .check_ondisk(param, assay="gsvaranks",
+                                      first=first, last=last, whdim=2,
+                                      recompute_nzcount=recompute_nzcount,
+                                      maxmem=maxmem, verbose=verbose)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "GSVA", first,
@@ -1154,6 +1165,13 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
               ## dropAssays=TRUE for consistency but doesn't apply here
               rval <- wrapData(get_exprData(param), gsva_es, param, "es",
                                first, last, whdim=2, dropAssays=TRUE, gs)
+
+              if (!is.null(rmdt)) {
+                  if (is(rval, "SummarizedExperiment"))
+                      metadata(rval)$restrict <- rmdt
+                  else
+                      attr(rval, "restrict") <- rmdt
+              }
 
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")

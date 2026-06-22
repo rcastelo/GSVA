@@ -32,8 +32,9 @@ setMethod("gsva", signature(param="plageParam"),
               filtMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
-              ondisk <- .check_ondisk(param, maxmem=maxmem, first=NA, last=NA,
-                                      whdim=2, verbose=verbose)
+              ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
+                                      recompute_nzcount=FALSE, maxmem=maxmem,
+                                      verbose=verbose)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "PLAGE", first=NA,

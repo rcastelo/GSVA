@@ -40,9 +40,10 @@ test_mapReduce <- function() {
     gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
 
     ## calculate row-normalized expression values with map-reduce
-    gsvarnorm2 <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, verbose=FALSE), verbose=FALSE)
+    gsvarnorm2 <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, verbose=FALSE),
+                             verbose=FALSE)
 
-    ## check that both approaches yield the same row-normalized expression values
+    ## check that both approaches yield same row-normalized expression values
     checkEqualsNumeric(assay(gsvarnorm, "gsvarnorm"),
                        assay(gsvarnorm2, "gsvarnorm"))
 
@@ -50,20 +51,58 @@ test_mapReduce <- function() {
     gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
 
     ## calculate column rank values with map-reduce
-    gsvaranks2 <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE), verbose=FALSE)
+    gsvamapranks <- gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE)
+    gsvaredranks <- gsvaReduce(gsvamapranks, verbose=FALSE)
 
     ## check that both approaches yield the same column rank values
     checkEqualsNumeric(assay(gsvaranks, "gsvaranks"),
-                       assay(gsvaranks2, "gsvaranks"))
+                       assay(gsvaredranks, "gsvaranks"))
+
+    ## calculate column rank values with map-reduce returning paths to results
+    gsvamapranksfls <- gsvaMap(gsvaColRanks, gsvarnorm, returnPath=TRUE,
+                               verbose=FALSE)
+    gsvaredranksfls <- gsvaReduce(gsvamapranksfls, verbose=FALSE)
+
+    ## check that this approach also yields the same column rank values
+    checkEqualsNumeric(assay(gsvaranks, "gsvaranks"),
+                       assay(gsvaredranksfls, "gsvaranks"))
 
     ## calculate column GSVA scores without map-reduce
     gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
 
     ## calculate column GSVA scores with map-reduce
-    gsvaes2 <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, verbose=FALSE), verbose=FALSE)
+    gsvaesmapred <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, verbose=FALSE),
+                               verbose=FALSE)
 
     ## check that both approaches yield the same column GSVA scores
     checkEqualsNumeric(assay(gsvaes, "es"),
-                       assay(gsvaes2, "es"))
+                       assay(gsvaesmapred, "es"))
 
+    ## calculate column GSVA scores with map-reduce on mapped ranks
+    gsvaesmaprnkred <- gsvaReduce(gsvaMap(gsvaColScores, gsvamapranks,
+                                          verbose=FALSE), verbose=FALSE)
+
+    ## check that we obtain the same column GSVA scores as before
+    checkEqualsNumeric(assay(gsvaes, "es"),
+                       assay(gsvaesmaprnkred, "es"))
+
+    ## calculate column GSVA scores with map-reduce on mapped ranks stored in
+    ## temporary files
+    gsvaesmaprnkflsred <- gsvaReduce(gsvaMap(gsvaColScores, gsvamapranksfls,
+                                             verbose=FALSE),
+                                     verbose=FALSE)
+
+    ## check that we obtain the same column GSVA scores as before
+    checkEqualsNumeric(assay(gsvaes, "es"),
+                       assay(gsvaesmaprnkflsred, "es"))
+
+    ## calculate column GSVA scores with map-reduce on mapped ranks stored in
+    ## temporary files, returning paths to results
+    gsvaesmaprnkflsredfls <- gsvaReduce(gsvaMap(gsvaColScores, gsvamapranksfls,
+                                                returnPath=TRUE, verbose=FALSE),
+                                        verbose=FALSE)
+
+    ## check that we obtain the same column GSVA scores as before
+    checkEqualsNumeric(assay(gsvaes, "es"),
+                       assay(gsvaesmaprnkflsredfls, "es"))
 }
