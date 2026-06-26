@@ -309,7 +309,9 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
     ## that, at least by now, the user must manually delete those HDF5 files
     ## after the GSVA calculations are finished
     con <- file(file.path(dir, "gsvainit.R"))
-    writeLines(c("library(HDF5Array)", "setHDF5DumpDir(\"HDF5Array_dump\")"),
+    hdf5_dump_dir <- file.path(dir, "HDF5Array_dump")
+    writeLines(c("library(HDF5Array)",
+                 sprintf("setHDF5DumpDir(\"%s\")", hdf5_dump_dir)),
                con)
     close(con)
 
