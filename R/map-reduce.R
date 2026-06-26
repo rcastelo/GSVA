@@ -6,7 +6,22 @@
 #' GSVA calculations on each compute node, while the `gsvaReduce()` function is
 #' used to combine the results from all nodes into a single object.
 #'
-#' @param FUN Function to map to the data in the `inputData` argument.
+#' The specific HPC backend used for parallelization is determined by the
+#' `BTPARAM` argument to the `gsvaMap()` function, which should be an object of
+#' class [`BatchtoolsParam`][BiocParallel::BatchtoolsParam-class]. The function
+#' `gsvaBatchtoolsSlurmParam()` is provided to create a `BatchtoolsParam` object
+#' with some sensible defaults for running GSVA calculations on a Slurm cluster.
+#' The calculations across independent compute nodes without shared memory are
+#' enabled by using on-disk data structures that store enrichment scores and
+#' intermediate results in HDF5 files locate in a filesystem path specified in
+#' the `dir` argument of `gsvaBatchtoolsSlurmParam()`, which defaults to a
+#' directory named "GSVAOUTPUT" in the current working directory from where the
+#' R session calling `gsvaMap()` was launched. The user must ensure that this
+#' path is reachable by all compute nodes in the HPC environment, and must
+#' manually delete its contents after the GSVA calculations are finished.
+#'
+#' @param FUN In `gsvaMap()`, function to map to the data in the `inputData`
+#' argument.
 #'
 #' @param inputData In `gsvaMap()`, input data for performing the calculations
 #' in parallel. It should be an object either of class [`gsvaParam`], or one of
@@ -27,14 +42,41 @@
 #' @param verbose Gives information about the progress of the calculations.
 #' Default: `TRUE`.
 #'
-#' @param BTPARAM An object of class
-#' [`BatchtoolsParam`][BiocParallel::BatchtoolsParam-class] specifying parameters
-#' for parallel execution in an HPC enviroment.
+#' @param dir In `gsvaBatchtoolsSlurmParam()`, path to a directory where the
+#' output of the GSVA calculations will be saved. Default: "GSVAOUTPUT" in the
+#' current working directory.
+#'
+#' @param partition In `gsvaBatchtoolsSlurmParam()`, name of the Slurm partition
+#' to use for the GSVA calculations. No default value, the user must provide a
+#' valid partition name for the Slurm cluster.
+#'
+#' @param nodes In `gsvaBatchtoolsSlurmParam()`, number of independent compute
+#' nodes to distribute the GSVA calculations (tasks) across. Default: 1.
+#'
+#' @param ncpus_per_task In `gsvaBatchtoolsSlurmParam()`, number of CPU cores
+#' to use for each independent task executed within a compute node. Default: 1.
+#'
+#' @param mem In `gsvaBatchtoolsSlurmParam()`, amount of memory to allocate for
+#' each independent task executed within a compute node. Default: "10G".
+#'
+#' @param BTPARAM In `gsvaMap()`, an object of class
+#' [`BatchtoolsParam`][BiocParallel::BatchtoolsParam-class] specifying
+#' parameters for parallel execution in an HPC enviroment. By default, it is set
+#' to a `BatchtoolsParam` object with 2 workers and a progress bar enabled, and
+#' this will start a multicore execution using CPU cores in the compute node
+#' where `gsvaMap()` has been called, i.e., by default it will not deploy an HPC
+#' environment. For that purpose, users should either create a `BatchtoolsParam`
+#' object themselves with appropriate arguments or, if an SLURM HPC environment
+#' is available, they may use the wrapper function `gsvaBatchtoolsSlurmParam()`,
+#' which is provided to create a `BatchtoolsParam` object with some sensible
+#' defaults for running GSVA calculations on a SLURM cluster.
 #'
 #' @return The `gsvaMap()` function returns either a list of objects with the
 #' results of the GSVA calculations for each compute node, or a list of file paths
 #' where the results are saved. The `gsvaReduce()` function returns a single
-#' object that combines the results from all compute nodes.
+#' object that combines the results from all compute nodes. The
+#' `gsvaBatchtoolsSlurmParam()` function returns a `BatchtoolsParam` object with
+#' some sensible defaults for running GSVA calculations on a SLURM cluster.
 #'
 #' @examples
 #'
@@ -228,6 +270,50 @@ gsvaReduce <- function(..., verbose=TRUE) {
     return(res)
 }
 
+#' @importFrom BiocParallel BatchtoolsParam batchtoolsRegistryargs
+#' @importFrom cli cli_alert_warning cli_abort
+#' @rdname map-reduce
+#' @export gsvaMap
+gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition=NULL, nodes=1,
+                                     ncpus_per_task=1, mem="10G") {
+
+    if (dir.exists(dir))
+        cli_alert_warning("The directory {dir} already exists.")
+    else
+        dir.create(dir, recursive=TRUE)
+
+    dir <- normalizePath(dir, mustWork=TRUE)
+
+    if (missing(partition) || is.null(partition) || !is.character(partition))
+        cli_abort(c("x"=paste("You must provide a valid partition name",
+                              "for the Slurm cluster.")))
+
+    ## automatically created HDF5 datasets should be stored in a filesystem
+    ## path that is reachable by all compute nodes, instead of the default
+    ## tempdir() path, which is local to each compute node. this also means
+    ## that, at least by now, the user must manually delete those HDF5 files
+    ## after the GSVA calculations are finished
+    con <- file(file.path(dir, "gsvainit.R"))
+    writeLines(c("library(HDF5Array)", "setHDF5DumpDir(\"HDF5Array_dump\")"),
+               con)
+    close(con)
+
+    registryargs <- batchtoolsRegistryargs(file.dir=file.path(dir, "registry"),
+                                           work.dir=dir, packages="GSVA",
+                                           source="gsvainit.R")
+
+    BTPARAM <- BatchtoolsParam(workers=nodes, cluster="slurm",
+                               jobname="gsva",
+                               resources=list(ncpus=ncpus_per_task,
+                                              partition=partition, mem=mem),
+                               registryargs=registryargs,
+                               stop.on.error=TRUE, log=TRUE, logdir=dir)
+    return(BTPARAM)
+}
+
+
+## private functions
+
 #' @importFrom S4Vectors metadata
 .pull_nonrestrict_metadata <- function(x) {
     if (is(x, "SummarizedExperiment")) {
@@ -340,7 +426,7 @@ gsvaReduce <- function(..., verbose=TRUE) {
     last <- last[ord]
     if (first[1] != 1 || any(first[-1] != (last+1)[-length(last)]))
         cli_abort(c("x"=paste("Input restrict metadata must contain elements",
-			      "'first' and 'last' starting at position 1,",
+                              "'first' and 'last' starting at position 1,",
                               "contiguous and non-overlapping.")))
 
     return(ord)

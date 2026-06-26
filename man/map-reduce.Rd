@@ -3,6 +3,7 @@
 \name{gsvaMap}
 \alias{gsvaMap}
 \alias{gsvaReduce}
+\alias{gsvaBatchtoolsSlurmParam}
 \title{MapReduce parallelization for HPC environments}
 \usage{
 gsvaMap(
@@ -14,9 +15,18 @@ gsvaMap(
 )
 
 gsvaReduce(..., verbose = TRUE)
+
+gsvaBatchtoolsSlurmParam(
+  dir = "GSVAOUTPUT",
+  partition = NULL,
+  nodes = 1,
+  ncpus_per_task = 1,
+  mem = "10G"
+)
 }
 \arguments{
-\item{FUN}{Function to map to the data in the \code{inputData} argument.}
+\item{FUN}{In \code{gsvaMap()}, function to map to the data in the \code{inputData}
+argument.}
 
 \item{inputData}{In \code{gsvaMap()}, input data for performing the calculations
 in parallel. It should be an object either of class \code{\link{gsvaParam}}, or one of
@@ -35,17 +45,44 @@ themselves, which is the default behavior (\code{FALSE}).}
 \item{verbose}{Gives information about the progress of the calculations.
 Default: \code{TRUE}.}
 
-\item{BTPARAM}{An object of class
-\code{\link[BiocParallel:BatchtoolsParam-class]{BatchtoolsParam}} specifying parameters
-for parallel execution in an HPC enviroment.}
+\item{BTPARAM}{In \code{gsvaMap()}, an object of class
+\code{\link[BiocParallel:BatchtoolsParam-class]{BatchtoolsParam}} specifying
+parameters for parallel execution in an HPC enviroment. By default, it is set
+to a \code{BatchtoolsParam} object with 2 workers and a progress bar enabled, and
+this will start a multicore execution using CPU cores in the compute node
+where \code{gsvaMap()} has been called, i.e., by default it will not deploy an HPC
+environment. For that purpose, users should either create a \code{BatchtoolsParam}
+object themselves with appropriate arguments or, if an SLURM HPC environment
+is available, they may use the wrapper function \code{gsvaBatchtoolsSlurmParam()},
+which is provided to create a \code{BatchtoolsParam} object with some sensible
+defaults for running GSVA calculations on a SLURM cluster.}
 
 \item{...}{In \code{gsvaReduce()}, the output of \code{gsvaMap()}.}
+
+\item{dir}{In \code{gsvaBatchtoolsSlurmParam()}, path to a directory where the
+output of the GSVA calculations will be saved. Default: "GSVAOUTPUT" in the
+current working directory.}
+
+\item{partition}{In \code{gsvaBatchtoolsSlurmParam()}, name of the Slurm partition
+to use for the GSVA calculations. No default value, the user must provide a
+valid partition name for the Slurm cluster.}
+
+\item{nodes}{In \code{gsvaBatchtoolsSlurmParam()}, number of independent compute
+nodes to distribute the GSVA calculations (tasks) across. Default: 1.}
+
+\item{ncpus_per_task}{In \code{gsvaBatchtoolsSlurmParam()}, number of CPU cores
+to use for each independent task executed within a compute node. Default: 1.}
+
+\item{mem}{In \code{gsvaBatchtoolsSlurmParam()}, amount of memory to allocate for
+each independent task executed within a compute node. Default: "10G".}
 }
 \value{
 The \code{gsvaMap()} function returns either a list of objects with the
 results of the GSVA calculations for each compute node, or a list of file paths
 where the results are saved. The \code{gsvaReduce()} function returns a single
-object that combines the results from all compute nodes.
+object that combines the results from all compute nodes. The
+\code{gsvaBatchtoolsSlurmParam()} function returns a \code{BatchtoolsParam} object with
+some sensible defaults for running GSVA calculations on a SLURM cluster.
 }
 \description{
 The functions \code{gsvaMap()} and \code{gsvaReduce()} allow one
@@ -53,6 +90,20 @@ to run GSVA calculations across multiple compute nodes in a high-performance
 computing (HPC) environment. The \code{gsvaMap()} function is used to launch the
 GSVA calculations on each compute node, while the \code{gsvaReduce()} function is
 used to combine the results from all nodes into a single object.
+
+The specific HPC backend used for parallelization is determined by the
+\code{BTPARAM} argument to the \code{gsvaMap()} function, which should be an object of
+class \code{\link[BiocParallel:BatchtoolsParam-class]{BatchtoolsParam}}. The function
+\code{gsvaBatchtoolsSlurmParam()} is provided to create a \code{BatchtoolsParam} object
+with some sensible defaults for running GSVA calculations on a Slurm cluster.
+The calculations across independent compute nodes without shared memory are
+enabled by using on-disk data structures that store enrichment scores and
+intermediate results in HDF5 files locate in a filesystem path specified in
+the \code{dir} argument of \code{gsvaBatchtoolsSlurmParam()}, which defaults to a
+directory named "GSVAOUTPUT" in the current working directory from where the
+R session calling \code{gsvaMap()} was launched. The user must ensure that this
+path is reachable by all compute nodes in the HPC environment, and must
+manually delete its contents after the GSVA calculations are finished.
 }
 \examples{
 
