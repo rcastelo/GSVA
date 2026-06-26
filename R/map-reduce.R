@@ -50,6 +50,9 @@
 #' to use for the GSVA calculations. No default value, the user must provide a
 #' valid partition name for the Slurm cluster.
 #'
+#' @param walltime In `gsvaBatchtoolsSlurmParam()`, maximum wall time in seconds
+#' for the GSVA calculations. Default: 600 seconds (10 minutes).
+#'
 #' @param nodes In `gsvaBatchtoolsSlurmParam()`, number of independent compute
 #' nodes to distribute the GSVA calculations (tasks) across. Default: 1.
 #'
@@ -108,6 +111,18 @@
 #' ## calculate column GSVA scores in parallel across multiple
 #' ## compute nodes in a high-performance computing (HPC) environment
 #' gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks))
+#'
+#' ## the example below assumes that a SLURM HPC environment is available
+#' ## with a partition named 'short' and that the user has write access to a
+#' ## filesystem path called 'GSVAOUTPUT' in the current working directory
+#' ## where this script is run and where the GSVA calculations will be saved.
+#' ## The user must ensure that this path is reachable by all compute nodes in
+#' ## the HPC environment, and must manually delete its contents after the GSVA
+#' ## calculations are finished.
+#' \dontrun{
+#' gsvabtpar <- gsvaBatchtoolsSlurmParam(partition="short")
+#' gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar))
+#' }
 #'
 #' @importFrom BiocParallel BatchtoolsParam bpnworkers MulticoreParam bplapply
 #' @importFrom IRanges IRanges start end
@@ -273,9 +288,9 @@ gsvaReduce <- function(..., verbose=TRUE) {
 #' @importFrom BiocParallel BatchtoolsParam batchtoolsRegistryargs
 #' @importFrom cli cli_alert_warning cli_abort
 #' @rdname map-reduce
-#' @export gsvaMap
-gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition=NULL, nodes=1,
-                                     ncpus_per_task=1, mem="10G") {
+#' @export gsvaBatchtoolsSlurmParam
+gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
+                                     nodes=2, ncpus_per_task=2, mem="10G") {
 
     if (dir.exists(dir))
         cli_alert_warning("The directory {dir} already exists.")
@@ -305,7 +320,9 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition=NULL, nodes=1,
     BTPARAM <- BatchtoolsParam(workers=nodes, cluster="slurm",
                                jobname="gsva",
                                resources=list(ncpus=ncpus_per_task,
-                                              partition=partition, mem=mem),
+                                              partition=partition,
+                                              walltime=walltime,
+                                              memory=mem),
                                registryargs=registryargs,
                                stop.on.error=TRUE, log=TRUE, logdir=dir)
     return(BTPARAM)
