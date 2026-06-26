@@ -79,7 +79,8 @@ a convenience function called `gsvaBatchtoolsParam()` that will build a
 environment with a SLURM workload manager.
 
 ```{r, eval=FALSE}
-gsvabtpar <- gsvaBatchtoolsSlurmParam(partition="short", nodes=10, ncpus=4)
+gsvabtpar <- gsvaBatchtoolsSlurmParam(partition="short", nodes=10,
+                                      ncpus_per_task=4)
 ```
 In this example, we are distributing the computational load across 10 nodes, where
 in each of them calculations will be done in parallel using 4 CPU cores, sending
