@@ -14,7 +14,7 @@ gsvaMap(
   BTPARAM = BatchtoolsParam(workers = 2, progressbar = verbose)
 )
 
-gsvaReduce(..., verbose = TRUE)
+gsvaReduce(mapOutput, verbose = TRUE)
 
 gsvaBatchtoolsSlurmParam(
   dir = "GSVAOUTPUT",
@@ -58,7 +58,7 @@ is available, they may use the wrapper function \code{gsvaBatchtoolsSlurmParam()
 which is provided to create a \code{BatchtoolsParam} object with some sensible
 defaults for running GSVA calculations on a SLURM cluster.}
 
-\item{...}{In \code{gsvaReduce()}, the output of \code{gsvaMap()}.}
+\item{mapOutput}{In \code{gsvaReduce()}, the output of \code{gsvaMap()}.}
 
 \item{dir}{In \code{gsvaBatchtoolsSlurmParam()}, path to a directory where the
 output of the GSVA calculations will be saved. Default: "GSVAOUTPUT" in the

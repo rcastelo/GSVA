@@ -893,14 +893,16 @@ gsvaRowNorm <- function(param,
                                                  minparrows=100, minparcols=100,
                                                  verbose)
 
-              if (.get_filterRows(param))
+              rem <- 0
+              if (.get_filterRows(param)) {
                   filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
                                            removeConstant=TRUE,
                                            removeNzConstant=TRUE,
                                            errorOnTooFewRows=errorOnTooFewRows,
                                            verbose=verbose,
                                            BPPARAM=BPPARAM, maxmem=maxmem)
-              else if (verbose) {
+                  rem <- nrow(dataMatrix) - nrow(filtDataMatrix)
+              } else if (verbose) {
                   msg <- "Skipping filtering of constant rows (filterRows=FALSE)"
                   cli_alert_warning(msg)
               }
@@ -923,7 +925,7 @@ gsvaRowNorm <- function(param,
               colnames(gsvarnorm) <- colnames(filtDataMatrix)
 
               rval <- wrapData(get_exprData(param), gsvarnorm, param,
-                               "gsvarnorm", first, last, whdim=1,
+                               "gsvarnorm", first, last, rem, whdim=1,
                                dropExistingAssays)
 
               if (verbose && gsva_global$show_start_and_end_messages)
@@ -1015,7 +1017,7 @@ gsvaColRanks <- function(rowNormExprData,
               colnames(gsvarnks) <- colnames(dataMatrix)
 
               rval <- wrapData(get_exprData(param), gsvarnks, param,
-                               "gsvaranks", first, last, whdim=2,
+                               "gsvaranks", first, last, rem=0, whdim=2,
                                dropExistingAssays)
 
               if (verbose && gsva_global$show_start_and_end_messages)
@@ -1164,7 +1166,8 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
 
               ## dropAssays=TRUE for consistency but doesn't apply here
               rval <- wrapData(get_exprData(param), gsva_es, param, "es",
-                               first, last, whdim=2, dropAssays=TRUE, gs)
+                               first, last, rem=0, whdim=2, dropAssays=TRUE,
+                               gs)
 
               if (!is.null(rmdt)) {
                   if (is(rval, "SummarizedExperiment"))

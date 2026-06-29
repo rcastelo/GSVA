@@ -87,8 +87,8 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
               colnames(gsvarnks) <- colnames(filtDataMatrix)
 
               rnkscontainer <- wrapData(get_exprData(param), gsvarnks, param,
-                                        "gsvaranks", first=NA, last=NA, whdim=2,
-                                        dropAssays=FALSE)
+                                        "gsvaranks", first=NA, last=NA, rem=NA,
+                                        whdim=2, dropAssays=FALSE)
               rval <- new("gsvaRanksParam",
                           exprData=rnkscontainer, geneSets=get_geneSets(param),
                           assay="gsvaranks", annotation=get_annotation(param),
@@ -201,7 +201,8 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
               gs <- .geneSetsIndices2Names(indices=filtMappedGeneSets,
                                            names=rownames(filtDataMatrix))
               rval <- wrapData(get_exprData(param), gsva_es, param, "es",
-                               first=NA, last=NA, whdim=2, dropAssays=FALSE, gs)
+                               first=NA, last=NA, rem=NA, whdim=2,
+                               dropAssays=FALSE, gs)
 
               if (verbose && gsva_global$show_start_and_end_messages)
                   cli_alert_success("Calculations finished")

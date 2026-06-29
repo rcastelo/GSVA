@@ -53,60 +53,83 @@ setMethod("unwrapData", signature("SpatialExperiment"),
           })
 
 
-.wrapdata_nonSE <- function(dataMatrix, param, assay, first, last, whdim,
+.wrapdata_nonSE <- function(dataMatrix, param, assay, first, last, rem, whdim,
                             dropAssays, geneSets) {
     stopifnot(!missing(param))
     stopifnot(!missing(assay))
     stopifnot(!missing(first))
     stopifnot(!missing(last))
+    stopifnot(!missing(rem))
     stopifnot(!missing(whdim))
     stopifnot(!missing(dropAssays))
     attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
     attr(dataMatrix, "assay") <- assay
     if (!is.na(first) || !is.na(last))
         attr(dataMatrix, "restrict") <- list(first=first, last=last,
-                                             whdim=whdim)
+                                             rem=rem, whdim=whdim)
     if (!missing(geneSets))
         attr(dataMatrix, "geneSets") <- geneSets
     return(dataMatrix)
 }
 
-## wrapData: put the resulting data and gene sets into the original data container type
+## wrapData: put the resulting data and gene sets into the original data
+##           container type
+## parameters:
+##  - container is the original data container object
+##  - dataMatrix is a matrix of values to be wrapped into the container
+##  - param is the parameter object used for the calculation that produced
+##    dataMatrix
+##  - assay is the name of the assay to be used in the container object to
+##    store dataMatrix
+##  - first if not NA, it is the index of the first row/column in the original
+##    data container that was used to produce dataMatrix
+##  - last if not NA, it is the index of the last row/column in the original
+##    data container that was used to produce dataMatrix
+##  - rem if not NA, it is the number of rows/columns that were discarded from
+##    the original data container, e.g., when filtering out constant rows
+##  - whdim if not NA, it is the dimension along which first and last are
+##    defined, i.e., 1 for rows and 2 for columns
+##  - dropAssays if TRUE and container uses assays, the original assays in the
+##    container are dropped and only the new assay is kept. If FALSE, the new
+##    assay is added to the existing assays
+##  - geneSets if not missing, it is a list of gene sets that were used to
+##    produce dataMatrix.
 setMethod("wrapData", signature(container="matrix"),
-          function(container, dataMatrix, param, assay, first, last, whdim,
+          function(container, dataMatrix, param, assay, first, last, rem, whdim,
                    dropAssays, geneSets) {
-              .wrapdata_nonSE(dataMatrix, param, assay, first, last, whdim,
+              .wrapdata_nonSE(dataMatrix, param, assay, first, last, rem, whdim,
                               dropAssays, geneSets)
           })
 
 setMethod("wrapData", signature(container="dgCMatrix"),
-          function(container, dataMatrix, param, assay, first, last, whdim,
+          function(container, dataMatrix, param, assay, first, last, rem, whdim,
                    dropAssays, geneSets) {
-              .wrapdata_nonSE(dataMatrix, param, assay, first, last, whdim,
+              .wrapdata_nonSE(dataMatrix, param, assay, first, last, rem, whdim,
                               dropAssays, geneSets)
           })
 
 setMethod("wrapData", signature(container="SVT_SparseMatrix"),
-          function(container, dataMatrix, param, assay, first, last, whdim,
+          function(container, dataMatrix, param, assay, first, last, rem, whdim,
                    dropAssays, geneSets) {
-              .wrapdata_nonSE(dataMatrix, param, assay, first, last, whdim,
+              .wrapdata_nonSE(dataMatrix, param, assay, first, last, rem, whdim,
                               dropAssays, geneSets)
           })
 
 setMethod("wrapData", signature(container="DelayedMatrix"),
-          function(container, dataMatrix, param, assay, first, last, whdim,
+          function(container, dataMatrix, param, assay, first, last, rem, whdim,
                    dropAssays, geneSets) {
-              .wrapdata_nonSE(dataMatrix, param, assay, first, last, whdim,
+              .wrapdata_nonSE(dataMatrix, param, assay, first, last, rem, whdim,
                               dropAssays, geneSets)
           })
 
 setMethod("wrapData", signature(container="ExpressionSet"),
-          function(container, dataMatrix, param, assay, first, last, whdim,
+          function(container, dataMatrix, param, assay, first, last, rem, whdim,
                    dropAssays, geneSets) {
               stopifnot(!missing(param))
               stopifnot(!missing(assay))
               stopifnot(!missing(first))
               stopifnot(!missing(last))
+              stopifnot(!missing(rem))
               stopifnot(!missing(whdim))
               stopifnot(!missing(dropAssays))
               pdata <- phenoData(container)
@@ -120,7 +143,7 @@ setMethod("wrapData", signature(container="ExpressionSet"),
               attr(rval, "assay") <- assay
               if (!is.na(first) || !is.na(last))
                   attr(rval, "restrict") <- list(first=first, last=last,
-                                                 whdim=whdim)
+                                                 rem=rem, whdim=whdim)
               if (!missing(geneSets))
                   attr(rval, "geneSets") <- geneSets
               
@@ -131,12 +154,13 @@ setMethod("wrapData", signature(container="ExpressionSet"),
 #' @importFrom S4Vectors SimpleList
 #' @importFrom SummarizedExperiment assayNames
 setMethod("wrapData", signature(container="SummarizedExperiment"),
-          function(container, dataMatrix, param, assay, first, last, whdim,
-                   dropAssays, geneSets) {
+          function(container, dataMatrix, param, assay, first, last, rem,
+                   whdim, dropAssays, geneSets) {
               stopifnot(!missing(param))
               stopifnot(!missing(assay))
               stopifnot(!missing(first))
               stopifnot(!missing(last))
+              stopifnot(!missing(rem))
               stopifnot(!missing(whdim))
               stopifnot(!missing(dropAssays))
               rdata <- NULL
@@ -165,7 +189,7 @@ setMethod("wrapData", signature(container="SummarizedExperiment"),
               metadata(rval)$gsvaParam <- .gsvaParam_as_list(param)
               if (!is.na(first) || !is.na(last))
                   metadata(rval)$restrict <- list(first=first, last=last,
-                                                  whdim=whdim)
+                                                  rem=rem, whdim=whdim)
               if (!missing(geneSets)) ## row data has been replaced
                   metadata(rval)$annotation <- NULL
 
@@ -177,12 +201,13 @@ setMethod("wrapData", signature(container="SummarizedExperiment"),
 #' @importFrom SummarizedExperiment assayNames
 #' @importFrom SingleCellExperiment SingleCellExperiment reducedDims altExps
 setMethod("wrapData", signature(container="SingleCellExperiment"),
-          function(container, dataMatrix, param, assay, first, last, whdim,
-                   dropAssays, geneSets) {
+          function(container, dataMatrix, param, assay, first, last, rem,
+                   whdim, dropAssays, geneSets) {
               stopifnot(!missing(param))
               stopifnot(!missing(assay))
               stopifnot(!missing(first))
               stopifnot(!missing(last))
+              stopifnot(!missing(rem))
               stopifnot(!missing(whdim))
               stopifnot(!missing(dropAssays))
               rdata <- NULL
@@ -213,7 +238,7 @@ setMethod("wrapData", signature(container="SingleCellExperiment"),
               metadata(rval)$gsvaParam <- .gsvaParam_as_list(param)
               if (!is.na(first) || !is.na(last))
                   metadata(rval)$restrict <- list(first=first, last=last,
-                                                  whdim=whdim)
+                                                  rem=rem, whdim=whdim)
               if (!missing(geneSets)) ## row data has been replaced
                   metadata(rval)$annotation <- NULL
               
@@ -226,12 +251,13 @@ setMethod("wrapData", signature(container="SingleCellExperiment"),
 #' @importFrom SingleCellExperiment SingleCellExperiment reducedDims altExps
 #' @importFrom SpatialExperiment SpatialExperiment
 setMethod("wrapData", signature(container="SpatialExperiment"),
-          function(container, dataMatrix, param, assay, first, last, whdim,
-                   dropAssays, geneSets) {
+          function(container, dataMatrix, param, assay, first, last, rem,
+                   whdim, dropAssays, geneSets) {
               stopifnot(!missing(param))
               stopifnot(!missing(assay))
               stopifnot(!missing(first))
               stopifnot(!missing(last))
+              stopifnot(!missing(rem))
               stopifnot(!missing(whdim))
               stopifnot(!missing(dropAssays))
               rdata <- NULL
@@ -264,7 +290,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
               metadata(rval)$gsvaParam <- .gsvaParam_as_list(param)
               if (!is.na(first) || !is.na(last))
                   metadata(rval)$restrict <- list(first=first, last=last,
-                                                  whdim=whdim)
+                                                  rem=rem, whdim=whdim)
               if (!missing(geneSets)) ## row data has been replaced
                   metadata(rval)$annotation <- NULL
               

@@ -37,7 +37,7 @@
 #' using [`saveHDF5GSVA`], instead returning the list of resulting objects
 #' themselves, which is the default behavior (`FALSE`).
 #'
-#' @param ... In `gsvaReduce()`, the output of `gsvaMap()`.
+#' @param mapOutput In `gsvaReduce()`, the output of `gsvaMap()`.
 #'
 #' @param verbose Gives information about the progress of the calculations.
 #' Default: `TRUE`.
@@ -143,7 +143,7 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
 
     FUN_WRAPPER <- function(X, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
         rng <- X
-        res <- whdim <- NULL
+        res <- whdim <- rem <- NULL
         if (is(X, "IRanges"))
             res <- WRAPPED_FUN(..., first=start(rng), last=end(rng),
                                verbose=FALSE,
@@ -156,6 +156,7 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
                                           "metadata with chunk boundaries.")))
                 rng <- IRanges(start=metadata(X)$restrict$first,
                                end=metadata(X)$restrict$last)
+                rem <- metadata(X)$restrict$rem
                 whdim <- metadata(X)$restrict$whdim
             } else if (is(X, "GsvaExprData")) {
                 if (is.null(attributes(X)$restrict))
@@ -163,28 +164,31 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
                                           "metadata with chunk boundaries.")))
                 rng <- IRanges(start=attributes(X)$restrict$first,
                                end=attributes(X)$restrict$last)
+                rem <- metadata(X)$restrict$rem
                 whdim <- attributes(X)$restrict$whdim
             } ## if X is path WRAPPED_FUN loads object and metadata from disk
+
             res <- WRAPPED_FUN(X, ..., verbose=FALSE,
                                BPPARAM=MulticoreParam(workers=ncpus),
                                maxmem=maxmem)
+
             if (is(X, "SummarizedExperiment")) {
                 metadata(res)$restrict <- list(first=start(rng),
                                                last=end(rng),
+                                               rem=rem,
                                                whdim=whdim)
             } else if (is(X, "GsvaExprData")) {
                 attributes(res)$restrict <- list(first=start(rng),
                                                  last=end(rng),
+                                                 rem=rem,
                                                  whdim=whdim)
             } else { ## X is a path, restrict metadata is in the loaded object
                 if (is(res, "SummarizedExperiment")) {
                     rng <- IRanges(start=metadata(res)$restrict$first,
                                    end=metadata(res)$restrict$last)
-                    whdim <- metadata(res)$restrict$whdim
                 } else if (is(res, "GsvaExprData")) {
                     rng <- IRanges(start=attributes(res)$restrict$first,
                                    end=attributes(res)$restrict$last)
-                    whdim <- attributes(res)$restrict$whdim
                 }
             }
         }
@@ -239,48 +243,74 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
         path2save <- path.expand(BTPARAM$registryargs$work.dir)
 
     X <- inputData
+    totalInputDim <- NULL
     if (!is.list(X)) {
         grid <- gridsizefun(unwrapData(get_exprData(inputData)),
                             nworkers, maxmem)
         X <- splitinrangesfun(grid)
+        totalInputDim <- dim(get_exprData(inputData))
+    } else {
+        if (is.null(attributes(X)$totalInputDim))
+            cli_abort(c("x"=paste("If inputData is a list, it must contain",
+                                  "the attribute 'totalInputDim'.")))
+        totalInputDim <- attributes(X)$totalInputDim
     }
 
-    do.call("bplapply", args=c(list(X=X, FUN=FUN_WRAPPER, WRAPPED_FUN=FUN,
-                                    path2save=path2save, ncpus=ncpus,
-                                    maxmem=maxmem, BPPARAM=BTPARAM), funargs))
+    res <- do.call("bplapply", args=c(list(X=X, FUN=FUN_WRAPPER,
+                                           WRAPPED_FUN=FUN, path2save=path2save,
+                                           ncpus=ncpus, maxmem=maxmem,
+                                           BPPARAM=BTPARAM), funargs))
+    attributes(res)$totalInputDim <- totalInputDim
+
+    return(res)
 }
 
 #' @importFrom cli cli_abort
 #' @importFrom BiocGenerics rbind cbind
 #' @rdname map-reduce
 #' @export gsvaReduce
-gsvaReduce <- function(..., verbose=TRUE) {
-    args <- list(...)
-    if (length(args) == 1 && is.list(args[[1]]))
-        args <- args[[1]]
+gsvaReduce <- function(mapOutput, verbose=TRUE) {
+    if (!is.list(mapOutput))
+        cli_abort(c("x"="argument 'mapOutput' must be a list."))
 
-    cls <- unique(lapply(args, class))
+    cls <- unique(lapply(mapOutput, class))
     if (length(cls) > 1)
         cli_abort(c("x"="All inputs must be of the same class."))
 
-    if (is.character(args[[1]])) {
-        args <- lapply(args, function(x) {
+    totalInputDim <- attributes(mapOutput)$totalInputDim
+    if (is.null(totalInputDim))
+        cli_abort(c("x"=paste("The input list argument in 'mapOutput' must",
+                              "contain the attribute 'totalInputDim'.")))
+
+    if (is.character(mapOutput[[1]])) {
+        mapOutput <- lapply(mapOutput, function(x) {
             if (!dir.exists(x))
                 cli_abort(c("x"="Cannot find {x}."))
             loadHDF5GSVA(x)
         })
     }
 
-    param <- .pull_param(args[[1]])
-    nrmdata <- .pull_nonrestrict_metadata(args[[1]])
-    rmdata <- .pull_restrict_metadata_list(args)
-    ord <- .check_and_order_restrict_metadata(rmdata)
-    args <- .strip_metadata(args)
+    param <- .pull_param(mapOutput[[1]])
+    nrmdata <- .pull_nonrestrict_metadata(mapOutput[[1]])
+    rmdata <- .pull_restrict_metadata_list(mapOutput)
+    ord <- .check_and_order_restrict_metadata(rmdata, totalInputDim)
+    mapOutput <- .strip_metadata(mapOutput)
+
+    if (is.null(rmdata[[1]]$whdim))
+        cli_abort(c("x"=paste("The input list argument in 'mapOutput' must",
+                              "contain the 'restrict' metadata with the",
+                              "element 'whdim'.")))
+
     bfun <- "rbind"
     if (rmdata[[1]]$whdim == 2)
         bfun <- "cbind"
-    res <- do.call(bfun, args[ord])
+    res <- do.call(bfun, mapOutput[ord])
     res <- .add_metadata(res, param, nrmdata)
+
+    rem <- vapply(rmdata, function(x) x$rem, numeric(1))
+    if (dim(res)[rmdata[[1]]$whdim]+sum(rem) != totalInputDim[rmdata[[1]]$whdim])
+        cli_abort(c("x"=paste("The combined output object does not match the",
+                              "expected dimensions of the input data.")))
 
     return(res)
 }
@@ -419,7 +449,7 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
 ## order of chunk boundaries defined by 'first' and 'last'.
 
 #' @importFrom cli cli_abort
-.check_and_order_restrict_metadata <- function(rmdata) {
+.check_and_order_restrict_metadata <- function(rmdata, totalInputDim) {
     stopifnot(is.list(rmdata))
 
     first <- vapply(rmdata, function(x) x$first, numeric(1))
@@ -443,10 +473,14 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
     ord <- order(first)
     first <- first[ord]
     last <- last[ord]
-    if (first[1] != 1 || any(first[-1] != (last+1)[-length(last)]))
+    if (first[1] != 1 || last[length(last)] != totalInputDim[whdim[1]] ||
+        any(first[-1] != (last+1)[-length(last)]) ||
+        sum(last - first + 1) != totalInputDim[whdim[1]]) {
+        tot <- totalInputDim[whdim[1]]
         cli_abort(c("x"=paste("Input restrict metadata must contain elements",
-                              "'first' and 'last' starting at position 1,",
-                              "contiguous and non-overlapping.")))
+                              "'first' and 'last' starting at 1, ending at",
+                              "{tot}, contiguous and non-overlapping.")))
+    }
 
     return(ord)
 }

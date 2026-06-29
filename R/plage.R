@@ -64,7 +64,8 @@ setMethod("gsva", signature(param="plageParam"),
                   names=rownames(filtDataMatrix))
               ## dropAssays=TRUE for consistency but doesn't apply here
               rval <- wrapData(get_exprData(param), plage_es, param, "es",
-                               first=NA, last=NA, whdim=2, dropAssays=TRUE, gs)
+                               first=NA, last=NA, rem=NA, whdim=2,
+                               dropAssays=TRUE, gs)
 
               if (verbose)
                   cli_alert_success("Calculations finished")
