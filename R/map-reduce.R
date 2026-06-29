@@ -144,12 +144,15 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
     FUN_WRAPPER <- function(X, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
         rng <- X
         res <- whdim <- rem <- NULL
-        if (is(X, "IRanges"))
+        if (is(X, "IRanges")) {
+            parallelbackend <- MulticoreParam(workers=ncpus)
+            if (.Platform$OS.type != "unix")
+                parallelbackend <- SnowParam(workers=ncpus)
             res <- WRAPPED_FUN(..., first=start(rng), last=end(rng),
                                verbose=FALSE,
-                               BPPARAM=MulticoreParam(workers=ncpus),
+                               BPPARAM=parallelbackend,
                                maxmem=maxmem)
-        else {
+        } else {
             if (is(X, "SummarizedExperiment")) {
                 if (is.null(metadata(X)$restrict))
                     cli_abort(c("x"=paste("Input object must contain 'restrict'",
