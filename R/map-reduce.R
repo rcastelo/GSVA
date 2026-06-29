@@ -145,10 +145,11 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
     FUN_WRAPPER <- function(X, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
         rng <- X
         res <- whdim <- rem <- NULL
+        parallelbackend <- MulticoreParam(workers=ncpus)
+        if (.Platform$OS.type != "unix")
+            parallelbackend <- SnowParam(workers=ncpus)
+
         if (is(X, "IRanges")) {
-            parallelbackend <- MulticoreParam(workers=ncpus)
-            if (.Platform$OS.type != "unix")
-                parallelbackend <- SnowParam(workers=ncpus)
             res <- WRAPPED_FUN(..., first=start(rng), last=end(rng),
                                verbose=FALSE,
                                BPPARAM=parallelbackend,
@@ -173,7 +174,7 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
             } ## if X is path WRAPPED_FUN loads object and metadata from disk
 
             res <- WRAPPED_FUN(X, ..., verbose=FALSE,
-                               BPPARAM=MulticoreParam(workers=ncpus),
+                               BPPARAM=parallelbackend,
                                maxmem=maxmem)
 
             if (is(X, "SummarizedExperiment")) {
