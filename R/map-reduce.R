@@ -124,7 +124,8 @@
 #' gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar))
 #' }
 #'
-#' @importFrom BiocParallel BatchtoolsParam bpnworkers MulticoreParam bplapply
+#' @importFrom BiocParallel BatchtoolsParam bpnworkers MulticoreParam SnowParam
+#' @importFrom BiocParallel bplapply
 #' @importFrom IRanges IRanges start end
 #' @rdname map-reduce
 #' @export gsvaMap

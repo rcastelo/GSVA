@@ -58,6 +58,17 @@ test_mapReduce <- function() {
     checkEqualsNumeric(assay(gsvaranks, "gsvaranks"),
                        assay(gsvaredranks, "gsvaranks"))
 
+    ## check that gsvaReduce() correctly reduces chunks provided in
+    ## a non-sequential order
+    p <- sample(seq_len(length(gsvamapranks))) ## permutation
+    gsvamapranks2 <- gsvamapranks[p]
+    attributes(gsvamapranks2) <- attributes(gsvamapranks)
+    gsvaredranks <- gsvaReduce(gsvamapranks2, verbose=FALSE)
+
+    ## check that both approaches yield the same column rank values
+    checkEqualsNumeric(assay(gsvaranks, "gsvaranks"),
+                       assay(gsvaredranks, "gsvaranks"))
+
     ## calculate column rank values with map-reduce returning paths to results
     gsvamapranksfls <- gsvaMap(gsvaColRanks, gsvarnorm, returnPath=TRUE,
                                verbose=FALSE)
