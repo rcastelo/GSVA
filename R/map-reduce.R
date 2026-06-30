@@ -144,7 +144,7 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
 
     FUN_WRAPPER <- function(X, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
         rng <- X
-        res <- whdim <- rem <- NULL
+        res <- whdim <- NULL
         parallelbackend <- MulticoreParam(workers=ncpus)
         if (.Platform$OS.type != "unix")
             parallelbackend <- SnowParam(workers=ncpus)
@@ -155,6 +155,7 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
                                BPPARAM=parallelbackend,
                                maxmem=maxmem)
         } else {
+            rem <- 0
             if (is(X, "SummarizedExperiment")) {
                 if (is.null(metadata(X)$restrict))
                     cli_abort(c("x"=paste("Input object must contain 'restrict'",
@@ -169,7 +170,7 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
                                           "metadata with chunk boundaries.")))
                 rng <- IRanges(start=attributes(X)$restrict$first,
                                end=attributes(X)$restrict$last)
-                rem <- metadata(X)$restrict$rem
+                rem <- attributes(X)$restrict$rem
                 whdim <- attributes(X)$restrict$whdim
             } ## if X is path WRAPPED_FUN loads object and metadata from disk
 
@@ -203,7 +204,8 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
                                                   start(rng), end(rng)))
             if (dir.exists(fname))
                 cli_abort(c("x"=paste("cannot save results to {fname} because",
-                                      "it already exists.")))
+                                      "it already exists. You probably should",
+                                      "delete the contents of {path2save}.")))
             res <- saveHDF5GSVA(res, fname)
         }
         return(res)
