@@ -48,9 +48,9 @@ Default: \code{TRUE}.}
 
 \item{BTPARAM}{In \code{gsvaMap()}, an object of class
 \code{\link[BiocParallel:BatchtoolsParam-class]{BatchtoolsParam}} specifying
-parameters for parallel execution in an HPC enviroment. By default, it is set
-to a \code{BatchtoolsParam} object with 2 workers and a progress bar enabled, and
-this will start a multicore execution using CPU cores in the compute node
+parameters for parallel execution in an HPC environment. By default, it is
+set to a \code{BatchtoolsParam} object with 2 workers and a progress bar enabled,
+and this will start a multicore execution using CPU cores in the compute node
 where \code{gsvaMap()} has been called, i.e., by default it will not deploy an HPC
 environment. For that purpose, users should either create a \code{BatchtoolsParam}
 object themselves with appropriate arguments or, if an SLURM HPC environment
@@ -102,7 +102,7 @@ class \code{\link[BiocParallel:BatchtoolsParam-class]{BatchtoolsParam}}. The fun
 with some sensible defaults for running GSVA calculations on a Slurm cluster.
 The calculations across independent compute nodes without shared memory are
 enabled by using on-disk data structures that store enrichment scores and
-intermediate results in HDF5 files locate in a filesystem path specified in
+intermediate results in HDF5 files located in a filesystem path specified in
 the \code{dir} argument of \code{gsvaBatchtoolsSlurmParam()}, which defaults to a
 directory named "GSVAOUTPUT" in the current working directory from where the
 R session calling \code{gsvaMap()} was launched. The user must ensure that this

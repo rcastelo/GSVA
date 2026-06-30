@@ -13,7 +13,7 @@
 #' with some sensible defaults for running GSVA calculations on a Slurm cluster.
 #' The calculations across independent compute nodes without shared memory are
 #' enabled by using on-disk data structures that store enrichment scores and
-#' intermediate results in HDF5 files locate in a filesystem path specified in
+#' intermediate results in HDF5 files located in a filesystem path specified in
 #' the `dir` argument of `gsvaBatchtoolsSlurmParam()`, which defaults to a
 #' directory named "GSVAOUTPUT" in the current working directory from where the
 #' R session calling `gsvaMap()` was launched. The user must ensure that this
@@ -64,9 +64,9 @@
 #'
 #' @param BTPARAM In `gsvaMap()`, an object of class
 #' [`BatchtoolsParam`][BiocParallel::BatchtoolsParam-class] specifying
-#' parameters for parallel execution in an HPC enviroment. By default, it is set
-#' to a `BatchtoolsParam` object with 2 workers and a progress bar enabled, and
-#' this will start a multicore execution using CPU cores in the compute node
+#' parameters for parallel execution in an HPC environment. By default, it is
+#' set to a `BatchtoolsParam` object with 2 workers and a progress bar enabled,
+#' and this will start a multicore execution using CPU cores in the compute node
 #' where `gsvaMap()` has been called, i.e., by default it will not deploy an HPC
 #' environment. For that purpose, users should either create a `BatchtoolsParam`
 #' object themselves with appropriate arguments or, if an SLURM HPC environment
@@ -215,6 +215,7 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
     splitinrangesfun <- .splitColsInRanges
 
     funargs <- list()
+    assay <- NA_character_
 
     if (identical(FUN, gsvaRowNorm)) {
 
@@ -223,16 +224,20 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
                                    errorOnTooFewRows=FALSE))
         gridsizefun <- .rowgridsize
         splitinrangesfun <- .splitRowsInRanges
+        assay <- get_assay(inputData)
 
     } else if (identical(FUN, gsvaColRanks)) {
+
         if (!"gsvarnorm" %in% gsvaAssayNames(inputData))
             cli_abort(c("x"=paste("FUN=gsvaColRanks requires inputData with",
                                   "row-normalized expression values.")))
 
         funargs <- c(funargs, list(rowNormExprData=inputData,
                                    dropExistingAssays=TRUE))
+        assay <- "gsvarnorm"
 
     } else if (identical(FUN, gsvaColScores)) {
+
         if (!is.list(inputData)) {
             if (!"gsvaranks" %in% gsvaAssayNames(inputData))
                 cli_abort(c("x"=paste("FUN=gsvaColScores requires inputData",
@@ -241,6 +246,7 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
             funargs <- c(funargs, list(rankExprData=inputData))
         } else
             funargs <- c(funargs, list(recompute_nzcount=TRUE))
+        assay <- "gsvaranks"
 
     } else
         cli_abort(c("x"="Internal error, invalid FUN argument."))
@@ -252,7 +258,7 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
     X <- inputData
     totalInputDim <- NULL
     if (!is.list(X)) {
-        grid <- gridsizefun(unwrapData(get_exprData(inputData)),
+        grid <- gridsizefun(unwrapData(get_exprData(inputData), assay),
                             nworkers, maxmem)
         X <- splitinrangesfun(grid)
         totalInputDim <- dim(get_exprData(inputData))
