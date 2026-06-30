@@ -26,14 +26,16 @@ setMethod("gsva", signature(param="ssgseaParam"),
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=FALSE,
                                                        removeNzConstant=FALSE,
+                                                       errorOnTooFewRows=TRUE,
                                                        verbose=verbose,
                                                        BPPARAM=BPPARAM)
               filtDataMatrix <- famGaGS[["filteredDataMatrix"]]
               filtMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
-              ondisk <- .check_ondisk(param, maxmem=maxmem, first=NA, last=NA,
-                                      whdim=2, verbose=verbose)
+              ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
+                                      recompute_nzcount=FALSE, maxmem=maxmem,
+                                      verbose=verbose)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "ssGSEA", first=NA,
@@ -68,7 +70,8 @@ setMethod("gsva", signature(param="ssgseaParam"),
                   names=rownames(filtDataMatrix))
               ## dropAssays=TRUE for consistency but doesn't apply here
               rval <- wrapData(get_exprData(param), ssgsea_es, param, "es",
-                               first=NA, last=NA, whdim=2, dropAssays=TRUE, gs)
+                               first=NA, last=NA, rem=NA, whdim=2,
+                               dropAssays=TRUE, gs)
               
               if (verbose)
                   cli_alert_success("Calculations finished")

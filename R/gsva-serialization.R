@@ -120,6 +120,7 @@ saveHDF5GSVA <- function(gsvaExprData, dir, assay="auto", ...) {
                                   "GSVA output.")))
         param <- .pull_param(gsvaExprData)
         first <- last <- NA_real_
+        rem <- 0
         whdim <- NA_integer_
         annot <- NULL
         if (!is.null(attributes(gsvaExprData)$annotation) &&
@@ -131,13 +132,15 @@ saveHDF5GSVA <- function(gsvaExprData, dir, assay="auto", ...) {
             first <- attributes(gsvaExprData)$restrict$first
             last <- attributes(gsvaExprData)$restrict$last
             whdim <- attributes(gsvaExprData)$restrict$whdim
+            if (!is.null(attributes(gsvaExprData)$restrict$rem))
+                rem <- attributes(gsvaExprData)$restrict$rem
             attributes(gsvaExprData)$restrict <- NULL
         }
         se <- SummarizedExperiment(assays=list(dummy=gsvaExprData))
         if (!is.null(annot))
             gsvaAnnotation(se) <- annot
         se <- wrapData(se, gsvaExprData, param, assay, first=first,
-                       last=last, whdim=whdim, dropAssays=TRUE)
+                       last=last, rem=rem, whdim=whdim, dropAssays=TRUE)
 
     } else {
         ## 'SummarizedExperiment' object, remove all assays except the selected GSVA assay
@@ -209,6 +212,8 @@ loadHDF5GSVA <- function(dir, assay="auto", ...) {
             assay <- "gsvaranks"
         else if ("gsvarnorm" %in% an)
             assay <- "gsvarnorm"
+        else if ("es" %in% an)
+            assay <- "es"
         else
             cli_abort(c("x"="Cannot find a GSVA assay in the object."))
     } else

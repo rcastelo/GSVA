@@ -4,28 +4,12 @@ setGeneric("gsva",
            function(param, ...) standardGeneric("gsva"))
 
 #' @export 
-setGeneric("gsvaRowNorm",
-           function(param, ...) standardGeneric("gsvaRowNorm"))
-
-#' @export 
-setGeneric("gsvaColRanks",
-           function(rowNormExprData, ...) standardGeneric("gsvaColRanks"))
-
-#' @export 
-setGeneric("gsvaColScores",
-           function(rankExprData, ...) standardGeneric("gsvaColScores"))
-
-#' @export 
 setGeneric("gsvaRanks",
            function(param, ...) standardGeneric("gsvaRanks"))
 
 #' @export 
 setGeneric("gsvaScores",
            function(param, ...) standardGeneric("gsvaScores"))
-
-#' @export 
-setGeneric("gsvaEnrichment",
-           function(rankExprData, ...) standardGeneric("gsvaEnrichment"))
 
 #' @export 
 setGeneric("filterGeneSets",

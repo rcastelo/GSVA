@@ -1,0 +1,169 @@
+---
+title: "Running GSVA in an HPC environment"
+author:
+- name: Robert Castelo
+  affiliation:
+  - &idupf Dept. of Medicine and Life Sciences, Universitat Pompeu Fabra, Barcelona, Spain
+  email: robert.castelo@upf.edu
+abstract: >
+  Here we illustrate how to use GSVA in an HPC environment.
+date: "`r BiocStyle::doc_date()`"
+package: "`r pkg_ver('GSVA')`"
+vignette: >
+  %\VignetteIndexEntry{Running GSVA in an HPC environment}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteKeywords{GeneExpression, Microarray, RNAseq, GeneSetEnrichment, Pathway}
+output:
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    fig_captions: yes
+bibliography: GSVA.bib
+---
+
+**License**: `r packageDescription("GSVA")[["License"]]`
+
+```{r setup, include=FALSE}
+options(width=80)
+knitr::opts_chunk$set(collapse=TRUE,
+                      message=FALSE,
+                      warning=FALSE,
+                      comment="",
+                      fig.align="center",
+                      fig.wide=TRUE)
+```
+
+# Introduction
+
+Splitting GSVA calculations in parallel on a multicore shared-memory computer is
+directly supported in the functions `gsva()`, `gsvaRowNorm()`, `gsvaColRanks()`
+and `gsvaColScores()`, by using the `BPPARAM` parameter with backends such
+as `BiocParallel::MulticoreParam()` or `BiocParallel::SnowParam()`. However,
+running GSVA in a high-performance computing (HPC) environment, distributing the
+computational load across multiple independent nodes that do not share their
+main memory, requires using some additional functions for that purpose. In this
+vignette we illustrate this use case assuming our HPC environment uses the
+[SLURM](https://slurm.schedmd.com) workload manager. Other workload managers
+can be used, please consult the documentation of the `r Biocpkg("BiocParallel")`
+package for more information, or open an
+[issue](https://github.com/rcastelo/GSVA/issues/new/choose) in the GSVA GitHub
+repo if you need help with a different workload manager.
+
+In essence, we will be using the three-step GSVA pipeline, illustrated in the
+scRNA-seq vignette, with the additional parameters `first` and `last`, which
+allow the algorithm to run on a subset of rows (`gsvaRowNorm()`) or columns
+(`gsvaColRanks()` and `gsvaColScores()`) of the input data, storing the
+intermediate results using on-disk data structures, and merging them into a
+final single output object that will store the enrichment scores using also
+an on-disk data structure. We will not have to worry about how to split the
+input data and merge the intermediate results. These two tasks will be executed
+by the functions `gsvaMap()` and `gsvaReduce()`.
+
+# Using a SLURM workload manager
+
+Let's assume we have run the first part of the scRNA-seq vignette, and we have
+obtained a `SingleCellExperiment` object called `sce` with filtered and
+normalized expression values, and a collection of gene sets stored in an object
+called `gsets`.
+
+We first build a parameter object using the function `gsvaParam()`, as we would
+normally do.
+
+```{r, eval=FALSE}
+gsvapar <- gsvaParam(sce, gsets)
+```
+We would then build a `BatchtoolsParam` object, as described in the
+corresponding
+[vignette](https://bioconductor.org/packages/release/bioc/vignettes/BiocParallel/inst/doc/BiocParallel_BatchtoolsParam.html)
+of the `r Biocpkg("BiocParallel")` package. The GSVA package, however, provides
+a convenience function called `gsvaBatchtoolsSlurmParam()` that will build a
+`BatchtoolsParam` object with some sensible settings for running GSVA in an HPC
+environment with a SLURM workload manager.
+
+```{r, eval=FALSE}
+gsvabtpar <- gsvaBatchtoolsSlurmParam(partition="short", nodes=10,
+                                      ncpus_per_task=4)
+```
+In this example, we are distributing the computational load across 10 nodes, where
+in each of them calculations will be done in parallel using 4 CPU cores, sending
+the corresponding jobs to a partition called `short`. By default, the function
+`gsvaBatchtoolsSlurmParam()` has a first argument `dir="GSVAOUTPUT"`, which will
+create a directory called `GSVAOUTPUT` in the current working directory, where
+the intermediate results will be stored. The user can change this directory by
+specifying a different value for the `dir` argument, but it is important that this
+directory is accessible from all nodes in the HPC environment. The user is also
+responsible for deleting the contents of this directory after the GSVA calculations
+are finished.
+
+The next step is to run the function `gsvaMap()`, which will submit the jobs to the
+SLURM workload manager, and return a list object, where each of its elements will be
+of the same class as the input expression data, but with the intermediate results
+stored in an on-disk data structure.
+
+```{r, eval=FALSE}
+gsvamaprnorm <- gsvaMap(gsvaRowNorm, gsvapar, BTPARAM=gsvabtpar)
+```
+The final step is to merge the intermediate results into a single object, using
+the function `gsvaReduce()`, which in this example will return a
+`SingleCellExperiment` object with the row-normalized values stored in an
+assay called `gsvarnorm`.
+
+```{r, eval=FALSE}
+gsvarnorm <- gsvaReduce(gsvamaprnorm)
+```
+To complete the three-step GSVA pipeline, we would then calculate the column
+rank values using the function `gsvaColRanks()`, and finally the GSVA scores
+using the function `gsvaColScores()`, as we would normally do in a single-node
+environment, but using `gsvaMap()` and `gsvaReduce()`, this time for a more
+compact coding in single line of code each.
+
+```{r, eval=FALSE}
+gsvaranks <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, BTPARAM=gsvabtpar))
+gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar))
+```
+Since the calculations of the column ranks and enrichment scores are both done
+on the columns of the input data, we can reuse the output of `gsvaMap()`
+obtained from the rank calculations, directly to the input of `gsvaMap()` for
+the enrichment score calculations, without having to reduce the intermediate
+results into a single object, avoiding the overhead of that unnecessary
+reduction.
+
+```{r, eval=FALSE}
+gsvamapranks <- gsvaMap(gsvaColRanks, gsvarnorm, BTPARAM=gsvabtpar)
+gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvamapranks, BTPARAM=gsvabtpar))
+```
+The current implementation using the `BatchtoolsParam` backend makes the
+`gsvaMap()` function blocking, waiting for all jobs to finish before returning
+a list object with the intermediate results. There are currently two ways to
+circumvent this limitation. The first one is to use a terminal multiplexer such
+as [tmux](https://github.com/tmux/tmux/wiki), log interactively into a node of
+the HPC environment using a job submission command such as:
+
+```{r, eval=FALSE}
+srun --mpi=none --mem=10G --nodes=1 --ntasks-per-node=1 --partition=short --pty bash -i
+```
+start an R session, call interactively the `gsvaMap()` function and detach the
+tmux session to be able to log out and leave the jobs running in the background.
+You may reattach to the tmux session later to check the progress of the jobs or
+fetch the results. Note that the partition where the interactive job is
+submitted must have a walltime limit that is long enough to allow the jobs to finish.
+
+The second way is to submit a job with the R script that calls the `gsvaMap()`
+function, which will submit the jobs to the SLURM workload manager.
+
+The current implementation of `gsvaMap()` and `gsvaReduce()` does not yet handle
+partial completion of the jobs. So, if any of the jobs fail, the user will have
+to resubmit the entire calculation. We are working to enable the resubmission of
+only the failed jobs.
+
+# Session information {.unnumbered}
+Here is the output of `sessionInfo()` on the system on which this document was
+compiled running pandoc `r rmarkdown::pandoc_version()`:
+
+```{r session_info, cache=FALSE}
+sessionInfo()
+```
+
+# References

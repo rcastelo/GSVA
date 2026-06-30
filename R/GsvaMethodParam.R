@@ -68,6 +68,11 @@ setMethod("get_exprData", signature("GsvaMethodParam"),
               return(object@exprData)
           })
 
+setMethod("get_exprData", signature("GsvaExprData"),
+          function(object) {
+              return(object)
+          })
+
 setMethod("get_geneSets", signature("GsvaMethodParam"),
           function(object) {
               return(object@geneSets)
@@ -161,21 +166,26 @@ setMethod("gsvaShow",
 setMethod("gsvaAssayNames",
           signature=signature(object="GsvaExprData"),
           function(object) {
+              if (!is.null(attr(object, "assay")))
+                  return(attr(object, "assay"))
               return(NA_character_)
           })
 
+#' @importFrom SummarizedExperiment assayNames
 setMethod("gsvaAssayNames", signature("SummarizedExperiment"),
           function(object) {
               a <- assayNames(object)
               return(if(.isCharNonEmpty(a)) a else NA_character_)
           })
 
+#' @importFrom SummarizedExperiment assayNames
 setMethod("gsvaAssayNames", signature("SingleCellExperiment"),
           function(object) {
               a <- assayNames(object)
               return(if(.isCharNonEmpty(a)) a else NA_character_)
           })
 
+#' @importFrom SummarizedExperiment assayNames
 setMethod("gsvaAssayNames", signature("SpatialExperiment"),
           function(object) {
               a <- assayNames(object)

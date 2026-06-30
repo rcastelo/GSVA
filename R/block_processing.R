@@ -72,7 +72,7 @@
     msg <- paste("{sum(!bpokmask)} execution thread(s) gave an error,",
                  "reporting the first one.")
     cli_alert_warning(msg)
-    msg <- attr(res[[which(!bpokmask)]], "traceback")
+    msg <- attr(res[[which(!bpokmask)[1]]], "traceback")
     msg <- gsub("\\}", "]", gsub("\\{", "[", msg))
     out <- lapply(msg, cli_alert_warning)
 }
