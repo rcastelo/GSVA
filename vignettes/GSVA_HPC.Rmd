@@ -153,6 +153,11 @@ submitted must have a walltime limit that is long enough to allow the jobs to fi
 The second way is to submit a job with the R script that calls the `gsvaMap()`
 function, which will submit the jobs to the SLURM workload manager.
 
+The current implementation of `gsvaMap()` and `gsvaReduce()` is not does not handle
+yet partial completion of the jobs. So, if any of the jobs fail, the user will have
+to resubmit the entire calculation. We are working to enable the resubmission of
+only the failed jobs.
+
 # Session information {.unnumbered}
 Here is the output of `sessionInfo()` on the system on which this document was
 compiled running pandoc `r rmarkdown::pandoc_version()`:
