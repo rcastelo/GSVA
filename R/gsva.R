@@ -857,82 +857,79 @@ gsvaRowNorm <- function(param,
                         BPPARAM=SerialParam(progressbar=verbose),
                         maxmem="auto") {
 
-              if (!is(param, "gsvaParam")) {
-                  msg <- paste("'param' must be an object of class",
-                               "'gsvaParam'; see class ? gsvaParam.")
-                  cli_abort(c("x"=msg))
-              }
+    if (!is(param, "gsvaParam"))
+        cli_abort(c("x"=paste("'param' must be an object of class 'gsvaParam';",
+                              "see class ? gsvaParam.")))
 
-              if (verbose && gsva_global$show_start_and_end_messages) {
-                  pkgversion <- packageDescription("GSVA")[["Version"]]
-                  cli_alert_info("GSVA version {pkgversion}")
-              }
+    if (verbose && gsva_global$show_start_and_end_messages) {
+        pkgversion <- packageDescription("GSVA")[["Version"]]
+        cli_alert_info("GSVA version {pkgversion}")
+    }
 
-              .check_bpparam(BPPARAM)
+    .check_bpparam(BPPARAM)
 
-              exprData <- get_exprData(param)
-              dataMatrix <- unwrapData(exprData, get_assay(param))
+    exprData <- get_exprData(param)
+    dataMatrix <- unwrapData(exprData, get_assay(param))
 
-              rmdt <- .pull_restrict_metadata(exprData)
-              checkedfl <- .check_first_last_values(dataMatrix, nrow, "rows",
-                                                    first, last, rmdt)
-              first <- checkedfl$first
-              last <- checkedfl$last
+    rmdt <- .pull_restrict_metadata(exprData)
+    checkedfl <- .check_first_last_values(dataMatrix, nrow, "rows",
+                                          first, last, rmdt)
+    first <- checkedfl$first
+    last <- checkedfl$last
 
-              maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
-              ondisk <- .check_ondisk(param, first=first, last=last, whdim=1,
-                                      recompute_nzcount=FALSE, maxmem=maxmem,
-                                      verbose=verbose)
+    maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+    ondisk <- .check_ondisk(param, first=first, last=last, whdim=1,
+                            recompute_nzcount=FALSE, maxmem=maxmem,
+                            verbose=verbose)
 
-              dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
-                                                          first, last, whdim=1,
-                                                          ondisk, verbose)
+    dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
+                                                first, last, whdim=1,
+                                                ondisk, verbose)
 
-              filtDataMatrix <- dataMatrix
-              BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
-                                                 minparrows=100, minparcols=100,
-                                                 verbose)
+    filtDataMatrix <- dataMatrix
+    BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
+                                       minparrows=100, minparcols=100,
+                                       verbose)
 
-              rem <- 0
-              if (.get_filterRows(param)) {
-                  filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
-                                           removeConstant=TRUE,
-                                           removeNzConstant=TRUE,
-                                           errorOnTooFewRows=errorOnTooFewRows,
-                                           verbose=verbose,
-                                           BPPARAM=BPPARAM, maxmem=maxmem)
-                  rem <- nrow(dataMatrix) - nrow(filtDataMatrix)
-              } else if (verbose) {
-                  msg <- "Skipping filtering of constant rows (filterRows=FALSE)"
-                  cli_alert_warning(msg)
-              }
-              
-              if (verbose)
-                  cli_alert_info(sprintf("Normalizing rows"))
+    rem <- 0
+    if (.get_filterRows(param)) {
+        filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
+                                 removeConstant=TRUE,
+                                 removeNzConstant=TRUE,
+                                 errorOnTooFewRows=errorOnTooFewRows,
+                                 verbose=verbose,
+                                 BPPARAM=BPPARAM, maxmem=maxmem)
+        rem <- nrow(dataMatrix) - nrow(filtDataMatrix)
+    } else if (verbose)
+        cli_alert_warning(paste("Skipping filtering of constant rows",
+                                "(filterRows=FALSE)"))
+    
+    if (verbose)
+        cli_alert_info(sprintf("Normalizing rows"))
 
-              kcdfminssize <- .get_kcdfNoneMinSampleSize(param)
-              gsvarnorm <- .compute_row_norm(expr=filtDataMatrix,
-                                             kcdf=.get_kcdf(param),
-                                             kcdf.min.ssize=kcdfminssize,
-                                             sparse=.get_sparse(param),
-                                             any_na=anyNA(param),
-                                             na_use=.get_NAuse(param),
-                                             verbose=verbose,
-                                             BPPARAM=BPPARAM,
-                                             maxmem=maxmem)
+    kcdfminssize <- .get_kcdfNoneMinSampleSize(param)
+    gsvarnorm <- .compute_row_norm(expr=filtDataMatrix,
+                                   kcdf=.get_kcdf(param),
+                                   kcdf.min.ssize=kcdfminssize,
+                                   sparse=.get_sparse(param),
+                                   any_na=anyNA(param),
+                                   na_use=.get_NAuse(param),
+                                   verbose=verbose,
+                                   BPPARAM=BPPARAM,
+                                   maxmem=maxmem)
 
-              rownames(gsvarnorm) <- rownames(filtDataMatrix)
-              colnames(gsvarnorm) <- colnames(filtDataMatrix)
+    rownames(gsvarnorm) <- rownames(filtDataMatrix)
+    colnames(gsvarnorm) <- colnames(filtDataMatrix)
 
-              rval <- wrapData(get_exprData(param), gsvarnorm, param,
-                               "gsvarnorm", first, last, rem, whdim=1,
-                               dropExistingAssays)
+    rval <- wrapData(get_exprData(param), gsvarnorm, param,
+                     "gsvarnorm", first, last, rem, whdim=1,
+                     dropExistingAssays)
 
-              if (verbose && gsva_global$show_start_and_end_messages)
-                  cli_alert_success("Calculations finished")
+    if (verbose && gsva_global$show_start_and_end_messages)
+        cli_alert_success("Calculations finished")
 
-              return(rval)
-          }
+    return(rval)
+}
 
 
 
@@ -961,70 +958,69 @@ gsvaColRanks <- function(rowNormExprData,
                          BPPARAM=SerialParam(progressbar=verbose),
                          maxmem="auto") {
 
-              if (!is(rowNormExprData, "GsvaExprData") &&
-                  !is.character(rowNormExprData)) {
-                  msg <- paste("'rowNormExprData' must be either a character",
-                               "string or an object of one of the classes",
-                               "supported by 'GsvaExprData'; See class ?",
-                               "GsvaExprData.")
-                  cli_abort(c("x"=msg))
-              } else if (is.character(rowNormExprData)) {
-                  if (!dir.exists(rowNormExprData))
-                      cli_abort(c("x"=paste("{rowNormExprData} cannot be found",
-                                            "in the filesystem")))
-                  if (verbose)
-                      cli_alert_info(paste("Loading {basename(rowNormExprData)}",
-                                           "from disk"))
-                  rowNormExprData <- loadHDF5GSVA(rowNormExprData)
-              }
+    if (!is(rowNormExprData, "GsvaExprData") &&
+        !is.character(rowNormExprData))
+        cli_abort(c("x"=paste("'rowNormExprData' must be either a character",
+                              "string or an object of one of the classes",
+                              "supported by 'GsvaExprData'; See class ?",
+                              "GsvaExprData.")))
+    else if (is.character(rowNormExprData)) {
+        if (!dir.exists(rowNormExprData))
+            cli_abort(c("x"=paste("{rowNormExprData} cannot be found in the",
+                                  "filesystem")))
+        if (verbose)
+            cli_alert_info(paste("Loading {basename(rowNormExprData)}",
+                                 "from disk"))
+        rowNormExprData <- loadHDF5GSVA(rowNormExprData)
+    }
 
-              param <- .pull_param(rowNormExprData)
+    param <- .pull_param(rowNormExprData)
 
-              if (verbose && gsva_global$show_start_and_end_messages) {
-                  pkgversion <- packageDescription("GSVA")[["Version"]]
-                  cli_alert_info("GSVA version {pkgversion}")
-              }
+    if (verbose && gsva_global$show_start_and_end_messages) {
+        pkgversion <- packageDescription("GSVA")[["Version"]]
+        cli_alert_info("GSVA version {pkgversion}")
+    }
 
-              .check_bpparam(BPPARAM)
+    .check_bpparam(BPPARAM)
 
-              dataMatrix <- unwrapData(rowNormExprData, "gsvarnorm")
+    dataMatrix <- unwrapData(rowNormExprData, "gsvarnorm")
 
-              rmdt <- .pull_restrict_metadata(rowNormExprData)
-              checkedfl <- .check_first_last_values(dataMatrix, ncol, "columns",
-                                                    first, last, rmdt)
-              first <- checkedfl$first
-              last <- checkedfl$last
+    rmdt <- .pull_restrict_metadata(rowNormExprData)
+    checkedfl <- .check_first_last_values(dataMatrix, ncol, "columns",
+                                          first, last, rmdt)
+    first <- checkedfl$first
+    last <- checkedfl$last
 
-              maxmem <- .check_maxmem(param, assay="gsvarnorm", maxmem=maxmem,
-                                      verbose=verbose)
-              ondisk <- .check_ondisk(param, assay="gsvarnorm",
-                                      first=first, last=last, whdim=2,
-                                      recompute_nzcount=FALSE, maxmem=maxmem,
-                                      verbose=verbose)
+    maxmem <- .check_maxmem(param, assay="gsvarnorm", maxmem=maxmem,
+                            verbose=verbose)
+    ondisk <- .check_ondisk(param, assay="gsvarnorm",
+                            first=first, last=last, whdim=2,
+                            recompute_nzcount=FALSE, maxmem=maxmem,
+                            verbose=verbose)
 
-              dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
-                                                          first, last, whdim=2,
-                                                          ondisk, verbose)
-              sparse <- .get_sparse(param)
-              if (sparse && !is_sparse(dataMatrix))
-                  sparse <- FALSE
+    dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
+                                                first, last, whdim=2,
+                                                ondisk, verbose)
+    sparse <- .get_sparse(param)
+    if (sparse && !is_sparse(dataMatrix))
+        sparse <- FALSE
 
-              gsvarnks <- .compute_gsva_ranks(Z=dataMatrix, sparse=sparse,
-                                              verbose=verbose, BPPARAM=BPPARAM,
-                                              maxmem=maxmem)
+    gsvarnks <- .compute_gsva_ranks(Z=dataMatrix, sparse=sparse,
+                                    verbose=verbose, BPPARAM=BPPARAM,
+                                    maxmem=maxmem)
 
-              rownames(gsvarnks) <- rownames(dataMatrix)
-              colnames(gsvarnks) <- colnames(dataMatrix)
+    rownames(gsvarnks) <- rownames(dataMatrix)
+    colnames(gsvarnks) <- colnames(dataMatrix)
 
-              rval <- wrapData(get_exprData(param), gsvarnks, param,
-                               "gsvaranks", first, last, rem=0, whdim=2,
-                               dropExistingAssays)
+    rval <- wrapData(get_exprData(param), gsvarnks, param,
+                     "gsvaranks", first, last, rem=0, whdim=2,
+                     dropExistingAssays)
 
-              if (verbose && gsva_global$show_start_and_end_messages)
-                  cli_alert_success("Calculations finished")
+    if (verbose && gsva_global$show_start_and_end_messages)
+        cli_alert_success("Calculations finished")
 
-              return(rval)
-          }
+    return(rval)
+}
 
 
 
@@ -1059,128 +1055,125 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                           BPPARAM=SerialParam(progressbar=verbose),
                           maxmem="auto") {
 
-              if (!is(rankExprData, "GsvaExprData") &&
-                  !is.character(rankExprData)) {
-                  msg <- paste("'rankExprData' must be either a character",
-                               "string or an object of one of the classes",
-                               "supported by 'GsvaExprData'; See class ?",
-                               "GsvaExprData.")
-                  cli_abort(c("x"=msg))
-              } else if (is.character(rankExprData)) {
-                  if (!dir.exists(rankExprData))
-                      cli_abort(c("x"=paste("{rankExprData} cannot be found",
-                                            "in the filesystem")))
-                  if (verbose)
-                      cli_alert_info("Loading {basename(rankExprData)} from disk")
-                  rankExprData <- loadHDF5GSVA(rankExprData)
-              }
+    if (!is(rankExprData, "GsvaExprData") &&
+        !is.character(rankExprData))
+        cli_abort(c("x"=paste("'rankExprData' must be either a character",
+                              "string or an object of one of the classes",
+                              "supported by 'GsvaExprData'; See class ?",
+                              "GsvaExprData.")))
+    else if (is.character(rankExprData)) {
+        if (!dir.exists(rankExprData))
+            cli_abort(c("x"=paste("{rankExprData} cannot be found",
+                                  "in the filesystem")))
+        if (verbose)
+            cli_alert_info("Loading {basename(rankExprData)} from disk")
+        rankExprData <- loadHDF5GSVA(rankExprData)
+    }
 
-              param <- .pull_param(rankExprData)
+    param <- .pull_param(rankExprData)
 
-              if (!missing(geneSets)) {
-                  if (!is(geneSets, "GsvaGeneSets"))
-                      cli_abort(c("x"=paste("'geneSets' must be a",
-                                            "'GsvaGeneSets' object. See",
-                                            "class ? GsvaGeneSets.")))
-                  geneSets(param) <- geneSets
-              }
+    if (!missing(geneSets)) {
+        if (!is(geneSets, "GsvaGeneSets"))
+            cli_abort(c("x"=paste("'geneSets' must be a",
+                                  "'GsvaGeneSets' object. See",
+                                  "class ? GsvaGeneSets.")))
+        geneSets(param) <- geneSets
+    }
 
+    if (verbose && gsva_global$show_start_and_end_messages) {
+        pkgversion <- packageDescription("GSVA")[["Version"]]
+        cli_alert_info("GSVA version {pkgversion}")
+    }
 
-              if (verbose && gsva_global$show_start_and_end_messages) {
-                  pkgversion <- packageDescription("GSVA")[["Version"]]
-                  cli_alert_info("GSVA version {pkgversion}")
-              }
+    .check_bpparam(BPPARAM)
 
-              .check_bpparam(BPPARAM)
+    ## assuming rows in the rank data have been already filtered
+    filtDataMatrix <- unwrapData(rankExprData, "gsvaranks")
 
-              ## assuming rows in the rank data have been already filtered
-              filtDataMatrix <- unwrapData(rankExprData, "gsvaranks")
+    rmdt <- .pull_restrict_metadata(rankExprData)
+    checkedfl <- .check_first_last_values(filtDataMatrix, ncol,
+                                          "columns", first, last,
+                                          rmdt)
+    first <- checkedfl$first
+    last <- checkedfl$last
 
-              rmdt <- .pull_restrict_metadata(rankExprData)
-              checkedfl <- .check_first_last_values(filtDataMatrix, ncol,
-                                                    "columns", first, last,
-                                                    rmdt)
-              first <- checkedfl$first
-              last <- checkedfl$last
+    filtMappedGeneSets <- .filterAndMapGeneSets(param=param,
+                                 filteredDataMatrix=filtDataMatrix,
+                                 verbose=verbose)
 
-              filtMappedGeneSets <- .filterAndMapGeneSets(param=param,
-                                           filteredDataMatrix=filtDataMatrix,
-                                           verbose=verbose)
+    sparse <- .get_sparse(param)
+    if (sparse && !is_sparse(filtDataMatrix))
+        sparse <- FALSE
 
-              sparse <- .get_sparse(param)
-              if (sparse && !is_sparse(filtDataMatrix))
-                  sparse <- FALSE
+    if (verbose) {
+      if (sparse)
+          cli_alert_info("GSVA sparse algorithm")
+        else
+          cli_alert_info("GSVA dense (classical) algorithm")
+    }
 
-              if (verbose) {
-                if (sparse)
-                    cli_alert_info("GSVA sparse algorithm")
-                  else
-                    cli_alert_info("GSVA dense (classical) algorithm")
-              }
+    maxmem <- .check_maxmem(param, assay="gsvaranks", maxmem=maxmem,
+                            verbose=verbose)
+    ondisk <- .check_ondisk(param, assay="gsvaranks",
+                            first=first, last=last, whdim=2,
+                            recompute_nzcount=recompute_nzcount,
+                            maxmem=maxmem, verbose=verbose)
 
-              maxmem <- .check_maxmem(param, assay="gsvaranks", maxmem=maxmem,
-                                      verbose=verbose)
-              ondisk <- .check_ondisk(param, assay="gsvaranks",
-                                      first=first, last=last, whdim=2,
-                                      recompute_nzcount=recompute_nzcount,
-                                      maxmem=maxmem, verbose=verbose)
+    filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix, "GSVA",
+                                                    first, last, whdim=2,
+                                                    ondisk, verbose)
 
-              filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
-                                                              "GSVA", first,
-                                                              last, whdim=2,
-                                                              ondisk, verbose)
+    BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
+                                       minparrows=100, minparcols=100,
+                                       verbose)
 
-              BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
-                                                 minparrows=100, minparcols=100,
-                                                 verbose)
+    ondisk <- .check_es_memory_requirements(filtDataMatrix,
+                                            filtMappedGeneSets,
+                                            ondisk, maxmem)
+    if (verbose) {
+        n <- length(filtMappedGeneSets)
+        cli_alert_info("Calculating GSVA scores for {n} gene sets")
+    }
 
-              ondisk <- .check_es_memory_requirements(filtDataMatrix,
-                                                      filtMappedGeneSets,
-                                                      ondisk, maxmem)
-              if (verbose) {
-                  n <- length(filtMappedGeneSets)
-                  cli_alert_info("Calculating GSVA scores for {n} gene sets")
-              }
+    gsva_es <- .processMatrixCols(filtDataMatrix,
+                                  FUN=.compute_gsva_scores,
+                                  geneSetsIdx=filtMappedGeneSets,
+                                  tau=.get_tau(param),
+                                  maxDiff=.get_maxDiff(param),
+                                  absRanking=.get_absRanking(param),
+                                  sparse=sparse, any_na=anyNA(param),
+                                  na_use=.get_NAuse(param),
+                                  minSize=get_minSize(param),
+                                  ondisk=ondisk, verbose=verbose,
+                                  minparrows=100, minparcols=100,
+                                  BPPARAM=BPPARAM,
+                                  maxmem=ceiling(maxmem/100)) ## use
+                                  ## of memory increases here about
+                                  ## 10-fold over block size memory
 
-              gsva_es <- .processMatrixCols(filtDataMatrix,
-                                            FUN=.compute_gsva_scores,
-                                            geneSetsIdx=filtMappedGeneSets,
-                                            tau=.get_tau(param),
-                                            maxDiff=.get_maxDiff(param),
-                                            absRanking=.get_absRanking(param),
-                                            sparse=sparse, any_na=anyNA(param),
-                                            na_use=.get_NAuse(param),
-                                            minSize=get_minSize(param),
-                                            ondisk=ondisk, verbose=verbose,
-                                            minparrows=100, minparcols=100,
-                                            BPPARAM=BPPARAM,
-                                            maxmem=ceiling(maxmem/100)) ## use
-                                            ## of memory increases here about
-                                            ## 10-fold over block size memory
+    rownames(gsva_es) <- names(filtMappedGeneSets)
+    colnames(gsva_es) <- colnames(filtDataMatrix)
 
-              rownames(gsva_es) <- names(filtMappedGeneSets)
-              colnames(gsva_es) <- colnames(filtDataMatrix)
+    gs <- .geneSetsIndices2Names(indices=filtMappedGeneSets,
+                                 names=rownames(filtDataMatrix))
 
-              gs <- .geneSetsIndices2Names(indices=filtMappedGeneSets,
-                                           names=rownames(filtDataMatrix))
+    ## dropAssays=TRUE for consistency but doesn't apply here
+    rval <- wrapData(get_exprData(param), gsva_es, param, "es",
+                     first, last, rem=0, whdim=2, dropAssays=TRUE,
+                     gs)
 
-              ## dropAssays=TRUE for consistency but doesn't apply here
-              rval <- wrapData(get_exprData(param), gsva_es, param, "es",
-                               first, last, rem=0, whdim=2, dropAssays=TRUE,
-                               gs)
+    if (!is.null(rmdt)) {
+        if (is(rval, "SummarizedExperiment"))
+            metadata(rval)$restrict <- rmdt
+        else
+            attr(rval, "restrict") <- rmdt
+    }
 
-              if (!is.null(rmdt)) {
-                  if (is(rval, "SummarizedExperiment"))
-                      metadata(rval)$restrict <- rmdt
-                  else
-                      attr(rval, "restrict") <- rmdt
-              }
+    if (verbose && gsva_global$show_start_and_end_messages)
+        cli_alert_success("Calculations finished")
 
-              if (verbose && gsva_global$show_start_and_end_messages)
-                  cli_alert_success("Calculations finished")
-
-              return(rval)
-          }
+    return(rval)
+}
 
 #' @title GSVA enrichment data and visualization
 #'
@@ -1267,115 +1260,102 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
 gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
                            plot=c("auto", "base", "ggplot", "no"), ...) {
 
-              if (!is(rankExprData, "GsvaExprData")) {
-                  msg <- paste("'rankExprData' must be an object of one",
-                               "of the classes supported by 'GsvaExprData';",
-                               "See class ? GsvaExprData.")
-                  cli_abort(c("x"=msg))
-              }
+    if (!is(rankExprData, "GsvaExprData"))
+        cli_abort(c("x"=paste("'rankExprData' must be an object of one of the",
+                              "classes supported by 'GsvaExprData';",
+                              "see class ? GsvaExprData.")))
 
-              if (length(column) != 1)
-                  cli_abort(c("x"="'column' should be of length 1."))
+    if (length(column) != 1)
+        cli_abort(c("x"="'column' should be of length 1."))
 
-              if (is.numeric(column) && !is.na(column)) {
-                  if (column != as.integer(column) ||
-                      column < 1 || column > ncol(rankExprData))
-                      cli_abort(c("x"=paste("'column' should be a positive",
-                                            "integer between 1 and the number",
-                                            "of columns in the input data.")))
-              } else
-                  cli_abort(c("x"="'column' should be a positive integer."))
-                    
-              param <- .pull_param(rankExprData)
+    if (is.numeric(column) && !is.na(column)) {
+        if (column != as.integer(column) ||
+            column < 1 || column > ncol(rankExprData))
+            cli_abort(c("x"=paste("'column' should be a positive integer",
+                                  "between 1 and the number of columns in the",
+                                  "input data.")))
+    } else
+        cli_abort(c("x"="'column' should be a positive integer."))
+          
+    param <- .pull_param(rankExprData)
 
-              plot <- match.arg(plot)
+    plot <- match.arg(plot)
 
-              geneSets <- get_geneSets(param)
-              if (is.character(geneSet) && length(geneSet) == 1) {
-                  if (!geneSet %in% names(geneSets)) {
-                      msg <- paste("Gene set {geneSet} is missing from the input",
-                                   "parameter object.")
-                      cli_abort(c("x"=msg))
-                  }
-              } else if (is.numeric(geneSet) && length(geneSet) == 1 && !is.na(geneSet)) {
-                  if (geneSet < 1 || geneSet > length(geneSets)) {
-                       msg <- paste("When 'geneSet' is a single number, it",
-                                    "should be a number between 1 and the",
-                                    "number of gene sets ({length(geneSets)}).")
-                       cli_abort(c("x"=msg))
-                  }
-              } else if (!is.character(geneSet) && !is.numeric(geneSet)) {
-                  msg <- paste("input argument 'geneSet' should be either",
-                               "numeric or character.")
-                  cli_abort(c("x"=msg))
-              }
+    geneSets <- get_geneSets(param)
+    if (is.character(geneSet) && length(geneSet) == 1) {
+        if (!geneSet %in% names(geneSets))
+            cli_abort(c("x"=paste("Gene set {geneSet} is missing from the",
+                                  "input parameter object.")))
+    } else if (is.numeric(geneSet) && length(geneSet) == 1 && !is.na(geneSet)) {
+        if (geneSet < 1 || geneSet > length(geneSets))
+             cli_abort(c("x"=paste("When 'geneSet' is a single number, it",
+                                   "should be a number between 1 and the",
+                                   "number of gene sets ({length(geneSets)}).")))
+    } else if (!is.character(geneSet) && !is.numeric(geneSet))
+        cli_abort(c("x"=paste("input argument 'geneSet' should be either",
+                              "numeric or character.")))
 
-              if (is.numeric(geneSet) && length(geneSet) > 1) {
-                  if (any(geneSet != as.integer(geneSet)) || any(geneSet < 1) ||
-                      any(geneSet > nrow(rankExprData))) {
-                       msg <- paste("When 'geneSet' is a numeric vector,",
-                                    "it should contain positive integers",
-                                    "between 1 and the number of rows in the",
-                                    "input data.")
-                       cli_abort(c("x"=msg))
-                  }
-                  geneSets(param) <- list(geneSet)
-                  geneSet <- 1
-              }
+    if (is.numeric(geneSet) && length(geneSet) > 1) {
+        if (any(geneSet != as.integer(geneSet)) || any(geneSet < 1) ||
+            any(geneSet > nrow(rankExprData)))
+             cli_abort(c("x"=paste("When 'geneSet' is a numeric vector, it",
+                                   "should contain positive integers between 1",
+                                   "and the number of rows in the input data.")))
+        geneSets(param) <- list(geneSet)
+        geneSet <- 1
+    }
 
-              if (is.character(geneSet) && length(geneSet) > 1) {
-                  if (!all(geneSet %in% rownames(rankExprData))) {
-                      msg <- paste("When 'geneSet' is a character vector, all",
-                                   "its values should be present in the row",
-                                   "names of the input data.")
-                      cli_abort(c("x"=msg))
-                  }
-                  geneSets(param) <- list(geneSet)
-                  geneSet <- 1
-              }
+    if (is.character(geneSet) && length(geneSet) > 1) {
+        if (!all(geneSet %in% rownames(rankExprData)))
+            cli_abort(c("x"=paste("When 'geneSet' is a character vector, all",
+                                  "its values should be present in the row",
+                                  "names of the input data.")))
+        geneSets(param) <- list(geneSet)
+        geneSet <- 1
+    }
 
-              tau <- .get_tau(param)
-              maxDiff <- .get_maxDiff(param)
-              absRanking <- .get_absRanking(param)
-              sparse <- .get_sparse(param)
-              any_na <- anyNA(param)
-              na_use <- .get_NAuse(param)
-              minsize <- get_minSize(param)
+    tau <- .get_tau(param)
+    maxDiff <- .get_maxDiff(param)
+    absRanking <- .get_absRanking(param)
+    sparse <- .get_sparse(param)
+    any_na <- anyNA(param)
+    na_use <- .get_NAuse(param)
+    minsize <- get_minSize(param)
 
-              exprData <- get_exprData(param)
-              filtDataMatrix <- unwrapData(rankExprData, "gsvaranks")
+    exprData <- get_exprData(param)
+    filtDataMatrix <- unwrapData(rankExprData, "gsvaranks")
 
-              ## no need for verbosity when mapping a single gene set
-              filtMappedGeneSets <- .filterAndMapGeneSets(param,
-                                           wgset=geneSet, ## use that gene set
-                                           filteredDataMatrix=filtDataMatrix,
-                                           verbose=FALSE)
+    ## no need for verbosity when mapping a single gene set
+    filtMappedGeneSets <- .filterAndMapGeneSets(param,
+                                 wgset=geneSet, ## use that gene set
+                                 filteredDataMatrix=filtDataMatrix,
+                                 verbose=FALSE)
 
-              geneSetIdx <- filtMappedGeneSets[[1]]
-              edata <- .gsva_enrichment_data(R=filtDataMatrix,
-                                             column=column,
-                                             geneSetIdx=geneSetIdx,
-                                             maxDiff=maxDiff,
-                                             absRanking=absRanking,
-                                             tau=tau,
-                                             sparse=sparse,
-                                             any_na=any_na,
-                                             na_use=na_use,
-                                             minSize=minsize)
+    geneSetIdx <- filtMappedGeneSets[[1]]
+    edata <- .gsva_enrichment_data(R=filtDataMatrix,
+                                   column=column,
+                                   geneSetIdx=geneSetIdx,
+                                   maxDiff=maxDiff,
+                                   absRanking=absRanking,
+                                   tau=tau,
+                                   sparse=sparse,
+                                   any_na=any_na,
+                                   na_use=na_use,
+                                   minSize=minsize)
 
-              if (plot == "no" || (plot == "auto" && !interactive()))
-                  return(edata)
+    if (plot == "no" || (plot == "auto" && !interactive()))
+        return(edata)
 
-              if (plot == "auto" || plot == "base")
-                  .plot_enrichment_base(edata, ...) 
-              else { ## plot == "ggplot"
-                  instpkgs <- installed.packages(noCache=TRUE)[, "Package"]
-                  if (!"ggplot2" %in% instpkgs)
-                      cli_alert_danger("Please install the ggplot2 package")
-                  else
-                      .plot_enrichment_ggplot(edata)
-              }
-          }
+    if (plot == "auto" || plot == "base")
+        .plot_enrichment_base(edata, ...) 
+    else { ## plot == "ggplot"
+        instpkgs <- installed.packages(noCache=TRUE)[, "Package"]
+        if (!"ggplot2" %in% instpkgs)
+            cli_alert_danger("Please install the ggplot2 package")
+        else
+            .plot_enrichment_ggplot(edata)
+    }
+}
 
 
 
