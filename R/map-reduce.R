@@ -142,7 +142,172 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
     ncpus <- BTPARAM$resources$ncpus
     maxmem <- .memtext2bytes(BTPARAM$resources$memory)
 
-    FUN_WRAPPER <- function(X, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
+    gridsizefun <- .colgridsize
+    splitinrangesfun <- .splitColsInRanges
+
+    funargs <- list()
+    assay <- NA_character_
+
+    if (identical(FUN, gsvaRowNorm)) {
+
+        funargs <- c(funargs, list(param=inputData,
+                                   dropExistingAssays=TRUE,
+                                   errorOnTooFewRows=FALSE))
+        gridsizefun <- .rowgridsize
+        splitinrangesfun <- .splitRowsInRanges
+        assay <- get_assay(inputData)
+
+    } else if (identical(FUN, gsvaColRanks)) {
+
+        if (!"gsvarnorm" %in% gsvaAssayNames(inputData))
+            cli_abort(c("x"=paste("FUN=gsvaColRanks requires inputData with",
+                                  "row-normalized expression values.")))
+
+        funargs <- c(funargs, list(rowNormExprData=inputData,
+                                   dropExistingAssays=TRUE))
+        assay <- "gsvarnorm"
+
+    } else if (identical(FUN, gsvaColScores)) {
+
+        if (!is.list(inputData)) {
+            if (!"gsvaranks" %in% gsvaAssayNames(inputData))
+                cli_abort(c("x"=paste("FUN=gsvaColScores requires inputData",
+                                      "with column rank values.")))
+
+            funargs <- c(funargs, list(rankExprData=inputData))
+        } else
+            funargs <- c(funargs, list(recompute_nzcount=TRUE))
+        assay <- "gsvaranks"
+
+    } else
+        cli_abort(c("x"="Internal error, invalid FUN argument."))
+
+    path2save <- ""
+    if (returnPath)
+        path2save <- path.expand(BTPARAM$registryargs$work.dir)
+
+    X <- inputData
+    totalInputDim <- NULL
+    if (!is.list(X)) {
+        grid <- gridsizefun(unwrapData(get_exprData(inputData), assay),
+                            nworkers, maxmem)
+        X <- splitinrangesfun(grid)
+        totalInputDim <- dim(get_exprData(inputData))
+    } else {
+        if (is.null(attributes(X)$totalInputDim))
+            cli_abort(c("x"=paste("If inputData is a list, it must contain",
+                                  "the attribute 'totalInputDim'.")))
+        totalInputDim <- attributes(X)$totalInputDim
+    }
+
+    res <- do.call("bplapply", args=c(list(X=X, FUN=MAP_FUN_WRAPPER,
+                                           WRAPPED_FUN=FUN, path2save=path2save,
+                                           ncpus=ncpus, maxmem=maxmem,
+                                           BPPARAM=BTPARAM), funargs))
+    attributes(res)$totalInputDim <- totalInputDim
+
+    return(res)
+}
+
+#' @importFrom cli cli_abort
+#' @importFrom BiocGenerics rbind cbind
+#' @rdname map-reduce
+#' @export gsvaReduce
+gsvaReduce <- function(mapOutput, verbose=TRUE) {
+    if (!is.list(mapOutput))
+        cli_abort(c("x"="argument 'mapOutput' must be a list."))
+
+    cls <- unique(lapply(mapOutput, class))
+    if (length(cls) > 1)
+        cli_abort(c("x"="All inputs must be of the same class."))
+
+    totalInputDim <- attributes(mapOutput)$totalInputDim
+    if (is.null(totalInputDim))
+        cli_abort(c("x"=paste("The input list argument in 'mapOutput' must",
+                              "contain the attribute 'totalInputDim'.")))
+
+    if (is.character(mapOutput[[1]])) {
+        mapOutput <- lapply(mapOutput, function(x) {
+            if (!dir.exists(x))
+                cli_abort(c("x"="Cannot find {x}."))
+            loadHDF5GSVA(x)
+        })
+    }
+
+    param <- .pull_param(mapOutput[[1]])
+    nrmdata <- .pull_nonrestrict_metadata(mapOutput[[1]])
+    rmdata <- .pull_restrict_metadata_list(mapOutput)
+    ord <- .check_and_order_restrict_metadata(rmdata, totalInputDim)
+    mapOutput <- .strip_metadata(mapOutput)
+
+    if (is.null(rmdata[[1]]$whdim))
+        cli_abort(c("x"=paste("The input list argument in 'mapOutput' must",
+                              "contain the 'restrict' metadata with the",
+                              "element 'whdim'.")))
+
+    bfun <- "rbind"
+    if (rmdata[[1]]$whdim == 2)
+        bfun <- "cbind"
+    res <- do.call(bfun, mapOutput[ord])
+    res <- .add_metadata(res, param, nrmdata)
+
+    rem <- vapply(rmdata, function(x) x$rem, numeric(1))
+    if (dim(res)[rmdata[[1]]$whdim]+sum(rem) != totalInputDim[rmdata[[1]]$whdim])
+        cli_abort(c("x"=paste("The combined output object does not match the",
+                              "expected dimensions of the input data.")))
+
+    return(res)
+}
+
+#' @importFrom BiocParallel BatchtoolsParam batchtoolsRegistryargs
+#' @importFrom cli cli_alert_warning cli_abort
+#' @rdname map-reduce
+#' @export gsvaBatchtoolsSlurmParam
+gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
+                                     nodes=2, ncpus_per_task=2, mem="10G") { # nocov start
+
+    if (dir.exists(dir))
+        cli_alert_warning("The directory {dir} already exists.")
+    else
+        dir.create(dir, recursive=TRUE)
+
+    dir <- normalizePath(dir, mustWork=TRUE)
+
+    if (missing(partition) || is.null(partition) || !is.character(partition))
+        cli_abort(c("x"=paste("You must provide a valid partition name",
+                              "for the Slurm cluster.")))
+
+    ## automatically created HDF5 datasets should be stored in a filesystem
+    ## path that is reachable by all compute nodes, instead of the default
+    ## tempdir() path, which is local to each compute node. this also means
+    ## that, at least by now, the user must manually delete those HDF5 files
+    ## after the GSVA calculations are finished
+    con <- file(file.path(dir, "gsvainit.R"))
+    hdf5_dump_dir <- file.path(dir, "HDF5Array_dump")
+    writeLines(c("library(HDF5Array)",
+                 sprintf("setHDF5DumpDir(\"%s\")", hdf5_dump_dir)),
+               con)
+    close(con)
+
+    registryargs <- batchtoolsRegistryargs(file.dir=file.path(dir, "registry"),
+                                           work.dir=dir, packages="GSVA",
+                                           source="gsvainit.R")
+
+    BTPARAM <- BatchtoolsParam(workers=nodes, cluster="slurm",
+                               jobname="gsva",
+                               resources=list(ncpus=ncpus_per_task,
+                                              partition=partition,
+                                              walltime=walltime,
+                                              memory=mem),
+                               registryargs=registryargs,
+                               stop.on.error=TRUE, log=TRUE, logdir=dir)
+    return(BTPARAM)
+} # nocov end
+
+
+## private functions
+
+    MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
         rng <- X
         res <- whdim <- NULL
         parallelbackend <- MulticoreParam(workers=ncpus)
@@ -210,171 +375,6 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
         }
         return(res)
     }
-
-    gridsizefun <- .colgridsize
-    splitinrangesfun <- .splitColsInRanges
-
-    funargs <- list()
-    assay <- NA_character_
-
-    if (identical(FUN, gsvaRowNorm)) {
-
-        funargs <- c(funargs, list(param=inputData,
-                                   dropExistingAssays=TRUE,
-                                   errorOnTooFewRows=FALSE))
-        gridsizefun <- .rowgridsize
-        splitinrangesfun <- .splitRowsInRanges
-        assay <- get_assay(inputData)
-
-    } else if (identical(FUN, gsvaColRanks)) {
-
-        if (!"gsvarnorm" %in% gsvaAssayNames(inputData))
-            cli_abort(c("x"=paste("FUN=gsvaColRanks requires inputData with",
-                                  "row-normalized expression values.")))
-
-        funargs <- c(funargs, list(rowNormExprData=inputData,
-                                   dropExistingAssays=TRUE))
-        assay <- "gsvarnorm"
-
-    } else if (identical(FUN, gsvaColScores)) {
-
-        if (!is.list(inputData)) {
-            if (!"gsvaranks" %in% gsvaAssayNames(inputData))
-                cli_abort(c("x"=paste("FUN=gsvaColScores requires inputData",
-                                      "with column rank values.")))
-
-            funargs <- c(funargs, list(rankExprData=inputData))
-        } else
-            funargs <- c(funargs, list(recompute_nzcount=TRUE))
-        assay <- "gsvaranks"
-
-    } else
-        cli_abort(c("x"="Internal error, invalid FUN argument."))
-
-    path2save <- ""
-    if (returnPath)
-        path2save <- path.expand(BTPARAM$registryargs$work.dir)
-
-    X <- inputData
-    totalInputDim <- NULL
-    if (!is.list(X)) {
-        grid <- gridsizefun(unwrapData(get_exprData(inputData), assay),
-                            nworkers, maxmem)
-        X <- splitinrangesfun(grid)
-        totalInputDim <- dim(get_exprData(inputData))
-    } else {
-        if (is.null(attributes(X)$totalInputDim))
-            cli_abort(c("x"=paste("If inputData is a list, it must contain",
-                                  "the attribute 'totalInputDim'.")))
-        totalInputDim <- attributes(X)$totalInputDim
-    }
-
-    res <- do.call("bplapply", args=c(list(X=X, FUN=FUN_WRAPPER,
-                                           WRAPPED_FUN=FUN, path2save=path2save,
-                                           ncpus=ncpus, maxmem=maxmem,
-                                           BPPARAM=BTPARAM), funargs))
-    attributes(res)$totalInputDim <- totalInputDim
-
-    return(res)
-}
-
-#' @importFrom cli cli_abort
-#' @importFrom BiocGenerics rbind cbind
-#' @rdname map-reduce
-#' @export gsvaReduce
-gsvaReduce <- function(mapOutput, verbose=TRUE) {
-    if (!is.list(mapOutput))
-        cli_abort(c("x"="argument 'mapOutput' must be a list."))
-
-    cls <- unique(lapply(mapOutput, class))
-    if (length(cls) > 1)
-        cli_abort(c("x"="All inputs must be of the same class."))
-
-    totalInputDim <- attributes(mapOutput)$totalInputDim
-    if (is.null(totalInputDim))
-        cli_abort(c("x"=paste("The input list argument in 'mapOutput' must",
-                              "contain the attribute 'totalInputDim'.")))
-
-    if (is.character(mapOutput[[1]])) {
-        mapOutput <- lapply(mapOutput, function(x) {
-            if (!dir.exists(x))
-                cli_abort(c("x"="Cannot find {x}."))
-            loadHDF5GSVA(x)
-        })
-    }
-
-    param <- .pull_param(mapOutput[[1]])
-    nrmdata <- .pull_nonrestrict_metadata(mapOutput[[1]])
-    rmdata <- .pull_restrict_metadata_list(mapOutput)
-    ord <- .check_and_order_restrict_metadata(rmdata, totalInputDim)
-    mapOutput <- .strip_metadata(mapOutput)
-
-    if (is.null(rmdata[[1]]$whdim))
-        cli_abort(c("x"=paste("The input list argument in 'mapOutput' must",
-                              "contain the 'restrict' metadata with the",
-                              "element 'whdim'.")))
-
-    bfun <- "rbind"
-    if (rmdata[[1]]$whdim == 2)
-        bfun <- "cbind"
-    res <- do.call(bfun, mapOutput[ord])
-    res <- .add_metadata(res, param, nrmdata)
-
-    rem <- vapply(rmdata, function(x) x$rem, numeric(1))
-    if (dim(res)[rmdata[[1]]$whdim]+sum(rem) != totalInputDim[rmdata[[1]]$whdim])
-        cli_abort(c("x"=paste("The combined output object does not match the",
-                              "expected dimensions of the input data.")))
-
-    return(res)
-}
-
-#' @importFrom BiocParallel BatchtoolsParam batchtoolsRegistryargs
-#' @importFrom cli cli_alert_warning cli_abort
-#' @rdname map-reduce
-#' @export gsvaBatchtoolsSlurmParam
-gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
-                                     nodes=2, ncpus_per_task=2, mem="10G") {
-
-    if (dir.exists(dir))
-        cli_alert_warning("The directory {dir} already exists.")
-    else
-        dir.create(dir, recursive=TRUE)
-
-    dir <- normalizePath(dir, mustWork=TRUE)
-
-    if (missing(partition) || is.null(partition) || !is.character(partition))
-        cli_abort(c("x"=paste("You must provide a valid partition name",
-                              "for the Slurm cluster.")))
-
-    ## automatically created HDF5 datasets should be stored in a filesystem
-    ## path that is reachable by all compute nodes, instead of the default
-    ## tempdir() path, which is local to each compute node. this also means
-    ## that, at least by now, the user must manually delete those HDF5 files
-    ## after the GSVA calculations are finished
-    con <- file(file.path(dir, "gsvainit.R"))
-    hdf5_dump_dir <- file.path(dir, "HDF5Array_dump")
-    writeLines(c("library(HDF5Array)",
-                 sprintf("setHDF5DumpDir(\"%s\")", hdf5_dump_dir)),
-               con)
-    close(con)
-
-    registryargs <- batchtoolsRegistryargs(file.dir=file.path(dir, "registry"),
-                                           work.dir=dir, packages="GSVA",
-                                           source="gsvainit.R")
-
-    BTPARAM <- BatchtoolsParam(workers=nodes, cluster="slurm",
-                               jobname="gsva",
-                               resources=list(ncpus=ncpus_per_task,
-                                              partition=partition,
-                                              walltime=walltime,
-                                              memory=mem),
-                               registryargs=registryargs,
-                               stop.on.error=TRUE, log=TRUE, logdir=dir)
-    return(BTPARAM)
-}
-
-
-## private functions
 
 #' @importFrom S4Vectors metadata
 .pull_nonrestrict_metadata <- function(x) {
