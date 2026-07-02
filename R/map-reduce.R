@@ -200,10 +200,19 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
         totalInputDim <- attributes(X)$totalInputDim
     }
 
-    res <- do.call("bplapply", args=c(list(X=X, FUN=MAP_FUN_WRAPPER,
-                                           WRAPPED_FUN=FUN, path2save=path2save,
-                                           ncpus=ncpus, maxmem=maxmem,
-                                           BPPARAM=BTPARAM), funargs))
+    res <- NULL
+    if (nworkers > 1)
+        res <- do.call("bplapply", args=c(list(X=X, FUN=MAP_FUN_WRAPPER,
+                                               WRAPPED_FUN=FUN,
+                                               path2save=path2save,
+                                               ncpus=ncpus, maxmem=maxmem,
+                                               BPPARAM=BTPARAM), funargs))
+    else ## mainly to be able to unit test this
+        res <- do.call("lapply", args=c(list(X=X, FUN=MAP_FUN_WRAPPER,
+                                             WRAPPED_FUN=FUN,
+                                             path2save=path2save,
+                                             ncpus=ncpus, maxmem=maxmem),
+                                        funargs))
     attributes(res)$totalInputDim <- totalInputDim
 
     return(res)
@@ -307,74 +316,77 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
 
 ## private functions
 
-    MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
-        rng <- X
-        res <- whdim <- NULL
+MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
+    rng <- X
+    res <- whdim <- NULL
+    parallelbackend <- SerialParam()
+    if (ncpus > 1) {
         parallelbackend <- MulticoreParam(workers=ncpus)
         if (.Platform$OS.type != "unix")
             parallelbackend <- SnowParam(workers=ncpus)
+    }
 
-        if (is(X, "IRanges")) {
-            res <- WRAPPED_FUN(..., first=start(rng), last=end(rng),
-                               verbose=FALSE,
-                               BPPARAM=parallelbackend,
-                               maxmem=maxmem)
-        } else {
-            rem <- 0
-            if (is(X, "SummarizedExperiment")) {
-                if (is.null(metadata(X)$restrict))
-                    cli_abort(c("x"=paste("Input object must contain 'restrict'",
-                                          "metadata with chunk boundaries.")))
-                rng <- IRanges(start=metadata(X)$restrict$first,
-                               end=metadata(X)$restrict$last)
-                rem <- metadata(X)$restrict$rem
-                whdim <- metadata(X)$restrict$whdim
-            } else if (is(X, "GsvaExprData")) {
-                if (is.null(attributes(X)$restrict))
-                    cli_abort(c("x"=paste("Input object must contain 'restrict'",
-                                          "metadata with chunk boundaries.")))
-                rng <- IRanges(start=attributes(X)$restrict$first,
-                               end=attributes(X)$restrict$last)
-                rem <- attributes(X)$restrict$rem
-                whdim <- attributes(X)$restrict$whdim
-            } ## if X is path WRAPPED_FUN loads object and metadata from disk
+    if (is(X, "IRanges")) {
+        res <- WRAPPED_FUN(..., first=start(rng), last=end(rng),
+                           verbose=FALSE,
+                           BPPARAM=parallelbackend,
+                           maxmem=maxmem)
+    } else {
+        rem <- 0
+        if (is(X, "SummarizedExperiment")) {
+            if (is.null(metadata(X)$restrict))
+                cli_abort(c("x"=paste("Input object must contain 'restrict'",
+                                      "metadata with chunk boundaries.")))
+            rng <- IRanges(start=metadata(X)$restrict$first,
+                           end=metadata(X)$restrict$last)
+            rem <- metadata(X)$restrict$rem
+            whdim <- metadata(X)$restrict$whdim
+        } else if (is(X, "GsvaExprData")) {
+            if (is.null(attributes(X)$restrict))
+                cli_abort(c("x"=paste("Input object must contain 'restrict'",
+                                      "metadata with chunk boundaries.")))
+            rng <- IRanges(start=attributes(X)$restrict$first,
+                           end=attributes(X)$restrict$last)
+            rem <- attributes(X)$restrict$rem
+            whdim <- attributes(X)$restrict$whdim
+        } ## if X is path WRAPPED_FUN loads object and metadata from disk
 
-            res <- WRAPPED_FUN(X, ..., verbose=FALSE,
-                               BPPARAM=parallelbackend,
-                               maxmem=maxmem)
+        res <- WRAPPED_FUN(X, ..., verbose=FALSE,
+                           BPPARAM=parallelbackend,
+                           maxmem=maxmem)
 
-            if (is(X, "SummarizedExperiment")) {
-                metadata(res)$restrict <- list(first=start(rng),
-                                               last=end(rng),
-                                               rem=rem,
-                                               whdim=whdim)
-            } else if (is(X, "GsvaExprData")) {
-                attributes(res)$restrict <- list(first=start(rng),
-                                                 last=end(rng),
-                                                 rem=rem,
-                                                 whdim=whdim)
-            } else { ## X is a path, restrict metadata is in the loaded object
-                if (is(res, "SummarizedExperiment")) {
-                    rng <- IRanges(start=metadata(res)$restrict$first,
-                                   end=metadata(res)$restrict$last)
-                } else if (is(res, "GsvaExprData")) {
-                    rng <- IRanges(start=attributes(res)$restrict$first,
-                                   end=attributes(res)$restrict$last)
-                }
+        if (is(X, "SummarizedExperiment")) {
+            metadata(res)$restrict <- list(first=start(rng),
+                                           last=end(rng),
+                                           rem=rem,
+                                           whdim=whdim)
+        } else if (is(X, "GsvaExprData")) {
+            attributes(res)$restrict <- list(first=start(rng),
+                                             last=end(rng),
+                                             rem=rem,
+                                             whdim=whdim)
+        } else { ## X is a path, restrict metadata is in the loaded object
+            if (is(res, "SummarizedExperiment")) {
+                rng <- IRanges(start=metadata(res)$restrict$first,
+                               end=metadata(res)$restrict$last)
+            } else if (is(res, "GsvaExprData")) {
+                rng <- IRanges(start=attributes(res)$restrict$first,
+                               end=attributes(res)$restrict$last)
             }
         }
-        if (nchar(path2save) > 0) {
-            fname <- file.path(path2save, sprintf("%s_%d_%d",
-                                                  basename(tempfile()),
-                                                  start(rng), end(rng)))
-            if (dir.exists(fname))
-                cli_abort(c("x"=paste("cannot save results to {fname} because",
-                                      "it already exists. You probably should",
-                                      "delete the contents of {path2save}.")))
-            res <- saveHDF5GSVA(res, fname)
-        }
-        return(res)
     }
+    if (nchar(path2save) > 0) {
+        fname <- file.path(path2save, sprintf("%s_%d_%d",
+                                              basename(tempfile()),
+                                              start(rng), end(rng)))
+        if (dir.exists(fname))
+            cli_abort(c("x"=paste("cannot save results to {fname} because",
+                                  "it already exists. You probably should",
+                                  "delete the contents of {path2save}.")))
+        res <- saveHDF5GSVA(res, fname)
+    }
+    return(res)
+}
 
 #' @importFrom S4Vectors metadata
 .pull_nonrestrict_metadata <- function(x) {
@@ -529,8 +541,8 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
 
     if (is.null(BTPARAM$resources$memory)) {
         cli_alert_warning(c("x"=paste("{.arg BTPARAM} has no memory element",
-                            "in its resources. Assuming memory=1G")))
-        BTPARAM$resources$memory <- "1G"
+                            "in its resources. Using all available memory")))
+        BTPARAM$resources$memory <- Inf
     }
 
     if (is.null(BTPARAM$registryargs))

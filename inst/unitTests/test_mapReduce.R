@@ -5,6 +5,7 @@ test_mapReduce <- function() {
     suppressPackageStartupMessages({
         library(Matrix)
         library(GSEABase)
+        library(BiocParallel)
         library(SingleCellExperiment)
         library(scrapper)
     })
@@ -51,7 +52,8 @@ test_mapReduce <- function() {
     gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
 
     ## calculate column rank values with map-reduce
-    gsvamapranks <- gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE)
+    btpar <- BatchtoolsParam(workers=1) ## just to force unit testing internal MAP_FUN_WRAPPER()
+    gsvamapranks <- gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE, BTPARAM=btpar)
     gsvaredranks <- gsvaReduce(gsvamapranks, verbose=FALSE)
 
     ## check that both approaches yield the same column rank values
