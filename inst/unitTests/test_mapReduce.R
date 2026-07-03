@@ -93,7 +93,8 @@ test_mapReduce <- function() {
 
     ## calculate column GSVA scores with map-reduce on mapped ranks
     gsvaesmaprnkred <- gsvaReduce(gsvaMap(gsvaColScores, gsvamapranks,
-                                          verbose=FALSE), verbose=FALSE)
+                                          verbose=FALSE, BTPARAM=btpar),
+                                  verbose=FALSE)
 
     ## check that we obtain the same column GSVA scores as before
     checkEqualsNumeric(assay(gsvaes, "es"),

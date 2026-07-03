@@ -350,9 +350,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 
 .check_bpparam <- function(BPPARAM) {
     if (!is(BPPARAM, "BiocParallelParam")) {
-        msg <- paste("Argument 'BPPARAM' must be a",
-                     "'BiocParallelParam' derivative. Please",
-                     "consult the BiocParallel package.")
+        msg <- paste("Argument 'BPPARAM' must be a 'BiocParallelParam'",
+                     "derivative. Please consult the BiocParallel package.")
         cli_abort(c("x"=msg))
     }
 }
@@ -361,9 +360,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                                           ondisk, verbose) {
     if (method != "GSVA" && is_sparse(expr)) { 
         msg <- paste("Input expression data is sparse, but the {method}",
-                     "algorithm does not deal with sparsity",
-                     "in any specific way, and data will be",
-                     "converted into a dense matrix format")
+                     "algorithm does not deal with sparsity in a specific way,",
+                     "and data will be converted into a dense matrix format")
         cli_alert_warning(msg)
     }
 
@@ -551,16 +549,12 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     if (missing(assay) || is.na(assay)) {
         assay <- names(assays(container))[1]
     } else {
-        if (!is.character(assay)) {
-            msg <- "The 'assay' argument must contain a character string."
-            cli_abort(c("x"=msg))
-        }
+        if (!is.character(assay))
+            cli_abort(c("x"="The 'assay' argument must be a character string."))
         assay <- assay[1]
-        if (!assay %in% names(assays(container))) {
-            msg <- paste("Assay {assay} not found in the input",
-                         "{container_class} object.")
-            cli_abort(c("x"=msg))
-        }
+        if (!assay %in% names(assays(container)))
+            cli_abort(c("x"=paste("assay {assay} not found in the input",
+                                  "{container_class} object.")))
     }
 
     assay
@@ -785,16 +779,12 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         ondisk <- "no"
         if (as.numeric(sze) > maxmem) {
             ondisk <- "yes"
-            if (is(X, "DelayedArray") && verbose) {
-                msg <- paste("On-disk input data does not fit in the maximum",
-                             "available main memory")
-                cli_alert_info(msg)
-            }
-        } else if (is(X, "DelayedArray") && verbose) {
-            msg <- paste("On-disk input data fits in the maximum available",
-                         "main memory")
-            cli_alert_info(msg)
-        }
+            if (is(X, "DelayedArray") && verbose)
+                cli_alert_info(paste("On-disk input data does not fit in the",
+                                     "maximum available main memory"))
+        } else if (is(X, "DelayedArray") && verbose)
+            cli_alert_info(paste("On-disk input data fits in the maximum",
+                                 "available main memory"))
 
     } else if (ondisk != "yes" && ondisk != "no")
         cli_abort(c("x"="'ondisk' should be either 'auto', 'yes' or 'no'"))
@@ -895,28 +885,16 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 
     if (.isNumLength1(first) && .isNumLength1(last)) {
         if (first < 1 || last < 1 || first != as.integer(first) ||
-            last != as.integer(last)) {
-            msg <- paste("arguments 'first' and 'last' must be",
-                         "positive integers.")
-            cli_abort(c("x"=msg))
-        }
-        if (first > last) {
-            msg <- paste("argument 'first' must be smaller or equal than",
-                         "argument 'last'.")
-            cli_abort(c("x"=msg))
-        }
-    } else {
-        msg <- paste("arguments 'first' and 'last' must be numeric vectors of",
-                     "length 1.")
-        cli_abort(c("x"=msg))
-    }
+            last != as.integer(last))
+            cli_abort(c("x"="'first' and 'last' must be positive integers."))
+        if (first > last)
+            cli_abort(c("x"="'first' must be smaller or equal than 'last'."))
+    } else
+        cli_abort(c("x"="'first' and 'last' must be a single number."))
 
-    if (first > dimfun(X) || last > dimfun(X)) {
-        msg <- paste("arguments 'first' and 'last' must be smaller or equal",
-                     "than the number of {dimname} of the input expression",
-		     "data.")
-        cli_abort(c("x"=msg))
-    }
+    if (first > dimfun(X) || last > dimfun(X))
+        cli_abort(c("x"=paste("'first' and 'last' must be smaller or equal than",
+                              "the number of {dimname} in the input data")))
 
     return(list(first=first, last=last))
 }

@@ -124,9 +124,7 @@
 #' gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar))
 #' }
 #'
-#' @importFrom BiocParallel BatchtoolsParam bpnworkers MulticoreParam SnowParam
-#' @importFrom BiocParallel bplapply
-#' @importFrom IRanges IRanges start end
+#' @importFrom BiocParallel BatchtoolsParam bpnworkers bplapply
 #' @rdname map-reduce
 #' @export gsvaMap
 gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
@@ -316,6 +314,8 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
 
 ## private functions
 
+#' @importFrom BiocParallel SerialParam MulticoreParam SnowParam
+#' @importFrom IRanges IRanges start end
 MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
     rng <- X
     res <- whdim <- NULL
@@ -326,12 +326,12 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
             parallelbackend <- SnowParam(workers=ncpus)
     }
 
-    if (is(X, "IRanges")) {
+    if (is(X, "IRanges")) { ## input is splitted in chunks
         res <- WRAPPED_FUN(..., first=start(rng), last=end(rng),
                            verbose=FALSE,
                            BPPARAM=parallelbackend,
                            maxmem=maxmem)
-    } else {
+    } else {                ## input was already splitted in chunks
         rem <- 0
         if (is(X, "SummarizedExperiment")) {
             if (is.null(metadata(X)$restrict))
