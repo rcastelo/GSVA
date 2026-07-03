@@ -63,15 +63,22 @@ setMethod("details",
 
 ## ----- getters -----
 
-setMethod("get_exprData", signature("GsvaMethodParam"),
-          function(object) {
-              return(object@exprData)
-          })
+## somehow a method get_exprData() cannot dispatch on the members of the
+## SummarizedExperiment class and the union GsvaExprData class hierarchy,
+## and we would have to define one for each of them separately; see
+## https://github.com/rcastelo/GSVA/issues/156
+## https://stat.ethz.ch/pipermail/bioc-devel/2025-January/020788.html
+## for this reason we define this getter using a function
 
-setMethod("get_exprData", signature("GsvaExprData"),
-          function(object) {
-              return(object)
-          })
+## @importFrom cli cli_abort
+get_exprData <- function(object) {
+    if (is(object, "GsvaMethodParam"))
+        return(object@exprData)
+    else if (is(object, "GsvaExprData"))
+        return(object)
+    else
+        cli_abort("object must be either 'GsvaMethodParam' or 'GsvaExprData'")
+}
 
 setMethod("get_geneSets", signature("GsvaMethodParam"),
           function(object) {
@@ -162,32 +169,23 @@ setMethod("gsvaShow",
 
 
 ## ----- uniform access to assay names -----
+## somehow a method gsvaAssayNames() cannot dispatch on the members of the
+## SummarizedExperiment class and the union GsvaExprData class hierarchy,
+## and we would have to define one for each of them separately; see
+## https://github.com/rcastelo/GSVA/issues/156
+## https://stat.ethz.ch/pipermail/bioc-devel/2025-January/020788.html
+## for this reason we define this getter using a function
 
-setMethod("gsvaAssayNames",
-          signature=signature(object="GsvaExprData"),
-          function(object) {
-              if (!is.null(attr(object, "assay")))
-                  return(attr(object, "assay"))
-              return(NA_character_)
-          })
-
+#' @importFrom cli cli_abort
 #' @importFrom SummarizedExperiment assayNames
-setMethod("gsvaAssayNames", signature("SummarizedExperiment"),
-          function(object) {
-              a <- assayNames(object)
-              return(if(.isCharNonEmpty(a)) a else NA_character_)
-          })
-
-#' @importFrom SummarizedExperiment assayNames
-setMethod("gsvaAssayNames", signature("SingleCellExperiment"),
-          function(object) {
-              a <- assayNames(object)
-              return(if(.isCharNonEmpty(a)) a else NA_character_)
-          })
-
-#' @importFrom SummarizedExperiment assayNames
-setMethod("gsvaAssayNames", signature("SpatialExperiment"),
-          function(object) {
-              a <- assayNames(object)
-              return(if(.isCharNonEmpty(a)) a else NA_character_)
-          })
+gsvaAssayNames <- function(object) {
+    if (is(object, "SummarizedExperiment")) {
+        a <- assayNames(object)
+        return(if(.isCharNonEmpty(a)) a else NA_character_)
+    } else if (is(object, "GsvaExprData")) {
+        if (!is.null(attr(object, "assay")))
+            return(attr(object, "assay"))
+        return(NA_character_)
+    } else
+        cli_abort("object must be either 'SummarizedExperiment' or 'GsvaExprData'")
+}

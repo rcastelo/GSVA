@@ -51,8 +51,6 @@ setGeneric("wrapData",
 setGeneric("mapGeneSetsToAnno",
            function(geneSets, anno, ...) standardGeneric("mapGeneSetsToAnno"))
 
-setGeneric("get_exprData", function(object) standardGeneric("get_exprData"))
-
 setGeneric("get_geneSets", function(object) standardGeneric("get_geneSets"))
 
 setGeneric("get_assay", function(object) standardGeneric("get_assay"))
@@ -64,8 +62,6 @@ setGeneric("get_minSize", function(object) standardGeneric("get_minSize"))
 setGeneric("get_maxSize", function(object) standardGeneric("get_maxSize"))
 
 setGeneric("gsvaShow", function(object) standardGeneric("gsvaShow"))
-
-setGeneric("gsvaAssayNames", function(object) standardGeneric("gsvaAssayNames"))
 
 ## spatial methods
 

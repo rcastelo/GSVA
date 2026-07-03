@@ -73,7 +73,7 @@ test_mapReduce <- function() {
 
     ## calculate column rank values with map-reduce returning paths to results
     gsvamapranksfls <- gsvaMap(gsvaColRanks, gsvarnorm, returnPath=TRUE,
-                               verbose=FALSE)
+                               verbose=FALSE, BTPARAM=btpar)
     gsvaredranksfls <- gsvaReduce(gsvamapranksfls, verbose=FALSE)
 
     ## check that this approach also yields the same column rank values
@@ -103,7 +103,7 @@ test_mapReduce <- function() {
     ## calculate column GSVA scores with map-reduce on mapped ranks stored in
     ## temporary files
     gsvaesmaprnkflsred <- gsvaReduce(gsvaMap(gsvaColScores, gsvamapranksfls,
-                                             verbose=FALSE),
+                                             verbose=FALSE, BTPARAM=btpar),
                                      verbose=FALSE)
 
     ## check that we obtain the same column GSVA scores as before
@@ -119,4 +119,17 @@ test_mapReduce <- function() {
     ## check that we obtain the same column GSVA scores as before
     checkEqualsNumeric(assay(gsvaes, "es"),
                        assay(gsvaesmaprnkflsredfls, "es"))
+
+    ## check with input expression data stored in a matrix
+    expr <- as(logcounts(sce), "matrix")
+    gsvapar <- gsvaParam(expr, gsets, verbose=FALSE)
+    gsvaes <- gsva(gsvapar, verbose=FALSE)
+    ## set returnPath=TRUE once to test stripping of attributes and wrapping into an SE for saving
+    gsvarnorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, returnPath=TRUE, verbose=FALSE, BTPARAM=btpar),
+                            verbose=FALSE)
+    gsvaranks <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE, BTPARAM=btpar),
+                            verbose=FALSE)
+    gsvaes2 <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, verbose=FALSE, BTPARAM=btpar),
+                          verbose=FALSE)
+    checkEqualsNumeric(gsvaes, gsvaes2)
 }
