@@ -80,7 +80,7 @@ gsva_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, int n,
 
 void
 gsva_sparse_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, int n,
-                     double tau, int nzeros, int zerosymrnkstat,
+                     double tau, int nzeros, double zerosymrnkstat,
                      double* walkstat, double* walkstatpos, double* walkstatneg) {
   int     nnz, gset_nnz, gset_nzeros;
   int*    gsetrnk;
@@ -128,7 +128,10 @@ gsva_sparse_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, i
 
   if (gset_nzeros > 0) { /* if there are zero expression values in the gene set */
     int*   gsetrnk_zeros;
-    double step = (double) (nzeros - 1) / (double) (gset_nzeros + 1);
+    double step = 0;
+   
+    if (gset_nzeros > 1)
+      step = (double) (nzeros - 1) / (double) (gset_nzeros - 1);
 
     gsetrnk_zeros = R_Calloc(gset_nzeros, int);
     for (int i=0; i < gset_nzeros; i++)
@@ -419,13 +422,13 @@ void
 ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
             FetchColFunDef fetch_col,
             int* decordstat_col, double* symrnkstat_col,
-            int* nzeros_col, int* zerosymrnkstat);
+            int* nzeros_col, double* zerosymrnkstat);
 
 void
 ranks2stats_nas(SEXP ranksR, int p, int n, int j, Rboolean sparse,
                 FetchColFunDef fetch_col,
                 int* decordstat_col, double* symrnkstat_col,
-                int* nzeros_col, int* zerosymrnkstat, int* nnas);
+                int* nzeros_col, double* zerosymrnkstat, int* nnas);
 
 SEXP
 gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
@@ -452,7 +455,7 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
   int*     decordstat_col;
   double*  symrnkstat_col;
   int      nzeros_col=0;
-  int      zerosymrnkstat=0;
+  double   zerosymrnkstat=0;
   FetchColFunDef fetch_col;
 
   fetch_col = find_dim_and_fetchcolfun(ranksR, intrnks, &dimranks);
@@ -560,7 +563,7 @@ void
 ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
             FetchColFunDef fetch_col,
             int* decordstat_col, double* symrnkstat_col,
-            int* nzeros_col, int* zerosymrnkstat) {
+            int* nzeros_col, double* zerosymrnkstat) {
   int* r = R_Calloc(p, int);       /* assume 0s are set */
   int* r_dense = R_Calloc(p, int); /* assume 0s are set */
   int  nnz, nzs;
@@ -615,7 +618,7 @@ void
 ranks2stats_nas(SEXP ranksR, int p, int n, int j, Rboolean sparse,
                 FetchColFunDef fetch_col,
                 int* decordstat_col, double* symrnkstat_col,
-                int* nzeros_col, int* zerosymrnkstat, int* nnas) {
+                int* nzeros_col, double* zerosymrnkstat, int* nnas) {
   int* r = R_Calloc(p, int);       /* assume 0s are set */
   int* r_dense = R_Calloc(p, int); /* assume 0s are set */
   int  nnz, nzs;
