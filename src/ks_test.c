@@ -111,7 +111,7 @@ gsva_rnd_walk_nas(int* gsetidx, int k, int* decordstat, double* symrnkstat, int 
     for (int i=0; i < n; i++)
       stepcdfoutgeneset[i] = 1;
 
-    for (int i=0; i < k; i++) {
+    for (int i=0; i < k_notna; i++) {
       /* convert 1-based gene indices to 0-based ! */
       if (tau == 1)
         stepcdfingeneset[gsetrnk[i]-1] = symrnkstat[gsetidx_wonas[i]-1];
