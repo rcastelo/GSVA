@@ -20,14 +20,18 @@ test_spatial <- function() {
     granulecellmarkers <- c("SLC17A7", "RBFOX3", "PAX6", "KCND2")
     granulecellmarkers <- mapIds(org.Hs.eg.db, granulecellmarkers,
 				 "ENSEMBL", "SYMBOL")
+    ## remove when GSVAdata 1.49.1 is available on the Bioconductor build system
+    microgliamarkers <- c("ENSG00000078808", "ENSG00000116251",
+                          "ENSG00000142583", "ENSG00000173372")
 
     gsets <- list(gset1=sample(rownames(spe), size=4, replace=FALSE),
                   gset2=sample(rownames(spe), size=4, replace=FALSE),
-		  granulecells=granulecellmarkers)
+                  microglia=microgliamarkers)         ## remove when GSVAdata 1.49.1 is available on the Bioconductor build system
+                  ## granulecells=granulecellmarkers) ## and uncomment this line
 
     ## calculate GSVA enrichment scores and check output
-    gsvapar <- gsvaParam(spe, gsets, verbose=FALSE)
-    es <- gsva(gsvapar, verbose=FALSE)
+    gsvapar <- gsvaParam(spe, gsets, verbose=TRUE)
+    es <- gsva(gsvapar, verbose=TRUE)
     checkTrue(is(es, "SpatialExperiment"))
     checkTrue(all(dim(es) == c(length(gsets), ncol(spe))))
     checkTrue(all(colnames(es) == colnames(spe)))
