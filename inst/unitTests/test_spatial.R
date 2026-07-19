@@ -20,14 +20,10 @@ test_spatial <- function() {
     granulecellmarkers <- c("SLC17A7", "RBFOX3", "PAX6", "KCND2")
     granulecellmarkers <- mapIds(org.Hs.eg.db, granulecellmarkers,
 				 "ENSEMBL", "SYMBOL")
-    ## remove when GSVAdata 1.49.1 is available on the Bioconductor build system
-    microgliamarkers <- c("ENSG00000078808", "ENSG00000116251",
-                          "ENSG00000142583", "ENSG00000173372")
 
     gsets <- list(gset1=sample(rownames(spe), size=4, replace=FALSE),
                   gset2=sample(rownames(spe), size=4, replace=FALSE),
-                  microglia=microgliamarkers)         ## remove when GSVAdata 1.49.1 is available on the Bioconductor build system
-                  ## granulecells=granulecellmarkers) ## and uncomment this line
+                  granulecells=granulecellmarkers)
 
     ## calculate GSVA enrichment scores and check output
     gsvapar <- gsvaParam(spe, gsets, verbose=TRUE)
@@ -42,6 +38,6 @@ test_spatial <- function() {
 
     ## comment until GSVAdata 1.49.1 is available on the Bioconductor build system
     ## calculate spatial autocorrelation on the GSVA enrichment scores
-    ## r <- spatCor(es, verbose=FALSE)
-    ## checkTrue(all(r$observed[r$gene_id == "granulecells"] > r$observed[r$gene_id != "granulecells"]))
+    r <- spatCor(es, verbose=FALSE)
+    checkTrue(all(r$observed[r$gene_id == "granulecells"] > r$observed[r$gene_id != "granulecells"]))
 }
