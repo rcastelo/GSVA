@@ -1,0 +1,280 @@
+---
+title: "GSVA on spatial omics data"
+author:
+- name: Robert Castelo
+  affiliation:
+  - &idupf Dept. of Medicine and Life Sciences, Universitat Pompeu Fabra, Barcelona, Spain
+  email: robert.castelo@upf.edu
+- name: Pere Moles
+  affiliation: *idupf
+  email: pere.moles@upf.edu
+- name: Justin Guinney 
+  affiliation: 
+  - Tempus Labs, Inc.
+  email: justin.guinney@tempus.com
+abstract: >
+  Here we illustrate how to use GSVA with spatial omics data.
+date: "`r BiocStyle::doc_date()`"
+package: "`r pkg_ver('GSVA')`"
+vignette: >
+  %\VignetteIndexEntry{GSVA on spatial omics data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteKeywords{GeneExpression, Microarray, RNAseq, GeneSetEnrichment, Pathway}
+output:
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    fig_captions: yes
+bibliography: GSVA.bib
+---
+
+**License**: `r packageDescription("GSVA")[["License"]]`
+
+```{r setup, include=FALSE}
+options(width=80)
+knitr::opts_chunk$set(collapse=TRUE,
+                      message=FALSE,
+                      warning=FALSE,
+                      comment="",
+                      fig.align="center",
+                      fig.wide=TRUE)
+```
+
+# Introduction
+
+GSVA provides now specific support for spatial omics data in the algorithm
+that runs through the `gsvaParam()` parameter constructor, and originally
+described in the publication by @haenzelmann2013gsva. At the moment, this
+specific support consists of the following features:
+
+  * The currently available container for spatial omics data that allows one
+    to input additional row and column metadata, and spatial coordinates, is a
+    `SpatialExperiment` object.
+  * While the input spatial omics data is always sparse, the output of enrichment
+    scores will be always dense, and therefore, the container storing those
+    scores will be different from the input data, typically a `matrix` or a
+    dense `DelayedMatrix` object using an `HDF5Matrix` backend. The latter will
+    be particularly used when the total number of values exceeds 2^31, which is
+    the largest 32-bit standard integer value in R.
+  * By default, when the input expression data is stored in a sparse data
+    container, as it typically happens with spatial omics data, then a sparse
+    regime of the GSVA algorithm will run, if GSVA is the chosen method, by
+    which nonzero values are treated differently from zero values, leading to
+    slightly different results than those obtained by applying the classical
+    GSVA algorithm. If we set the parameter `sparse=FALSE` in the call to
+    `gsvaParam()`, the classical GSVA algorithm will be used, which for a
+    typical spatial omics data set will result in longer running times and larger
+    memory consumption than running it in the default sparse regime for this
+    type of data.
+  * The GSVA algorithm can be run either at once through a call to `gsva()`
+    with a parameter object or in three steps: (1) row normalization with
+    `gsvaRowNorm()`; (2) column rank transformation with `gsvaColRanks()`;
+    and (3) column enrichment scores calculation with `gsvaColScores()`.
+    Splitting the GSVA algorithm into these three steps allows one to distribute
+    and balance the computational load of the algorithm in a high-performance
+    computing (HPC) environment with multiple nodes, and to reuse the output of
+    the first two steps, which are independent of the gene sets, to calculate
+    enrichment scores for different collections of gene sets, without having to
+    repeat the first two steps.
+
+In what follows, we will illustrate the use of GSVA on a publicly available
+spatial transcriptomics transcriptomics data set published by
+@maynard2021transcriptome, which is available through the `r Biocpkg("spatialLIBD")`
+package, and which contains 12 samples of human dorsolateral prefrontal cortex
+(DLPFC) tissue.
+
+# Import data
+
+We import the DLPFC data using the `r Biocpkg("spatialLIBD")` package, as a
+`r Biocpkg("SpatialExperiment")` object, following the instructions at
+http://research.libd.org/spatialLIBD/articles/spatialLIBD.html.
+
+```{r, message=FALSE, warning=FALSE}
+library(SpatialExperiment)
+library(ExperimentHub)
+library(spatialLIBD)
+
+ehub <- ExperimentHub()
+spe <- fetch_data(type="spe", eh=ehub)
+```
+Note that this data set contains 12 samples.
+
+```{r}
+table(spe$sample_id)
+```
+For the purpose of speeding up processing this vignette, we will analyze here
+only the sample with identifier `151673`.
+
+```{r}
+spe <- spe[, spe$sample_id == "151673"]
+dim(spe)
+```
+There is an indicator column called `in_tissue` for identifying spots
+overlapping the tissue, but apparently all spots have such a condition.
+
+```{r}
+stopifnot(all(colData(spe)$in_tissue))
+```
+The column data includes a column called `spatialLIBD` with anatomically
+annotated groups of spots (six cortical layers from the grey matter and the
+white matter). This annotation is apparently missing for a small number of
+spots, we are going to discard those spots.
+
+```{r}
+table(colData(spe)$spatialLIBD, useNA="always")
+spe <- spe[, !is.na(colData(spe)$spatialLIBD)]
+dim(spe)
+table(colData(spe)$spatialLIBD, useNA="always")
+```
+
+# Quality control and pre-processing
+
+Here, we perform a quality control (QC) and pre-processing steps using the
+package `r Biocpkg("scrapper")` [@lun2022powering]. We start identifying
+mitochondrial genes.
+
+```{r, message=FALSE, warning=FALSE}
+library(scrapper)
+
+is_mito <- grepl("^MT-", rowData(spe)$gene_name)
+table(is_mito)
+```
+Calculate QC metrics and tally the number of low-quality spots.
+
+```{r}
+spe <- quickRnaQc.se(spe, subsets=list(mito=is_mito))
+spe$discard <- !spe$keep
+table(spe$discard)
+```
+Plot detected low-quality spots to ensure they are not located in a specific
+region of the tissue.
+
+```{r dlpfcqcplot, echo=TRUE, message=FALSE, fig.height=5, fig.width=5, out.width="600px", fig.cap="Detected low-quality spots in the DLPFC sample 151673."}
+library(ggspavis)
+
+plotObsQC(spe, plot_type="spot", annotate="discard")
+```
+Filter out low-quality spots.
+
+```{r}
+spe <- spe[, spe$keep]
+dim(spe)
+```
+Filter out genes that are expressed in less than 1% of the spots.
+
+```{r}
+spotsxgene <- rowSums(counts(spe) > 0)
+spe <- spe[spotsxgene > floor(ncol(spe)*0.01), ]
+dim(spe)
+```
+Calculate library size factors and normalized units of expression in
+logarithmic scale.
+
+```{r}
+spe <- normalizeRnaCounts.se(spe, size.factors=spe$sum)
+assayNames(spe)
+```
+
+# Spot cell-type annotation using GSVA
+
+Here we use the a collection of brain cell-type marker genes derived from the
+single-nuclei RNA-seq (snRNA-seq) data set published by @tran2021single, to
+estimate the most abundant cell type in each spot of the DLPFC sample 151673.
+This collection of marker gene sets is available in the `r Biocpkg("GSVAdata")`
+package, which contains the script that generated the marker gene sets, and
+can be imported as follows.
+
+```{r, message=FALSE, warning=FALSE}
+library(GSEABase)
+library(GSVA)
+
+fname <- file.path(system.file("extdata", package="GSVAdata"),
+                   "human_brain_snRNAseq_cellType_markers.gmt.gz")
+gsets <- readGMT(fname)
+gsets
+```
+We first build a parameter object using the function `gsvaParam()`. By default,
+the expression values in the `logcounts` assay will be selected for downstream
+analysis.
+
+```{r}
+gsvapar <- gsvaParam(spe, gsets)
+gsvapar
+```
+Second, we call the `gsva()` function to calculate the GSVA scores for each spot
+and each gene set. The output will be a `SpatialExperiment` object with the GSVA
+scores stored in a new assay called `es`. When the input spatial omics data is
+very large, you can use the three-step approach described in the single-cell
+RNA-seq vignette.
+
+```{r}
+es <- gsva(gsvapar)
+es
+```
+Finally, we assign to each spot the gene set with highest GSVA score, and store
+that assignment as a new metadata column into the `spe` object.
+
+```{r}
+whmax <- apply(assay(es), 2, which.max)
+es$cellType <- factor(rownames(es)[whmax])
+```
+Figure \@ref(fig:dlpfcgsva) shows the annotated layers of the DLPFC data set and
+the spatial distribution of the most likely cell type in each spot, based on the
+GSVA scores.
+
+```{r dlpfcgsva, echo=TRUE, message=FALSE, fig.height=10, fig.width=7, out.width="800px", dpi=100, fig.cap="(a) Annotated layers of the DLPFC sample 151673 and (b) spatial distribution of the most likely cell type in each spot, based on GSVA scores."}
+library(ggspavis)
+library(patchwork)
+library(RColorBrewer)
+
+ctpal <- colorRampPalette(brewer.pal(9, "Set1"))(nlevels(es$cellType))
+plts <- list(plotVisium(spe, point_size=0.60, facets=NULL, annotate="spatialLIBD",
+                        pal=brewer.pal(nlevels(spe$spatialLIBD), "Set1")) +
+             labs(tag="a"),
+             plotVisium(es, assay="es", point_size=0.60, facets=NULL,
+                        annotate="cellType",
+                        pal=ctpal) +
+             labs(tag="b")
+             )
+wrap_plots(plts, nrow=1)
+```
+We can see that the white matter layer is enriched in oligodendrocytes, while
+the gray matter layers are enriched in excitatory and inhibitory neurons, and
+astrocytes. While in this case it is clear that oligodendrocytes are the most
+abundant cell type in the white matter layer, we can also verify this
+observation by calculating the Moran's I spatial autocorrelation statistic for
+the GSVA scores of every gene set and rank them, using the function `spatCor()`
+implemented also in the GSVA package, which can take as input the
+`SpatialExperiment` object with the GSVA scores obtained in the previous step.
+
+
+```{r}
+I <- spatCor(es)
+I[order(I$observed, decreasing=TRUE), ]
+```
+We can observe that the `Oligo` gene set has the highest Moran's I statistic, which
+follows from the spatial distribution of the GSVA scores for that gene set, which
+is shown in Figure \@ref(fig:dlpfcgsvaoligo).
+
+```{r dlpfcgsvaoligo, echo=TRUE, message=FALSE, fig.height=10, fig.width=7, out.width="800px", dpi=100, fig.cap="Spatial distribution of the GSVA scores for the Oligodendrocytes gene set in the DLPFC sample 151673."}
+plotVisium(es, assay="es", point_size=1, facets=NULL, annotate="Oligo")
+```
+
+# Benchmarking
+
+We are still benchmarking and testing this version of GSVA for spatial omics
+data. If you encounter problems or have suggestions, do not hesitate to
+contact us by opening an [issue](https://github.com/rcastelo/GSVA/issues)
+in the GSVA GitHub repo.
+
+# Session information {.unnumbered}
+Here is the output of `sessionInfo()` on the system on which this document was
+compiled running pandoc `r rmarkdown::pandoc_version()`:
+
+```{r session_info, cache=FALSE}
+sessionInfo()
+```
+
+# References
