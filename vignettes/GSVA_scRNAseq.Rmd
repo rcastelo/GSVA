@@ -78,6 +78,14 @@ specific support consists of the following features:
     typical single-cell data set will result in longer running times and larger
     memory consumption than running it in the default sparse regime for this
     type of data.
+  * The GSVA algorithm can be run either at once through a call to `gsva()`
+    with a parameter object or in two steps: (1) row normalization and column
+    rank transformation with `gsvaRanks()`; and (2) column enrichment scores
+    calculation with `gsvaScores()`. Splitting the GSVA algorithm into these
+    two steps allows one to reuse the output of the first step, which is
+    independent of the gene sets, to calculate enrichment scores for different
+    collections of gene sets, without having to repeat the first step.
+
 
 In what follows, we will illustrate the use of GSVA on a publicly available
 single-cell transcriptomics data set of peripheral blood mononuclear cells
@@ -292,7 +300,7 @@ a GSEA enrichment plot. This function takes as input the output of
 gene set. In Figure \@ref(fig:gsvaenrichment) below, we show such a plot for the
 first cell annotated to the monocytes cell type.
 
-```{r gsvaenrichment, echo=TRUE, fig.height=5, fig.width=5, out.width="600px", fig.cap="GSVA enrichment plot of the EOSINOPHILS gene set in the expression profile of the first cell annotated to that cell type."}
+```{r gsvaenrichment, echo=TRUE, fig.height=5, fig.width=5, out.width="600px", fig.cap="GSVA enrichment plot of the MONOCYTES gene set in the expression profile of the first cell annotated to that cell type."}
 firstmonocytecell <- which(colLabels(es) == "MONOCYTES")[1]
 par(mar=c(4, 5, 1, 1))
 gsvaEnrichment(gsvaranks, column=firstmonocytecell, geneSet="MONOCYTES",
@@ -344,7 +352,7 @@ es2 <- gsva(gsvapar, verbose=FALSE)
 all.equal(assay(es), assay(es2))
 ```
 The tiny differences in the enrichment scores (less than 1e-3 in these data)
-are due to the few nonzero values in the gene set that are tied in the ranking
+are due to the nonzero values in gene sets that are tied in the ranking
 of the internally calculated expression statistic.
 
 # Benchmarking

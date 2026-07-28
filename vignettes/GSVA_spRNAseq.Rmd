@@ -69,15 +69,12 @@ specific support consists of the following features:
     memory consumption than running it in the default sparse regime for this
     type of data.
   * The GSVA algorithm can be run either at once through a call to `gsva()`
-    with a parameter object or in three steps: (1) row normalization with
-    `gsvaRowNorm()`; (2) column rank transformation with `gsvaColRanks()`;
-    and (3) column enrichment scores calculation with `gsvaColScores()`.
-    Splitting the GSVA algorithm into these three steps allows one to distribute
-    and balance the computational load of the algorithm in a high-performance
-    computing (HPC) environment with multiple nodes, and to reuse the output of
-    the first two steps, which are independent of the gene sets, to calculate
-    enrichment scores for different collections of gene sets, without having to
-    repeat the first two steps.
+    with a parameter object or in two steps: (1) row normalization and column
+    rank transformation with `gsvaRanks()`; and (2) column enrichment scores
+    calculation with `gsvaScores()`. Splitting the GSVA algorithm into these
+    two steps allows one to reuse the output of the first step, which is
+    independent of the gene sets, to calculate enrichment scores for different
+    collections of gene sets, without having to repeat the first step.
 
 In what follows, we will illustrate the use of GSVA on a publicly available
 spatial transcriptomics transcriptomics data set published by
