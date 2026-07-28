@@ -1303,6 +1303,28 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     return(R)
 }
 
+## given a decreasing order statistic in the 'dos' vector, a vector of indices
+## 'gSetIdx' containing the positions of the genes in a gene set, and a vector
+## 'whz' containing the positions of the genes with zero expression values,
+## re-distribute the zeros of the gene set in the 'dos' vector, so that those
+## zeros are placed evenly spaced among all the zeros in the 'dos' vector
+.redistribute_geneset_zeros <- function(dos, gset, whz) {
+    dos2 <- dos
+    whz_gset <- intersect(gset, whz)
+    if (length(whz_gset) > 0) {                 ## if gene set has zeros, then
+        whz2 <- integer(length(whz))            ## create a new vector where
+        whz_gset2 <- round(seq(1, length(whz2), ## redistribute gene set zeros
+                               length.out=length(whz_gset)))
+        whz2[whz_gset2] <- whz_gset             ## evenly among all zeros
+        whz2[whz2 == 0] <- setdiff(whz, whz_gset)  ## fill in remaining zeros
+        nnz <- length(dos) - length(whz)        ## number of nonzero values
+        dos2[whz2] <- nnz + seq_along(whz2)     ## assign new dos to rearranged
+                                                ## zeros
+    }
+
+    dos2
+}
+
 ## here gSetIdx, decOrderStat and symRnkStat contain the positions with respect
 ## to the original order of genes in the data
 .gsvaRndWalk <- function(gSetIdx, decOrderStat, symRnkStat, tau) {
@@ -1334,28 +1356,29 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     walkStat
 }
 
-.gsva_score_genesets_Rimp <- function(geneSetsIdx, decOrdStat, symRnkStat,
+.gsva_score_genesets_Rimp <- function(geneSetsIdx, decOrdStat, symRnkStat, whz,
                                       maxDiff, absRanking, tau, any_na, na_use,
                                       minSize) {
    md <- lapply(geneSetsIdx, function(gSetIdx, decOrdStat, symRnkStat) {
-             maxDev <- c(NA_real_, NA_real_)
-             if (any_na) {
-                 walkStat <- .gsvaRndWalk_nas(gSetIdx, decOrdStat, symRnkStat,
-                                              tau, na_use, minSize)
-                 if (any(!is.na(walkStat))) {
-                     if (na_use == "na.rm")
-                         maxDev <- c(max(c(0, max(walkStat, na.rm=TRUE))),
-                                     min(c(0, min(walkStat, na.rm=TRUE))))
-                     else
-                         maxDev <- c(max(c(0, max(walkStat))),
-                                     min(c(0, min(walkStat))))
-                 }
-             } else {
-                 walkStat <- .gsvaRndWalk(gSetIdx, decOrdStat, symRnkStat, tau)
-                 maxDev <- c(max(c(0, max(walkStat))), min(c(0, min(walkStat))))
-             }
-             maxDev
-         }, decOrdStat, symRnkStat)
+       maxDev <- c(NA_real_, NA_real_)
+       if (any_na) {
+           walkStat <- .gsvaRndWalk_nas(gSetIdx, decOrdStat, symRnkStat,
+                                        tau, na_use, minSize)
+           if (any(!is.na(walkStat))) {
+               if (na_use == "na.rm")
+                   maxDev <- c(max(c(0, max(walkStat, na.rm=TRUE))),
+                               min(c(0, min(walkStat, na.rm=TRUE))))
+               else
+                   maxDev <- c(max(c(0, max(walkStat))),
+                               min(c(0, min(walkStat))))
+           }
+       } else {
+           decOrdStat <- .redistribute_geneset_zeros(decOrdStat, gSetIdx, whz)
+           walkStat <- .gsvaRndWalk(gSetIdx, decOrdStat, symRnkStat, tau)
+           maxDev <- c(max(c(0, max(walkStat))), min(c(0, min(walkStat))))
+       }
+       maxDev
+   }, decOrdStat, symRnkStat)
    md <- do.call("rbind", md)
    if (maxDiff && absRanking)
        md[, 2] <- -1 * md[, 2]
@@ -1432,14 +1455,16 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     dos <- p - r_dense + 1L           ## dense ranks into decreasing order stats
     srs <- numeric(p)
 
+    whz <- NULL
     if (any(mask) && sparse) {
+        whz <- which(mask)            ## indices of zeros in the original ranks
         r[!mask] <- r[!mask] + 1      ## shift ranks of nonzero values by one
         r[mask] <- 1                  ## all zeros get the same first rank
         srs <- abs(max(r)/2 - r)
     } else
         srs <- abs(p/2 - r_dense)
 
-    list(dos=dos, srs=srs)
+    list(dos=dos, srs=srs, whz=whz)
 }
 
 ## convert ranks into decreasing order statistics and symmetric rank statistics
@@ -1466,14 +1491,16 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     dos <- p - n_nas - r_dense + 1L   ## dense ranks into decreasing order stats
     srs <- numeric(p)
 
+    whz <- NULL
     if (any(mask) && sparse) {
+        whz <- which(mask)            ## indices of zeros in the original ranks
         r[!mask] <- r[!mask] + 1L     ## shift ranks of nonzero values by one
         r[mask] <- 1L                 ## all zeros get the same first rank
         srs <- abs(max(r, na.rm=TRUE)/2 - r)
     } else
         srs <- abs((p - n_nas)/2 - r_dense)
 
-    list(dos=dos, srs=srs)
+    list(dos=dos, srs=srs, whz=whz)
 }
 
 
@@ -1560,6 +1587,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 
     if (any_na) {
         rnkstats <- .ranks2stats_nas(R[, column], sparse)
+        rnkstats$dos <- .redistribute_geneset_zeros(rnkstats$dos, geneSetIdx,
+                                                    rnkstats$whz)
         walkStat <- .gsvaRndWalk_nas(geneSetIdx, rnkstats$dos, rnkstats$srs,
                                      tau, na_use, minSize, wna_env=wna_env)
         maxDev <- whMaxDev <- c(NA, NA)
@@ -1577,6 +1606,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
             whMaxDev[2] <- which.min(walkStat)
     } else {
         rnkstats <- .ranks2stats(R[, column], sparse)
+        rnkstats$dos <- .redistribute_geneset_zeros(rnkstats$dos, geneSetIdx,
+                                                    rnkstats$whz)
         walkStat <- .gsvaRndWalk(geneSetIdx, rnkstats$dos, rnkstats$srs, tau)
         maxDev <- c(max(c(0, max(walkStat))), min(c(0, min(walkStat))))
         whMaxDev <- c(which.max(walkStat), which.min(walkStat))
@@ -1627,6 +1658,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
         leneg <- rownames(R)[leneg]
 
     res <- list(stats=edat,
+                gsetidx=geneSetIdx,
                 gsetrnk=gsetrnk,
                 maxPos=maxDev[1],
                 whichMaxPos=whMaxDev[1],

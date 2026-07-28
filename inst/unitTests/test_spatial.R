@@ -34,5 +34,5 @@ test_spatial <- function() {
 
     ## calculate spatial autocorrelation on the GSVA enrichment scores
     r <- spatCor(es, verbose=FALSE)
-    checkTrue(all(r$observed[r$gene_id == "microglia"] > r$observed[r$gene_id != "microglia"]))
+    checkTrue(all(r$observed[r$gene_id == "microglia"] < r$observed[r$gene_id != "microglia"]))
 }

@@ -79,6 +79,111 @@ gsva_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, int n,
 }
 
 void
+gsva_sparse_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, int n,
+                     double tau, int nzeros, double zerosymrnkstat,
+                     double* walkstat, double* walkstatpos, double* walkstatneg) {
+  int     nnz, gset_nnz, gset_nzeros;
+  int*    gsetrnk;
+  int*    gsetrnk_nnz;
+  int*    gsetidx_nnz;
+  double* stepcdfingeneset;
+  int*    stepcdfoutgeneset;
+
+  nnz = n - nzeros;
+
+  gsetrnk = R_Calloc(k, int);
+  gsetrnk_nnz = R_Calloc(k, int);
+  gsetidx_nnz = R_Calloc(k, int);
+  gset_nnz = gset_nzeros = 0;
+
+  for (int i=0; i < k; i++) {
+    gsetrnk[i] = decordstat[gsetidx[i]-1];
+    if (gsetrnk[i] <= nnz) { /* assuming nonzeros expression values are positive */
+      gsetrnk_nnz[gset_nnz] = gsetrnk[i];
+      gsetidx_nnz[gset_nnz] = gsetidx[i];
+      gset_nnz++;
+    } else
+      gset_nzeros++;
+  }
+
+  stepcdfingeneset = R_Calloc(n, double);  /* assuming zeros are set */
+  stepcdfoutgeneset = R_Calloc(n, int);
+  for (int i=0; i < n; i++)
+    stepcdfoutgeneset[i] = 1;
+
+  if (gset_nnz > 0) { /* if there are nonzero expression values in the gene set */
+    for (int i=0; i < gset_nnz; i++) {
+      /* convert 1-based gene indices to 0-based ! */
+      if (tau == 1)
+        stepcdfingeneset[gsetrnk_nnz[i]-1] = symrnkstat[gsetidx_nnz[i]-1];
+      else
+        stepcdfingeneset[gsetrnk_nnz[i]-1] = pow(symrnkstat[gsetidx_nnz[i]-1], tau);
+      stepcdfoutgeneset[gsetrnk_nnz[i]-1] = 0;
+    }
+  }
+
+  R_Free(gsetrnk);
+  R_Free(gsetrnk_nnz);
+  R_Free(gsetidx_nnz);
+
+  if (gset_nzeros > 0) { /* if there are zero expression values in the gene set */
+    int*   gsetrnk_zeros;
+    double step = 0;
+   
+    if (gset_nzeros > 1)
+      step = (double) (nzeros - 1) / (double) (gset_nzeros - 1);
+
+    gsetrnk_zeros = R_Calloc(gset_nzeros, int);
+    for (int i=0; i < gset_nzeros; i++)
+      gsetrnk_zeros[i] = ((int) round(((double) i) * step + 1)) + nnz;
+
+    for (int i=0; i < gset_nzeros; i++) {
+      /* convert 1-based gene indices to 0-based ! */
+      if (tau == 1)
+        stepcdfingeneset[gsetrnk_zeros[i]-1] = zerosymrnkstat;
+      else
+        stepcdfingeneset[gsetrnk_zeros[i]-1] = pow(zerosymrnkstat, tau);
+      stepcdfoutgeneset[gsetrnk_zeros[i]-1] = 0;
+    }
+
+    R_Free(gsetrnk_zeros);
+  }
+
+  for (int i=1; i < n; i++) {
+    stepcdfingeneset[i] = stepcdfingeneset[i-1] + stepcdfingeneset[i];
+    stepcdfoutgeneset[i] = stepcdfoutgeneset[i-1] + stepcdfoutgeneset[i];
+  }
+
+  *walkstatpos = *walkstatneg = NA_REAL;
+  if (stepcdfingeneset[n-1] > 0 && stepcdfoutgeneset[n-1] > 0) {
+    *walkstatpos = *walkstatneg = 0;
+    for (int i=0; i < n; i++) {
+      double wlkstat = 0;
+
+      if (walkstat != NULL)
+        wlkstat = walkstat[i] = ((double) stepcdfingeneset[i]) /
+                                ((double) stepcdfingeneset[n-1]) -
+                                ((double) stepcdfoutgeneset[i]) /
+                                ((double) stepcdfoutgeneset[n-1]);
+      else {
+        wlkstat = ((double) stepcdfingeneset[i]) /
+                  ((double) stepcdfingeneset[n-1]) -
+                  ((double) stepcdfoutgeneset[i]) /
+                  ((double) stepcdfoutgeneset[n-1]);
+      }
+
+      if (wlkstat > *walkstatpos)
+        *walkstatpos = wlkstat;
+      if (wlkstat < *walkstatneg)
+        *walkstatneg = wlkstat;
+    }
+  }
+
+  R_Free(stepcdfoutgeneset);
+  R_Free(stepcdfingeneset);
+}
+
+void
 gsva_rnd_walk_nas(int* gsetidx, int k, int* decordstat, double* symrnkstat, int n,
                   double tau, int na_use, int minsize, double* walkstat,
                   double* walkstatpos, double* walkstatneg, int* wna) {
@@ -316,19 +421,21 @@ find_dim_and_fetchcolfun(SEXP XR, Rboolean intrnks, int** dim) {
 void
 ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
             FetchColFunDef fetch_col,
-            int* decordstat_col, double* symrnkstat_col);
+            int* decordstat_col, double* symrnkstat_col,
+            int* nzeros_col, double* zerosymrnkstat);
 
 void
 ranks2stats_nas(SEXP ranksR, int p, int n, int j, Rboolean sparse,
                 FetchColFunDef fetch_col,
-                int* decordstat_col, double* symrnkstat_col);
+                int* decordstat_col, double* symrnkstat_col,
+                int* nzeros_col, double* zerosymrnkstat, int* nnas);
 
 SEXP
 gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
                       SEXP sparseR, SEXP maxdiffR, SEXP absrnkR, SEXP tauR,
                       SEXP anynaR, SEXP nauseR, SEXP minsizeR, SEXP verboseR) {
   int*     dimranks;
-  int      p, n;
+  int      p, n, nnas;
   int      m = length(genesetsidxR);
   Rboolean intrnks=asLogical(intrnksR);
   Rboolean sparse=asLogical(sparseR);
@@ -347,6 +454,8 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
   int      nunprotect=0;
   int*     decordstat_col;
   double*  symrnkstat_col;
+  int      nzeros_col=0;
+  double   zerosymrnkstat=0;
   FetchColFunDef fetch_col;
 
   fetch_col = find_dim_and_fetchcolfun(ranksR, intrnks, &dimranks);
@@ -371,9 +480,11 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
     }
 
     if (anyna)
-      ranks2stats_nas(ranksR, p, n, i, sparse, fetch_col, decordstat_col, symrnkstat_col);
+      ranks2stats_nas(ranksR, p, n, i, sparse, fetch_col, decordstat_col,
+                      symrnkstat_col, &nzeros_col, &zerosymrnkstat, &nnas);
     else
-      ranks2stats(ranksR, p, n, i, sparse, fetch_col, decordstat_col, symrnkstat_col);
+      ranks2stats(ranksR, p, n, i, sparse, fetch_col, decordstat_col,
+                  symrnkstat_col, &nzeros_col, &zerosymrnkstat);
 
     for (int j=0; j < m; j++) {
       SEXP     gsetidxR = VECTOR_ELT(genesetsidxR, j);
@@ -392,9 +503,15 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
         gsva_rnd_walk_nas(gsetidx, k, decordstat_col, symrnkstat_col, p, tau,
                           nause, minsize, NULL, &walkstatpos, &walkstatneg,
                           &wna);
-      else
-        gsva_rnd_walk(gsetidx, k, decordstat_col, symrnkstat_col, p, tau,
-                      NULL, &walkstatpos, &walkstatneg);
+      else {
+        if (sparse && nzeros_col > 0)
+          gsva_sparse_rnd_walk(gsetidx, k, decordstat_col, symrnkstat_col, p,
+                               tau, nzeros_col, zerosymrnkstat, NULL,
+                               &walkstatpos, &walkstatneg);
+        else
+          gsva_rnd_walk(gsetidx, k, decordstat_col, symrnkstat_col, p, tau,
+                        NULL, &walkstatpos, &walkstatneg);
+      }
 
       es[idx] = NA_REAL;
       if (!anyna || (!ISNA(walkstatpos) && !ISNA(walkstatneg))) {
@@ -445,7 +562,8 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
 void
 ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
             FetchColFunDef fetch_col,
-            int* decordstat_col, double* symrnkstat_col) {
+            int* decordstat_col, double* symrnkstat_col,
+            int* nzeros_col, double* zerosymrnkstat) {
   int* r = R_Calloc(p, int);       /* assume 0s are set */
   int* r_dense = R_Calloc(p, int); /* assume 0s are set */
   int  nnz, nzs;
@@ -453,7 +571,7 @@ ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
   nnz = (*fetch_col)(ranksR, p, j, r);
   nzs = p - nnz;
 
-  if (nzs > 0) { /* if ranks have zeroes, then input is a sparse matrix */
+  if (nzs > 0) { /* if ranks have zeros, then input is a sparse matrix */
     int  k = 1;
 
     for (int i=0; i < p; i++) {
@@ -470,12 +588,15 @@ ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
   for (int i=0; i < p; i++)
     decordstat_col[i] = p - r_dense[i] + 1;
 
+  *nzeros_col = *zerosymrnkstat = 0;
   if (nzs > 0 && sparse) {
     for (int i=0; i < p; i++) {
       double nnz1div2 = ((double) (nnz+1)) / 2.0;  /* nnz is in fact max(r)   */
-      if (r[i] == 0)                               /* in sparse regime zeroes */
+      if (r[i] == 0) {                             /* in sparse regime zeroes */
         symrnkstat_col[i] = fabs(nnz1div2 - 1.0);  /* get same sym rank stat  */
-      else                                         /* nonzero ranks shift one */
+        (*nzeros_col)++;                           /* count zeros  */
+        *zerosymrnkstat = symrnkstat_col[i];       /* store zero sym rank stat*/
+      } else                                       /* nonzero ranks shift one */
         symrnkstat_col[i] = fabs(nnz1div2 - (double) (r[i] + 1));
     }
   } else {
@@ -496,17 +617,17 @@ ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
 void
 ranks2stats_nas(SEXP ranksR, int p, int n, int j, Rboolean sparse,
                 FetchColFunDef fetch_col,
-                int* decordstat_col, double* symrnkstat_col) {
+                int* decordstat_col, double* symrnkstat_col,
+                int* nzeros_col, double* zerosymrnkstat, int* nnas) {
   int* r = R_Calloc(p, int);       /* assume 0s are set */
   int* r_dense = R_Calloc(p, int); /* assume 0s are set */
   int  nnz, nzs;
-  int  nnas;
 
   nnz = (*fetch_col)(ranksR, p, j, r);
-  nnas = 0;
+  *nnas = 0;
   for (int i=0; i < p; i++)
     if (r[i] == NA_INTEGER)
-      nnas++;
+      (*nnas)++;
 
   nzs = p - nnz;
 
@@ -528,15 +649,18 @@ ranks2stats_nas(SEXP ranksR, int p, int n, int j, Rboolean sparse,
 
   /* dense ranks into decreasing order statistics */
   for (int i=0; i < p; i++)
-    decordstat_col[i] = r_dense[i] == NA_INTEGER ? NA_INTEGER : p - nnas - r_dense[i] + 1;
+    decordstat_col[i] = r_dense[i] == NA_INTEGER ? NA_INTEGER : p - *nnas - r_dense[i] + 1;
 
+  *nzeros_col = *zerosymrnkstat = 0;
   if (nzs > 0 && sparse) {
     for (int i=0; i < p; i++) {
-      double nnz1div2 = ((double) (nnz-nnas+1)) / 2.0; /* nnz is in fact max(r) */
+      double nnz1div2 = ((double) (nnz-*nnas+1)) / 2.0; /* nnz is in fact max(r) */
       if (r[i] != NA_INTEGER) {
-        if (r[i] == 0)                               /* in sparse regime zeroes */
+        if (r[i] == 0) {                             /* in sparse regime zeroes */
           symrnkstat_col[i] = fabs(nnz1div2 - 1.0);  /* get same sym rank stat  */
-        else                                         /* nonzero ranks shift one */
+          (*nzeros_col)++;                           /* count zeros  */
+          *zerosymrnkstat = symrnkstat_col[i];       /* store zero sym rank stat*/
+        } else                                       /* nonzero ranks shift one */
           symrnkstat_col[i] = fabs(nnz1div2 - (double) (r[i] + 1));
       } else
           symrnkstat_col[i] = NA_REAL;
@@ -544,7 +668,7 @@ ranks2stats_nas(SEXP ranksR, int p, int n, int j, Rboolean sparse,
   } else {
     for (int i=0; i < p; i++)
       if (r_dense[i] != NA_INTEGER)
-        symrnkstat_col[i] = fabs(((double) (p - nnas)) / 2.0 - ((double) r_dense[i]));
+        symrnkstat_col[i] = fabs(((double) (p - *nnas)) / 2.0 - ((double) r_dense[i]));
       else
         symrnkstat_col[i] = NA_REAL;
   }

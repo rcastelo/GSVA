@@ -5,6 +5,9 @@ author:
   affiliation:
   - &idupf Dept. of Medicine and Life Sciences, Universitat Pompeu Fabra, Barcelona, Spain
   email: robert.castelo@upf.edu
+- name: Pere Moles
+  affiliation: *idupf
+  email: pere.moles@upf.edu
 - name: Axel Klenk
   affiliation: *idupf
   email: axel.klenk@gmail.com
@@ -109,26 +112,16 @@ table(is_mito)
 ```
 Calculate quality control (QC) metrics and filter out low-quality cells.
 
-```{r}
+```{r, message=FALSE}
 sce <- quickRnaQc.se(sce, subsets=list(mito=is_mito))
 sce <- sce[, sce$keep]
 dim(sce)
 ```
-Figure \@ref(fig:cntxgene) below shows the empirical cumulative distribution of
-counts per gene in logarithmic scale.
-
-```{r cntxgene, fig.width=5, fig.height=5, out.width="600px", fig.cap="Empirical cumulative distribution of UMI counts per gene. The red vertical bar indicates a cutoff value of 100 UMI counts per gene across all cells, below which genes will be filtered out."}
-cntxgene <- rowSums(assays(sce)$counts)+1
-plot.ecdf(cntxgene, xaxt="n", panel.first=grid(), xlab="UMI counts per gene",
-          log="x", main="", xlim=c(1, 1e5), las=1)
-axis(1, at=10^(0:5), labels=10^(0:5))
-abline(v=100, lwd=2, col="red")
-```
-We filter out lowly-expressed genes, by selecting those with at least 100 UMI
-counts across all cells for downstream analysis.
+We filter out genes that are expressed in less than 1% of the cells.
 
 ```{r}
-sce <- sce[cntxgene >= 100, ]
+cellsxgene <- rowSums(counts(sce) > 0)
+sce <- sce[cellsxgene > floor(ncol(sce)*0.01), ]
 dim(sce)
 ```
 Calculate library size factors and normalized units of expression in
@@ -297,12 +290,12 @@ to a given cell, we can use the `gsvaEnrichment()` function, which will show
 a GSEA enrichment plot. This function takes as input the output of
 `gsvaRanks()`, a given column (cell) in the input singl-cell data, and a given
 gene set. In Figure \@ref(fig:gsvaenrichment) below, we show such a plot for the
-first cell annotated to the eosinophil cell type.
+first cell annotated to the monocytes cell type.
 
 ```{r gsvaenrichment, echo=TRUE, fig.height=5, fig.width=5, out.width="600px", fig.cap="GSVA enrichment plot of the EOSINOPHILS gene set in the expression profile of the first cell annotated to that cell type."}
-firsteosinophilcell <- which(colLabels(es) == "EOSINOPHILS")[1]
+firstmonocytecell <- which(colLabels(es) == "MONOCYTES")[1]
 par(mar=c(4, 5, 1, 1))
-gsvaEnrichment(gsvaranks, column=firsteosinophilcell, geneSet="EOSINOPHILS",
+gsvaEnrichment(gsvaranks, column=firstmonocytecell, geneSet="MONOCYTES",
                cex.axis=1.2, cex.lab=1.5, plot="ggplot")
 ```
 In the previous call to `gsvaEnrichment()` we used the argument `plot="ggplot"`
@@ -311,6 +304,48 @@ package. By default, if we call `gsvaEnrichment()` interactively, it will
 produce a plot using "base R", but either when we do it non-interactively, or
 when we set `plot="no"` it will return a `data.frame` object with the enrichment
 data.
+
+# Stability of GSVA scores with sparse data
+
+This version of GSVA (>= 2.6.4) fixes a known problem with the stability of
+GSVA scores with sparse data. More concretely, for a given gene set, its genes
+with a zero count expression value in a given column/cell, would occupy
+arbitrary positions in the gene ranking of that column/cell. This, and newer
+versions of GSVA, place those genes evenly distributed after the nonzerovalues
+along the ranking. We can see this happening with the MONOCYTES
+gene set in Figure \@ref(fig:gsvaenrichment), where the genes of this gene set
+with zero expression values are evenly distributed after the left vertical
+dashed line that in this plot indicates the largest positive leading edge of
+the enrichment score. We can also verify that those genes have zero expression
+values in the first cell annotated to the MONOCYTES cell type, as follows.
+
+```{r}
+edat <- gsvaEnrichment(gsvaranks, column=firstmonocytecell,
+                       geneSet="MONOCYTES", plot="no")
+unname(counts(sce)[edat$gsetidx, firstmonocytecell][order(edat$gsetrnk)])
+```
+Note that the nonzero count values are not perfectly sorted in decreasing order,
+because rankings are calculated on a expression statistic after column and row
+normalization. Using the `diff()` function, which calculates differences between
+consecutive elements of a vector, we can also verify how exactly these zeros of
+the gene set are evenly spaced.
+
+```{r}
+diff(sort(edat$gsetrnk))
+```
+Finally, we can verify that this strategy results in stable GSVA scores, by
+running the GSVA algorithm on a random permutation of the rows of the `sce`
+object, and checking that the resulting GSVA scores are nearly identical to
+those obtained with the original `sce` object.
+
+```{r}
+gsvapar <- gsvaParam(sce[sample(1:nrow(sce)), ], gsets, verbose=FALSE)
+es2 <- gsva(gsvapar, verbose=FALSE)
+all.equal(assay(es), assay(es2))
+```
+The tiny differences in the enrichment scores (less than 1e-3 in these data)
+are due to the few nonzero values in the gene set that are tied in the ranking
+of the internally calculated expression statistic.
 
 # Benchmarking
 

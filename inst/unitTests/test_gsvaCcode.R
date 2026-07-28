@@ -35,6 +35,7 @@ test_gsvaCcode <- function() {
         GSVA:::.gsva_score_genesets_Rimp(geneSetsIdx,
                                          decOrdStat=rnkstats$dos,
                                          symRnkStat=rnkstats$srs,
+                                         whz=rnkstats$whz,
                                          maxDiff=GSVA:::.get_maxDiff(gsvarankspar),
                                          absRanking=GSVA:::.get_absRanking(gsvarankspar),
                                          tau=GSVA:::.get_tau(gsvarankspar),
@@ -48,7 +49,7 @@ test_gsvaCcode <- function() {
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
     sco_C <- GSVA:::.gsva_score_genesets(R, geneSetsIdx, is.integer(R[1, 1]),
-					 sparse=GSVA:::.get_sparse(gsvarankspar), 
+                                         sparse=GSVA:::.get_sparse(gsvarankspar), 
                                          maxDiff=GSVA:::.get_maxDiff(gsvarankspar),
                                          absRanking=GSVA:::.get_absRanking(gsvarankspar),
                                          tau=GSVA:::.get_tau(gsvarankspar),
@@ -90,6 +91,7 @@ test_gsvaCcode <- function() {
         sco_R <- GSVA:::.gsva_score_genesets_Rimp(geneSetsIdx,
                                                   decOrdStat=rnkstats$dos,
                                                   symRnkStat=rnkstats$srs,
+                                                  whz=rnkstats$whz,
                                                   maxDiff=GSVA:::.get_maxDiff(gsvarankspar),
                                                   absRanking=GSVA:::.get_absRanking(gsvarankspar),
                                                   tau=GSVA:::.get_tau(gsvarankspar),
@@ -103,7 +105,7 @@ test_gsvaCcode <- function() {
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
     sco_C <- GSVA:::.gsva_score_genesets(R, geneSetsIdx, is.integer(R[1, 1]),
-					 sparse=GSVA:::.get_sparse(gsvarankspar), 
+                                         sparse=GSVA:::.get_sparse(gsvarankspar), 
                                          maxDiff=GSVA:::.get_maxDiff(gsvarankspar),
                                          absRanking=GSVA:::.get_absRanking(gsvarankspar),
                                          tau=GSVA:::.get_tau(gsvarankspar),
@@ -137,6 +139,7 @@ test_gsvaCcode <- function() {
         sco_R <- GSVA:::.gsva_score_genesets_Rimp(geneSetsIdx,
                                                   decOrdStat=rnkstats$dos,
                                                   symRnkStat=rnkstats$srs,
+                                                  whz=rnkstats$whz,
                                                   maxDiff=GSVA:::.get_maxDiff(gsvarankspar),
                                                   absRanking=GSVA:::.get_absRanking(gsvarankspar),
                                                   tau=GSVA:::.get_tau(gsvarankspar),
@@ -150,7 +153,7 @@ test_gsvaCcode <- function() {
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
     sco_C <- GSVA:::.gsva_score_genesets(R, geneSetsIdx, is.integer(R[1, 1]),
-					 sparse=GSVA:::.get_sparse(gsvarankspar), 
+                                         sparse=GSVA:::.get_sparse(gsvarankspar), 
                                          maxDiff=GSVA:::.get_maxDiff(gsvarankspar),
                                          absRanking=GSVA:::.get_absRanking(gsvarankspar),
                                          tau=GSVA:::.get_tau(gsvarankspar),
