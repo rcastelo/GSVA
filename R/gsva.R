@@ -1966,6 +1966,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
         leneg <- rownames(R)[leneg]
 
     res <- list(stats=edat,
+                gsetidx=geneSetIdx,
                 gsetrnk=gsetrnk,
                 maxPos=maxDev[1],
                 whichMaxPos=whMaxDev[1],

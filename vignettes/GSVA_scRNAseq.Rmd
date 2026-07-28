@@ -5,6 +5,9 @@ author:
   affiliation:
   - &idupf Dept. of Medicine and Life Sciences, Universitat Pompeu Fabra, Barcelona, Spain
   email: robert.castelo@upf.edu
+- name: Pere Moles
+  affiliation: *idupf
+  email: pere.moles@upf.edu
 - name: Axel Klenk
   affiliation: *idupf
   email: axel.klenk@gmail.com
@@ -309,16 +312,16 @@ plot(res$rotation[, 1], res$rotation[, 2], col=hmcol[colLabels(es)], pch=19,
 mask <- colLabels(es) == "NK_CELLS_RESTING"
 points(res$rotation[mask, 1], res$rotation[mask, 2], ## show the overlap better
        col=hmcol[colLabels(es)[mask]], pch=19)
-legend("bottomright", gsub("_", " ", levels(colLabels(es))), fill=hmcol, inset=0.01)
+legend("topright", gsub("_", " ", levels(colLabels(es))), fill=hmcol, inset=0.01)
 ```
 Finally, if we want to better understand why a specific cell type is annotated
 to a given cell, we can use the `gsvaEnrichment()` function, which will show
 a GSEA enrichment plot. This function takes as input the output of
-`gsvaRanks()`, a given column (cell) in the input single-cell data, and a given
+`gsvaColRanks()`, a given column (cell) in the input single-cell data, and a given
 gene set. In Figure \@ref(fig:gsvaenrichment) below, we show such a plot for the
 first cell annotated to the monocytes cell type.
 
-```{r gsvaenrichment, echo=TRUE, fig.height=5, fig.width=5, out.width="600px", fig.cap="GSVA enrichment plot of the EOSINOPHILS gene set in the expression profile of the first cell annotated to that cell type."}
+```{r gsvaenrichment, echo=TRUE, fig.height=5, fig.width=5, out.width="600px", fig.cap="GSVA enrichment plot of the MONOCYTES gene set in the expression profile of the first cell annotated to that cell type."}
 firstmonocytecell <- which(colLabels(es) == "MONOCYTES")[1]
 par(mar=c(4, 5, 1, 1))
 gsvaEnrichment(gsvacolranks, column=firstmonocytecell, geneSet="MONOCYTES",
@@ -330,6 +333,48 @@ package. By default, if we call `gsvaEnrichment()` interactively, it will
 produce a plot using "base R", but either when we do it non-interactively, or
 when we set `plot="no"` it will return a `data.frame` object with the enrichment
 data.
+
+# Stability of GSVA scores with sparse data
+
+This version of GSVA (>= 2.6.4) fixes a known problem with the stability of
+GSVA scores with sparse data. More concretely, for a given gene set, its genes
+with a zero count expression value in a given column/cell, would occupy
+arbitrary positions in the gene ranking of that column/cell. This, and newer
+versions of GSVA, place those genes evenly distributed after the nonzerovalues
+along the ranking. We can see this happening with the MONOCYTES
+gene set in Figure \@ref(fig:gsvaenrichment), where the genes of this gene set
+with zero expression values are evenly distributed after the left vertical
+dashed line that in this plot indicates the largest positive leading edge of
+the enrichment score. We can also verify that those genes have zero expression
+values in the first cell annotated to the MONOCYTES cell type, as follows.
+
+```{r}
+edat <- gsvaEnrichment(gsvacolranks, column=firstmonocytecell,
+                       geneSet="MONOCYTES", plot="no")
+unname(counts(sce)[edat$gsetidx, firstmonocytecell][order(edat$gsetrnk)])
+```
+Note that the nonzero count values are not perfectly sorted in decreasing order,
+because rankings are calculated on a expression statistic after column and row
+normalization. Using the `diff()` function, which calculates differences between
+consecutive elements of a vector, we can also verify how exactly these zeros of
+the gene set are evenly spaced.
+
+```{r}
+diff(sort(edat$gsetrnk))
+```
+Finally, we can verify that this strategy results in stable GSVA scores, by
+running the GSVA algorithm on a random permutation of the rows of the `sce`
+object, and checking that the resulting GSVA scores are nearly identical to
+those obtained with the original `sce` object.
+
+```{r}
+gsvapar <- gsvaParam(sce[sample(1:nrow(sce)), ], gsets, verbose=FALSE)
+es2 <- gsva(gsvapar, verbose=FALSE)
+all.equal(assay(es), assay(es2))
+```
+The tiny differences in the enrichment scores (less than 1e-3 in these data)
+are due to the nonzero values in gene sets that are tied in rankings
+of the internally calculated expression statistic.
 
 # Benchmarking
 
