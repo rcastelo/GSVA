@@ -203,7 +203,7 @@ gsvapar
 Second, we call the `gsva()` function to calculate the GSVA scores for each spot
 and each gene set. The output will be a `SpatialExperiment` object with the GSVA
 scores stored in a new assay called `es`. When the input spatial omics data is
-very large, you can use the three-step approach described in the single-cell
+very large, you can use the two-step approach described in the single-cell
 RNA-seq vignette.
 
 ```{r}
