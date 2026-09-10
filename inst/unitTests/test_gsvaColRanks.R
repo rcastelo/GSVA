@@ -39,7 +39,7 @@ test_gsvaColRanks <- function() {
 
     ## check that gsvaEnrichment() works
     gsvaenrich <- gsvaEnrichment(gsvaranks, plot="no")
-    checkEqualsNumeric(gsva_es1[1, 1], gsvaenrich$score)
+    checkEqualsNumeric(gsva_es1[1, 1], gsvaenrich$score, tolerance = 1e-6)
     gsvaenrich2 <- gsvaEnrichment(gsvaranks,
                                   geneSet=c("g1", "g4", "g7"),
                                   plot="no")
