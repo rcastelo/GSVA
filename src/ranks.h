@@ -1,18 +1,32 @@
 #include <R.h>
 #include <Rdefines.h>
 
-typedef int (*FetchColFunDef)(SEXP, int, int, int*);
+/* type codes */
+#define RANKSTYPE_MATRIX_INT   1
+#define RANKSTYPE_MATRIX_DBL   2
+#define RANKSTYPE_DGC          3
+#define RANKSTYPE_SVT_INT      4
+#define RANKSTYPE_SVT_DBL      5
 
-FetchColFunDef find_dim_and_fetchcolfun(SEXP XR, Rboolean intrnks, int** dim);
+typedef struct ranks_ctx_s {
+  int type;            /* RANKSTYPE_*  */
+  union {
+    const void* data;  /* matrix: INTEGER or REAL base ptr     */
+    struct { const int* i; const int* p; const double* x; } dgc;
+    SEXP svt;
+  } u;
+  int p;
+  int n;
+  Rboolean sparse;
+  int (*fetch_col)(struct ranks_ctx_s* ctx, int j, int* col);
+} ranks_ctx_t;
+
+ranks_ctx_t* ranks_ctx_create(SEXP XR, Rboolean intrnks, Rboolean sparse);
 
 int
-ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
-            FetchColFunDef fetch_col,
-            int* decordstat_col, double* symrnkstat_col,
+ranks2stats(ranks_ctx_t* ctx, int j, int* decordstat, double* symrnkstat,
             int* nzeros_col, double* zerosymrnkstat);
 
 int
-ranks2stats_nas(SEXP ranksR, int p, int n, int j, Rboolean sparse,
-                FetchColFunDef fetch_col,
-                int* decordstat_col, double* symrnkstat_col,
+ranks2stats_nas(ranks_ctx_t* ctx, int j, int* decordstat, double* symrnkstat,
                 int* nzeros_col, double* zerosymrnkstat, int* nnas);
