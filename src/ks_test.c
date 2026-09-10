@@ -270,7 +270,6 @@ SEXP
 gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
                       SEXP sparseR, SEXP maxdiffR, SEXP absrnkR, SEXP tauR,
                       SEXP anynaR, SEXP nauseR, SEXP minsizeR, SEXP verboseR) {
-  int*     dimranks;
   int      p, n, nnas;
   int      m = length(genesetsidxR);
   Rboolean intrnks=asLogical(intrnksR);
@@ -283,24 +282,24 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
   int      minsize=INTEGER(minsizeR)[0];
   SEXP     esR;
   double*  es;
-  int      wna=0;
-  Rboolean abort=FALSE;
-  Rboolean verbose=asLogical(verboseR);
-  SEXP     pb=R_NilValue;
-  int      nunprotect=0;
+  int      wna = 0;
+  int      nzeros_col = 0;
+  double   zerosymrnkstat = 0.0;
+  int      invalidranks = 0;
+  Rboolean abort = FALSE;
+  Rboolean verbose = asLogical(verboseR);
+  SEXP     pb = R_NilValue;
+  int      nunprotect = 0;
   int*     decordstat_col;
   double*  symrnkstat_col;
-  int      nzeros_col=0;
-  double   zerosymrnkstat=0;
-  int      invalidranks=0;
-  FetchColFunDef fetch_col;
+  ranks_ctx_t* ctx;
 
-  fetch_col = find_dim_and_fetchcolfun(ranksR, intrnks, &dimranks);
-  p = dimranks[0]; /* number of rows/genes/features */
-  n = dimranks[1]; /* number of columns/samples/cells/spots */
+  ctx = ranks_ctx_create(ranksR, intrnks, sparse);
+  p = ctx->p; /* number of rows/genes */
+  n = ctx->n; /* number of columns/samples */
 
-  decordstat_col = R_Calloc(p, int);
-  symrnkstat_col = R_Calloc(p, double);
+  decordstat_col = (int*)R_alloc(p, sizeof(int));
+  symrnkstat_col = (double*)R_alloc(p, sizeof(double));
 
   PROTECT(esR = allocMatrix(REALSXP, m, n)); nunprotect++;
   es = REAL(esR);
@@ -317,20 +316,15 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
     }
 
     if (anyna)
-      invalidranks = ranks2stats_nas(ranksR, p, n, i, sparse, fetch_col,
-                                     decordstat_col, symrnkstat_col,
+      invalidranks = ranks2stats_nas(ctx, i, decordstat_col, symrnkstat_col,
                                      &nzeros_col, &zerosymrnkstat, &nnas);
     else
-      invalidranks = ranks2stats(ranksR, p, n, i, sparse, fetch_col,
-                                 decordstat_col, symrnkstat_col,
+      invalidranks = ranks2stats(ctx, i, decordstat_col, symrnkstat_col,
                                  &nzeros_col, &zerosymrnkstat);
 
     /* ranks out of range would lead to reading and writing out of the
-     * bounds of the arrays used in the random walk; memory allocated with
-     * R_Calloc() is not released by error(), so it is released before */
+     * bounds of the arrays used in the random walk */
     if (invalidranks) {
-      R_Free(decordstat_col);
-      R_Free(symrnkstat_col);
       if (verbose)
         cli_progress_done(pb);
       UNPROTECT(nunprotect); /* esR pb */
@@ -360,8 +354,7 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
       gsetidx = INTEGER(gsetidxR);
       if (anyna) {
         gsva_rnd_walk_nas(gsetidx, k, decordstat_col, symrnkstat_col, p, tau,
-                          nause, minsize, NULL, &walkstatpos, &walkstatneg,
-                          &wna);
+                          nause, minsize, NULL, &walkstatpos, &walkstatneg, &wna);
       } else {
         if (sparse && nzeros_col > 0)
           gsva_sparse_rnd_walk(gsetidx, k, decordstat_col, symrnkstat_col, p,
@@ -374,13 +367,13 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
 
       es[idx] = NA_REAL;
       if (!anyna || (!ISNA(walkstatpos) && !ISNA(walkstatneg))) {
-	      if (maxdiff) {
-		      es[idx] = walkstatpos + walkstatneg;
+        if (maxdiff) {
+          es[idx] = walkstatpos + walkstatneg;
           if (absrnk)
             es[idx] = walkstatpos - walkstatneg;
-	      } else {
-		        es[idx] = (walkstatpos > fabs(walkstatneg)) ? walkstatpos : walkstatneg;
-	      }
+        } else {
+          es[idx] = (walkstatpos > fabs(walkstatneg)) ? walkstatpos : walkstatneg;
+        }
       } else {
         if (anyna && (ISNA(walkstatpos) || ISNA(walkstatneg)) && nause == 2) { /* all.obs */
           abort=TRUE;
@@ -391,9 +384,6 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
     if (abort)
       break;
   }
-
-  R_Free(decordstat_col);
-  R_Free(symrnkstat_col);
 
   if (anyna) {
     SEXP attr;
@@ -418,6 +408,7 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
 
   return(esR);
 }
+
 /* figures out whether 'obj' is a matrix, dgCMatrix or SVT_SparseMatrix
  * and returns the class name */
 const char*
@@ -428,4 +419,3 @@ get_class_name(SEXP obj) {
     SEXP classR = getAttrib(obj, R_ClassSymbol);
     return CHAR(STRING_ELT(classR, 0));
 }
-
