@@ -18,7 +18,8 @@ typedef struct ranks_ctx_s {
   int p;
   int n;
   Rboolean sparse;
-  int (*fetch_col)(struct ranks_ctx_s* ctx, int j, int* col);
+  int (*fetch_col)(struct ranks_ctx_s* ctx, int j);
+  int *r;
 } ranks_ctx_t;
 
 ranks_ctx_t* ranks_ctx_create(SEXP XR, Rboolean intrnks, Rboolean sparse);

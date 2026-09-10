@@ -16,43 +16,45 @@ extern SEXP Matrix_DimNamesSym,
 
 /* fetch integer column from a dense matrix of type integer */
 static int
-fetch_intcol_intmatrix(struct ranks_ctx_s* ctx, int j, int* col) {
+fetch_intcol_intmatrix(struct ranks_ctx_s* ctx, int j) {
   int* X = (int*)ctx->u.data;
-  Memcpy(col, X + ctx->p * j, (size_t)ctx->p);
+  Memcpy(ctx->r, X + ctx->p * j, (size_t)ctx->p);
   return ctx->p;
 }
 
 /* fetch integer column from a dense matrix of type double */
 static int
-fetch_intcol_dblmatrix(struct ranks_ctx_s* ctx, int j, int* col) {
+fetch_intcol_dblmatrix(struct ranks_ctx_s* ctx, int j) {
   double* X = (double*)ctx->u.data;
   for (int i = 0; i < ctx->p; i++)
-    col[i] = ISNAN(X[ctx->p * j + i]) ? NA_INTEGER : (int)X[ctx->p * j + i];
+    ctx->r[i] = ISNAN(X[ctx->p * j + i]) ? NA_INTEGER : (int)X[ctx->p * j + i];
   return ctx->p;
 }
 
 /* fetch integer column from a sparse dgCMatrix */
 static int
-fetch_intcol_dgCMatrix(struct ranks_ctx_s* ctx, int j, int* col) {
+fetch_intcol_dgCMatrix(struct ranks_ctx_s* ctx, int j) {
+  int*          r  = ctx->r;
   const int*    i  = ctx->u.dgc.i;
   const int*    p  = ctx->u.dgc.p;
   const double* x  = ctx->u.dgc.x;
 
-  memset(col, 0, (size_t)ctx->p * sizeof(int));
+  memset(r, 0, (size_t)ctx->p * sizeof(int));
   for (int idx = p[j]; idx < p[j + 1]; idx++)
-    col[i[idx]] = ISNAN(x[idx]) ? NA_INTEGER : (int)x[idx];
+    r[i[idx]] = ISNAN(x[idx]) ? NA_INTEGER : (int)x[idx];
 
   return p[j + 1] - p[j];
 }
 
 /* fetch integer column from a sparse SVT_SparseMatrix of type integer */
 static int
-fetch_intcol_intSVT_SparseMatrix(struct ranks_ctx_s* ctx, int j, int* col) {
+fetch_intcol_intSVT_SparseMatrix(struct ranks_ctx_s* ctx, int j) {
   SEXP Xsvt_SVT = ctx->u.svt;
   SEXP svtLeaf  = VECTOR_ELT(Xsvt_SVT, j);
+  int* r        = ctx->r;
   int  nnz      = 0;
 
-  memset(col, 0, (size_t)ctx->p * sizeof(int));
+  memset(r, 0, (size_t)ctx->p * sizeof(int));
   if (svtLeaf != R_NilValue) {
     SEXP valsR        = VECTOR_ELT(svtLeaf, 0);
     SEXP offsetsR     = VECTOR_ELT(svtLeaf, 1);
@@ -64,10 +66,10 @@ fetch_intcol_intSVT_SparseMatrix(struct ranks_ctx_s* ctx, int j, int* col) {
     if (nvals > 0) {
       vals = INTEGER(valsR);
       for (int i = 0; i < nvals; i++)
-        col[offsets[i]] = vals[i];
+        r[offsets[i]] = vals[i];
     } else { /* lacunar */
       for (int i = 0; i < noffsets; i++)
-        col[offsets[i]] = 1;
+        r[offsets[i]] = 1;
     }
     nnz = noffsets;
   }
@@ -77,12 +79,13 @@ fetch_intcol_intSVT_SparseMatrix(struct ranks_ctx_s* ctx, int j, int* col) {
 
 /* fetch integer column from a sparse SVT_SparseMatrix of type double */
 static int
-fetch_intcol_dblSVT_SparseMatrix(struct ranks_ctx_s* ctx, int j, int* col) {
-  SEXP  Xsvt_SVT = ctx->u.svt;
-  SEXP  svtLeaf  = VECTOR_ELT(Xsvt_SVT, j);
-  int   nnz      = 0;
+fetch_intcol_dblSVT_SparseMatrix(struct ranks_ctx_s* ctx, int j) {
+  SEXP   Xsvt_SVT = ctx->u.svt;
+  SEXP   svtLeaf  = VECTOR_ELT(Xsvt_SVT, j);
+  int*   r        = ctx->r;
+  int    nnz      = 0;
 
-  memset(col, 0, (size_t)ctx->p * sizeof(int));
+  memset(r, 0, (size_t)ctx->p * sizeof(int));
   if (svtLeaf != R_NilValue) {
     SEXP   valsR        = VECTOR_ELT(svtLeaf, 0);
     SEXP   offsetsR     = VECTOR_ELT(svtLeaf, 1);
@@ -94,10 +97,10 @@ fetch_intcol_dblSVT_SparseMatrix(struct ranks_ctx_s* ctx, int j, int* col) {
     if (nvals > 0) {
       vals = REAL(valsR);
       for (int i = 0; i < nvals; i++)
-        col[offsets[i]] = ISNAN(vals[i]) ? NA_INTEGER : (int)vals[i];
+        r[offsets[i]] = ISNAN(vals[i]) ? NA_INTEGER : (int)vals[i];
     } else { /* lacunar */
       for (int i = 0; i < noffsets; i++)
-        col[offsets[i]] = 1;
+        r[offsets[i]] = 1;
     }
     nnz = noffsets;
   }
@@ -146,8 +149,9 @@ ranks_ctx_create(SEXP XR, Rboolean intrnks, Rboolean sparse) {
     error("input class %s cannot be handled yet.", class);
   }
 
-  ctx->p    = dim[0];
-  ctx->n    = dim[1];
+  ctx->p = dim[0];
+  ctx->n = dim[1];
+  ctx->r = (int*)R_alloc(ctx->p, sizeof(int));
 
   return ctx;
 }
@@ -177,114 +181,24 @@ invalid_rank(int r, int p, int nnz, int nnas) {
 int
 ranks2stats(ranks_ctx_t* ctx, int j, int* decordstat, double* symrnkstat,
             int* nzeros_col, double* zerosymrnkstat) {
-  int* r         = (int*)R_alloc(ctx->p, sizeof(int));
-  int* r_dense   = (int*)R_alloc(ctx->p, sizeof(int));
+  int* r = ctx->r;
   int  nnz, nzs;
   int irankflag = 0;
 
-  nnz = ctx->fetch_col(ctx, j, r);
+  nnz = ctx->fetch_col(ctx, j);
   nzs = ctx->p - nnz;
 
-  if (nzs > 0) { /* input is a sparse matrix */
-    int k = 1;
-    for (int i = 0; i < ctx->p && !irankflag; i++) {
-      /* missing ranks are not expected when calling this function */
-      irankflag = r[i] == NA_INTEGER ? 2 : invalid_rank(r[i], ctx->p, nnz, 0);
-      if (!irankflag) {
-        if (r[i] == 0)
-          r_dense[i] = k++;
-        else
-          r_dense[i] = r[i] + nzs;
-      }
-    }
-  } else { /* input is a dense matrix */
-    for (int i = 0; i < ctx->p && !irankflag; i++) {
-      /* missing ranks are not expected when calling this function */
-      irankflag = r[i] == NA_INTEGER ? 2 : invalid_rank(r[i], ctx->p, nnz, 0);
-      if (!irankflag)
-        r_dense[i] = r[i];
-    }
-  }
-
+  /* validate ranks before the in-place conversion to dense ranks */
+  for (int i = 0; i < ctx->p && !irankflag; i++)
+    irankflag = r[i] == NA_INTEGER ? 2 : invalid_rank(r[i], ctx->p, nnz, 0);
   if (irankflag)
     return irankflag;
 
-  /* dense ranks into decreasing order statistics */
-  for (int i = 0; i < ctx->p; i++)
-    decordstat[i] = ctx->p - r_dense[i] + 1;
-
-  *nzeros_col      = 0;
-  *zerosymrnkstat  = 0.0;
-  if (nzs > 0 && ctx->sparse) {
-    double nnz1div2 = ((double)(nnz + 1)) / 2.0;
-    for (int i = 0; i < ctx->p; i++) {
-      if (r[i] == 0) {
-        symrnkstat[i] = fabs(nnz1div2 - 1.0);
-        (*nzeros_col)++;
-        *zerosymrnkstat = symrnkstat[i];
-      }
-      else
-        symrnkstat[i] = fabs(nnz1div2 - (double)(r[i] + 1));
-    }
-  } else {
-    for (int i = 0; i < ctx->p; i++)
-      symrnkstat[i] = fabs(((double)ctx->p) / 2.0 - ((double)r_dense[i]));
-  }
-  return 0;
-}
-
-int
-ranks2stats_nas(ranks_ctx_t* ctx, int j, int* decordstat, double* symrnkstat,
-                int* nzeros_col, double* zerosymrnkstat, int* nnas) {
-  int* r         = (int*)R_alloc(ctx->p, sizeof(int));
-  int* r_dense   = (int*)R_alloc(ctx->p, sizeof(int));
-  int  nnz, nzs;
-  Rboolean irankflag = FALSE;
-
-  nnz = ctx->fetch_col(ctx, j, r);
-  *nnas = 0;
-  for (int i = 0; i < ctx->p; i++)
-    if (r[i] == NA_INTEGER)
-      (*nnas)++;
-
-  nzs = ctx->p - nnz;
-
+  *nzeros_col = *zerosymrnkstat = 0;
   if (nzs > 0) { /* input is a sparse matrix */
-    int k = 1;
-    for (int i = 0; i < ctx->p && !irankflag; i++) {
-      irankflag = invalid_rank(r[i], ctx->p, nnz, *nnas);
-      if (!irankflag) {
-        if (r[i] != NA_INTEGER) {
-          if (r[i] == 0)
-            r_dense[i] = k++;
-          else
-            r_dense[i] = r[i] + nzs;
-        } else
-          r_dense[i] = NA_INTEGER;
-      }
-    }
-  } else { /* input is a dense matrix */
-    for (int i = 0; i < ctx->p && !irankflag; i++) {
-      irankflag = invalid_rank(r[i], ctx->p, nnz, *nnas);
-      if (!irankflag)
-        r_dense[i] = r[i];
-    }
-  }
-
-  if (irankflag)
-    return 1;
-
-  /* dense ranks into decreasing order statistics */
-  for (int i = 0; i < ctx->p; i++)
-    decordstat[i] = r_dense[i] == NA_INTEGER ? NA_INTEGER
-                                             : ctx->p - *nnas - r_dense[i] + 1;
-
-  *nzeros_col      = 0;
-  *zerosymrnkstat  = 0.0;
-  if (nzs > 0 && ctx->sparse) {
-    double nnz1div2 = ((double)(nnz - *nnas + 1)) / 2.0;
-    for (int i = 0; i < ctx->p; i++) {
-      if (r[i] != NA_INTEGER) {
+    if (ctx->sparse) {
+      double nnz1div2 = ((double)(nnz + 1)) / 2.0;
+      for (int i = 0; i < ctx->p; i++) {
         if (r[i] == 0) {
           symrnkstat[i] = fabs(nnz1div2 - 1.0);
           (*nzeros_col)++;
@@ -293,14 +207,88 @@ ranks2stats_nas(ranks_ctx_t* ctx, int j, int* decordstat, double* symrnkstat,
         else
           symrnkstat[i] = fabs(nnz1div2 - (double)(r[i] + 1));
       }
-      else
-        symrnkstat[i] = NA_REAL;
     }
-  } else {
+
+    int k = 1;
     for (int i = 0; i < ctx->p; i++) {
-      if (r_dense[i] != NA_INTEGER)
+      if (r[i] == 0)
+        r[i] = k++;
+      else
+        r[i] = r[i] + nzs;
+    }
+  }
+
+  /* dense ranks into decreasing order statistics */
+  for (int i = 0; i < ctx->p; i++)
+    decordstat[i] = ctx->p - r[i] + 1;
+
+  if (!(nzs > 0 && ctx->sparse)) {
+    for (int i = 0; i < ctx->p; i++)
+      symrnkstat[i] = fabs(((double)ctx->p) / 2.0 - ((double)r[i]));
+  }
+  return 0;
+}
+
+int
+ranks2stats_nas(ranks_ctx_t* ctx, int j, int* decordstat, double* symrnkstat,
+                int* nzeros_col, double* zerosymrnkstat, int* nnas) {
+  int* r = ctx->r;
+  int  nnz, nzs;
+  Rboolean irankflag = FALSE;
+
+  nnz = ctx->fetch_col(ctx, j);
+  *nnas = 0;
+  for (int i = 0; i < ctx->p; i++)
+    if (r[i] == NA_INTEGER)
+      (*nnas)++;
+
+  nzs = ctx->p - nnz;
+
+  for (int i = 0; i < ctx->p && !irankflag; i++)
+    irankflag = invalid_rank(r[i], ctx->p, nnz, *nnas);
+  if (irankflag)
+    return 1;
+
+  *nzeros_col = *zerosymrnkstat = 0;
+  if (nzs > 0) { /* input is a sparse matrix */
+    if (ctx->sparse) {
+      double nnz1div2 = ((double)(nnz - *nnas + 1)) / 2.0;
+      for (int i = 0; i < ctx->p; i++) {
+        if (r[i] != NA_INTEGER) {
+          if (r[i] == 0) {
+            symrnkstat[i] = fabs(nnz1div2 - 1.0);
+            (*nzeros_col)++;
+            *zerosymrnkstat = symrnkstat[i];
+          }
+          else
+            symrnkstat[i] = fabs(nnz1div2 - (double)(r[i] + 1));
+        }
+        else
+          symrnkstat[i] = NA_REAL;
+      }
+    }
+
+    int k = 1;
+    for (int i = 0; i < ctx->p; i++) {
+      if (r[i] != NA_INTEGER) {
+        if (r[i] == 0)
+          r[i] = k++;
+        else
+          r[i] = r[i] + nzs;
+      }
+    }
+  }
+
+  /* dense ranks into decreasing order statistics */
+  for (int i = 0; i < ctx->p; i++)
+    decordstat[i] = r[i] == NA_INTEGER ? NA_INTEGER
+                                        : ctx->p - *nnas - r[i] + 1;
+
+  if (!(nzs > 0 && ctx->sparse)) {
+    for (int i = 0; i < ctx->p; i++) {
+      if (r[i] != NA_INTEGER)
         symrnkstat[i] = fabs(((double)(ctx->p - *nnas)) / 2.0
-                                  - ((double)r_dense[i]));
+                                  - ((double)r[i]));
       else
         symrnkstat[i] = NA_REAL;
     }
