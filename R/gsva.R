@@ -211,15 +211,23 @@ setMethod("gsva", signature(param="gsvaParam"),
 #' the gene identifier type from the expression data set provided as `exprData`
 #' (by calling [`gsvaAnnotation`] on it).  If still not successful, the
 #' `NullIdentifier()` will be used as the gene identifier type, gene identifier
-#' mapping will be disabled and gene identifiers used in expression data set and
-#' gene sets can only be matched directly.
+#' mapping will be disabled and gene identifiers used in expression data set
+#' and gene sets can only be matched directly.
 #' 
-#' @param minSize Numeric vector of length 1.  Minimum size of the resulting gene
-#' sets after gene identifier mapping. By default, the minimum size is 1.
+#' @param minSize Numeric vector of length 1.  Minimum size of the resulting
+#' gene sets after gene identifier mapping. By default, the minimum size is 1.
 #' 
-#' @param maxSize Numeric vector of length 1.  Maximum size of the resulting gene
-#' sets after gene identifier mapping. By default, the maximum size is `Inf`.
+#' @param maxSize Numeric vector of length 1.  Maximum size of the resulting
+#' gene sets after gene identifier mapping. By default, the maximum size is
+#' `Inf`.
 #' 
+#' @param rownorm Character vector of length 1 denoting the method to use for
+#' row normalization of the input expression data. The default value
+#' `rownorm="ecdf"` will perform a row normalization of the input expression
+#' data by transforming the expression values of each row using an empirical
+#' cumulative distribution function (ECDF) built from the same gene expression
+#' profile. The value `rownorm="none"` will skip the row normalization step.
+#'
 #' @param kcdf Character vector of length 1 denoting the kernel to use during
 #' the non-parametric estimation of the empirical cumulative distribution
 #' function (ECDF) of expression levels across samples. The value `kcdf="auto"`
@@ -359,6 +367,7 @@ setMethod("gsva", signature(param="gsvaParam"),
 gsvaParam <- function(exprData, geneSets,
                       assay=NA_character_, annotation=NULL,
                       minSize=1, maxSize=Inf,
+                      rownorm=c("ecdf", "clr", "none"),
                       kcdf=c("auto", "Gaussian", "Poisson", "none"),
                       kcdfNoneMinSampleSize=200, tau=1, maxDiff=TRUE,
                       absRanking=FALSE, sparse=TRUE,
@@ -370,6 +379,7 @@ gsvaParam <- function(exprData, geneSets,
 
     .check_input_expr_gene_sets(exprData, geneSets)
 
+    rownorm <- match.arg(rownorm)
     kcdf <- match.arg(kcdf)
     kcdfNoneMinSampleSize <- as.integer(kcdfNoneMinSampleSize)
     checkNA <- match.arg(checkNA)
@@ -416,7 +426,8 @@ gsvaParam <- function(exprData, geneSets,
                  exprData=exprData, geneSets=geneSets,
                  assay=assay, annotation=annotation,
                  minSize=minSize, maxSize=maxSize,
-                 kcdf=kcdf, kcdfNoneMinSampleSize=kcdfNoneMinSampleSize,
+                 rownorm=rownorm, kcdf=kcdf,
+                 kcdfNoneMinSampleSize=kcdfNoneMinSampleSize,
                  tau=as.double(tau), maxDiff=maxDiff, absRanking=absRanking,
                  sparse=sparse, checkNA=checkNA, didCheckNA=naparam$didCheckNA,
                  anyNA=naparam$any_na, use=use, filterRows=filterRows,
@@ -491,6 +502,12 @@ setValidity("gsvaParam", function(object) {
     if(object@maxSize < object@minSize) {
         inv <- c(inv, "@maxSize must be at least @minSize or greater")
     }
+    if(!.isCharLength1(object@rownorm)) {
+        inv <- c(inv, "@rownorm must be a single character string")
+    }
+    if(!.isCharLength1(object@kcdf)) {
+        inv <- c(inv, "@kcdf must be a single character string")
+    }
     if(length(object@kcdfNoneMinSampleSize) != 1) {
         inv <- c(inv, "@kcdfNoneMinSampleSize must be of length 1")
     }
@@ -564,6 +581,12 @@ setValidity("gsvaParam", function(object) {
 ## ----- getters -----
 
 #' @noRd
+.get_rownorm <- function(object) {
+  stopifnot(inherits(object, "gsvaParam"))
+  return(object@rownorm)
+}
+
+#' @noRd
 .get_kcdf <- function(object) {
   stopifnot(inherits(object, "gsvaParam"))
   return(object@kcdf)
@@ -631,12 +654,16 @@ setMethod("details",
           signature=signature(object="gsvaParam"),
           function(object) {
               callNextMethod(object)
-              cat("kcdf: ", .get_kcdf(object), "\n",
-                  "kcdfNoneMinSampleSize: ", .get_kcdfNoneMinSampleSize(object), "\n",
-                  "tau: ", .get_tau(object), "\n",
-                  "maxDiff: ", .get_maxDiff(object), "\n",
-                  "absRanking: ", .get_absRanking(object), "\n",
-                  sep="")
+              cat("rownorm: ", .get_rownorm(object), "\n", sep="")
+              if (.get_rownorm(object) == "ecdf") {
+                  cat("kcdf: ", .get_kcdf(object), "\n",
+                      "kcdfNoneMinSampleSize: ",
+                      .get_kcdfNoneMinSampleSize(object), "\n",
+                      "tau: ", .get_tau(object), "\n",
+                      "maxDiff: ", .get_maxDiff(object), "\n",
+                      "absRanking: ", .get_absRanking(object), "\n",
+                      sep="")
+              }
               cat("sparse: ", .get_sparse(object), "\n")
               cat("checkNA: ", .get_checkNA(object), "\n", sep="")
               if (.get_didCheckNA(object)) {
@@ -675,6 +702,7 @@ setMethod("details",
 
     if (is(x, "gsvaParam"))
         lst <- c(lst,
+                 rownorm=.get_rownorm(x),
                  kcdf=.get_kcdf(x),
                  kcdfNoneMinSampleSize=.get_kcdfNoneMinSampleSize(x),
                  tau=.get_tau(x),
@@ -697,10 +725,10 @@ setMethod("details",
         p <- metadata(exprData)$gsvaParam
         if (!any(assayNames(exprData) %in% c("gsvarnorm", "gsvaranks", "es"))) 
             cli_abort(c("x"="Wrong metadata in the input expression data."))
-	metadata(exprData)$geneSets <- NULL
-	metadata(exprData)$assay <- NULL
-	metadata(exprData)$gsvaParam <- NULL
-	metadata(exprData)$restrict <- NULL
+        metadata(exprData)$geneSets <- NULL
+        metadata(exprData)$assay <- NULL
+        metadata(exprData)$gsvaParam <- NULL
+        metadata(exprData)$restrict <- NULL
     } else {
         mask <- is.null(attr(exprData, "gsvaParam")) ||
                 is.null(attr(exprData, "assay"))
@@ -710,17 +738,18 @@ setMethod("details",
         a <- attr(exprData, "assay")
         if (!a %in% c("gsvarnorm", "gsvaranks", "es"))
             cli_abort(c("x"="Wrong metadata in the input expression data."))
-	attr(exprData, "geneSets") <- NULL
-	attr(exprData, "assay") <- NULL
-	attr(exprData, "gsvaParam") <- NULL
-	attr(exprData, "restrict") <- NULL
+        attr(exprData, "geneSets") <- NULL
+        attr(exprData, "assay") <- NULL
+        attr(exprData, "gsvaParam") <- NULL
+        attr(exprData, "restrict") <- NULL
     }
 
     param <- new("gsvaParam",
                  exprData=exprData, geneSets=p$geneSets,
                  assay=p$assay, annotation=p$annotation,
                  minSize=p$minSize, maxSize=p$maxSize,
-                 kcdf=p$kcdf, kcdfNoneMinSampleSize=p$kcdfNoneMinSampleSize,
+                 rownorm=p$rownorm, kcdf=p$kcdf,
+                 kcdfNoneMinSampleSize=p$kcdfNoneMinSampleSize,
                  tau=p$tau, maxDiff=p$maxDiff, absRanking=p$absRanking,
                  sparse=p$sparse, checkNA=p$checkNA, didCheckNA=p$didCheckNA,
                  anyNA=p$anyNA, use=p$use, filterRows=p$filterRows,

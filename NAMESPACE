@@ -65,122 +65,160 @@ importClassesFrom(SparseArray,SVT_SparseMatrix)
 importClassesFrom(SpatialExperiment,SpatialExperiment)
 importClassesFrom(SummarizedExperiment,SummarizedExperiment)
 importFrom(Biobase,selectSome)
-importFrom(BiocGenerics,"annotation<-")
-importFrom(BiocGenerics,"type<-")
-importFrom(BiocGenerics,annotation)
-importFrom(BiocGenerics,cbind)
-importFrom(BiocGenerics,rbind)
-importFrom(BiocGenerics,type)
-importFrom(BiocParallel,"bpprogressbar<-")
-importFrom(BiocParallel,"bpstopOnError<-")
-importFrom(BiocParallel,BatchtoolsParam)
-importFrom(BiocParallel,MulticoreParam)
-importFrom(BiocParallel,SerialParam)
-importFrom(BiocParallel,SnowParam)
-importFrom(BiocParallel,batchtoolsRegistryargs)
-importFrom(BiocParallel,bplapply)
-importFrom(BiocParallel,bpnworkers)
-importFrom(BiocParallel,bpok)
-importFrom(BiocParallel,bpprogressbar)
-importFrom(BiocParallel,bptry)
+importFrom(BiocGenerics,
+  "annotation<-",
+  "type<-",
+  annotation,
+  cbind,
+  rbind,
+  type
+)
+importFrom(BiocParallel,
+  "bpprogressbar<-",
+  "bpstopOnError<-",
+  BatchtoolsParam,
+  MulticoreParam,
+  SerialParam,
+  SnowParam,
+  batchtoolsRegistryargs,
+  bplapply,
+  bpnworkers,
+  bpok,
+  bpprogressbar,
+  bptry
+)
 importFrom(BiocSingular,runExactSVD)
-importFrom(DelayedArray,blockApply)
-importFrom(DelayedArray,blockReduce)
-importFrom(DelayedArray,chunkGrid)
-importFrom(DelayedArray,chunkdim)
-importFrom(DelayedArray,close)
-importFrom(DelayedArray,colAutoGrid)
-importFrom(DelayedArray,defaultAutoGrid)
-importFrom(DelayedArray,getAutoBlockLength)
-importFrom(DelayedArray,gridReduce)
-importFrom(DelayedArray,rowAutoGrid)
-importFrom(DelayedArray,rowRanges)
-importFrom(DelayedArray,seed)
-importFrom(DelayedArray,setAutoBPPARAM)
+importFrom(DelayedArray,
+  blockApply,
+  blockReduce,
+  chunkGrid,
+  chunkdim,
+  close,
+  colAutoGrid,
+  defaultAutoGrid,
+  getAutoBlockLength,
+  gridReduce,
+  rowAutoGrid,
+  rowRanges,
+  seed,
+  setAutoBPPARAM
+)
 importFrom(DelayedMatrixStats,rowSds)
-importFrom(GSEABase,AnnoOrEntrezIdentifier)
-importFrom(GSEABase,ENSEMBLIdentifier)
-importFrom(GSEABase,EntrezIdentifier)
-importFrom(GSEABase,NullCollection)
-importFrom(GSEABase,NullIdentifier)
-importFrom(GSEABase,SymbolIdentifier)
-importFrom(GSEABase,details)
-importFrom(GSEABase,geneIdType)
-importFrom(GSEABase,geneIds)
-importFrom(GSEABase,mapIdentifiers)
-importFrom(HDF5Array,HDF5RealizationSink)
-importFrom(HDF5Array,loadHDF5SummarizedExperiment)
-importFrom(HDF5Array,saveHDF5SummarizedExperiment)
-importFrom(HDF5Array,writeHDF5Array)
-importFrom(IRanges,CharacterList)
-importFrom(IRanges,IRanges)
-importFrom(IRanges,IntegerList)
-importFrom(IRanges,end)
-importFrom(IRanges,match)
-importFrom(IRanges,ranges)
-importFrom(IRanges,start)
-importFrom(IRanges,width)
+importFrom(GSEABase,
+  AnnoOrEntrezIdentifier,
+  ENSEMBLIdentifier,
+  EntrezIdentifier,
+  NullCollection,
+  NullIdentifier,
+  SymbolIdentifier,
+  details,
+  geneIdType,
+  geneIds,
+  mapIdentifiers
+)
+importFrom(HDF5Array,
+  HDF5RealizationSink,
+  loadHDF5SummarizedExperiment,
+  saveHDF5SummarizedExperiment,
+  writeHDF5Array
+)
+importFrom(IRanges,
+  CharacterList,
+  IRanges,
+  IntegerList,
+  end,
+  match,
+  ranges,
+  start,
+  width
+)
 importFrom(Matrix,nnzero)
-importFrom(MatrixGenerics,colRanks)
-importFrom(MatrixGenerics,colSums)
-importFrom(MatrixGenerics,rowMeans)
-importFrom(MatrixGenerics,rowSds)
-importFrom(S4Arrays,ArrayViewport)
-importFrom(S4Arrays,DummyArrayGrid)
-importFrom(S4Arrays,is_sparse)
-importFrom(S4Arrays,read_block)
-importFrom(S4Arrays,refdim)
-importFrom(S4Arrays,write_block)
-importFrom(S4Vectors,"metadata<-")
-importFrom(S4Vectors,DataFrame)
-importFrom(S4Vectors,SimpleList)
-importFrom(S4Vectors,metadata)
-importFrom(SingleCellExperiment,SingleCellExperiment)
-importFrom(SingleCellExperiment,altExps)
-importFrom(SingleCellExperiment,reducedDims)
-importFrom(SparseArray,nzcount)
-importFrom(SparseArray,rowMeans)
-importFrom(SparseArray,rowSds)
+importFrom(MatrixGenerics,
+  colRanks,
+  colSums,
+  rowMeans,
+  rowSds
+)
+importFrom(S4Arrays,
+  ArrayViewport,
+  DummyArrayGrid,
+  is_sparse,
+  read_block,
+  refdim,
+  write_block
+)
+importFrom(S4Vectors,
+  "metadata<-",
+  DataFrame,
+  SimpleList,
+  metadata
+)
+importFrom(SingleCellExperiment,
+  SingleCellExperiment,
+  altExps,
+  reducedDims
+)
+importFrom(SparseArray,
+  nzcount,
+  rowMeans,
+  rowSds
+)
 importFrom(SpatialExperiment,SpatialExperiment)
-importFrom(SummarizedExperiment,"assay<-")
-importFrom(SummarizedExperiment,SummarizedExperiment)
-importFrom(SummarizedExperiment,assay)
-importFrom(SummarizedExperiment,assayNames)
-importFrom(cli,cli_abort)
-importFrom(cli,cli_alert_danger)
-importFrom(cli,cli_alert_info)
-importFrom(cli,cli_alert_success)
-importFrom(cli,cli_alert_warning)
-importFrom(cli,cli_progress_bar)
-importFrom(cli,cli_progress_done)
-importFrom(cli,cli_progress_update)
-importFrom(graphics,abline)
-importFrom(graphics,grid)
-importFrom(graphics,lines)
-importFrom(graphics,plot)
-importFrom(graphics,segments)
-importFrom(memuse,Sys.meminfo)
-importFrom(memuse,howbig)
-importFrom(methods,callNextMethod)
-importFrom(methods,getClass)
-importFrom(methods,is)
-importFrom(methods,isClass)
-importFrom(methods,new)
-importFrom(sparseMatrixStats,colRanks)
-importFrom(sparseMatrixStats,rowRanges)
-importFrom(stats,dist)
-importFrom(stats,ecdf)
-importFrom(stats,na.omit)
-importFrom(stats,pnorm)
-importFrom(stats,rnorm)
-importFrom(stats,rpois)
-importFrom(stats,sd)
-importFrom(utils,capture.output)
-importFrom(utils,globalVariables)
-importFrom(utils,head)
-importFrom(utils,installed.packages)
-importFrom(utils,packageDescription)
-importFrom(utils,tail)
+importFrom(SummarizedExperiment,
+  "assay<-",
+  SummarizedExperiment,
+  assay,
+  assayNames
+)
+importFrom(cli,
+  cli_abort,
+  cli_alert_danger,
+  cli_alert_info,
+  cli_alert_success,
+  cli_alert_warning,
+  cli_progress_bar,
+  cli_progress_done,
+  cli_progress_update
+)
+importFrom(graphics,
+  abline,
+  grid,
+  lines,
+  plot,
+  segments
+)
+importFrom(memuse,
+  Sys.meminfo,
+  howbig
+)
+importFrom(methods,
+  callNextMethod,
+  getClass,
+  is,
+  isClass,
+  new
+)
+importFrom(sparseMatrixStats,
+  colRanks,
+  rowRanges
+)
+importFrom(stats,
+  dist,
+  ecdf,
+  na.omit,
+  pnorm,
+  rnorm,
+  rpois,
+  sd
+)
+importFrom(utils,
+  capture.output,
+  globalVariables,
+  head,
+  installed.packages,
+  packageDescription,
+  tail
+)
 importMethodsFrom(Biobase,experimentData)
 importMethodsFrom(Biobase,exprs)
 importMethodsFrom(Biobase,featureNames)

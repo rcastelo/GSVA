@@ -17,6 +17,7 @@ gsvaParam(
   annotation = NULL,
   minSize = 1,
   maxSize = Inf,
+  rownorm = c("ecdf", "clr", "none"),
   kcdf = c("auto", "Gaussian", "Poisson", "none"),
   kcdfNoneMinSampleSize = 200,
   tau = 1,
@@ -58,14 +59,22 @@ If the default value \code{NULL} is provided, an attempt will be made to extract
 the gene identifier type from the expression data set provided as \code{exprData}
 (by calling \code{\link{gsvaAnnotation}} on it).  If still not successful, the
 \code{NullIdentifier()} will be used as the gene identifier type, gene identifier
-mapping will be disabled and gene identifiers used in expression data set and
-gene sets can only be matched directly.}
+mapping will be disabled and gene identifiers used in expression data set
+and gene sets can only be matched directly.}
 
-\item{minSize}{Numeric vector of length 1.  Minimum size of the resulting gene
-sets after gene identifier mapping. By default, the minimum size is 1.}
+\item{minSize}{Numeric vector of length 1.  Minimum size of the resulting
+gene sets after gene identifier mapping. By default, the minimum size is 1.}
 
-\item{maxSize}{Numeric vector of length 1.  Maximum size of the resulting gene
-sets after gene identifier mapping. By default, the maximum size is \code{Inf}.}
+\item{maxSize}{Numeric vector of length 1.  Maximum size of the resulting
+gene sets after gene identifier mapping. By default, the maximum size is
+\code{Inf}.}
+
+\item{rownorm}{Character vector of length 1 denoting the method to use for
+row normalization of the input expression data. The default value
+\code{rownorm="ecdf"} will perform a row normalization of the input expression
+data by transforming the expression values of each row using an empirical
+cumulative distribution function (ECDF) built from the same gene expression
+profile. The value \code{rownorm="none"} will skip the row normalization step.}
 
 \item{kcdf}{Character vector of length 1 denoting the kernel to use during
 the non-parametric estimation of the empirical cumulative distribution
@@ -195,6 +204,13 @@ All of these parameters are described in detail below.
 \section{Slots}{
 
 \describe{
+\item{\code{rownorm}}{Character vector of length 1 denoting the method to use for
+row normalization of the input expression data. The default value
+\code{rownorm="ecdf"} will perform a row normalization of the input expression
+data by transforming the expression values of each row using an empirical
+cumulative distribution function (ECDF) built from the same gene expression
+profile. The value \code{rownorm="none"} will skip the row normalization step.}
+
 \item{\code{kcdf}}{Character vector of length 1 denoting the kernel to use during
 the non-parametric estimation of the empirical cumulative distribution
 function (ECDF) of expression levels across samples. The value \code{kcdf="auto"}
