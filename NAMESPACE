@@ -159,6 +159,9 @@ importFrom(SingleCellExperiment,
   reducedDims
 )
 importFrom(SparseArray,
+  NaArray,
+  SparseArray,
+  is_nonna,
   nzcount,
   rowMeans,
   rowSds

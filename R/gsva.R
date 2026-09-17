@@ -221,12 +221,12 @@ setMethod("gsva", signature(param="gsvaParam"),
 #' gene sets after gene identifier mapping. By default, the maximum size is
 #' `Inf`.
 #' 
-#' @param rownorm Character vector of length 1 denoting the method to use for
+#' @param rowNorm Character vector of length 1 denoting the method to use for
 #' row normalization of the input expression data. The default value
-#' `rownorm="ecdf"` will perform a row normalization of the input expression
+#' `rowNorm="ecdf"` will perform a row normalization of the input expression
 #' data by transforming the expression values of each row using an empirical
 #' cumulative distribution function (ECDF) built from the same gene expression
-#' profile. The value `rownorm="none"` will skip the row normalization step.
+#' profile. The value `rowNorm="none"` will skip the row normalization step.
 #'
 #' @param kcdf Character vector of length 1 denoting the kernel to use during
 #' the non-parametric estimation of the empirical cumulative distribution
@@ -367,7 +367,7 @@ setMethod("gsva", signature(param="gsvaParam"),
 gsvaParam <- function(exprData, geneSets,
                       assay=NA_character_, annotation=NULL,
                       minSize=1, maxSize=Inf,
-                      rownorm=c("ecdf", "clr", "none"),
+                      rowNorm=c("ecdf", "clr", "none"),
                       kcdf=c("auto", "Gaussian", "Poisson", "none"),
                       kcdfNoneMinSampleSize=200, tau=1, maxDiff=TRUE,
                       absRanking=FALSE, sparse=TRUE,
@@ -379,7 +379,7 @@ gsvaParam <- function(exprData, geneSets,
 
     .check_input_expr_gene_sets(exprData, geneSets)
 
-    rownorm <- match.arg(rownorm)
+    rowNorm <- match.arg(rowNorm)
     kcdf <- match.arg(kcdf)
     kcdfNoneMinSampleSize <- as.integer(kcdfNoneMinSampleSize)
     checkNA <- match.arg(checkNA)
@@ -426,7 +426,7 @@ gsvaParam <- function(exprData, geneSets,
                  exprData=exprData, geneSets=geneSets,
                  assay=assay, annotation=annotation,
                  minSize=minSize, maxSize=maxSize,
-                 rownorm=rownorm, kcdf=kcdf,
+                 rowNorm=rowNorm, kcdf=kcdf,
                  kcdfNoneMinSampleSize=kcdfNoneMinSampleSize,
                  tau=as.double(tau), maxDiff=maxDiff, absRanking=absRanking,
                  sparse=sparse, checkNA=checkNA, didCheckNA=naparam$didCheckNA,
@@ -502,8 +502,8 @@ setValidity("gsvaParam", function(object) {
     if(object@maxSize < object@minSize) {
         inv <- c(inv, "@maxSize must be at least @minSize or greater")
     }
-    if(!.isCharLength1(object@rownorm)) {
-        inv <- c(inv, "@rownorm must be a single character string")
+    if(!.isCharLength1(object@rowNorm)) {
+        inv <- c(inv, "@rowNorm must be a single character string")
     }
     if(!.isCharLength1(object@kcdf)) {
         inv <- c(inv, "@kcdf must be a single character string")
@@ -581,9 +581,9 @@ setValidity("gsvaParam", function(object) {
 ## ----- getters -----
 
 #' @noRd
-.get_rownorm <- function(object) {
-  stopifnot(inherits(object, "gsvaParam"))
-  return(object@rownorm)
+.get_rowNorm <- function(object) {
+  stopifnot(inherits(object, "gsvaParam") || inherits(object, "gsvaRanksParam"))
+  return(object@rowNorm)
 }
 
 #' @noRd
@@ -654,8 +654,8 @@ setMethod("details",
           signature=signature(object="gsvaParam"),
           function(object) {
               callNextMethod(object)
-              cat("rownorm: ", .get_rownorm(object), "\n", sep="")
-              if (.get_rownorm(object) == "ecdf") {
+              cat("rowNorm: ", .get_rowNorm(object), "\n", sep="")
+              if (.get_rowNorm(object) == "ecdf") {
                   cat("kcdf: ", .get_kcdf(object), "\n",
                       "kcdfNoneMinSampleSize: ",
                       .get_kcdfNoneMinSampleSize(object), "\n",
@@ -702,7 +702,7 @@ setMethod("details",
 
     if (is(x, "gsvaParam"))
         lst <- c(lst,
-                 rownorm=.get_rownorm(x),
+                 rowNorm=.get_rowNorm(x),
                  kcdf=.get_kcdf(x),
                  kcdfNoneMinSampleSize=.get_kcdfNoneMinSampleSize(x),
                  tau=.get_tau(x),
@@ -748,7 +748,7 @@ setMethod("details",
                  exprData=exprData, geneSets=p$geneSets,
                  assay=p$assay, annotation=p$annotation,
                  minSize=p$minSize, maxSize=p$maxSize,
-                 rownorm=p$rownorm, kcdf=p$kcdf,
+                 rowNorm=p$rowNorm, kcdf=p$kcdf,
                  kcdfNoneMinSampleSize=p$kcdfNoneMinSampleSize,
                  tau=p$tau, maxDiff=p$maxDiff, absRanking=p$absRanking,
                  sparse=p$sparse, checkNA=p$checkNA, didCheckNA=p$didCheckNA,
@@ -921,8 +921,9 @@ gsvaRowNorm <- function(param,
                                        verbose)
 
     rem <- 0
-    if (.get_filterRows(param)) {
+    if (.get_filterRows(param)) { ## check on positive values for CLR?
         filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
+                                 rowNorm=.get_rowNorm(param),
                                  removeConstant=TRUE,
                                  removeNzConstant=TRUE,
                                  errorOnTooFewRows=errorOnTooFewRows,
@@ -933,19 +934,24 @@ gsvaRowNorm <- function(param,
         cli_alert_warning(paste("Skipping filtering of constant rows",
                                 "(filterRows=FALSE)"))
     
-    if (verbose)
-        cli_alert_info(sprintf("Normalizing rows"))
+    gsvarnorm <- filtDataMatrix
+    if (.get_rowNorm(param) != "none") {
+        if (verbose)
+            cli_alert_info(sprintf("Normalizing rows"))
 
-    kcdfminssize <- .get_kcdfNoneMinSampleSize(param)
-    gsvarnorm <- .compute_row_norm(expr=filtDataMatrix,
-                                   kcdf=.get_kcdf(param),
-                                   kcdf.min.ssize=kcdfminssize,
-                                   sparse=.get_sparse(param),
-                                   any_na=anyNA(param),
-                                   na_use=.get_NAuse(param),
-                                   verbose=verbose,
-                                   BPPARAM=BPPARAM,
-                                   maxmem=maxmem)
+        kcdfminssize <- .get_kcdfNoneMinSampleSize(param)
+        gsvarnorm <- .compute_row_norm(expr=filtDataMatrix,
+                                       rowNorm=.get_rowNorm(param),
+                                       kcdf=.get_kcdf(param),
+                                       kcdf.min.ssize=kcdfminssize,
+                                       sparse=.get_sparse(param),
+                                       any_na=anyNA(param),
+                                       na_use=.get_NAuse(param),
+                                       verbose=verbose,
+                                       BPPARAM=BPPARAM,
+                                       maxmem=maxmem)
+    } else if (verbose)
+        cli_alert_warning("Skipping row normalization (rowNorm='none')")
 
     rownames(gsvarnorm) <- rownames(filtDataMatrix)
     colnames(gsvarnorm) <- colnames(filtDataMatrix)
@@ -1386,7 +1392,130 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
     }
 }
 
+## gene expression profiles are usually not biologically comparable across genes
+## because, e.g., one gene might have high expression and huge cell-to-cell
+## variance due to amplification/capture efficiency or intrinsic biological
+## variability, while another gene might be lowly expressed and have low
+## variance because is tighly regulated. to make gene expression profiles
+## comparable across genes, we may normalize per-row/gene expression values by
+## either building an ECDF function for each row and using it to calculate the
+## cumulative distribution value at the same values used ot build the function,
+## or using the less computationally intensive centered log ratio (CLR)
+## transformation.
 
+## functions .rownorm_clr_dense() and .rownorm_clr_sparse() calculate CLR values
+## for each row of the input expression data, which is assumed to be columnwise
+## within-sample and between-sample normalized into positive values x_{ij} in
+## logarithmic scale. because the input values are already log-normalized
+## quantities, then the resulting row-centered values x_{ij}' are multiple of
+## the genes log-normalized values, i.e., they are a kind of a CLR
+## transformation of a CLR-like quantity already, with the aim of attempting to
+## make expression profiles more comparable across rows/genes. the difference
+## between the two functions is that the first one is for dense matrices, and
+## uses all values in its calculations, while the second one is for sparse
+## matrices, and uses only the nonzero values in its calculations, i.e., zeros
+## remain intact.
+.rownorm_clr_dense <- function(expr, any_na, na_use) {
+    gene.clr <- log(expr) ## undefined for zero or negative values !!
+    m <- rowMeans(gene.clr, na.rm=any_na && na_use == "na.rm")
+    gene.clr <- exp(gene.clr - m)
+    gene.clr
+}
+
+#' @importFrom SparseArray SparseArray NaArray is_nonna
+.rownorm_clr_sparse <- function(expr, sparse, any_na, na_use) {
+    stopifnot(is(expr, "dgCMatrix") || is(expr, "SVT_SparseMatrix")) ## QC
+
+    if (!sparse) {              ## sparse matrix to dense conversion
+        expr <- as.matrix(expr) ## this may explode memory consumption
+        return(.rownorm_clr_dense(expr, any_na, na_use))
+    }
+        
+    gene.clr <- expr ## assume expr contains log-normalized x_{ij} values
+    if (is(expr, "dgCMatrix")) ## convert 'expr' to a SparseArray object
+        gene.clr <- SparseArray(expr)
+
+    ## build an NaArray object from 'gene.clr'
+    naa <- NaArray(dim=dim(gene.clr), dimnames=dimnames(gene.clr))
+    naa@NaSVT <- gene.clr@SVT ## assuming there are no NA values in 'expr'
+    naa <- log(naa) ## take log of nonzero values, NA values remain NA
+    ## because SparseArray::rowMeans() is still not implemented we first
+    ## sum through the nonzero values and then divide by their number
+    rs <- rowSums(naa, na.rm=TRUE)
+    nna <- is_nonna(naa)
+    rnna <- rowSums(nna)
+    m <- rs / rnna
+    ## naa stores x'_i = exp(log(x_i) - mean(log(x_i))) for nonzero values
+    naa <- exp(naa - m)
+    gene.clr@SVT <- naa@NaSVT ## copy back the new nonzero CLR values in
+                              ## the SparseArray placeholder 'gene.clr'
+    gene.clr
+}
+
+#' @importFrom HDF5Array HDF5RealizationSink
+#' @importFrom S4Arrays is_sparse DummyArrayGrid
+#' @importFrom DelayedArray seed gridReduce close
+.rownorm_clr_h5 <- function(X, grid=NULL, sparse, any_na, na_use) {
+  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
+
+  sink <- HDF5RealizationSink(dim(X), as.sparse=is_sparse(X) && sparse)
+  if (is.null(grid))
+      grid <- DummyArrayGrid(dim(X))
+
+  rownorm_clr_byBlock_dense <- function(grid, sink) {
+    block <- read_block(X, grid)
+    block <- .rownorm_clr_dense(block, any_na, na_use)
+    write_block(sink, grid, block)
+  }
+  rownorm_clr_byBlock_sparse <- function(grid, sink) {
+    block <- read_block(X, grid)
+    block <- .rownorm_clr_sparse(block, sparse, any_na, na_use)
+    write_block(sink, grid, block)
+  }
+  f <- rownorm_clr_byBlock_dense
+  if (is_sparse(X) && sparse)
+      f <- rownorm_clr_byBlock_sparse
+  sink <- gridReduce(f, grid, sink)
+  close(sink)
+  res <- as(sink, "DelayedArray")
+  res
+}
+
+#' @importFrom S4Arrays is_sparse
+#' @importFrom SparseArray SparseArray NaArray is_nonna
+#' @importFrom DelayedArray seed
+#' @importFrom cli cli_abort
+compute.gene.clr <- function(expr, sparse=FALSE, any_na=FALSE,
+                             na_use=c("everything", "all.obs", "na.rm"),
+                             grid=NULL, verbose=TRUE, BPPARAM=NULL) {
+
+    na_use <- match.arg(na_use)
+    n.genes <- nrow(expr)
+
+    if (any_na && na_use == "all.obs") {
+        msg <- paste("missing values present in the input expression data and",
+                     "'use=\"all.obs\".")
+        cli_abort(c("x"=msg))
+    }
+    
+    gene.clr <- NA
+    if (is(expr, "dgCMatrix") || is(expr, "SVT_SparseMatrix"))
+        gene.clr <- .rownorm_clr_sparse(expr, sparse, any_na, na_use)
+    else if (is(expr, "DelayedMatrix"))
+        gene.clr <- .rownorm_clr_h5(expr, grid=grid, sparse=sparse,
+                                    any_na=any_na, na_use=na_use)
+    else if (is.matrix(expr)) {
+        gene.clr <- .rownorm_clr_dense(expr, any_na, na_use)
+    } else {
+        msg <- "Input container class {class(expr)} cannot be handled yet."
+        cli_abort(c("x"=msg))
+    }
+
+    if (ncol(expr) > 10000) ## free up ASAP memory we need not anymore and was
+        out <- gc()         ## allocated during CLR calculations on a big expr
+
+    return(gene.clr)	
+}
 
 #' @importFrom S4Arrays is_sparse
 #' @importFrom DelayedArray seed
@@ -1517,10 +1646,11 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
 }
 
 #' @importFrom S4Arrays is_sparse
-.parse_kcdf_param <- function(expr, kcdf, kcdf.min.ssize, sparse, verbose) {
+.parse_rownorm_param <- function(expr, rowNorm, kcdf, kcdf.min.ssize, sparse,
+                                 verbose) {
     kernel <- FALSE
     Gaussk <- TRUE  ## default (TRUE) is a Gaussian kernel, Poisson otherwise (FALSE)
-    if (kcdf == "auto") {
+    if (kcdf == "auto" && rowNorm == "ecdf") {
         if (verbose)
             cli_alert_info("kcdf='auto' (default)")
         if (!.sufficient_ssize(expr, kcdf.min.ssize)) {
@@ -1533,7 +1663,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
             } else if (is.integer(expr[1, 1]))
                 Gaussk <- FALSE
         }
-    } else {
+    } else if (rowNorm == "ecdf") {
         if (kcdf == "Gaussian") {
             kernel <- TRUE
             Gaussk <- TRUE
@@ -1542,8 +1672,21 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
             Gaussk <- FALSE
         } else
             kernel <- FALSE
-    }
-
+        if (verbose) {
+            if (kernel) {
+                if (Gaussk)
+                    cli_alert_info("Row-wise ECDF estimation with Gaussian kernels")
+                else
+                    cli_alert_info("Row-wise ECDF estimation with Poisson kernels")
+            } else
+                cli_alert_info("Direct row-wise ECDFs estimation")
+        }
+    } else if (kcdf != "auto")
+        cli_alert_warning(c("x"=paste("'kcdf' is ignored when 'rowNorm'",
+                                      "is not 'ecdf'.")))
+    else if (rowNorm != "clr" && rowNorm != "none")
+        cli_abort(c("x"=paste("'rowNorm' should be one of 'ecdf', 'clr',",
+                              "or 'none'.")))
     if (verbose) {
         is_sparse_matrix <- is(expr, "dgCMatrix") ||
                             is(expr, "SVT_SparseMatrix") ||
@@ -1552,13 +1695,6 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
             cli_alert_info("GSVA sparse algorithm")
         else
             cli_alert_info("GSVA dense (classical) algorithm")
-        if (kernel) {
-            if (Gaussk)
-                cli_alert_info("Row-wise ECDF estimation with Gaussian kernels")
-            else
-                cli_alert_info("Row-wise ECDF estimation with Poisson kernels")
-        } else
-            cli_alert_info("Direct row-wise ECDFs estimation")
     }
 
     list(kernel=kernel, Gaussk=Gaussk)
@@ -1567,17 +1703,25 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
 
 
 #' @importFrom cli cli_alert_info
-.compute_row_norm <- function(expr, kcdf, kcdf.min.ssize,
+.compute_row_norm <- function(expr, rowNorm, kcdf, kcdf.min.ssize,
                               sparse, any_na, na_use, verbose,
                               BPPARAM=NULL, maxmem=Inf) {
 
-    if (verbose)
-       cli_alert_info("Calculating row ECDFs")
+    if (verbose) {
+        if (rowNorm =="ecdf") 
+            cli_alert_info("Calculating row ECDFs")
+        else if (rowNorm == "clr")
+            cli_alert_info("Calculating row centered log-ratios")
+        else
+            cli_abort(c("x"=paste("'rowNorm' should be one of 'ecdf', 'clr',",
+                                  "or 'none'.")))
+    }
 
     if (nrow(expr) == 0) ## this may happen when errorOnTooFewRows=FALSE
         return(expr[0, , drop=FALSE])
 
-    kcdfparam <- .parse_kcdf_param(expr, kcdf, kcdf.min.ssize, sparse, verbose)
+    kcdfparam <- .parse_rownorm_param(expr, rowNorm, kcdf, kcdf.min.ssize,
+                                      sparse, verbose)
     kernel <- kcdfparam$kernel
     Gaussk <- kcdfparam$Gaussk
 

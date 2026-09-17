@@ -54,6 +54,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 
               if (.get_filterRows(param))
                   filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
+                                                 rowNorm=.get_rowNorm(param),
                                                  removeConstant=TRUE,
                                                  removeNzConstant=TRUE,
                                                  errorOnTooFewRows=TRUE,

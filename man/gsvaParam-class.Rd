@@ -17,7 +17,7 @@ gsvaParam(
   annotation = NULL,
   minSize = 1,
   maxSize = Inf,
-  rownorm = c("ecdf", "clr", "none"),
+  rowNorm = c("ecdf", "clr", "none"),
   kcdf = c("auto", "Gaussian", "Poisson", "none"),
   kcdfNoneMinSampleSize = 200,
   tau = 1,
@@ -69,12 +69,12 @@ gene sets after gene identifier mapping. By default, the minimum size is 1.}
 gene sets after gene identifier mapping. By default, the maximum size is
 \code{Inf}.}
 
-\item{rownorm}{Character vector of length 1 denoting the method to use for
+\item{rowNorm}{Character vector of length 1 denoting the method to use for
 row normalization of the input expression data. The default value
-\code{rownorm="ecdf"} will perform a row normalization of the input expression
+\code{rowNorm="ecdf"} will perform a row normalization of the input expression
 data by transforming the expression values of each row using an empirical
 cumulative distribution function (ECDF) built from the same gene expression
-profile. The value \code{rownorm="none"} will skip the row normalization step.}
+profile. The value \code{rowNorm="none"} will skip the row normalization step.}
 
 \item{kcdf}{Character vector of length 1 denoting the kernel to use during
 the non-parametric estimation of the empirical cumulative distribution
@@ -204,12 +204,12 @@ All of these parameters are described in detail below.
 \section{Slots}{
 
 \describe{
-\item{\code{rownorm}}{Character vector of length 1 denoting the method to use for
+\item{\code{rowNorm}}{Character vector of length 1 denoting the method to use for
 row normalization of the input expression data. The default value
-\code{rownorm="ecdf"} will perform a row normalization of the input expression
+\code{rowNorm="ecdf"} will perform a row normalization of the input expression
 data by transforming the expression values of each row using an empirical
 cumulative distribution function (ECDF) built from the same gene expression
-profile. The value \code{rownorm="none"} will skip the row normalization step.}
+profile. The value \code{rowNorm="none"} will skip the row normalization step.}
 
 \item{\code{kcdf}}{Character vector of length 1 denoting the kernel to use during
 the non-parametric estimation of the empirical cumulative distribution

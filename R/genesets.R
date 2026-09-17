@@ -1055,7 +1055,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 #' @importFrom cli cli_alert_warning cli_abort cli_alert_info
 #' @importFrom cli cli_progress_bar cli_progress_done
 #' @importFrom BiocParallel SerialParam bpnworkers bpprogressbar
-.filterGenes <- function(expr, anyna=FALSE, removeConstant=TRUE,
+.filterGenes <- function(expr, anyna=FALSE, rowNorm=NA, removeConstant=TRUE,
                          removeNzConstant=TRUE, errorOnTooFewRows=TRUE,
 			 verbose=TRUE, BPPARAM=NULL, maxmem=Inf) {
     rowrngs <- NULL
@@ -1075,6 +1075,23 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
     ## there are no nonzero values.
     rowrngs <- .processMatrixRows(expr, .rowNzRanges, anyna=anyna,
                                   verbose=verbose, BPPARAM=BPPARAM, maxmem=maxmem)
+
+    if (!is.na(rowNorm) && rowNorm == "clr") {
+        whcol <- 1
+        if (ncol(rowrngs) <= 2) { ## dense input
+            if (any(rowrngs[, 1] <= 0)) {
+                msg <- paste("Cannot apply row normalization method 'clr' to",
+                             "expression data with nonpositive values")
+                cli_abort(c("x"=msg))
+            }
+        } else { ## sparse input
+            if (any(rowrngs[, 3] <= 0)) {
+                msg <- paste("Cannot apply row normalization method 'clr' to",
+                             "expression data with nonzero nonpositive values")
+                cli_abort(c("x"=msg))
+            }
+        }
+    }
 
     constantRows <- (rowrngs[, 1] == rowrngs[, 2])
     mask <- is.na(constantRows)
