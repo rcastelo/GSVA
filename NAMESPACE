@@ -137,7 +137,8 @@ importFrom(MatrixGenerics,
   colRanks,
   colSums,
   rowMeans,
-  rowSds
+  rowSds,
+  rowSums
 )
 importFrom(S4Arrays,
   ArrayViewport,

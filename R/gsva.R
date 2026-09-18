@@ -1423,6 +1423,7 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
 }
 
 #' @importFrom SparseArray SparseArray NaArray is_nonna
+#' @importFrom MatrixGenerics rowSums
 .rownorm_clr_sparse <- function(expr, sparse, any_na, na_use) {
     stopifnot(is(expr, "dgCMatrix") || is(expr, "SVT_SparseMatrix")) ## QC
 
@@ -1436,7 +1437,8 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
         gene.clr <- SparseArray(expr)
 
     ## build an NaArray object from 'gene.clr'
-    naa <- NaArray(dim=dim(gene.clr), dimnames=dimnames(gene.clr))
+    naa <- NaArray(dim=dim(gene.clr), type=type(gene.clr),
+                   dimnames=dimnames(gene.clr))
     naa@NaSVT <- gene.clr@SVT ## assuming there are no NA values in 'expr'
     naa <- log(naa) ## take log of nonzero values, NA values remain NA
     ## because SparseArray::rowMeans() is still not implemented we first
@@ -1482,7 +1484,6 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
 }
 
 #' @importFrom S4Arrays is_sparse
-#' @importFrom SparseArray SparseArray NaArray is_nonna
 #' @importFrom DelayedArray seed
 #' @importFrom cli cli_abort
 compute.gene.clr <- function(expr, sparse=FALSE, any_na=FALSE,
@@ -1702,7 +1703,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
 
 
 
-#' @importFrom cli cli_alert_info
+#' @importFrom cli cli_alert_info cli_abort
 .compute_row_norm <- function(expr, rowNorm, kcdf, kcdf.min.ssize,
                               sparse, any_na, na_use, verbose,
                               BPPARAM=NULL, maxmem=Inf) {
@@ -1711,10 +1712,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
         if (rowNorm =="ecdf") 
             cli_alert_info("Calculating row ECDFs")
         else if (rowNorm == "clr")
-            cli_alert_info("Calculating row centered log-ratios")
-        else
-            cli_abort(c("x"=paste("'rowNorm' should be one of 'ecdf', 'clr',",
-                                  "or 'none'.")))
+            cli_alert_info("Calculating row CLRs")
     }
 
     if (nrow(expr) == 0) ## this may happen when errorOnTooFewRows=FALSE
@@ -1725,10 +1723,20 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
     kernel <- kcdfparam$kernel
     Gaussk <- kcdfparam$Gaussk
 
-    Z <- .processMatrixRows(expr, FUN=compute.gene.cdf, Gaussk=Gaussk,
-                            kernel=kernel, sparse=sparse, any_na=any_na,
-                            na_use=na_use, verbose=verbose, minparrows=100,
-                            minparcols=100, BPPARAM=BPPARAM, maxmem=maxmem)
+    Z <- NULL
+    if (rowNorm == "ecdf")
+        Z <- .processMatrixRows(expr, FUN=compute.gene.cdf, Gaussk=Gaussk,
+                                kernel=kernel, sparse=sparse, any_na=any_na,
+                                na_use=na_use, verbose=verbose, minparrows=100,
+                                minparcols=100, BPPARAM=BPPARAM, maxmem=maxmem)
+    else if (rowNorm == "clr")
+        Z <- .processMatrixRows(expr, FUN=compute.gene.clr, sparse=sparse,
+                                any_na=any_na, na_use=na_use, verbose=verbose,
+                                minparrows=100, minparcols=100, BPPARAM=BPPARAM,
+                                maxmem=maxmem)
+    else
+        cli_abort(c("x"=paste(".compute_row_norm: 'rowNorm' should be one of",
+                              "'ecdf' or 'clr'.")))
 
     return(Z)
 }
