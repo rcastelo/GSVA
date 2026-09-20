@@ -338,6 +338,13 @@ setClass("ssgseaParam",
 #' this class has slots for a number of method-specific parameters of the GSVA
 #' method described below.
 #'
+#' @slot rowNorm Character vector of length 1 denoting the method to use for
+#' row normalization of the input expression data. The default value
+#' `rowNorm="ecdf"` will perform a row normalization of the input expression
+#' data by transforming the expression values of each row using an empirical
+#' cumulative distribution function (ECDF) built from the same gene expression
+#' profile. The value `rowNorm="none"` will skip the row normalization step.
+#'
 #' @slot kcdf Character vector of length 1 denoting the kernel to use during
 #' the non-parametric estimation of the empirical cumulative distribution
 #' function (ECDF) of expression levels across samples. The value `kcdf="auto"`
@@ -421,7 +428,8 @@ setClass("ssgseaParam",
 #' @rdname gsvaParam-class
 #' @exportClass gsvaParam
 setClass("gsvaParam",
-         slots=c(kcdf="character",
+         slots=c(rowNorm="character",
+                 kcdf="character",
                  kcdfNoneMinSampleSize="integer",
                  tau="numeric", 
                  maxDiff="logical",
@@ -439,6 +447,7 @@ setClass("gsvaParam",
                         annotation=NULL,
                         minSize=NA_integer_,
                         maxSize=NA_integer_,
+                        rowNorm=NA_character_,
                         kcdf=NA_character_,
                         kcdfNoneMinSampleSize=NA_integer_,
                         tau=NA_real_,
@@ -464,6 +473,7 @@ setClass("gsvaRanksParam",
                         annotation=NULL,
                         minSize=NA_integer_,
                         maxSize=NA_integer_,
+                        rowNorm=NA_character_,
                         kcdf=NA_character_,
                         kcdfNoneMinSampleSize=NA_integer_,
                         tau=NA_real_,

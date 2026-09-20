@@ -1055,7 +1055,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 #' @importFrom cli cli_alert_warning cli_abort cli_alert_info
 #' @importFrom cli cli_progress_bar cli_progress_done
 #' @importFrom BiocParallel SerialParam bpnworkers bpprogressbar
-.filterGenes <- function(expr, anyna=FALSE, removeConstant=TRUE,
+.filterGenes <- function(expr, anyna=FALSE, rowNorm=NA, removeConstant=TRUE,
                          removeNzConstant=TRUE, errorOnTooFewRows=TRUE,
 			 verbose=TRUE, BPPARAM=NULL, maxmem=Inf) {
     rowrngs <- NULL
@@ -1081,7 +1081,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
     if (any(mask))
         constantRows[mask] <- TRUE
 
-    constantNzRows <- invalidRows <- invalidNzRows <- rep(FALSE, nrow(expr))
+    constantNzRows <- rep(FALSE, nrow(expr))
     if (ncol(rowrngs) > 2) { ## sparse input
         constantNzRows <- (rowrngs[, 3] == rowrngs[, 4])
         mask <- is.na(constantNzRows)
@@ -1113,17 +1113,34 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
     if (removeNzConstant && any(nzmask))
          removemask <- removemask | nzmask
 
-    if (any(removemask)) {
-        if (nrow(expr) - sum(removemask) < 2) {
-            msg <- "Less than two rows left in the input assay object."
-            if (errorOnTooFewRows)
-                cli_abort(c("x"=msg))
-            else
-                cli_alert_warning(msg)
-        }
-
-        expr <- expr[!removemask, , drop=FALSE]
+    if (any(removemask) && (nrow(expr) - sum(removemask)) < 2) {
+        msg <- "Less than two rows left in the input assay object."
+        if (errorOnTooFewRows)
+            cli_abort(c("x"=msg))
+        else
+            cli_alert_warning(msg)
     }
+
+    ## check for CLR compliant input data in nonconstant rows only
+    if (!is.na(rowNorm) && rowNorm == "clr") {
+        rowrngs <- rowrngs[!removemask, , drop=FALSE]
+        if (ncol(rowrngs) <= 2) { ## dense input
+            if (any(rowrngs[, 1] <= 0)) {
+                msg <- paste("Cannot apply row normalization method 'clr' to",
+                             "expression data with nonpositive values")
+                cli_abort(c("x"=msg))
+            }
+        } else { ## sparse input
+            if (any(rowrngs[, 3] <= 0)) {
+                msg <- paste("Cannot apply row normalization method 'clr' to",
+                             "expression data with nonzero nonpositive values")
+                cli_abort(c("x"=msg))
+            }
+        }
+    }
+
+    if (any(removemask))
+        expr <- expr[!removemask, , drop=FALSE]
 
     return(expr)
 }
