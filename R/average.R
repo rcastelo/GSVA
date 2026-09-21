@@ -1,5 +1,5 @@
 ##
-## methods for the z-score method from Lee et al. (2008)
+## methods for the average method
 ##
 
 #' @importFrom S4Arrays is_sparse
@@ -7,10 +7,10 @@
 #' @importFrom utils packageDescription
 #' @importFrom BiocParallel bpnworkers
 #' @importFrom utils packageDescription
-#' @aliases gsva,zscoreParam-method
+#' @aliases gsva,avgParam-method
 #' @rdname gsva
 #' @exportMethod gsva
-setMethod("gsva", signature(param="zscoreParam"),
+setMethod("gsva", signature(param="avgParam"),
           function(param,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose),
@@ -49,21 +49,26 @@ setMethod("gsva", signature(param="zscoreParam"),
               ondisk <- .check_es_memory_requirements(filtDataMatrix,
                                                       filtMappedGeneSets,
                                                       ondisk, maxmem)
+
               if (verbose) {
                   n <- length(filtMappedGeneSets)
-                  cli_alert_info("Calculating Z-scores for {n} gene sets")
+                  cli_alert_info("Calculating average scores for {n} gene sets")
               }
 
-              zscore_es <- zscore(X=filtDataMatrix,
-                                  geneSets=filtMappedGeneSets,
-                                  ondisk=ondisk, verbose=verbose,
-                                  BPPARAM=BPPARAM, maxmem=maxmem)
+              avg_es <- average(X=filtDataMatrix,
+                                geneSets=filtMappedGeneSets,
+                                method=.get_avgmethod(param),
+                                any_na=anyNA(param),
+                                na_use=.get_NAuse(param),
+                                minSize=get_minSize(param),
+                                ondisk=ondisk, verbose=verbose,
+                                BPPARAM=BPPARAM, maxmem=maxmem)
 
               gs <- .geneSetsIndices2Names(
                   indices=filtMappedGeneSets,
                   names=rownames(filtDataMatrix))
               ## dropAssays=TRUE for consistency but doesn't apply here
-              rval <- wrapData(get_exprData(param), zscore_es, param, "es",
+              rval <- wrapData(get_exprData(param), avg_es, param, "es",
                                first=NA, last=NA, rem=NA, whdim=2,
                                dropAssays=TRUE, gs)
               
@@ -74,12 +79,12 @@ setMethod("gsva", signature(param="zscoreParam"),
           })
 
 
-#' @title The `zscoreParam` class
+#' @title The `avgParam` class
 #'
-#' @description Objects of class `zscoreParam` contain the parameters for
-#' running the combined z-scores method.
+#' @description Objects of class `avgParam` contain the parameters for
+#' running the average method.
 #'
-#' @details The combined z-scores method takes a number of parameters shared
+#' @details The average method takes a number of parameters shared
 #' with all methods implemented by package GSVA but does not take any
 #' method-specific parameters.
 #'
@@ -115,6 +120,37 @@ setMethod("gsva", signature(param="zscoreParam"),
 #' @param maxSize Numeric vector of length 1. Maximum size of the resulting gene
 #' sets after gene identifier mapping. By default, the maximum size is `Inf`.
 #' 
+#' @param method character vector of length 1. Specific average method employed
+#' in the calculation of the average scores. By now, the default and only
+#' available value is `method="mean"`, which calculates the average scores as
+#' the arithmetic mean of the expression values of the genes in each gene set
+#' at each column sample or cell.
+#'
+#' @param checkNA Character vector of length 1 specifying whether the input
+#' expression data should be checked for the presence of missing values (`NA`
+#' or `NaN`). This must be one of the strings `"auto"` (default), `"yes"`, or
+#' `"no"`. The default value `"auto"` means that the software will perform that
+#' check only when the input expression data is provided as a base `matrix`, an
+#' `ExpressionSet` or a `SummarizedExperiment` object, while every other type
+#' of input expression data container (e.g., `SingleCellExperiment`, etc.) will
+#' not be checked. If `checkNA="yes"`, then the input expression data will be
+#' checked for missing values irrespective of the object class of the data
+#' container, and if `checkNA="no"`, then that check will not be performed.
+#'
+#' @param use Character vector of length 1 specifying a policy for dealing with
+#' missing values (`NA` or `NaN`) in the input expression data argument
+#' `exprData`. It only applies when either `checkNA="yes"`, or `checkNA="auto"`
+#' (see the `checkNA` parameter. The argument value must be one of the strings
+#' `"everything"` (default), `"all.obs"`, or `"na.rm"`. The policy of the
+#' default value `"everything"` consists of propagating missing values so that
+#' the resulting enrichment score will be `NA`, whenever one or more of its
+#' contributing values is missing, giving a warning when that happens. When
+#' `use="all.obs"`, the presence of `NA`s in the input expression data will
+#' produce an error. Finally, when `use="na.rm"`, missing values in the input
+#' expression data will be removed from calculations, giving a warning when that
+#' happens, and giving an error if no values are left after removing the missing
+#' values.
+#'
 #' @param ondisk Character vector of length 1 denoting whether an on-disk backend
 #' should be used to reduce the memory footprint. The default value
 #' `ondisk="auto"` will attempt to load all the data in main memory when the
@@ -127,14 +163,9 @@ setMethod("gsva", signature(param="zscoreParam"),
 #' decisions made by the software during parameter object construction when
 #' `verbose=TRUE` (default) and remains silent otherwise.
 #'
-#' @return A new [`zscoreParam-class`] object.
+#' @return A new [`avgParam-class`] object.
 #'
 #' @seealso [`GeneIdentifierType`][GSEABase::GeneIdentifierType-class]
-#'
-#' @references Lee, E. et al. Inferring pathway activity toward precise
-#' disease classification.
-#' *PLoS Comp Biol*, 4(11):e1000217, 2008.
-#' \doi{10.1371/journal.pcbi.1000217}
 #'
 #' @examples
 #' suppressPackageStartupMessages({
@@ -149,21 +180,27 @@ setMethod("gsva", signature(param="zscoreParam"),
 #' ## for simplicity, use only a subset of the sample data
 #' se <- geneExpCostaEtAl2021[1:1000, ]
 #' gsc <- c2BroadSets[1:100]
-#' zp1 <- zscoreParam(se, gsc)
-#' zp1
+#' avgp1 <- avgParam(se, gsc)
+#' avgp1
 #'
 #' @importFrom methods new
 #' @importFrom utils capture.output
-#' @rdname zscoreParam-class
+#' @rdname avgParam-class
 #' 
 #' @export
-zscoreParam <- function(exprData, geneSets,
-                        assay=NA_character_, annotation=NULL,
-                        minSize=1, maxSize=Inf, ondisk=c("auto", "yes", "no"),
-                        verbose=TRUE) {
+avgParam <- function(exprData, geneSets,
+                     assay=NA_character_, annotation=NULL,
+                     minSize=1, maxSize=Inf, method="mean",
+                     checkNA=c("auto", "yes", "no"),
+                     use=c("everything", "all.obs", "na.rm"),
+                     ondisk=c("auto", "yes", "no"),
+                     verbose=TRUE) {
 
     .check_input_expr_gene_sets(exprData, geneSets)
 
+    method <- match.arg(method)
+    checkNA <- match.arg(checkNA)
+    use <- match.arg(use)
     ondisk <- match.arg(ondisk)
 
     ## check assay parameter and assay names
@@ -189,17 +226,22 @@ zscoreParam <- function(exprData, geneSets,
         }
     }
 
+    naparam <- .check_for_na_values(exprData=exprData, assay=assay,
+                                    checkNA=checkNA, use=use)
+
     nzc <- .estimate_nzcount(exprData, assay, verbose)
 
-    new("zscoreParam", exprData=exprData, geneSets=geneSets,
+    new("avgParam", exprData=exprData, geneSets=geneSets,
         assay=assay, annotation=annotation,
-        minSize=minSize, maxSize=maxSize, nzcount=nzc, ondisk=ondisk)
+        minSize=minSize, maxSize=maxSize, method=method,
+        checkNA=checkNA, didCheckNA=naparam$didCheckNA,
+        anyNA=naparam$any_na, use=use, nzcount=nzc, ondisk=ondisk)
 }
 
 
 ## ----- validator -----
 
-setValidity("zscoreParam", function(object) {
+setValidity("avgParam", function(object) {
     inv <- NULL
     xd <- object@exprData
     dd <- dim(xd)
@@ -239,6 +281,27 @@ setValidity("zscoreParam", function(object) {
     if(object@maxSize < object@minSize) {
         inv <- c(inv, "@maxSize must be at least @minSize or greater")
     }
+    if(!.isCharLength1(object@method)) {
+        inv <- c(inv, "@method must be a single character string")
+    }
+    if(!.isCharLength1(object@checkNA)) {
+        inv <- c(inv, "@checkNA must be a single character string")
+    }
+    if(length(object@didCheckNA) != 1) {
+        inv <- c(inv, "@didCheckNA must be of length 1")
+    }
+    if(is.na(object@didCheckNA)) {
+        inv <- c(inv, "@didCheckNA must not be NA")
+    }
+    if(length(object@anyNA) != 1) {
+        inv <- c(inv, "@anyNA must be of length 1")
+    }
+    if(is.na(object@anyNA)) {
+        inv <- c(inv, "@anyNA must not be NA")
+    }
+    if(!.isCharLength1(object@use)) {
+        inv <- c(inv, "@use must be a single character string")
+    }
     if(length(object@nzcount) != 1) {
         inv <- c(inv, "@nzcount must be of length 1")
     }   
@@ -252,28 +315,55 @@ setValidity("zscoreParam", function(object) {
 })
 
 
+#' @param x An object of class [`avgParam-class`].
+#'
+#' @param recursive Not used with `x` being an object of
+#' class [`avgParam-class`].
+#'
+#' @aliases anyNA,avgParam-method
+#' @rdname avgParam-class
+setMethod("anyNA", signature=c("avgParam"),
+          function(x, recursive=FALSE)
+            return(x@anyNA))
+
+
+## ----- details method -----
+
+#' @importFrom GSEABase details
+#' @aliases details,avgParam-method
+#' @rdname GsvaMethodParam-class
+#' @exportMethod details
+setMethod("details",
+          signature=signature(object="avgParam"),
+          function(object) {
+              callNextMethod(object)
+              cat("method: ", .get_avgmethod(object), "\n",
+                  "checkNA: ", .get_checkNA(object), "\n", sep="")
+              if (.get_didCheckNA(object)) {
+                  if (anyNA(object)) {
+                      cat("missing data: yes\n",
+                          "na_use: ", .get_NAuse(object), "\n", sep="")
+                  } else
+                      cat("missing data: no\n")
+              } else
+                  cat("missing data: didn't check\n")
+          })
+
+
 ## ------ internal functions ------
 
-#' @importFrom MatrixGenerics rowMeans rowSds
-#' @importFrom SparseArray rowMeans rowSds
-#' @importFrom DelayedMatrixStats rowSds
-.scale_rows <- function(X, verbose) {
-    ## scaled <- t(scale(t(X)))
-    rmns <- rowMeans(X)
-    rsds <- rowSds(X) ## produces tiny differences 10^-16 wrt scale(), but it
-                      ## is more performant
-    scaled <- (X - rmns) / rsds
-
-    return(scaled)
+.get_avgmethod <- function(param) {
+    return(param@method)
 }
 
-## calculate enrichment scores as combined z-scores for all given genes sets
+## calculate enrichment scores as average scores for all given genes sets
 ## through the columns of the input matrix Z
 #' @importFrom MatrixGenerics colSums
-.compute_z_scores_block <- function(Z, geneSetsIdx, verbose) {
+.compute_average_scores_block <- function(Z, geneSetsIdx, method, any_na,
+                                          na_use, minSize, wna_env, verbose) {
     idpb <- NULL
     if (verbose)
-        idpb <- cli_progress_bar("Calculating Z-scores",
+        idpb <- cli_progress_bar("Calculating average scores",
                                  total=2*length(geneSetsIdx))
 
     es <- t(vapply(lapply(geneSetsIdx,
@@ -285,7 +375,14 @@ setValidity("zscoreParam", function(object) {
                    function(z) {
                        if (verbose)
                            cli_progress_update(id=idpb)
-                       colSums(z) / sqrt(nrow(z))
+                       avg <- colMeans(z, na.rm=(any_na && na_use=="na.rm"))
+                       if (any_na && na_use=="na.rm") {
+                           nnas <- colSums(!is.na(z))
+                           avg[nnas < minSize] <- NA
+                           if (any(is.na(avg)))
+                               assign("w", TRUE, envir=wna_env)
+                       }
+                       avg
                    }, numeric(ncol(Z))))
 
     if (verbose)
@@ -294,13 +391,14 @@ setValidity("zscoreParam", function(object) {
     return(es)
 }
 
-## this function computes enrichment scores as combined z-scores for all gene
+## this function computes enrichment scores as average scores for all gene
 ## sets in geneSetsIdx for a given rank matrix R, taking care that if
-## 'ondisk=TRUE' because, e.g., the resulting matrix of z-scores does not
+## 'ondisk=TRUE' because, e.g., the resulting matrix of average scores does not
 ## fit in main memory, the scores are written into an on-disk data structure
 ## (HDF5) instead of being returned in main memory.
 #' @importFrom S4Arrays DummyArrayGrid
-.compute_z_scores <- function(Z, geneSetsIdx, ondisk, verbose) {
+.compute_average_scores <- function(Z, geneSetsIdx, method, any_na, na_use,
+                                    minSize, wna_env, ondisk, verbose) {
     p <- nrow(Z)
     n <- ncol(Z)
     es <- NULL
@@ -323,7 +421,9 @@ setValidity("zscoreParam", function(object) {
         ## avp_es - ArrayViewport for writing the enrichment dense scores matrix
         colScores_byBlock <- function(avp, avp_es, sink) {
             block <- read_block(Z, avp)
-            block <- .compute_z_scores_block(block, geneSetsIdx, verbose)
+            block <- .compute_average_scores_block(block, geneSetsIdx, method,
+                                                   any_na, na_use, minSize,
+                                                   wna_env, verbose=verbose)
             write_block(sink, avp_es, block)
         }
 
@@ -333,7 +433,16 @@ setValidity("zscoreParam", function(object) {
         close(sink)
         es <- as(sink, "DelayedArray")
     } else
-        es <- .compute_z_scores_block(Z, geneSetsIdx, verbose)
+        es <- .compute_average_scores_block(Z, geneSetsIdx, method, any_na,
+                                            na_use, minSize, wna_env,
+                                            verbose=verbose)
+
+    if (any_na && na_use =="na.rm")
+        if (get("w", envir=wna_env)) {
+            msg <- sprintf(paste("NA enrichment scores in gene sets with less than",
+                                 "%d genes after removing missing values"), minSize)
+            cli_alert_warning(msg)
+        }
 
     return(es)
 }
@@ -343,34 +452,48 @@ setValidity("zscoreParam", function(object) {
 #' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
 #' @importFrom BiocParallel bpnworkers bplapply bpprogressbar
 #' @importFrom MatrixGenerics colSums
-zscore <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
-                   BPPARAM=NULL, maxmem=Inf) {
+average <- function(X, geneSets, method="mean",
+                    any_na=FALSE, na_use=c("everything", "all.obs", "na.rm"),
+                    minSize=1, ondisk=FALSE, verbose=TRUE,
+                    BPPARAM=NULL, maxmem=Inf) {
+    method <- match.arg(method)
+    na_use <- match.arg(na_use)
 
-    Z <- .processMatrixRows(X, .scale_rows, verbose=verbose,
-                            minparrows=100, minparcols=100,
-                            progressmsg="Centering and scaling rows",
-                            BPPARAM=BPPARAM, maxmem=maxmem)
+    wna_env <- new.env()
+    assign("w", FALSE, envir=wna_env)
 
     es <- NULL
-    if (ncol(Z) >= length(geneSets) || is(Z, "DelayedMatrix") || ondisk) {
-        es <- .processMatrixCols(Z, .compute_z_scores, geneSets,
-                                 ondisk=ondisk, verbose=verbose,
+    if (ncol(X) >= length(geneSets) || is(X, "DelayedMatrix") || ondisk) {
+        es <- .processMatrixCols(X, .compute_average_scores, geneSets,
+                                 method=method, any_na=any_na,
+                                 na_use=na_use, minSize=minSize,
+                                 wna_env=wna_env, ondisk=ondisk,
+                                 verbose=verbose,
                                  minparrows=100, minparcols=100,
-                                 progressmsg="Calculating Z-scores per gene set",
+                                 progressmsg="Calculating average scores per gene set",
                                  BPPARAM=BPPARAM, maxmem=maxmem)
     } else {
         if (is.null(BPPARAM) || bpnworkers(BPPARAM) == 1L) {
             env <- NULL
             if (verbose) {
                 env <- new.env(parent=globalenv())
-                msg <- "Calculating Z-scores per gene set"
+                msg <- "Calculating average scores per gene set"
                 assign("idpb", cli_progress_bar(msg, total=length(geneSets)),
                        envir=env)
             }
             es <- lapply(geneSets, function(gSetIdx, verbose, idpbe) {
                              if (verbose)
                                  cli_progress_update(id=get("idpb", envir=idpbe))
-                             colSums(Z[gSetIdx, , drop=FALSE]) / sqrt(length(gSetIdx))
+                             Xgset <- X[gSetIdx, , drop=FALSE]
+                             avg <- colMeans(Xgset,
+                                             na.rm=(any_na && na_use=="na.rm"))
+                             if (any_na && na_use=="na.rm") {
+                               nnas <- colSums(!is.na(Xgset))
+                               avg[nnas < minSize] <- NA
+                               if (any(is.na(avg)))
+                                   assign("w", TRUE, envir=wna_env)
+                             }
+                             avg
                          }, verbose=verbose, idpbe=env)
             if (verbose)
                 cli_progress_done(get("idpb", envir=env))
@@ -379,11 +502,33 @@ zscore <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
                 bpprogressbar(BPPARAM) <- TRUE ## reporting progress wo/ cli
 
             es <- bplapply(geneSets, function(gSetIdx) {
-                               colSums(Z[gSetIdx, , drop=FALSE]) / sqrt(length(gSetIdx))
+                               Xgset <- X[gSetIdx, , drop=FALSE]
+                               avg <- colMeans(Xgset,
+                                               na.rm=(any_na && na_use=="na.rm"))
+                               if (any_na && na_use=="na.rm") {
+                                 nnas <- colSums(!is.na(Xgset))
+                                 avg[nnas < minSize] <- NA
+                                 if (any(is.na(avg)))
+                                     assign("w", TRUE, envir=wna_env)
+                               }
+                               avg
                            }, BPPARAM=BPPARAM)
         }
         es <- do.call(rbind, es)
     }
+
+    if (any_na && na_use =="na.rm")
+        if (get("w", envir=wna_env)) {
+            msg <- sprintf(paste("NA enrichment scores in gene sets with less than",
+                                 "%d genes after removing missing values"), minSize)
+            cli_alert_warning(msg)
+        }
+
+    if (length(geneSets) == 1)
+        es <- matrix(es, nrow=1)
+
+    rownames(es) <- names(geneSets)
+    colnames(es) <- colnames(X)
 
     es
 }

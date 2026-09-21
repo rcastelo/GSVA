@@ -315,6 +315,7 @@ variation analysis for microarray and RNA-Seq data.
 \code{\link[=GsvaMethodParam-class]{GsvaMethodParam}},
 \code{\link[=plageParam-class]{plageParam}},
 \code{\link[=zscoreParam-class]{zscoreParam}},
+\code{\link[=avgParam-class]{avgParam}},
 \code{\link[=ssgseaParam-class]{ssgseaParam}}
 
 \code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}},

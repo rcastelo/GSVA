@@ -489,7 +489,7 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
         if (get("w", envir=wna_env)) {
             msg <- sprintf(paste("NA enrichment scores in gene sets with less than",
                                  "%d genes after removing missing values"), minSize)
-        cli_alert_warning(msg)
+            cli_alert_warning(msg)
         }
   
     if (normalization) {
@@ -596,7 +596,7 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
         if (get("w", envir=wna_env)) {
             msg <- sprintf(paste("NA enrichment scores in gene sets with less than",
                                  "%d genes after removing missing values"), minSize)
-        cli_alert_warning(msg)
+            cli_alert_warning(msg)
         }
 
     return(es)

@@ -101,13 +101,14 @@ setClassUnion("GsvaGeneSets",
 #' Virtual superclass of method parameter classes supported by `GSVA`.
 #'
 #' `GSVA` implements four single-sample gene set analysis methods: PLAGE,
-#' combined z-scores, ssGSEA, and GSVA.  All of them take at least an expression
-#' data matrix and one or more gene sets as input.  Further common parameters
-#' include an assay name for use with multi-assay expression data containers,
-#' the gene ID type used by the expression data set, and a minimum and maximum
-#' size for gene sets to limit the range of gene set sizes used in an analysis.
-#' This virtual class provides the necessary slots for this shared parameter set
-#' and serves as the parent class for all `GSVA` method parameter classes.
+#' combined z-scores, average, ssGSEA, and GSVA. All of them take at least an
+#' expression data matrix and one or more gene sets as input. Further common
+#' parameters include an assay name for use with multi-assay expression data
+#' containers, the gene ID type used by the expression data set, and a minimum
+#' and maximum size for gene sets to limit the range of gene set sizes used in
+#' an analysis. This virtual class provides the necessary slots for this shared
+#' parameter set and serves as the parent class for all `GSVA` method parameter
+#' classes.
 #'
 #' @slot exprData The expression data set.  Must be one of the classes
 #' supported by `GsvaExprData`.  For a list of these classes, see its
@@ -150,6 +151,7 @@ setClassUnion("GsvaGeneSets",
 #' [`GsvaExprData-class`],
 #' [`GsvaGeneSets-class`],
 #' [`zscoreParam-class`], 
+#' [`avgParam-class`], 
 #' [`plageParam-class`], 
 #' [`ssgseaParam-class`], 
 #' [`gsvaParam-class`],
@@ -206,6 +208,7 @@ setClass("GsvaMethodParam",
 #' [`GsvaGeneSets-class`],
 #' [`GsvaMethodParam-class`],
 #' [`zscoreParam-class`],
+#' [`avgParam-class`],
 #' [`ssgseaParam-class`],
 #' [`gsvaParam-class`]
 #'
@@ -258,6 +261,74 @@ setClass("zscoreParam",
 
 
 
+## ----- Average Parameter Class -----
+
+#' `avgParam` class
+#'
+#' S4 class for average scores method parameter objects.
+#' 
+#' Since the average scores method does not take any method-specific parameters,
+#' this class does not add any slots to the common slots inherited from
+#' `GsvaMethodParam`. In addition to the common parameter slots inherited from
+#' `[GsvaMethodParam]`, this class has slots for a specifying the average method
+#' employed and as well as four more slots for implementing a missing value
+#' policy.
+#' 
+#' @slot method character vector of length 1. Specific average method employed
+#' in the calculation of the average scores. By now, the default and only
+#' available value is `method="mean"`, which calculates the average scores as
+#' the arithmetic mean of the expression values of the genes in each gene set
+#' at each column sample or cell.
+#'
+#' @slot checkNA Character vector of length 1. One of the strings `"auto"`
+#' (default), `"yes"`, or `"no"`, which refer to whether the input expression
+#' data should be checked for the presence of missing (`NA`) values.
+#'
+#' @slot didCheckNA Logical vector of length 1, indicating whether the input
+#' expression data was checked for the presence of missing (`NA`) values.
+#'
+#' @slot anyNA Logical vector of length 1, indicating whether the input
+#' expression data contains missing (`NA`) values.
+#'
+#' @slot use Character vector of length 1. One of the strings `"everything"`
+#' (default), `"all.obs"`, or `"na.rm"`, which refer to three different policies
+#' to apply in the presence of missing values in the input expression data; see
+#' `ssgseaParam`.
+#'
+#' @seealso
+#' [`GsvaExprData-class`],
+#' [`GsvaGeneSets-class`],
+#' [`GsvaMethodParam-class`],
+#' [`zscoreParam-class`],
+#' [`plageParam-class`],
+#' [`ssgseaParam-class`],
+#' [`gsvaParam-class`]
+#'
+#' @name avgParam-class
+#' @rdname avgParam-class
+#' @exportClass avgParam
+setClass("avgParam",
+         slots=c(method="character",
+                 checkNA="character",
+                 didCheckNA="logical",
+                 anyNA="logical",
+                 use="character"),
+         contains="GsvaMethodParam",
+         prototype=list(exprData=NULL,
+                        geneSets=NULL,
+                        assay=NA_character_,
+                        annotation=NULL,
+                        minSize=NA_integer_,
+                        maxSize=NA_integer_,
+                        method=NA_character_,
+                        checkNA=NA_character_,
+                        didCheckNA=NA,
+                        anyNA=NA,
+                        use=NA_character_,
+                        nzcount=NA_real_,
+                        ondisk=NA_character_))
+
+
 ## ----- ssGSEA Parameter Class -----
 
 #' `ssgseaParam` class
@@ -299,6 +370,7 @@ setClass("zscoreParam",
 #' [`GsvaMethodParam-class`],
 #' [`plageParam-class`],
 #' [`zscoreParam-class`],
+#' [`avgParam-class`],
 #' [`gsvaParam-class`]
 #'
 #' @name ssgseaParam-class
@@ -422,6 +494,7 @@ setClass("ssgseaParam",
 #' [`GsvaMethodParam-class`],
 #' [`plageParam-class`],
 #' [`zscoreParam-class`],
+#' [`avgParam-class`],
 #' [`ssgseaParam-class`]
 #'
 #' @name gsvaParam-class
