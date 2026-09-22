@@ -134,34 +134,6 @@ sd_narm(double* x, int n) {
   return(sd);
 }
 
-/* src/main/unique.c */
-/*
-SEXP match5(SEXP itable, SEXP ix, int nmatch, SEXP incomp, SEXP env);
-*/
-
-SEXP
-match_int(SEXP x, SEXP table);
-
-SEXP
-match_int(SEXP x, SEXP table) {
-  SEXP s, t, ansR;
-
-  PROTECT(t = s = LCONS(R_NilValue, Rf_allocList(3)));
-  SETCAR(t, install("match")); t=CDR(t);
-  SETCAR(t, x);
-  SET_TAG(t, install("x")); t=CDR(t);
-  SETCAR(t, table);
-  SET_TAG(t, install("table"));
-  ansR = eval(s, R_BaseEnv);
-
-  /*
-  SEXP ansR = match5(table, x, NA_INTEGER, NULL, R_GlobalEnv);
-  */
-  UNPROTECT(1); /* t s */
-
-  return(ansR);
-}
-
 /* from https://github.com/cran/curl/blob/master/src/interrupt.c */
 /* Check for interrupt without long jumping */
 void

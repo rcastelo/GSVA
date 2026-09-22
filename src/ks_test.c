@@ -394,13 +394,23 @@ fetch_intcol_dblSVT_SparseMatrix(SEXP XsvtR, int nr, int j, int* col) {
   return nnz;
 }
 
+/* figures out whether 'obj' is a matrix, dgCMatrix or SVT_SparseMatrix
+ * and returns the class name */
+const char*
+get_class_name(SEXP obj) {
+    if (isMatrix(obj))
+        return "matrix";
+
+    SEXP classR = getAttrib(obj, R_ClassSymbol);
+    return CHAR(STRING_ELT(classR, 0));
+}
+
 typedef int (*FetchColFunDef)(SEXP, int, int, int*);
 
 FetchColFunDef
 find_dim_and_fetchcolfun(SEXP XR, Rboolean intrnks, int** dim) {
   FetchColFunDef fetch_col;
-  SEXP        classR = eval(lang2(install("class"), XR), R_BaseEnv);
-  const char* class = CHAR(STRING_ELT(classR, 0));
+  const char*    class = get_class_name(XR);
 
   if (!strcmp(class, "matrix")) {
     fetch_col = intrnks ? &fetch_intcol_intmatrix : &fetch_intcol_dblmatrix;
