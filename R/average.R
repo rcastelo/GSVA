@@ -38,7 +38,7 @@ setMethod("gsva", signature(param="avgParam"),
                                       verbose=verbose)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
-                                                              "Z-score", first=NA,
+                                                              "average", first=NA,
                                                               last=NA, whdim=2,
                                                               ondisk, verbose)
 
@@ -358,7 +358,7 @@ setMethod("details",
 
 ## calculate enrichment scores as average scores for all given genes sets
 ## through the columns of the input matrix Z
-#' @importFrom MatrixGenerics colSums
+#' @importFrom MatrixGenerics colMeans colSums
 .compute_average_scores_block <- function(Z, geneSetsIdx, method, any_na,
                                           na_use, minSize, wna_env, verbose) {
     idpb <- NULL
