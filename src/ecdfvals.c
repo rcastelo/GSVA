@@ -60,9 +60,6 @@ ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR);
 SEXP
 ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR);
 
-SEXP
-match_int(SEXP x, SEXP table);
-
 int
 pending_interrupt(void);
 
@@ -315,7 +312,7 @@ ecdfvals_svt_to_dense_R(SEXP XsvtR, SEXP verboseR) {
 
     /* match original values to sorted unique values */
     /* consider adding LONG_VECTOR_SUPPORT */
-    mt = INTEGER(match_int(xR, uniqvR)); /* 1-based! */
+    mt = INTEGER(Rf_match(uniqvR, xR, NA_INTEGER)); /* 1-based! */
 
     /* tabulate matches */
     /* consider adding LONG_VECTOR_SUPPORT */
@@ -546,7 +543,7 @@ ecdfvals_svt_to_svt_R(SEXP XsvtR, SEXP verboseR) {
 
     /* match original values to sorted unique values */
     /* consider adding LONG_VECTOR_SUPPORT */
-    mt = INTEGER(match_int(xR, uniqvR)); /* 1-based! */
+    mt = INTEGER(Rf_match(uniqvR, xR, NA_INTEGER)); /* 1-based! */
 
     /* tabulate matches */
     /* consider adding LONG_VECTOR_SUPPORT */
@@ -707,7 +704,7 @@ ecdfvals_sparse_to_sparse_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
 
     /* match original values to sorted unique values */
     /* consider adding LONG_VECTOR_SUPPORT */
-    mt = INTEGER(match_int(xR, uniqvR)); /* 1-based! */
+    mt = INTEGER(Rf_match(uniqvR, xR, NA_INTEGER)); /* 1-based! */
 
     /* tabulate matches */
     /* consider adding LONG_VECTOR_SUPPORT */
@@ -862,7 +859,7 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
 
     /* match original values to sorted unique values */
     /* consider adding LONG_VECTOR_SUPPORT */
-    mt = INTEGER(match_int(xR, uniqvR)); /* 1-based! */
+    mt = INTEGER(Rf_match(uniqvR, xR, NA_INTEGER)); /* 1-based! */
 
     /* tabulate matches */
     /* consider adding LONG_VECTOR_SUPPORT */
@@ -1018,7 +1015,7 @@ ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR) {
 
     /* match original values to sorted unique values */
     /* consider adding LONG_VECTOR_SUPPORT */
-    mt = INTEGER(match_int(xR, uniqvR)); /* 1-based! */
+    mt = INTEGER(Rf_match(uniqvR, xR, NA_INTEGER)); /* 1-based! */
 
     /* tabulate matches */
     /* consider adding LONG_VECTOR_SUPPORT */
@@ -1148,7 +1145,7 @@ ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR) {
 
     /* match original values to sorted unique values */
     /* consider adding LONG_VECTOR_SUPPORT */
-    mt = INTEGER(match_int(xR, uniqvR)); /* 1-based! */
+    mt = INTEGER(Rf_match(uniqvR, xR, NA_INTEGER)); /* 1-based! */
 
     /* tabulate matches */
     /* consider adding LONG_VECTOR_SUPPORT */
