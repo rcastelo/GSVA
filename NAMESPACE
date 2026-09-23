@@ -73,6 +73,7 @@ importFrom(BiocGenerics,
   annotation,
   cbind,
   rbind,
+  sort,
   type
 )
 importFrom(BiocParallel,
@@ -89,7 +90,6 @@ importFrom(BiocParallel,
   bpprogressbar,
   bptry
 )
-importFrom(BiocSingular,runExactSVD)
 importFrom(DelayedArray,
   blockApply,
   blockReduce,
