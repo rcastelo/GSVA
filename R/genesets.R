@@ -1149,17 +1149,20 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 ## maps gene sets content in 'gsets' to 'features', where 'gsets'
 ## is a 'list' object with character string vectors as elements,
 ## and 'features' is a character string vector object. it assumes
-## features in both input objects follow the same nomenclature,
+## features in both input objects follow the same nomenclature.
+## it removes NA values and orders indices in the output list.
+## the latter is necessary for the 'average' method with sparse data
 
 #' @importFrom cli cli_abort
 #' @importFrom IRanges CharacterList match
+#' @importFrom BiocGenerics sort
 .mapGeneSetsToFeatures <- function(gsets, features) {
 
     ## Aaron Lun's suggestion at
     ## https://github.com/rcastelo/GSVA/issues/39#issuecomment-765549620
     gsets2 <- CharacterList(gsets)
     mt <- match(gsets2, features)
-    mapdgenesets <- as.list(mt[!is.na(mt)])
+    mapdgenesets <- as.list(sort(mt[!is.na(mt)]))
 
     if (length(unlist(mapdgenesets, use.names=FALSE)) == 0) {
       msg <- paste("No identifiers in the gene sets could be matched to the",

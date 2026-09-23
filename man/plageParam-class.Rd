@@ -108,6 +108,7 @@ using singular value decomposition.
 \code{\link[=GsvaGeneSets-class]{GsvaGeneSets}},
 \code{\link[=GsvaMethodParam-class]{GsvaMethodParam}},
 \code{\link[=zscoreParam-class]{zscoreParam}},
+\code{\link[=avgParam-class]{avgParam}},
 \code{\link[=ssgseaParam-class]{ssgseaParam}},
 \code{\link[=gsvaParam-class]{gsvaParam}}
 

@@ -47,7 +47,7 @@ test_ondisk <- function() {
 
     ## estimate ssGSEA enrichment scores with HDF5 input and output and check that they are identical
     es_h5ondisk <- gsva(ssgseaParam(H5, gsets, ondisk="yes", verbose=FALSE),
-			verbose=FALSE)
+                        verbose=FALSE)
     es_h5ondiskmat <- as.matrix(es_h5ondisk)
     checkEqualsNumeric(es_noh5, es_h5ondiskmat)
 
@@ -59,10 +59,22 @@ test_ondisk <- function() {
 
     ## estimate Z-scores enrichment scores with HDF5 input and output and check that they are identical
     es_h5ondisk <- gsva(zscoreParam(H5, gsets, ondisk="yes", verbose=FALSE),
-			verbose=FALSE)
+                        verbose=FALSE)
     es_h5ondiskmat <- as.matrix(es_h5ondisk)
     ## not identical also due to the rowSds() vs sd() differences
     checkEqualsNumeric(es_noh5, es_h5ondiskmat)
+
+    ## estimate average enrichment scores with and without HDF5 input and check that they are identical
+    es_noh5 <- gsva(avgParam(M, gsets, verbose=FALSE), verbose=TRUE)
+    es_h5 <- gsva(avgParam(H5, gsets, verbose=FALSE), verbose=FALSE)
+    checkIdentical(es_noh5, es_h5)
+
+    ## estimate average enrichment scores with HDF5 input and output and check that they are identical
+    es_h5ondisk <- gsva(avgParam(H5, gsets, ondisk="yes", verbose=FALSE),
+                        verbose=FALSE)
+    es_h5ondiskmat <- as.matrix(es_h5ondisk)
+    attr(es_noh5, "gsvaParam") <- attr(es_noh5, "assay") <- attr(es_noh5, "geneSets") <- NULL
+    checkIdentical(es_noh5, es_h5ondiskmat)
 
     ## test the block processing of a small toy HDF5 input and output by
     ## setting a small block size and maximum available memory
@@ -70,6 +82,6 @@ test_ondisk <- function() {
     setAutoBlockSize(1024)
     es_noh5 <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE)
     es_chunks <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=TRUE, maxmem="25K")
-    checkEqualsNumeric(es_noh5, es_chunks)
+    checkIdentical(es_noh5, es_chunks)
     setAutoBlockSize(oldautoblocksize)
 }

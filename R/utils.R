@@ -618,19 +618,22 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 
 .get_NAuse <- function(object) {
   stopifnot(inherits(object, "ssgseaParam") ||
-            inherits(object, "gsvaParam"))
+            inherits(object, "gsvaParam") ||
+            inherits(object, "avgParam"))
   return(object@use)
 }
 
 .get_checkNA <- function(object) {
   stopifnot(inherits(object, "ssgseaParam") ||
-            inherits(object, "gsvaParam"))
+            inherits(object, "gsvaParam") ||
+            inherits(object, "avgParam"))
   return(object@checkNA)
 }
 
 .get_didCheckNA <- function(object) {
   stopifnot(inherits(object, "ssgseaParam") ||
-            inherits(object, "gsvaParam"))
+            inherits(object, "gsvaParam") ||
+            inherits(object, "avgParam"))
   return(object@didCheckNA)
 }
 
@@ -638,7 +641,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
   stopifnot(inherits(object, "ssgseaParam") ||
             inherits(object, "gsvaParam") ||
             inherits(object, "zscoreParam") ||
-            inherits(object, "plageParam"))
+            inherits(object, "plageParam") ||
+            inherits(object, "avgParam"))
   return(object@ondisk)
 }
 
