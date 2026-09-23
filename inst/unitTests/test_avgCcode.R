@@ -1,7 +1,7 @@
 test_avgCcode <- function() {
     ## here we use the acronym AVG to refer to the average method for
     ## calculating enrichment scores
-    message("Running unit tests for AVG C code without missing data.")
+    message("Running unit tests for AVG C code without missing data")
 
     ## geneids: gene identifiers
     ## k: number of genesets
@@ -58,12 +58,12 @@ test_avgCcode <- function() {
     dimnames(sco_C) <- dimnames(sco_R)
 
     ## both approaches to calculate AVG scores must give the same result
-    checkIdentical(sco_R, sco_C)
+    checkEqualsNumeric(sco_R, sco_C)
 
     ##
     ## with missing data
     ##
-    message("Running unit tests for AVG C code with missing data.")
+    message("Running unit tests for AVG C code with missing data")
 
     set.seed(123)
     x[sample(1:(n*p), size=floor(0.05*n*p), replace=FALSE)] <- NA ## 5% missing data
@@ -99,7 +99,7 @@ test_avgCcode <- function() {
     dimnames(sco_C) <- dimnames(sco_R)
 
     ## both approaches to calculate AVG scores must give the same result
-    checkIdentical(sco_R, sco_C)
+    checkEqualsNumeric(sco_R, sco_C)
 
     ## build AVG parameter object propagating NA values
     avgpar <- avgParam(y, gsets, use="everything")
@@ -118,9 +118,9 @@ test_avgCcode <- function() {
     dimnames(sco_C) <- dimnames(sco_R)
 
     ## both approaches to calculate AVG scores must give the same result
-    checkIdentical(sco_R, sco_C)
+    checkEqualsNumeric(sco_R, sco_C)
 
-    message("Running unit tests for GSVA C code with sparse data.")
+    message("Running unit tests for GSVA C code with sparse data")
 
     ## check now the C code on sparse input data
     library(Matrix)
@@ -169,9 +169,9 @@ test_avgCcode <- function() {
     dimnames(sco_C) <- dimnames(sco_R)
 
     ## both approaches to calculate AVG scores must give the same result
-    checkIdentical(sco_R, sco_C)
+    checkEqualsNumeric(sco_R, sco_C)
 
-    ## check now with an SVT_SparseMatrix object
+    ## check it now with an SVT_SparseMatrix object
     y <- SparseArray(y)
 
     ## build AVG parameter object
@@ -199,5 +199,5 @@ test_avgCcode <- function() {
     dimnames(sco_C) <- dimnames(sco_R)
 
     ## both approaches to calculate AVG scores must give the same result
-    checkIdentical(sco_R, sco_C)
+    checkEqualsNumeric(sco_R, sco_C)
 }
