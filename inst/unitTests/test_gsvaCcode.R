@@ -190,6 +190,7 @@ test_gsvaCcode <- function() {
 
     ## check now the C code on sparse input data
     library(Matrix)
+    library(SparseArray)
 
     p <- 100 ## number of genes
     n <- 50  ## number of samples
@@ -208,6 +209,53 @@ test_gsvaCcode <- function() {
     y <- matrix(x, nrow=p, ncol=n,
                 dimnames=list(paste0("g", 1:p) , paste0("s", 1:n)))
     y <- Matrix(y, sparse=TRUE)
+
+    ## build parameter object
+    gsvapar <- gsvaParam(y, gsets, verbose=FALSE)
+
+    ## calculate GSVA ranks
+    gsvarownorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
+    gsvacolranks <- gsvaColRanks(gsvarownorm, verbose=FALSE)
+    param <- GSVA:::.pull_param(gsvacolranks)
+    exprData <- GSVA:::get_exprData(param)
+    R <- GSVA:::unwrapData(exprData, get_assay(param))
+    gsetsidx <- GSVA:::.filterAndMapGeneSets(param=param,
+                                             filteredDataMatrix=R,
+                                             verbose=FALSE)
+
+    sco_R <- lapply(as.list(1:ncol(R)), function(j, R) {
+        rnkstats <- GSVA:::.ranks2stats(R[, j], sparse=GSVA:::.get_sparse(param))
+
+        ## calculate GSVA scores using the R implementation
+        GSVA:::.gsva_score_genesets_Rimp(gsetsidx,
+                                         decOrdStat=rnkstats$dos,
+                                         symRnkStat=rnkstats$srs,
+                                         whz=rnkstats$whz,
+                                         maxDiff=GSVA:::.get_maxDiff(param),
+                                         absRanking=GSVA:::.get_absRanking(param),
+                                         tau=GSVA:::.get_tau(param),
+                                         any_na=anyNA(param),
+                                         na_use=GSVA:::.get_NAuse(param),
+                                         minSize=GSVA:::get_minSize(param))
+    }, R=R)
+    sco_R <- do.call("cbind", sco_R)
+
+    ## calculate GSVA scores using the C implementation
+    sco_C <- GSVA:::.gsva_score_genesets(R, gsetsidx, is.integer(R[1, 1]),
+                                         sparse=GSVA:::.get_sparse(param), 
+                                         maxDiff=GSVA:::.get_maxDiff(param),
+                                         absRanking=GSVA:::.get_absRanking(param),
+                                         tau=GSVA:::.get_tau(param),
+                                         any_na=anyNA(param),
+                                         na_use=GSVA:::.get_NAuse(param),
+                                         minSize=GSVA:::get_minSize(param),
+                                         wna_env=wna_env, verbose=FALSE)
+
+    ## both approaches to calculate GSVA scores must give the same result
+    checkEqualsNumeric(sco_R, sco_C)
+
+    ## check now with an SVT_SparseMatrix object
+    y <- SparseArray(y)
 
     ## build parameter object
     gsvapar <- gsvaParam(y, gsets, verbose=FALSE)

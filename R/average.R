@@ -359,8 +359,8 @@ setMethod("details",
 ## calculate enrichment scores as average scores for all given genes sets
 ## through the columns of the input matrix Z
 #' @importFrom MatrixGenerics colMeans colSums
-.compute_average_scores_block <- function(Z, geneSetsIdx, method, any_na,
-                                          na_use, minSize, wna_env, verbose) {
+.compute_average_scores_R <- function(Z, geneSetsIdx, method, any_na,
+                                      na_use, minSize, wna_env, verbose) {
     idpb <- NULL
     if (verbose)
         idpb <- cli_progress_bar("Calculating average scores",
@@ -389,6 +389,35 @@ setMethod("details",
         cli_progress_done(idpb)
 
     return(es)
+}
+
+.compute_average_scores_block <- function(Z, geneSetsIdx, method, any_na,
+                                          na_use, minSize, wna_env, verbose) {
+    minSize <- as.integer(minSize)
+    stopifnot(is.list(geneSetsIdx)) ## QC
+    stopifnot(length(geneSetsIdx) > 0) ## QC
+    stopifnot(is.integer(geneSetsIdx[[1]])) ## QC
+    stopifnot(is.logical(any_na)) ## QC
+    stopifnot(is.character(na_use)) ## QC
+    stopifnot(is.integer(minSize)) ## QC
+    stopifnot(is.logical(verbose)) ## QC
+    na_use <- as.integer(factor(na_use, levels=c("everything", "all.obs",
+                                                 "na.rm")))
+
+    sco <- .Call("avg_score_genesets_R", Z, geneSetsIdx, any_na, na_use,
+                 minSize, verbose)
+
+    if (any_na) {
+      if (na_use == 2 && !is.null(attr(sco, "attrNAs")))
+          cli_abort(c("x"="Input GSVA ranks have NA values."))
+
+      if (na_use == 3 && !is.null(attr(sco, "attrNAs")))
+          assign("w", TRUE, envir=wna_env)
+
+      attr(sco, "attrNAs") <- NULL ## clean up the NA informing attribute
+    }
+
+    sco
 }
 
 ## this function computes enrichment scores as average scores for all gene

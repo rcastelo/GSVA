@@ -539,6 +539,8 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
         }
       }
     }
+    if (abort)
+      break;
   }
 
   R_Free(decordstat_col);
