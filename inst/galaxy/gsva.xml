@@ -1,0 +1,141 @@
+<tool id="gsva" name="gsva" version="1.0.0+galaxy1">
+    <description>Gene Set Variation Analysis</description>
+    <xrefs>
+        <xref type="bio.tools">gsva</xref>
+        <xref type="bioconductor">GSVA</xref>
+    </xrefs>
+    <requirements>
+        <requirement type="package" version="2.0.0">bioconductor-gsva</requirement>
+        <requirement type="package" version="1.7.5">r-optparse</requirement>
+    </requirements>
+    <version_command><![CDATA[
+echo $(R --version | grep version | grep -v GNU)", GSVA version" $(R --vanilla --slave -e "library(GSVA); cat(sessionInfo()\$otherPkgs\$GSVA\$Version)" 2> /dev/null | grep -v -i "WARNING: ")", optparse version" $(R --vanilla --slave -e "library(optparse); cat(sessionInfo()\$otherPkgs\$optparse\$Version)" 2> /dev/null | grep -v -i "WARNING: ")
+    ]]></version_command>
+    <command detect_errors="exit_code"><![CDATA[
+Rscript '$__tool_directory__/gsva.R'
+-e '$expression_file'
+-g '$gene_sets_file'
+-o '$output_file'
+-m '$method.method_type'
+
+#if $method.method_type == "gsva"
+-k '$method.gsva_opts.kcdf'
+-t $method.gsva_opts.tau
+-d $method.gsva_opts.max_diff
+#else if $method.method_type == "ssgsea"
+-a $method.ssgsea_opts.alpha
+-n $method.ssgsea_opts.normalize
+#end if
+    ]]></command>
+    <inputs>
+        <param name="expression_file" type="data" format="tabular" label="Expression Data" help="A tabular file containing gene expression data (genes as rows, samples as columns)"/>
+        <param name="gene_sets_file" type="data" format="gmt" label="Gene Sets" help="A GMT file containing gene sets"/>
+
+        <section name="method" title="GSVA Method" expanded="true">
+            <param name="method_type" type="select" label="Select GSVA Method">
+                <option value="gsva" selected="true">GSVA (Hänzelmann et al., 2013)</option>
+                <option value="ssgsea">ssGSEA (Barbie et al., 2009)</option>
+            </param>
+            <conditional name="gsva_opts">
+                <param name="method_type" type="select" label="GSVA Method Parameters">
+                    <option value="gsva">GSVA Parameters</option>
+                </param>
+                <when value="gsva">
+                    <param name="kcdf" type="select" label="Kernel Density Estimation Function">
+                        <option value="Gaussian" selected="true">Gaussian (for microarray data)</option>
+                        <option value="Poisson">Poisson (for RNA-seq count data)</option>
+                    </param>
+                    <param name="tau" type="float" value="1.0" label="Exponent for weighting the random walk" help="Default: 1.0"/>
+                    <param name="max_diff" type="boolean" truevalue="TRUE" falsevalue="FALSE" checked="true" label="Calculate enrichment score as difference between positive and negative random walk deviations" help="If unchecked, calculates as maximum deviation from zero. Default: True"/>
+                </when>
+            </conditional>
+            <conditional name="ssgsea_opts">
+                <param name="method_type" type="select" label="ssGSEA Method Parameters">
+                    <option value="ssgsea">ssGSEA Parameters</option>
+                </param>
+                <when value="ssgsea">
+                    <param name="alpha" type="float" value="0.25" label="Exponent for weighting the tail in the random walk" help="Default: 0.25"/>
+                    <param name="normalize" type="boolean" truevalue="TRUE" falsevalue="FALSE" checked="true" label="Normalize scores by the absolute difference between min and max" help="Default: True"/>
+                </when>
+            </conditional>
+        </section>
+    </inputs>
+    <outputs>
+        <data name="output_file" format="tabular" label="${tool.name} on ${on_string}: GSVA Scores" />
+    </outputs>
+    <tests>
+        <test>
+            <param name="expression_file" value="expression_data.csv"/>
+            <param name="gene_sets_file" value="gene_sets.gmt"/>
+            <param name="method_type" value="gsva"/>
+            <param name="kcdf" value="Gaussian"/>
+            <param name="tau" value="1.0"/>
+            <param name="max_diff" value="TRUE"/>
+            <output name="output_file">
+                <assert_contents>
+                    <has_text_matching expression="^GeneSet1\t" />
+                    <has_text_matching expression="^GeneSet2\t" />
+                </assert_contents>
+            </output>
+        </test>
+        <test>
+            <param name="expression_file" value="expression_data.csv"/>
+            <param name="gene_sets_file" value="gene_sets.gmt"/>
+            <param name="method_type" value="ssgsea"/>
+            <param name="alpha" value="0.25"/>
+            <param name="normalize" value="TRUE"/>
+            <output name="output_file">
+                <assert_contents>
+                    <has_text_matching expression="^GeneSet1\t" />
+                    <has_text_matching expression="^GeneSet2\t" />
+                </assert_contents>
+            </output>
+        </test>
+    </tests>
+    <help><![CDATA[
+GSVA_ is a Bioconductor package for Gene Set Variation Analysis. It estimates the variation of gene set enrichment over the samples in an expression dataset.
+
+-----
+
+**Inputs**
+
+**Expression Data**
+
+A tabular file containing gene expression data. Genes should be in rows and samples in columns. The first column should contain gene identifiers, and subsequent columns should contain expression values for each sample.
+
+Example:
+
+    =========  ============  ============
+    GeneID     Sample1       Sample2
+    =========  ============  ============
+    GeneA      10.5          12.3
+    GeneB      8.2           9.1
+    GeneC      15.1          14.7
+    =========  ============  ============
+
+**Gene Sets**
+
+A GMT file containing gene sets. In GMT format, each row represents a gene set, with the set name in the first column, a description in the second, then the identifiers of the genes in the set in the following columns.
+
+Example:
+
+    ==================  ==================================================================  ======  =====   ====
+    HALLMARK_APOPTOSIS  http://www.broadinstitute.org/gsea/msigdb/cards/HALLMARK_APOPTOSIS  CASP3   CASP9   ...
+    HALLMARK_HYPOXIA    http://www.broadinstitute.org/gsea/msigdb/cards/HALLMARK_HYPOXIA    PGK1    PDK1    ...
+    ==================  ==================================================================  ======  =====   ====
+
+-----
+
+**Outputs**
+
+*   **GSVA Scores**: A tabular file of GSVA enrichment scores, with gene sets in rows and samples in columns.
+
+-----
+
+Wrapper released under MIT License.
+    ]]></help>
+    <citations>
+        <citation type="doi">10.1186/1471-2105-14-7</citation>
+        <citation type="doi">10.1038/ng.318</citation>
+    </citations>
+</tool>
