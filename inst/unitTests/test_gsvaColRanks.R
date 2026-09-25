@@ -1,5 +1,5 @@
-test_gsvaRanks <- function() {
-    message("Running unit tests for GSVA ranks.")
+test_gsvaColRanks <- function() {
+    message("Running unit tests for GSVA column ranks")
 
     p <- 10 ## number of genes
     n <- 30 ## number of samples
