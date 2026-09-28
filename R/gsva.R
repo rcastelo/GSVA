@@ -1073,6 +1073,11 @@ gsvaColRanks <- function(rowNormExprData,
 #' of non-zero rows in the input expression data will be recomputed, internally
 #' used only.
 #'
+#' @details When the column ranks given to 'gsvaColScores()' are stored in
+#' Apache Parquet format, they are processed from disk by blocks of columns,
+#' even if they would fit in main memory, unless `ondisk="no"` was set in the
+#' original [`gsvaParam`] object.
+#'
 #' @return In the case of 'gsvaColScores()', an object of the same class as the
 #' input expression data given in the argument `exprData` of the `gsvaParam`
 #' object, containing the enrichment scores for the given gene sets. Note that
@@ -1149,10 +1154,18 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
 
     maxmem <- .check_maxmem(param, assay="gsvaranks", maxmem=maxmem,
                             verbose=verbose)
-    ondisk <- .check_ondisk(param, assay="gsvaranks",
-                            first=first, last=last, whdim=2,
-                            recompute_nzcount=recompute_nzcount,
-                            maxmem=maxmem, verbose=verbose)
+    ## ranks stored in Parquet format are processed from disk by blocks of
+    ## columns, even if they fit in main memory, unless 'ondisk="no"'
+    if (.get_ondisk(param) == "auto" && .is_parquet_backed(filtDataMatrix)) {
+        if (verbose)
+            cli_alert_info(paste("Processing ranks stored in Parquet format",
+                                 "from disk"))
+        ondisk <- TRUE
+    } else
+        ondisk <- .check_ondisk(param, assay="gsvaranks",
+                                first=first, last=last, whdim=2,
+                                recompute_nzcount=recompute_nzcount,
+                                maxmem=maxmem, verbose=verbose)
 
     filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix, "GSVA",
                                                     first, last, whdim=2,
@@ -1661,7 +1674,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                 sam <- sample(expr@x, size=min(1000, length(expr@x)),
                               replace=FALSE)
                 Gaussk <- any((sam < 0) | (sam != floor(sam)))
-            } else if (is.integer(expr[1, 1]))
+            } else if (type(expr) == "integer")
                 Gaussk <- FALSE
         }
     } else if (rowNorm == "ecdf") {
@@ -2009,7 +2022,9 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     es <- NULL
     if (sparse && !is_sparse(R))
         sparse <- FALSE
-    intrnks <- is.integer(R[1, 1])
+    ## use the type rather than reading a value, which in an on-disk 'R'
+    ## would read at least a whole chunk of it
+    intrnks <- type(R) == "integer"
 
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)

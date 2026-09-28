@@ -140,6 +140,12 @@ expression by row; (2) calculate GSVA ranks by column from the previous
 row-normalized values; and (3) calculate GSVA scores by column from the
 previously calculated column ranks.
 }
+\details{
+When the column ranks given to 'gsvaColScores()' are stored in
+Apache Parquet format, they are processed from disk by blocks of columns,
+even if they would fit in main memory, unless \code{ondisk="no"} was set in the
+original \code{\link{gsvaParam}} object.
+}
 \examples{
 library(GSVA)
 

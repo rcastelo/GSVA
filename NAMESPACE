@@ -62,6 +62,7 @@ importClassesFrom(HDF5Array,HDF5Array)
 importClassesFrom(HDF5Array,HDF5Matrix)
 importClassesFrom(IRanges,IRanges)
 importClassesFrom(Matrix,dgCMatrix)
+importClassesFrom(S4Arrays,Array)
 importClassesFrom(SingleCellExperiment,SingleCellExperiment)
 importClassesFrom(SparseArray,SVT_SparseMatrix)
 importClassesFrom(SpatialExperiment,SpatialExperiment)
@@ -72,6 +73,7 @@ importFrom(BiocGenerics,
   "type<-",
   annotation,
   cbind,
+  path,
   rbind,
   sort,
   type
@@ -91,6 +93,7 @@ importFrom(BiocParallel,
   bptry
 )
 importFrom(DelayedArray,
+  DelayedArray,
   blockApply,
   blockReduce,
   chunkGrid,
@@ -103,6 +106,7 @@ importFrom(DelayedArray,
   rowAutoGrid,
   rowRanges,
   seed,
+  seedApply,
   setAutoBPPARAM
 )
 importFrom(DelayedMatrixStats,rowSds)
@@ -146,6 +150,7 @@ importFrom(MatrixGenerics,
 importFrom(S4Arrays,
   ArrayViewport,
   DummyArrayGrid,
+  extract_array,
   is_sparse,
   read_block,
   refdim,
@@ -165,6 +170,7 @@ importFrom(SingleCellExperiment,
 importFrom(SparseArray,
   NaArray,
   SparseArray,
+  extract_sparse_array,
   is_nonna,
   nzcount,
   rowMeans,
