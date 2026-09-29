@@ -52,7 +52,14 @@ test_mapReduce <- function() {
     gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
 
     ## calculate column rank values with map-reduce
-    btpar <- BatchtoolsParam(workers=1) ## just to force unit testing internal MAP_FUN_WRAPPER()
+    ## gsvaMap() saves its results in the working directory of the registry,
+    ## which by default is the current working directory
+    wd <- tempfile("gsvamapwd")
+    dir.create(wd)
+    btregargs <- batchtoolsRegistryargs(work.dir=wd)
+    btpar <- BatchtoolsParam(workers=1, registryargs=btregargs) ## just to force unit testing internal MAP_FUN_WRAPPER()
+    ## two workers to have more than one chunk
+    btpar2 <- BatchtoolsParam(workers=2, registryargs=btregargs)
     gsvamapranks <- gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE, BTPARAM=btpar)
     gsvaredranks <- gsvaReduce(gsvamapranks, verbose=FALSE)
 
@@ -113,7 +120,8 @@ test_mapReduce <- function() {
     ## calculate column GSVA scores with map-reduce on mapped ranks stored in
     ## temporary files, returning paths to results
     gsvaesmaprnkflsredfls <- gsvaReduce(gsvaMap(gsvaColScores, gsvamapranksfls,
-                                                output="HDF5", verbose=FALSE),
+                                                output="HDF5", verbose=FALSE,
+                                                BTPARAM=btpar2),
                                         verbose=FALSE)
 
     ## check that we obtain the same column GSVA scores as before
@@ -132,11 +140,14 @@ test_mapReduce <- function() {
     ## returning paths also when mapping by columns an input that is not a
     ## SummarizedExperiment, with two workers to have more than one chunk
     gsvaranksfls <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, output="HDF5",
-                                       verbose=FALSE), verbose=FALSE)
+                                       verbose=FALSE, BTPARAM=btpar2),
+                               verbose=FALSE)
     checkEqualsNumeric(gsvaranks, gsvaranksfls)
     gsvaes2 <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, verbose=FALSE, BTPARAM=btpar),
                           verbose=FALSE)
     checkEqualsNumeric(gsvaes, gsvaes2)
+
+    unlink(wd, recursive=TRUE)
 }
 
 test_mapReduceParquet <- function() {
