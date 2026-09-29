@@ -54,9 +54,24 @@
       max.block.length <- min(.Machine$integer.max, max.block.length / nworkers)
       expected.block.length <- max(1, ceiling(nrow(X) / nworkers) * as.numeric(ncol(X)))
       block.length <- min(max.block.length, expected.block.length)
-      grid <- colAutoGrid(X, block.length=block.length)
+      ## number of columns per block, as calculated by colAutoGrid()
+      ncolblock <- min(max(1, floor(block.length / max(1, nrow(X)))), ncol(X))
+      grid <- colAutoGrid(X, ncol=.align_to_chunks(ncolblock, X, 2L))
   }
   grid
+}
+
+## when the data in 'X' is stored in chunks, such as in HDF5 or Parquet files,
+## round down the block width 'n' along the dimension 'whdim' to a multiple of
+## the chunk width, so that blocks do not split chunks, which would then be
+## read more than once; when a block is narrower than a chunk, its width is
+## kept, to avoid exceeding the memory bound behind the block width
+#' @importFrom DelayedArray chunkdim
+.align_to_chunks <- function(n, X, whdim) {
+    cd <- if (is(X, "DelayedArray")) chunkdim(X) else NULL
+    if (!is.null(cd) && cd[whdim] > 0 && n >= cd[whdim])
+        n <- (n %/% cd[whdim]) * cd[whdim]
+    as.integer(n)
 }
 
 #' @importClassesFrom IRanges IRanges

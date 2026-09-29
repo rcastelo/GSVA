@@ -60,13 +60,13 @@
 #' `extract_sparse_array()` an `SVT_SparseMatrix` object.
 #'
 #' @aliases GsvaParquetSeed-class
-#'          dim,GsvaParquetSeed-method
-#'          type,GsvaParquetSeed-method
-#'          path,GsvaParquetSeed-method
-#'          is_sparse,GsvaParquetSeed-method
-#'          chunkdim,GsvaParquetSeed-method
-#'          extract_array,GsvaParquetSeed-method
-#'          extract_sparse_array,GsvaParquetSeed-method
+#' @aliases dim,GsvaParquetSeed-method
+#' @aliases type,GsvaParquetSeed-method
+#' @aliases path,GsvaParquetSeed-method
+#' @aliases is_sparse,GsvaParquetSeed-method
+#' @aliases chunkdim,GsvaParquetSeed-method
+#' @aliases extract_array,GsvaParquetSeed-method
+#' @aliases extract_sparse_array,GsvaParquetSeed-method
 #' @name GsvaParquetSeed-class
 #' @rdname GsvaParquetSeed-class
 #' @keywords internal
@@ -432,6 +432,224 @@ setMethod("extract_sparse_array", "GsvaParquetSeed", function(x, index) {
 ## wrap a GSVA Parquet file into a 'DelayedMatrix' object
 #' @importFrom DelayedArray DelayedArray
 .GsvaParquetMatrix <- function(path) DelayedArray(GsvaParquetSeed(path))
+
+## ----- writing GSVA Parquet files -----
+
+## maximum number of rows that arrow writes in a single row group
+.GSVA_PARQUET_MAXRGROWS <- 2^20
+
+## default number of columns per row group in the sparse layout, where each
+## row stores one matrix column; with fewer columns, reading a block of
+## columns needs more calls to the reader, and with more columns, reading a
+## few columns reads many more of them than necessary
+.GSVA_PARQUET_SPARSE_COLS_PER_RGROUP <- 500L
+
+## maximum size of the encoded R objects stored in the key-value metadata of
+## the file footer; arrow fails to read footers with metadata strings larger
+## than about 64-95 MB
+.GSVA_PARQUET_MAXMDSIZE <- 64e6
+
+## base64 encoding of raw vectors, since the key-value metadata of Parquet
+## files written with arrow from R can only hold character strings
+.B64CHARS <- utf8ToInt(paste0(c(LETTERS, letters, 0:9, "+", "/"),
+                              collapse=""))
+
+.base64_encode <- function(r) {
+    pad <- (3L - length(r) %% 3L) %% 3L
+    x <- matrix(as.integer(c(r, as.raw(rep(0L, pad)))), nrow=3L)
+    v <- x[1L, ] * 65536L + x[2L, ] * 256L + x[3L, ]
+    codes <- .B64CHARS[rbind(v %/% 262144L, (v %/% 4096L) %% 64L,
+                             (v %/% 64L) %% 64L, v %% 64L) + 1L]
+    if (pad > 0L)
+        codes[length(codes) - seq_len(pad) + 1L] <- utf8ToInt("=")
+    intToUtf8(codes)
+}
+
+#' @importFrom cli cli_abort
+.base64_decode <- function(s) {
+    codes <- utf8ToInt(s)
+    pad <- sum(codes[length(codes) - 0:1] == utf8ToInt("="))
+    codes[codes == utf8ToInt("=")] <- utf8ToInt("A")
+    dec <- rep(NA_integer_, 256L)
+    dec[.B64CHARS + 1L] <- 0:63
+    v <- dec[codes + 1L]
+    if (anyNA(v) || length(v) %% 4L != 0L)
+        cli_abort(c("x"="Invalid base64-encoded metadata."))
+    v <- matrix(v, nrow=4L)
+    w <- v[1L, ] * 262144L + v[2L, ] * 4096L + v[3L, ] * 64L + v[4L, ]
+    r <- as.raw(rbind(w %/% 65536L, (w %/% 256L) %% 256L, w %% 256L))
+    r[seq_len(length(r) - pad)]
+}
+
+## serialize and compress an R object into a character string, and back
+## this approach ties the format used in Parquet files to R and therefore
+## they can only be read back by R. in the future, we may use a different
+## approach that enables interoperability with other programming languages
+.encode_r_object <- function(x)
+    .base64_encode(memCompress(serialize(x, connection=NULL), type="gzip"))
+
+.decode_r_object <- function(s)
+    unserialize(memDecompress(.base64_decode(s), type="gzip"))
+
+## number of columns per row group
+#' @importFrom cli cli_abort
+.parquet_cols_per_rgroup <- function(colsPerRowGroup, nrow, ncol, sparse) {
+    maxdense <- .GSVA_PARQUET_MAXRGROWS %/% nrow
+    if (identical(colsPerRowGroup, "auto"))
+        K <- if (sparse) .GSVA_PARQUET_SPARSE_COLS_PER_RGROUP else maxdense
+    else {
+        if (!is.numeric(colsPerRowGroup) || length(colsPerRowGroup) != 1L ||
+            is.na(colsPerRowGroup) || colsPerRowGroup < 1 ||
+            colsPerRowGroup != round(colsPerRowGroup))
+            cli_abort(c("x"=paste("'colsPerRowGroup' must be either \"auto\"",
+                                  "or a positive integer number.")))
+        K <- as.integer(colsPerRowGroup)
+        if (!sparse && K > maxdense)
+            cli_abort(c("x"=paste("With {nrow} rows, 'colsPerRowGroup' can be",
+                                  "at most {maxdense} to store dense values,",
+                                  "because row groups cannot have more than",
+                                  "2^20 values.")))
+    }
+    if (!sparse && K < 1L)
+        cli_abort(c("x"=paste("Dense matrices with more than 2^20 rows cannot",
+                              "be stored in Apache Parquet format.")))
+    as.integer(min(K, .Machine$integer.max, max(ncol, 1L)))
+}
+
+## table with the columns 'js' of the matrix block 'm', with column indices
+## 'cols' in the whole matrix, in the dense or sparse layout
+#' @importFrom cli cli_abort
+.parquet_rgroup_table <- function(m, js, cols, type, sch, sparse) {
+    vt <- if (type == "integer") arrow::int32() else arrow::float64()
+    if (!sparse) {
+        v <- as.vector(m[, js, drop=FALSE])
+        if (type == "integer" && is.double(v) &&
+            any(v != round(v), na.rm=TRUE))
+            cli_abort(c("x"="Non-integer values cannot be stored as integers."))
+        storage.mode(v) <- type
+        return(arrow::Table$create(col=rep(cols, each=nrow(m)), value=v,
+                                   schema=sch))
+    }
+
+    m <- m[, js, drop=FALSE]
+    lens <- diff(m@p)
+    ## row indices as differences within each column, except the first one
+    i1 <- m@i + 1L
+    d <- i1
+    if (length(i1) > 1L)
+        d[-1L] <- diff(i1)
+    starts <- m@p[-length(m@p)][lens > 0L] + 1L
+    d[starts] <- i1[starts]
+    x <- m@x
+    if (type == "integer") {
+        if (any(x != round(x), na.rm=TRUE))
+            cli_abort(c("x"="Non-integer values cannot be stored as integers."))
+        x <- as.integer(x)
+    }
+    f <- factor(rep(seq_along(lens), lens), levels=seq_along(lens))
+    arrow::Table$create(col=cols,
+                        row=arrow::Array$create(unname(split(d, f)),
+                                                type=arrow::list_of(arrow::int32())),
+                        value=arrow::Array$create(unname(split(x, f)),
+                                                  type=arrow::list_of(vt)),
+                        schema=sch)
+}
+
+## write the matrix 'X' to the Parquet file 'file' as values of type 'type',
+## in the sparse layout when 'X' is sparse, and in the dense one otherwise,
+## storing the character strings in the named list 'md' as additional
+## key-value metadata. The file is first written with a temporary name and
+## then renamed, so that an existing file is only replaced when writing
+## succeeds, and it can be read while it is being replaced.
+#' @importFrom cli cli_abort cli_progress_bar cli_progress_update
+#' @importFrom cli cli_progress_done
+#' @importFrom S4Arrays is_sparse
+#' @importFrom DelayedArray getAutoBlockSize
+.write_gsva_parquet <- function(X, file, type, colsPerRowGroup="auto",
+                                md=list(), verbose=FALSE) {
+    nr <- nrow(X)
+    nc <- ncol(X)
+    if (nr == 0L || nc == 0L)
+        cli_abort(c("x"=paste("Cannot store in Apache Parquet format a matrix",
+                              "without rows or columns.")))
+    sparse <- is_sparse(X)
+    K <- .parquet_cols_per_rgroup(colsPerRowGroup, nr, nc, sparse)
+    firsts <- seq(1L, nc, by=K)
+
+    vt <- if (type == "integer") arrow::int32() else arrow::float64()
+    if (sparse) {
+        sch <- arrow::schema(col=arrow::int32(),
+                             row=arrow::list_of(arrow::int32()),
+                             value=arrow::list_of(vt))
+        leaves <- c("col", "row.list.element", "value.list.element")
+        dict <- c(TRUE, TRUE, type == "integer")
+    } else {
+        sch <- arrow::schema(col=arrow::int32(), value=vt)
+        leaves <- c("col", "value")
+        dict <- c(TRUE, type == "integer")
+    }
+    md <- c(list(gsva_format=.GSVA_PARQUET_FORMAT,
+                 gsva_format_version=.GSVA_PARQUET_FORMAT_VERSIONS[1],
+                 gsva_layout=if (sparse) "sparse" else "dense",
+                 gsva_dim=paste(nr, nc, sep=","),
+                 gsva_type=type,
+                 gsva_firsts=paste(firsts, collapse=",")), md)
+    if (any(nchar(unlist(md), type="bytes") > .GSVA_PARQUET_MAXMDSIZE))
+        cli_abort(c("x"=paste("The metadata of the GSVA output is too large to",
+                              "be stored in Apache Parquet format. Consider",
+                              "removing large objects from it, such as images",
+                              "in a 'SpatialExperiment' object, or using",
+                              "'saveHDF5GSVA()' instead.")))
+    sch <- sch$WithMetadata(md)
+    ## per-column properties of list columns must refer to their leaf columns
+    props <- arrow::ParquetWriterProperties$create(leaves, compression="zstd",
+                                                   use_dictionary=dict)
+
+    tmpfile <- tempfile(pattern=paste0(".", basename(file), "."),
+                        tmpdir=dirname(file))
+    sink <- arrow::FileOutputStream$create(tmpfile)
+    done <- FALSE
+    on.exit({
+        if (!done) {
+            try(sink$close(), silent=TRUE)
+            unlink(tmpfile)
+        }
+    })
+    writer <- arrow::ParquetFileWriter$create(sch, sink, properties=props)
+
+    ## read the input by blocks of whole row groups of at most the automatic
+    ## block size, or a single row group if it does not fit in that size
+    rgbytes <- as.numeric(nr) * K * 8
+    rgsperblock <- max(1L, floor(getAutoBlockSize() / rgbytes))
+    blockfirsts <- firsts[seq(1L, length(firsts), by=rgsperblock)]
+    if (verbose)
+        idpb <- cli_progress_bar("Writing columns", total=nc)
+    for (b in seq_along(blockfirsts)) {
+        bcols <- blockfirsts[b]:(if (b < length(blockfirsts))
+                                     blockfirsts[b + 1L] - 1L else nc)
+        m <- X[, bcols, drop=FALSE]
+        m <- if (sparse) as(m, "dgCMatrix") else as.matrix(m)
+        for (f in firsts[firsts >= bcols[1] & firsts <= bcols[length(bcols)]]) {
+            cols <- f:min(f + K - 1L, nc)
+            tb <- .parquet_rgroup_table(m, cols - bcols[1] + 1L, cols, type,
+                                        sch, sparse)
+            writer$WriteTable(tb, chunk_size=nrow(tb)) ## one row group
+        }
+        if (verbose)
+            cli_progress_update(id=idpb, inc=length(bcols))
+    }
+    writer$Close()
+    sink$close()
+    if (verbose)
+        cli_progress_done(id=idpb)
+
+    if (!file.rename(tmpfile, file))
+        cli_abort(c("x"="Cannot write the file {.file {file}}."))
+    done <- TRUE
+
+    invisible(file)
+}
+
 
 ## TRUE when 'x' is a 'DelayedArray' object with data from a GSVA Parquet file,
 ## also after delayed operations such as subsetting
