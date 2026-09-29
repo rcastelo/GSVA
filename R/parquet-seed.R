@@ -433,6 +433,15 @@ setMethod("extract_sparse_array", "GsvaParquetSeed", function(x, index) {
 #' @importFrom DelayedArray DelayedArray
 .GsvaParquetMatrix <- function(path) DelayedArray(GsvaParquetSeed(path))
 
+## TRUE when the local file in 'path' starts with the magic number of the
+## Apache Parquet format
+.is_parquet_file <- function(path) {
+    con <- file(path, open="rb")
+    on.exit(close(con))
+    identical(readBin(con, what="raw", n=4L), charToRaw("PAR1"))
+}
+
+
 ## ----- writing GSVA Parquet files -----
 
 ## maximum number of rows that arrow writes in a single row group

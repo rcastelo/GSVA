@@ -367,3 +367,41 @@ loadParquetGSVA <- function(file, assay="auto") {
 
     .se_to_gsva_output(gsvacontainer, assay)
 }
+
+
+## load GSVA output given as a path in the arguments 'rowNormExprData' of
+## gsvaColRanks() or 'rankExprData' of gsvaColScores(), named in 'argname',
+## which can be either a directory with GSVA output saved with saveHDF5GSVA(),
+## or a file or an 's3://' or 'gs://' URI with GSVA output saved with
+## saveParquetGSVA(); 'assay' is the name of the GSVA assay to load
+#' @importFrom cli cli_abort cli_alert_info
+.load_gsva_path <- function(path, assay, argname, verbose) {
+    if (length(path) != 1L || is.na(path))
+        cli_abort(c("x"="'{argname}' must be a single character string."))
+
+    if (.is_uri(path))
+        parquet <- TRUE
+    else if (dir.exists(path))
+        parquet <- FALSE
+    else if (file.exists(path)) {
+        if (!.is_parquet_file(path))
+            cli_abort(c("x"=paste("{.file {path}} is neither a directory with",
+                                  "GSVA output saved with 'saveHDF5GSVA()',",
+                                  "nor a file with GSVA output saved with",
+                                  "'saveParquetGSVA()'.")))
+        parquet <- TRUE
+    } else
+        cli_abort(c("x"="{path} cannot be found in the filesystem"))
+
+    if (verbose) {
+        if (.is_uri(path))
+            cli_alert_info("Loading {path}")
+        else
+            cli_alert_info("Loading {basename(path)} from disk")
+    }
+
+    if (parquet)
+        loadParquetGSVA(path, assay=assay)
+    else
+        loadHDF5GSVA(path, assay=assay)
+}

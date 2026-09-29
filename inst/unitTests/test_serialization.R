@@ -86,3 +86,179 @@ test_ranksserialization <- function() {
     es_from_loaded_gsvaranks <- gsvaColScores(loaded_gsvacolranks, verbose=FALSE)
     checkEqualsNumeric(assay(es), es_from_loaded_gsvaranks)
 }
+
+test_parquetserialization <- function() {
+
+    if (!requireNamespace("arrow", quietly=TRUE)) {
+        message("Skipping unit tests for Parquet serialization (no 'arrow')")
+        return(invisible(TRUE))
+    }
+
+    message("Running unit tests for Parquet serialization")
+
+    suppressPackageStartupMessages({
+        library(Matrix)
+        library(GSEABase)
+        library(SummarizedExperiment)
+        library(S4Arrays)
+    })
+
+    p <- 50 ## number of genes
+    n <- 120 ## number of samples
+
+    gsets <- list(gset1=paste0("g", 1:10),
+                  gset2=paste0("g", 11:25),
+                  gset3=paste0("g", 26:50))
+
+    ## build a random sparse count matrix with 85% sparsity
+    cnt <- integer(n*p)
+    idx <- sample(length(cnt), size=round(length(cnt)*0.15))
+    cnt[idx] <- rpois(length(idx), lambda=2)+1
+    cnt <- matrix(cnt, nrow=p, ncol=n,
+                  dimnames=list(paste0("g", 1:p), paste0("s", 1:n)))
+    cnt <- Matrix(cnt, sparse=TRUE)
+    se <- SummarizedExperiment(assays=list(counts=cnt))
+
+    ## dense expression values
+    y <- matrix(rnorm(n*p), nrow=p, ncol=n, dimnames=dimnames(cnt))
+
+    getvals <- function(x, a)
+        as.matrix(if (is(x, "SummarizedExperiment")) assay(x, a) else x)
+
+    for (input in list(se, cnt, y)) {
+        gsvapar <- gsvaParam(input, gsets, verbose=FALSE)
+        gsvarownorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
+        gsvacolranks <- gsvaColRanks(gsvarownorm, verbose=FALSE)
+        es <- gsvaColScores(gsvacolranks, verbose=FALSE)
+
+        rnormfile <- tempfile(fileext=".parquet")
+        ranksfile <- tempfile(fileext=".parquet")
+        checkIdentical(rnormfile, saveParquetGSVA(gsvarownorm, rnormfile))
+        ## small row groups, to read columns from several of them
+        checkIdentical(ranksfile, saveParquetGSVA(gsvacolranks, ranksfile,
+                                                  colsPerRowGroup=7))
+
+        loaded_gsvarownorm <- loadParquetGSVA(rnormfile)
+        loaded_gsvacolranks <- loadParquetGSVA(ranksfile)
+        checkTrue(is(loaded_gsvacolranks, class(gsvacolranks)[1]) ||
+                  is(loaded_gsvacolranks, "DelayedMatrix"))
+
+        ## loaded values are read from the files, keeping their sparsity
+        ## and storing ranks as integers
+        lrnks <- if (is(loaded_gsvacolranks, "SummarizedExperiment"))
+                     assay(loaded_gsvacolranks, "gsvaranks")
+                 else loaded_gsvacolranks
+        checkTrue(GSVA:::.is_parquet_backed(lrnks))
+        insparse <- is_sparse(if (is(input, "SummarizedExperiment"))
+                                  assay(input) else input)
+        checkIdentical(insparse, is_sparse(lrnks))
+        checkIdentical("integer", type(lrnks))
+        checkIdentical(dimnames(getvals(gsvacolranks, "gsvaranks")),
+                       dimnames(lrnks))
+
+        checkEqualsNumeric(getvals(gsvarownorm, "gsvarnorm"),
+                           getvals(loaded_gsvarownorm, "gsvarnorm"))
+
+        ## the loaded row-normalized values provide the same ranks
+        gsvacolranks2 <- gsvaColRanks(loaded_gsvarownorm, verbose=FALSE)
+        checkEqualsNumeric(getvals(gsvacolranks, "gsvaranks"),
+                           getvals(gsvacolranks2, "gsvaranks"))
+
+        ## the loaded ranks provide the same scores, also for other gene sets
+        es2 <- gsvaColScores(loaded_gsvacolranks, verbose=FALSE)
+        checkEqualsNumeric(getvals(es, "es"), getvals(es2, "es"))
+        gsets2 <- list(gset4=paste0("g", c(1:5, 40:50)),
+                       gset5=paste0("g", 20:35))
+        es3 <- gsvaColScores(gsvacolranks, geneSets=gsets2, verbose=FALSE)
+        es4 <- gsvaColScores(loaded_gsvacolranks, geneSets=gsets2,
+                             verbose=FALSE)
+        checkEqualsNumeric(getvals(es3, "es"), getvals(es4, "es"))
+
+        ## existing files are only replaced when 'replace=TRUE'
+        checkException(saveParquetGSVA(gsvacolranks, ranksfile), silent=TRUE)
+        saveParquetGSVA(gsvarownorm, ranksfile, replace=TRUE)
+        checkEqualsNumeric(getvals(gsvarownorm, "gsvarnorm"),
+                           getvals(loadParquetGSVA(ranksfile), "gsvarnorm"))
+
+        unlink(c(rnormfile, ranksfile))
+    }
+
+    ## errors
+    f <- tempfile(fileext=".parquet")
+    checkException(saveParquetGSVA(gsvapar, f), silent=TRUE)
+    checkException(saveParquetGSVA(gsvacolranks, f, colsPerRowGroup=0),
+                   silent=TRUE)
+    checkException(saveParquetGSVA(gsvacolranks, f,
+                                   colsPerRowGroup=2^20), silent=TRUE)
+    checkException(loadParquetGSVA(f), silent=TRUE)
+    arrow::write_parquet(data.frame(a=1:3), f)
+    checkException(loadParquetGSVA(f), silent=TRUE)
+    unlink(f)
+}
+
+test_serializationpaths <- function() {
+
+    message("Running unit tests for GSVA output given as paths")
+
+    suppressPackageStartupMessages({
+        library(Matrix)
+        library(SummarizedExperiment)
+    })
+
+    p <- 40 ## number of genes
+    n <- 60 ## number of samples
+    gsets <- list(gset1=paste0("g", 1:10),
+                  gset2=paste0("g", 11:25),
+                  gset3=paste0("g", 26:40))
+    y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+                dimnames=list(paste0("g", 1:p), paste0("s", 1:n)))
+
+    getvals <- function(x, a)
+        as.matrix(if (is(x, "SummarizedExperiment")) assay(x, a) else x)
+
+    formats <- "HDF5"
+    if (requireNamespace("arrow", quietly=TRUE))
+        formats <- c(formats, "Parquet")
+
+    for (input in list(y, SummarizedExperiment(assays=list(exprs=y)))) {
+        gsvarownorm <- gsvaRowNorm(gsvaParam(input, gsets, verbose=FALSE),
+                                   verbose=FALSE)
+        gsvacolranks <- gsvaColRanks(gsvarownorm, verbose=FALSE)
+        es <- gsvaColScores(gsvacolranks, verbose=FALSE)
+
+        for (fmt in formats) {
+            if (fmt == "HDF5") {
+                rnormpath <- saveHDF5GSVA(gsvarownorm, tempfile())
+                rankspath <- saveHDF5GSVA(gsvacolranks, tempfile())
+            } else {
+                rnormpath <- saveParquetGSVA(gsvarownorm,
+                                             tempfile(fileext=".parquet"))
+                rankspath <- saveParquetGSVA(gsvacolranks,
+                                             tempfile(fileext=".parquet"))
+            }
+
+            gsvacolranks2 <- gsvaColRanks(rnormpath, verbose=FALSE)
+            checkEqualsNumeric(getvals(gsvacolranks, "gsvaranks"),
+                               getvals(gsvacolranks2, "gsvaranks"))
+            es2 <- gsvaColScores(rankspath, verbose=FALSE)
+            checkEqualsNumeric(getvals(es, "es"), getvals(es2, "es"))
+
+            ## the saved data must be of the kind expected by each function
+            checkException(gsvaColRanks(rankspath, verbose=FALSE),
+                           silent=TRUE)
+            checkException(gsvaColScores(rnormpath, verbose=FALSE),
+                           silent=TRUE)
+
+            unlink(c(rnormpath, rankspath), recursive=TRUE)
+        }
+    }
+
+    ## paths that cannot be loaded
+    checkException(gsvaColRanks(tempfile(), verbose=FALSE), silent=TRUE)
+    checkException(gsvaColScores(c(tempfile(), tempfile()), verbose=FALSE),
+                   silent=TRUE)
+    f <- tempfile()
+    writeLines("not GSVA output", f)
+    checkException(gsvaColScores(f, verbose=FALSE), silent=TRUE)
+    unlink(f)
+}

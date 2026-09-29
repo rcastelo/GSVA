@@ -3,11 +3,24 @@
 \name{saveHDF5GSVA}
 \alias{saveHDF5GSVA}
 \alias{loadHDF5GSVA}
-\title{Save/load GSVA output to disk using HDF5 format}
+\alias{saveParquetGSVA}
+\alias{loadParquetGSVA}
+\title{Save/load GSVA output to disk using HDF5 or Apache Parquet format}
 \usage{
 saveHDF5GSVA(gsvaExprData, dir, assay = "auto", ...)
 
 loadHDF5GSVA(dir, assay = "auto", ...)
+
+saveParquetGSVA(
+  gsvaExprData,
+  file,
+  assay = "auto",
+  colsPerRowGroup = "auto",
+  replace = FALSE,
+  verbose = FALSE
+)
+
+loadParquetGSVA(file, assay = "auto")
 }
 \arguments{
 \item{gsvaExprData}{An object obtained with \code{\link{gsvaRowNorm}} or
@@ -27,15 +40,33 @@ named \code{gsvaranks}, and if not found, it will look for an assay named
 derivatives, then the assay to be saved will be determined by the \code{assay}
 attribute of the \code{gsvaExprData} object.}
 
-\item{...}{Additional arguments to be passed to the underlying HDF5
-saving/loading functions
+\item{...}{Only for \code{saveHDF5GSVA()} and \code{loadHDF5GSVA()}, additional
+arguments to be passed to the underlying HDF5 saving/loading functions
 \code{\link[HDF5Array:saveHDF5SummarizedExperiment]{saveHDF5SummarizedExperiment}}
 and \code{\link[HDF5Array:loadHDF5SummarizedExperiment]{loadHDF5SummarizedExperiment}},
 respectively.}
+
+\item{file}{The path to the file where to save the GSVA output data in
+Apache Parquet format or, for loading it, either that path or an \verb{s3://} or
+\verb{gs://} URI.}
+
+\item{colsPerRowGroup}{Either \code{"auto"} (default), or the number of matrix
+columns stored in each row group of the Apache Parquet file, which is the
+smallest unit of data that can be read from it. With \code{"auto"}, dense data is
+stored in row groups of at most 2^20 values, which is also the maximum
+number of values allowed, while sparse data is stored in row groups of 500
+columns.}
+
+\item{replace}{Logical vector of length 1. When \code{TRUE}, an existing file in
+\code{file} is replaced. By default, \code{replace=FALSE}.}
+
+\item{verbose}{Logical vector of length 1. When \code{TRUE}, a progress bar is
+shown while writing the file. By default, \code{verbose=FALSE}.}
 }
 \value{
 For \code{saveHDF5GSVA()} the path to the directory where the data has
-been saved is returned invisibly. For \code{loadHDF5GSVA()}, an object is returned
+been saved is returned invisibly, and for \code{saveParquetGSVA()} the path to
+the file. For \code{loadHDF5GSVA()} and \code{loadParquetGSVA()}, an object is returned
 containing the corresponding loaded GSVA row-normalized or rank expression
 values, and their corresponding metadata. If the saved GSVA output was
 originally stored in a
@@ -54,6 +85,25 @@ specified directory. The \code{loadHDF5GSVA()} function reads the saved data fro
 the specified directory and returns an object with the corresponding
 GSVA row-normalized or rank expression values, and their corresponding
 metadata.
+
+The functions \code{saveParquetGSVA()} and \code{loadParquetGSVA()} do the same using
+a single file in Apache Parquet format, which is organized to efficiently
+read blocks of columns, as \code{\link{gsvaColRanks}} and \code{\link{gsvaColScores}} do. These
+two functions require the package
+\href{https://cran.r-project.org/package=arrow}{arrow}.
+}
+\details{
+\code{saveParquetGSVA()} stores sparse input, such as a
+\code{\link[Matrix:dgCMatrix-class]{dgCMatrix}} or an
+\code{\link[SparseArray:SVT_SparseMatrix-class]{SVT_SparseMatrix}} object, keeping
+only its non-zero values, and stores GSVA ranks as integer values. The
+object returned by \code{loadParquetGSVA()} holds its values in a
+\code{\link[DelayedArray:DelayedMatrix]{DelayedMatrix}} object that reads them from
+the file only when needed, by blocks of columns, and \code{\link{gsvaColScores}}
+processes ranks stored in this way from disk. \code{loadParquetGSVA()} can also
+read files stored in Amazon S3 or Google Cloud Storage, given as \verb{s3://} or
+\verb{gs://} URIs, as long as the installed arrow package supports them; see
+\code{\link[arrow:arrow_with_s3]{arrow_with_s3}}.
 }
 \examples{
 
@@ -107,5 +157,14 @@ loaded_gsvacolranks <- loadHDF5GSVA(ranksdir)
 ## same scores as the original ranks
 loaded_es <- gsvaColScores(loaded_gsvacolranks)
 identical(es, loaded_es)
+
+## the same using Apache Parquet files
+if (requireNamespace("arrow", quietly=TRUE)) {
+    ranksfile <- tempfile(fileext=".parquet")
+    saveParquetGSVA(gsvacolranks, ranksfile)
+    loaded_gsvacolranks <- loadParquetGSVA(ranksfile)
+    loaded_es <- gsvaColScores(loaded_gsvacolranks)
+    all.equal(es, loaded_es, check.attributes=FALSE)
+}
 
 }

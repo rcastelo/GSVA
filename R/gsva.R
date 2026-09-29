@@ -969,9 +969,11 @@ gsvaRowNorm <- function(param,
 
 
 #' @param rowNormExprData A row-normalized expression data set obtained with
-#' [`gsvaRowNorm`]. It can be either a single character string with path to
-#' a directory containing the column-rank data stored with [`saveHDF5GSVA`],
-#' or an object of one of the classes supported by [`GsvaExprData-class`].
+#' [`gsvaRowNorm`]. It can be either a single character string with the path
+#' to a directory containing the row-normalized data stored with
+#' [`saveHDF5GSVA`], the path to a file containing that data stored with
+#' [`saveParquetGSVA`] or an `s3://` or `gs://` URI to such a file, or an
+#' object of one of the classes supported by [`GsvaExprData-class`].
 #' For a list of these classes, see `class ? GsvaExprData`.
 #'
 #' @return In the case of 'gsvaColRanks()', an object of the same class as the
@@ -999,15 +1001,9 @@ gsvaColRanks <- function(rowNormExprData,
                               "string or an object of one of the classes",
                               "supported by 'GsvaExprData'; See class ?",
                               "GsvaExprData.")))
-    else if (is.character(rowNormExprData)) {
-        if (!dir.exists(rowNormExprData))
-            cli_abort(c("x"=paste("{rowNormExprData} cannot be found in the",
-                                  "filesystem")))
-        if (verbose)
-            cli_alert_info(paste("Loading {basename(rowNormExprData)}",
-                                 "from disk"))
-        rowNormExprData <- loadHDF5GSVA(rowNormExprData)
-    }
+    else if (is.character(rowNormExprData))
+        rowNormExprData <- .load_gsva_path(rowNormExprData, "gsvarnorm",
+                                           "rowNormExprData", verbose)
 
     param <- .pull_param(rowNormExprData)
 
@@ -1060,9 +1056,11 @@ gsvaColRanks <- function(rowNormExprData,
 
 
 #' @param rankExprData A column-rank expression data set obtained with
-#' [`gsvaColRanks`]. It can be either a single character string with path to
-#' a directory containing the column-rank data stored with [`saveHDF5GSVA`],
-#' or an object of one of the classes supported by [`GsvaExprData-class`].
+#' [`gsvaColRanks`]. It can be either a single character string with the path
+#' to a directory containing the column-rank data stored with
+#' [`saveHDF5GSVA`], the path to a file containing that data stored with
+#' [`saveParquetGSVA`] or an `s3://` or `gs://` URI to such a file, or an
+#' object of one of the classes supported by [`GsvaExprData-class`].
 #' For a list of these classes, see `class ? GsvaExprData`.
 #'
 #' @param geneSets An object of the classes supported by [`GsvaGeneSets-class`].
@@ -1101,14 +1099,9 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                               "string or an object of one of the classes",
                               "supported by 'GsvaExprData'; See class ?",
                               "GsvaExprData.")))
-    else if (is.character(rankExprData)) {
-        if (!dir.exists(rankExprData))
-            cli_abort(c("x"=paste("{rankExprData} cannot be found",
-                                  "in the filesystem")))
-        if (verbose)
-            cli_alert_info("Loading {basename(rankExprData)} from disk")
-        rankExprData <- loadHDF5GSVA(rankExprData)
-    }
+    else if (is.character(rankExprData))
+        rankExprData <- .load_gsva_path(rankExprData, "gsvaranks",
+                                        "rankExprData", verbose)
 
     param <- .pull_param(rankExprData)
 

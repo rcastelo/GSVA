@@ -25,10 +25,12 @@ export(guessGeneIdType)
 export(igsva)
 export(loadHDF5GSVA)
 export(loadHDF5GSVAranks)
+export(loadParquetGSVA)
 export(plageParam)
 export(readGMT)
 export(saveHDF5GSVA)
 export(saveHDF5GSVAranks)
+export(saveParquetGSVA)
 export(spatCor)
 export(ssgseaParam)
 export(zscoreParam)
@@ -102,6 +104,7 @@ importFrom(DelayedArray,
   colAutoGrid,
   defaultAutoGrid,
   getAutoBlockLength,
+  getAutoBlockSize,
   gridReduce,
   rowAutoGrid,
   rowRanges,

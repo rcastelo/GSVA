@@ -90,15 +90,19 @@ in an R session or script may depend on other commands and packages used in
 that same session or script.}
 
 \item{rowNormExprData}{A row-normalized expression data set obtained with
-\code{\link{gsvaRowNorm}}. It can be either a single character string with path to
-a directory containing the column-rank data stored with \code{\link{saveHDF5GSVA}},
-or an object of one of the classes supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.
+\code{\link{gsvaRowNorm}}. It can be either a single character string with the path
+to a directory containing the row-normalized data stored with
+\code{\link{saveHDF5GSVA}}, the path to a file containing that data stored with
+\code{\link{saveParquetGSVA}} or an \verb{s3://} or \verb{gs://} URI to such a file, or an
+object of one of the classes supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.
 For a list of these classes, see \code{class ? GsvaExprData}.}
 
 \item{rankExprData}{A column-rank expression data set obtained with
-\code{\link{gsvaColRanks}}. It can be either a single character string with path to
-a directory containing the column-rank data stored with \code{\link{saveHDF5GSVA}},
-or an object of one of the classes supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.
+\code{\link{gsvaColRanks}}. It can be either a single character string with the path
+to a directory containing the column-rank data stored with
+\code{\link{saveHDF5GSVA}}, the path to a file containing that data stored with
+\code{\link{saveParquetGSVA}} or an \verb{s3://} or \verb{gs://} URI to such a file, or an
+object of one of the classes supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.
 For a list of these classes, see \code{class ? GsvaExprData}.}
 
 \item{geneSets}{An object of the classes supported by \code{\link[=GsvaGeneSets-class]{GsvaGeneSets}}.
