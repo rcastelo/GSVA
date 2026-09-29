@@ -72,7 +72,7 @@ test_mapReduce <- function() {
                        assay(gsvaredranks, "gsvaranks"))
 
     ## calculate column rank values with map-reduce returning paths to results
-    gsvamapranksfls <- gsvaMap(gsvaColRanks, gsvarnorm, returnPath=TRUE,
+    gsvamapranksfls <- gsvaMap(gsvaColRanks, gsvarnorm, output="HDF5",
                                verbose=FALSE, BTPARAM=btpar)
     gsvaredranksfls <- gsvaReduce(gsvamapranksfls, verbose=FALSE)
 
@@ -113,7 +113,7 @@ test_mapReduce <- function() {
     ## calculate column GSVA scores with map-reduce on mapped ranks stored in
     ## temporary files, returning paths to results
     gsvaesmaprnkflsredfls <- gsvaReduce(gsvaMap(gsvaColScores, gsvamapranksfls,
-                                                returnPath=TRUE, verbose=FALSE),
+                                                output="HDF5", verbose=FALSE),
                                         verbose=FALSE)
 
     ## check that we obtain the same column GSVA scores as before
@@ -124,14 +124,14 @@ test_mapReduce <- function() {
     expr <- as(logcounts(sce), "matrix")
     gsvapar <- gsvaParam(expr, gsets, verbose=FALSE)
     gsvaes <- gsva(gsvapar, verbose=FALSE)
-    ## set returnPath=TRUE once to test stripping of attributes and wrapping into an SE for saving
-    gsvarnorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, returnPath=TRUE, verbose=FALSE, BTPARAM=btpar),
+    ## set output="HDF5" once to test stripping of attributes and wrapping into an SE for saving
+    gsvarnorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, output="HDF5", verbose=FALSE, BTPARAM=btpar),
                             verbose=FALSE)
     gsvaranks <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE, BTPARAM=btpar),
                             verbose=FALSE)
     ## returning paths also when mapping by columns an input that is not a
     ## SummarizedExperiment, with two workers to have more than one chunk
-    gsvaranksfls <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, returnPath=TRUE,
+    gsvaranksfls <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, output="HDF5",
                                        verbose=FALSE), verbose=FALSE)
     checkEqualsNumeric(gsvaranks, gsvaranksfls)
     gsvaes2 <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, verbose=FALSE, BTPARAM=btpar),
@@ -151,6 +151,7 @@ test_mapReduceParquet <- function() {
     suppressPackageStartupMessages({
         library(Matrix)
         library(SummarizedExperiment)
+        library(BiocParallel)
     })
 
     p <- 40 ## number of genes
@@ -171,14 +172,17 @@ test_mapReduceParquet <- function() {
     getvals <- function(x, a)
         as.matrix(if (is(x, "SummarizedExperiment")) assay(x, a) else x)
 
-    ## save each part of the output of gsvaMap() into a Parquet file,
-    ## as gsvaMap() does into HDF5 files when 'returnPath=TRUE'
-    saveparts <- function(parts) {
-        paths <- lapply(parts, function(x)
-            saveParquetGSVA(x, tempfile(fileext=".parquet")))
-        attributes(paths) <- attributes(parts)
-        paths
-    }
+    ## gsvaMap() saves its results in the working directory of the registry
+    wd <- tempfile("gsvamapwd")
+    dir.create(wd)
+    btpar <- BatchtoolsParam(workers=2,
+                             registryargs=batchtoolsRegistryargs(work.dir=wd))
+    isparquet <- function(paths)
+        all(vapply(paths, function(x) grepl("\\.parquet$", x) &&
+                                      GSVA:::.is_parquet_file(x), logical(1)))
+
+    checkException(gsvaMap(gsvaRowNorm, gsvaParam(y, gsets, verbose=FALSE),
+                           output="csv", verbose=FALSE), silent=TRUE)
 
     for (input in list(SummarizedExperiment(assays=list(counts=cnt)), y)) {
         gsvapar <- gsvaParam(input, gsets, verbose=FALSE)
@@ -187,16 +191,17 @@ test_mapReduceParquet <- function() {
         gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
 
         ## row-normalized values mapped by rows
-        rnormpaths <- saveparts(gsvaMap(gsvaRowNorm, gsvapar, verbose=FALSE))
-        checkTrue(length(rnormpaths) > 1)
+        rnormpaths <- gsvaMap(gsvaRowNorm, gsvapar, output="Parquet",
+                              verbose=FALSE, BTPARAM=btpar)
+        checkTrue(length(rnormpaths) > 1 && isparquet(rnormpaths))
         gsvarnorm2 <- gsvaReduce(rnormpaths, verbose=FALSE)
         checkEqualsNumeric(getvals(gsvarnorm, "gsvarnorm"),
                            getvals(gsvarnorm2, "gsvarnorm"))
 
         ## column ranks mapped by columns, given in a non-sequential order
-        rankspaths <- saveparts(gsvaMap(gsvaColRanks, gsvarnorm,
-                                        verbose=FALSE))
-        checkTrue(length(rankspaths) > 1)
+        rankspaths <- gsvaMap(gsvaColRanks, gsvarnorm, output="Parquet",
+                              verbose=FALSE, BTPARAM=btpar)
+        checkTrue(length(rankspaths) > 1 && isparquet(rankspaths))
         rankspaths2 <- rev(rankspaths)
         attributes(rankspaths2) <- attributes(rankspaths)
         gsvaranks2 <- gsvaReduce(rankspaths2, verbose=FALSE)
@@ -216,4 +221,6 @@ test_mapReduceParquet <- function() {
 
         unlink(c(unlist(rnormpaths), unlist(rankspaths)))
     }
+
+    unlink(wd, recursive=TRUE)
 }
