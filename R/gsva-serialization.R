@@ -2,12 +2,12 @@
 #'
 #' @description The functions `saveHDF5GSVA()` and `loadHDF5GSVA()` allow one
 #' to save and load the output from GSVA to/from disk. The `saveHDF5GSVA()`
-#' function takes the output of [`gsvaRowNorm`] or [`gsvaColRanks`] as input,
-#' and saves the output from these methods with the relevant metadata to a
-#' specified directory. The `loadHDF5GSVA()` function reads the saved data from
-#' the specified directory and returns an object with the corresponding
-#' GSVA row-normalized or rank expression values, and their corresponding
-#' metadata.
+#' function takes the output of [`gsvaRowNorm`], [`gsvaColRanks`] or
+#' [`gsvaColScores`] as input, and saves the output from these methods with the
+#' relevant metadata to a specified directory. The `loadHDF5GSVA()` function
+#' reads the saved data from the specified directory and returns an object with
+#' the corresponding GSVA row-normalized or rank expression values, or GSVA
+#' scores, and their corresponding metadata.
 #'
 #' The functions `saveParquetGSVA()` and `loadParquetGSVA()` do the same using
 #' a single file in Apache Parquet format, which is organized to efficiently
@@ -27,8 +27,8 @@
 #' `gs://` URIs, as long as the installed arrow package supports them; see
 #' [`arrow_with_s3`][arrow::arrow_with_s3].
 #'
-#' @param gsvaExprData An object obtained with [`gsvaRowNorm`] or
-#' [`gsvaColRanks`]. Must be one of the classes supported by
+#' @param gsvaExprData An object obtained with [`gsvaRowNorm`],
+#' [`gsvaColRanks`] or [`gsvaColScores`]. Must be one of the classes supported by
 #' [`GsvaExprData-class`].  For a list of these classes, see its help page
 #' using `help(GsvaExprData)`.
 #'
@@ -77,7 +77,10 @@
 #' or one of its derived classes, then the returned object will be a
 #' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment].
 #' Otherwise, the returned object will be a
-#' [`DelayedMatrix`][DelayedArray::DelayedMatrix] object.
+#' [`DelayedMatrix`][DelayedArray::DelayedMatrix] object. This is also the case
+#' for GSVA output originally stored in an
+#' [`ExpressionSet`][Biobase::ExpressionSet] object, of which only the values
+#' and the GSVA metadata are saved.
 #'
 #' @examples
 #'
@@ -160,10 +163,15 @@ saveHDF5GSVA <- function(gsvaExprData, dir, assay="auto", ...) {
 
 ## put the GSVA output in 'gsvaExprData' into a 'SummarizedExperiment' object
 ## with a single assay and the GSVA metadata, as required for serialization;
-## returns a list with that object in 'se' and the name of the assay in 'assay'
+## returns a list with that object in 'se' and the name of the assay in 'assay'.
+## GSVA scores not stored in a 'SummarizedExperiment' have their gene sets in
+## the attribute 'geneSets', which are stored in the row data column 'gs', as
+## done for GSVA scores stored in a 'SummarizedExperiment'. Of an
+## 'ExpressionSet' object, only its values and GSVA metadata are stored.
 #' @importFrom cli cli_abort
 #' @importFrom S4Vectors metadata "metadata<-"
 #' @importFrom SummarizedExperiment SummarizedExperiment assayNames "assay<-"
+#' @importMethodsFrom Biobase exprs
 .gsva_output_to_se <- function(gsvaExprData, assay) {
     if (!is(gsvaExprData, "GsvaExprData")) {
         msg <- paste("The input object in 'gsvaExprData' must a subclass of",
@@ -171,11 +179,20 @@ saveHDF5GSVA <- function(gsvaExprData, dir, assay="auto", ...) {
         cli_abort(msg)
     }
 
+    if (is(gsvaExprData, "ExpressionSet")) {
+        gsvaattr <- c("gsvaParam", "assay", "restrict", "geneSets")
+        gsvaattr <- attributes(gsvaExprData)[intersect(gsvaattr,
+                                                names(attributes(gsvaExprData)))]
+        gsvaExprData <- exprs(gsvaExprData)
+        for (a in names(gsvaattr))
+            attr(gsvaExprData, a) <- gsvaattr[[a]]
+    }
+
     se <- gsvaExprData
     if (!is(se, "SummarizedExperiment")) {
         if (!is.null(attributes(gsvaExprData)$assay))
             assay <- attributes(gsvaExprData)$assay
-        if (!assay %in% c("gsvarnorm", "gsvaranks"))
+        if (!assay %in% c("gsvarnorm", "gsvaranks", "es"))
             cli_abort(c("x"=paste("The object in 'gsvaExprData' does not have",
                                   "GSVA output.")))
         param <- .pull_param(gsvaExprData)
@@ -196,14 +213,22 @@ saveHDF5GSVA <- function(gsvaExprData, dir, assay="auto", ...) {
                 rem <- attributes(gsvaExprData)$restrict$rem
             attributes(gsvaExprData)$restrict <- NULL
         }
+        geneSets <- attributes(gsvaExprData)$geneSets
+        attributes(gsvaExprData)$geneSets <- NULL
         se <- SummarizedExperiment(assays=list(dummy=gsvaExprData))
         if (!is.null(annot))
             gsvaAnnotation(se) <- annot
         ## 'se' holds only the rows or columns of the chunk given by 'first'
         ## and 'last', so wrapData() should not subset it by them, and the
         ## 'restrict' metadata is added afterwards, as wrapData() would do
-        se <- wrapData(se, gsvaExprData, param, assay, first=NA_real_,
-                       last=NA_real_, rem=rem, whdim=whdim, dropAssays=TRUE)
+        if (assay == "es" && !is.null(geneSets))
+            se <- wrapData(se, gsvaExprData, param, assay, first=NA_real_,
+                           last=NA_real_, rem=rem, whdim=whdim,
+                           dropAssays=TRUE, geneSets=geneSets)
+        else
+            se <- wrapData(se, gsvaExprData, param, assay, first=NA_real_,
+                           last=NA_real_, rem=rem, whdim=whdim,
+                           dropAssays=TRUE)
         if (!is.na(first) || !is.na(last))
             metadata(se)$restrict <- list(first=first, last=last, rem=rem,
                                           whdim=whdim)
@@ -248,9 +273,10 @@ loadHDF5GSVA <- function(dir, assay="auto", ...) {
 ## turn a 'SummarizedExperiment' object with GSVA output, read from disk, back
 ## into the class of the object that was saved: if it was not originally a
 ## 'SummarizedExperiment', return the matrix in the assay 'assay' with the
-## GSVA metadata stored as attributes
+## GSVA metadata stored as attributes, including the gene sets of GSVA scores
 #' @importFrom cli cli_abort
 #' @importFrom S4Vectors metadata
+#' @importMethodsFrom SummarizedExperiment rowData
 .se_to_gsva_output <- function(gsvacontainer, assay) {
     if (is.null(metadata(gsvacontainer)$gsvaParam)) {
         msg <- paste("Cannot find the GSVA parameters in the metadata of the",
@@ -268,6 +294,11 @@ loadHDF5GSVA <- function(dir, assay="auto", ...) {
         gsvapar <- metadata(gsvacontainer)$gsvaParam
         restrict <- metadata(gsvacontainer)$restrict
         annotation <- metadata(gsvacontainer)$annotation
+        geneSets <- NULL
+        if (assay == "es" && !is.null(rowData(gsvacontainer)$gs)) {
+            geneSets <- as.list(rowData(gsvacontainer)$gs)
+            names(geneSets) <- rownames(gsvacontainer)
+        }
         gsvacontainer <- unwrapData(gsvacontainer, assay)
         attr(gsvacontainer, "gsvaParam") <- gsvapar
         attr(gsvacontainer, "assay") <- assay
@@ -275,6 +306,8 @@ loadHDF5GSVA <- function(dir, assay="auto", ...) {
             attr(gsvacontainer, "geneIdType") <- annotation
         if (!is.null(restrict))
             attr(gsvacontainer, "restrict") <- restrict
+        if (!is.null(geneSets))
+            attr(gsvacontainer, "geneSets") <- geneSets
     }
 
     return(gsvacontainer)

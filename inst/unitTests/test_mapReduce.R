@@ -224,3 +224,58 @@ test_mapReduceParquet <- function() {
 
     unlink(wd, recursive=TRUE)
 }
+
+test_mapReduceScoresOutput <- function() {
+
+    message("Running unit tests for map reduce saving GSVA scores")
+
+    suppressPackageStartupMessages({
+        library(SummarizedExperiment)
+        library(BiocParallel)
+    })
+
+    p <- 40 ## number of genes
+    n <- 90 ## number of samples
+    gsets <- list(gset1=paste0("g", 1:10),
+                  gset2=paste0("g", 11:25),
+                  gset3=paste0("g", 26:40))
+    set.seed(123)
+    y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+                dimnames=list(paste0("g", 1:p), paste0("s", 1:n)))
+
+    getvals <- function(x, a)
+        as.matrix(if (is(x, "SummarizedExperiment")) assay(x, a) else x)
+
+    formats <- "HDF5"
+    if (requireNamespace("arrow", quietly=TRUE))
+        formats <- c(formats, "Parquet")
+
+    ## gsvaMap() saves its results in the working directory of the registry
+    wd <- tempfile("gsvamapwd")
+    dir.create(wd)
+    btpar <- BatchtoolsParam(workers=2,
+                             registryargs=batchtoolsRegistryargs(work.dir=wd))
+
+    for (input in list(y, SummarizedExperiment(assays=list(exprs=y)))) {
+        gsvaranks <- gsvaColRanks(gsvaRowNorm(gsvaParam(input, gsets,
+                                                        verbose=FALSE),
+                                              verbose=FALSE),
+                                  verbose=FALSE)
+        gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+
+        for (fmt in formats) {
+            espaths <- gsvaMap(gsvaColScores, gsvaranks, output=fmt,
+                               verbose=FALSE, BTPARAM=btpar)
+            checkTrue(length(espaths) > 1)
+            checkTrue(all(vapply(espaths, is.character, logical(1))))
+            gsvaes2 <- gsvaReduce(espaths, verbose=FALSE)
+            checkEqualsNumeric(getvals(gsvaes, "es"), getvals(gsvaes2, "es"))
+            if (!is(input, "SummarizedExperiment"))
+                checkIdentical(attr(gsvaes, "geneSets"),
+                               attr(gsvaes2, "geneSets"))
+            unlink(unlist(espaths), recursive=TRUE)
+        }
+    }
+
+    unlink(wd, recursive=TRUE)
+}

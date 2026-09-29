@@ -23,8 +23,8 @@ saveParquetGSVA(
 loadParquetGSVA(file, assay = "auto")
 }
 \arguments{
-\item{gsvaExprData}{An object obtained with \code{\link{gsvaRowNorm}} or
-\code{\link{gsvaColRanks}}. Must be one of the classes supported by
+\item{gsvaExprData}{An object obtained with \code{\link{gsvaRowNorm}},
+\code{\link{gsvaColRanks}} or \code{\link{gsvaColScores}}. Must be one of the classes supported by
 \code{\link[=GsvaExprData-class]{GsvaExprData}}.  For a list of these classes, see its help page
 using \code{help(GsvaExprData)}.}
 
@@ -74,17 +74,20 @@ originally stored in a
 or one of its derived classes, then the returned object will be a
 \code{\link[SummarizedExperiment:SummarizedExperiment]{SummarizedExperiment}}.
 Otherwise, the returned object will be a
-\code{\link[DelayedArray:DelayedMatrix]{DelayedMatrix}} object.
+\code{\link[DelayedArray:DelayedMatrix]{DelayedMatrix}} object. This is also the case
+for GSVA output originally stored in an
+\code{\link[Biobase:ExpressionSet]{ExpressionSet}} object, of which only the values
+and the GSVA metadata are saved.
 }
 \description{
 The functions \code{saveHDF5GSVA()} and \code{loadHDF5GSVA()} allow one
 to save and load the output from GSVA to/from disk. The \code{saveHDF5GSVA()}
-function takes the output of \code{\link{gsvaRowNorm}} or \code{\link{gsvaColRanks}} as input,
-and saves the output from these methods with the relevant metadata to a
-specified directory. The \code{loadHDF5GSVA()} function reads the saved data from
-the specified directory and returns an object with the corresponding
-GSVA row-normalized or rank expression values, and their corresponding
-metadata.
+function takes the output of \code{\link{gsvaRowNorm}}, \code{\link{gsvaColRanks}} or
+\code{\link{gsvaColScores}} as input, and saves the output from these methods with the
+relevant metadata to a specified directory. The \code{loadHDF5GSVA()} function
+reads the saved data from the specified directory and returns an object with
+the corresponding GSVA row-normalized or rank expression values, or GSVA
+scores, and their corresponding metadata.
 
 The functions \code{saveParquetGSVA()} and \code{loadParquetGSVA()} do the same using
 a single file in Apache Parquet format, which is organized to efficiently

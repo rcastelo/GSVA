@@ -262,3 +262,79 @@ test_serializationpaths <- function() {
     checkException(gsvaColScores(f, verbose=FALSE), silent=TRUE)
     unlink(f)
 }
+
+test_serializationscoresandeset <- function() {
+
+    message("Running unit tests for serialization of scores and ExpressionSet")
+
+    suppressPackageStartupMessages({
+        library(Biobase)
+        library(SummarizedExperiment)
+    })
+
+    p <- 40 ## number of genes
+    n <- 60 ## number of samples
+    gsets <- list(gset1=paste0("g", 1:10),
+                  gset2=paste0("g", 11:25),
+                  gset3=paste0("g", 26:40))
+    y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+                dimnames=list(paste0("g", 1:p), paste0("s", 1:n)))
+
+    getvals <- function(x, a) {
+        if (is(x, "SummarizedExperiment"))
+            x <- assay(x, a)
+        else if (is(x, "ExpressionSet"))
+            x <- exprs(x)
+        as.matrix(x)
+    }
+
+    formats <- "HDF5"
+    if (requireNamespace("arrow", quietly=TRUE))
+        formats <- c(formats, "Parquet")
+
+    inputs <- list(y, SummarizedExperiment(assays=list(exprs=y)),
+                   ExpressionSet(y))
+    for (input in inputs) {
+        gsvarownorm <- gsvaRowNorm(gsvaParam(input, gsets, verbose=FALSE),
+                                   verbose=FALSE)
+        gsvacolranks <- gsvaColRanks(gsvarownorm, verbose=FALSE)
+        es <- gsvaColScores(gsvacolranks, verbose=FALSE)
+
+        for (fmt in formats) {
+            savefun <- function(x) {
+                if (fmt == "HDF5")
+                    saveHDF5GSVA(x, tempfile())
+                else
+                    saveParquetGSVA(x, tempfile(fileext=".parquet"))
+            }
+            loadfun <- if (fmt == "HDF5") loadHDF5GSVA else loadParquetGSVA
+
+            ## GSVA scores, keeping their gene sets
+            espath <- savefun(es)
+            loaded_es <- loadfun(espath)
+            checkEqualsNumeric(getvals(es, "es"), getvals(loaded_es, "es"))
+            if (is(input, "SummarizedExperiment")) {
+                checkTrue(is(loaded_es, "SummarizedExperiment"))
+                checkIdentical(as.list(rowData(es)$gs),
+                               as.list(rowData(loaded_es)$gs))
+            } else {
+                ## an 'ExpressionSet' is loaded as a matrix
+                checkTrue(is(loaded_es, "DelayedMatrix"))
+                checkIdentical("es", attr(loaded_es, "assay", exact=TRUE))
+                checkIdentical(attr(es, "geneSets"),
+                               attr(loaded_es, "geneSets"))
+            }
+
+            ## row-normalized values and ranks
+            rnormpath <- savefun(gsvarownorm)
+            rankspath <- savefun(gsvacolranks)
+            gsvacolranks2 <- gsvaColRanks(loadfun(rnormpath), verbose=FALSE)
+            checkEqualsNumeric(getvals(gsvacolranks, "gsvaranks"),
+                               getvals(gsvacolranks2, "gsvaranks"))
+            es2 <- gsvaColScores(loadfun(rankspath), verbose=FALSE)
+            checkEqualsNumeric(getvals(es, "es"), getvals(es2, "es"))
+
+            unlink(c(espath, rnormpath, rankspath), recursive=TRUE)
+        }
+    }
+}
