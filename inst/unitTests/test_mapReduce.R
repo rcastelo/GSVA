@@ -129,7 +129,91 @@ test_mapReduce <- function() {
                             verbose=FALSE)
     gsvaranks <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE, BTPARAM=btpar),
                             verbose=FALSE)
+    ## returning paths also when mapping by columns an input that is not a
+    ## SummarizedExperiment, with two workers to have more than one chunk
+    gsvaranksfls <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, returnPath=TRUE,
+                                       verbose=FALSE), verbose=FALSE)
+    checkEqualsNumeric(gsvaranks, gsvaranksfls)
     gsvaes2 <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, verbose=FALSE, BTPARAM=btpar),
                           verbose=FALSE)
     checkEqualsNumeric(gsvaes, gsvaes2)
+}
+
+test_mapReduceParquet <- function() {
+
+    if (!requireNamespace("arrow", quietly=TRUE)) {
+        message("Skipping unit tests for map reduce with Parquet files (no 'arrow')")
+        return(invisible(TRUE))
+    }
+
+    message("Running unit tests for map reduce with Parquet files")
+
+    suppressPackageStartupMessages({
+        library(Matrix)
+        library(SummarizedExperiment)
+    })
+
+    p <- 40 ## number of genes
+    n <- 90 ## number of samples
+    gsets <- list(gset1=paste0("g", 1:10),
+                  gset2=paste0("g", 11:25),
+                  gset3=paste0("g", 26:40))
+
+    set.seed(123)
+    cnt <- integer(n*p)
+    idx <- sample(length(cnt), size=round(length(cnt)*0.15)) ## 85% sparsity
+    cnt[idx] <- rpois(length(idx), lambda=2)+1
+    cnt <- Matrix(matrix(cnt, nrow=p, ncol=n,
+                         dimnames=list(paste0("g", 1:p), paste0("s", 1:n))),
+                  sparse=TRUE)
+    y <- matrix(rnorm(n*p), nrow=p, ncol=n, dimnames=dimnames(cnt))
+
+    getvals <- function(x, a)
+        as.matrix(if (is(x, "SummarizedExperiment")) assay(x, a) else x)
+
+    ## save each part of the output of gsvaMap() into a Parquet file,
+    ## as gsvaMap() does into HDF5 files when 'returnPath=TRUE'
+    saveparts <- function(parts) {
+        paths <- lapply(parts, function(x)
+            saveParquetGSVA(x, tempfile(fileext=".parquet")))
+        attributes(paths) <- attributes(parts)
+        paths
+    }
+
+    for (input in list(SummarizedExperiment(assays=list(counts=cnt)), y)) {
+        gsvapar <- gsvaParam(input, gsets, verbose=FALSE)
+        gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
+        gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
+        gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+
+        ## row-normalized values mapped by rows
+        rnormpaths <- saveparts(gsvaMap(gsvaRowNorm, gsvapar, verbose=FALSE))
+        checkTrue(length(rnormpaths) > 1)
+        gsvarnorm2 <- gsvaReduce(rnormpaths, verbose=FALSE)
+        checkEqualsNumeric(getvals(gsvarnorm, "gsvarnorm"),
+                           getvals(gsvarnorm2, "gsvarnorm"))
+
+        ## column ranks mapped by columns, given in a non-sequential order
+        rankspaths <- saveparts(gsvaMap(gsvaColRanks, gsvarnorm,
+                                        verbose=FALSE))
+        checkTrue(length(rankspaths) > 1)
+        rankspaths2 <- rev(rankspaths)
+        attributes(rankspaths2) <- attributes(rankspaths)
+        gsvaranks2 <- gsvaReduce(rankspaths2, verbose=FALSE)
+        checkEqualsNumeric(getvals(gsvaranks, "gsvaranks"),
+                           getvals(gsvaranks2, "gsvaranks"))
+        rnks2 <- if (is(gsvaranks2, "SummarizedExperiment"))
+                     assay(gsvaranks2, "gsvaranks") else gsvaranks2
+        checkTrue(GSVA:::.is_parquet_backed(rnks2))
+
+        ## scores from reduced ranks read from the Parquet files, and from
+        ## the Parquet files given as input to gsvaMap()
+        gsvaes2 <- gsvaColScores(gsvaranks2, verbose=FALSE)
+        checkEqualsNumeric(getvals(gsvaes, "es"), getvals(gsvaes2, "es"))
+        gsvaes3 <- gsvaReduce(gsvaMap(gsvaColScores, rankspaths,
+                                      verbose=FALSE), verbose=FALSE)
+        checkEqualsNumeric(getvals(gsvaes, "es"), getvals(gsvaes3, "es"))
+
+        unlink(c(unlist(rnormpaths), unlist(rankspaths)))
+    }
 }

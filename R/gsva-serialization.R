@@ -199,8 +199,14 @@ saveHDF5GSVA <- function(gsvaExprData, dir, assay="auto", ...) {
         se <- SummarizedExperiment(assays=list(dummy=gsvaExprData))
         if (!is.null(annot))
             gsvaAnnotation(se) <- annot
-        se <- wrapData(se, gsvaExprData, param, assay, first=first,
-                       last=last, rem=rem, whdim=whdim, dropAssays=TRUE)
+        ## 'se' holds only the rows or columns of the chunk given by 'first'
+        ## and 'last', so wrapData() should not subset it by them, and the
+        ## 'restrict' metadata is added afterwards, as wrapData() would do
+        se <- wrapData(se, gsvaExprData, param, assay, first=NA_real_,
+                       last=NA_real_, rem=rem, whdim=whdim, dropAssays=TRUE)
+        if (!is.na(first) || !is.na(last))
+            metadata(se)$restrict <- list(first=first, last=last, rem=rem,
+                                          whdim=whdim)
 
     } else {
         ## 'SummarizedExperiment' object, remove all assays except the selected GSVA assay

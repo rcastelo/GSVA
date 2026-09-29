@@ -37,7 +37,10 @@
 #' using [`saveHDF5GSVA`], instead returning the list of resulting objects
 #' themselves, which is the default behavior (`FALSE`).
 #'
-#' @param mapOutput In `gsvaReduce()`, the output of `gsvaMap()`.
+#' @param mapOutput In `gsvaReduce()`, the output of `gsvaMap()`, which can be
+#' a list of objects or a list of paths to GSVA output saved with
+#' [`saveHDF5GSVA`] or [`saveParquetGSVA`], such as the one returned by
+#' `gsvaMap()` with `returnPath=TRUE`.
 #'
 #' @param verbose Gives information about the progress of the calculations.
 #' Default: `TRUE`.
@@ -233,13 +236,9 @@ gsvaReduce <- function(mapOutput, verbose=TRUE) {
         cli_abort(c("x"=paste("The input list argument in 'mapOutput' must",
                               "contain the attribute 'totalInputDim'.")))
 
-    if (is.character(mapOutput[[1]])) {
-        mapOutput <- lapply(mapOutput, function(x) {
-            if (!dir.exists(x))
-                cli_abort(c("x"="Cannot find {x}."))
-            loadHDF5GSVA(x)
-        })
-    }
+    if (is.character(mapOutput[[1]]))
+        mapOutput <- lapply(mapOutput, .load_gsva_path, assay="auto",
+                            argname="mapOutput", verbose=FALSE)
 
     param <- .pull_param(mapOutput[[1]])
     nrmdata <- .pull_nonrestrict_metadata(mapOutput[[1]])

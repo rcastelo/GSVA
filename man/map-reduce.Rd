@@ -58,7 +58,10 @@ is available, they may use the wrapper function \code{gsvaBatchtoolsSlurmParam()
 which is provided to create a \code{BatchtoolsParam} object with some sensible
 defaults for running GSVA calculations on a SLURM cluster.}
 
-\item{mapOutput}{In \code{gsvaReduce()}, the output of \code{gsvaMap()}.}
+\item{mapOutput}{In \code{gsvaReduce()}, the output of \code{gsvaMap()}, which can be
+a list of objects or a list of paths to GSVA output saved with
+\code{\link{saveHDF5GSVA}} or \code{\link{saveParquetGSVA}}, such as the one returned by
+\code{gsvaMap()} with \code{returnPath=TRUE}.}
 
 \item{dir}{In \code{gsvaBatchtoolsSlurmParam()}, path to a directory where the
 output of the GSVA calculations will be saved. Default: "GSVAOUTPUT" in the
