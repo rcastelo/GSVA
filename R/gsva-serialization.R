@@ -141,6 +141,10 @@ saveHDF5GSVA <- function(gsvaExprData, dir, assay="auto", ...) {
             gsvaAnnotation(se) <- annot
         se <- wrapData(se, gsvaExprData, param, assay, first=first,
                        last=last, rem=rem, whdim=whdim, dropAssays=TRUE)
+        ## keep the version of GSVA that produced the object, instead of the
+        ## one that is saving it, which wrapData() records
+        if (!is.null(attributes(gsvaExprData)$gsvaVersion))
+            metadata(se)$gsvaVersion <- attributes(gsvaExprData)$gsvaVersion
 
     } else {
         ## 'SummarizedExperiment' object, remove all assays except the selected GSVA assay
@@ -193,6 +197,8 @@ loadHDF5GSVA <- function(dir, assay="auto", ...) {
         gsvapar <- metadata(gsvacontainer)$gsvaParam
         restrict <- metadata(gsvacontainer)$restrict
         annotation <- metadata(gsvacontainer)$annotation
+        gsvaversion <- metadata(gsvacontainer)$gsvaVersion
+        ranksnrow <- metadata(gsvacontainer)$ranksNrow
         gsvacontainer <- unwrapData(gsvacontainer, assay)
         attr(gsvacontainer, "gsvaParam") <- gsvapar
         attr(gsvacontainer, "assay") <- assay
@@ -200,6 +206,10 @@ loadHDF5GSVA <- function(dir, assay="auto", ...) {
             attr(gsvacontainer, "geneIdType") <- annotation
         if (!is.null(restrict))
             attr(gsvacontainer, "restrict") <- restrict
+        if (!is.null(gsvaversion))
+            attr(gsvacontainer, "gsvaVersion") <- gsvaversion
+        if (!is.null(ranksnrow))
+            attr(gsvacontainer, "ranksNrow") <- ranksnrow
     }
 
     return(gsvacontainer)

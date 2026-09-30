@@ -53,6 +53,18 @@ setMethod("unwrapData", signature("SpatialExperiment"),
           })
 
 
+## metadata recorded in every GSVA output object: the version of GSVA that
+## produced it, 'gsvaVersion', to handle in the future objects produced by
+## different versions of GSVA, e.g., when they are stored on disk, and for
+## column ranks, the number of rows on which they were calculated,
+## 'ranksNrow', since the ranks are only valid for those rows; for other
+## outputs 'ranksNrow' is NULL, which removes it when inherited from the input
+#' @importFrom utils packageDescription
+.gsva_output_metadata <- function(dataMatrix, assay) {
+    list(gsvaVersion=packageDescription("GSVA")[["Version"]],
+         ranksNrow=if (assay == "gsvaranks") nrow(dataMatrix) else NULL)
+}
+
 .wrapdata_nonSE <- function(dataMatrix, param, assay, first, last, rem, whdim,
                             dropAssays, geneSets) {
     stopifnot(!missing(param))
@@ -62,8 +74,11 @@ setMethod("unwrapData", signature("SpatialExperiment"),
     stopifnot(!missing(rem))
     stopifnot(!missing(whdim))
     stopifnot(!missing(dropAssays))
+    omd <- .gsva_output_metadata(dataMatrix, assay)
     attr(dataMatrix, "gsvaParam") <- .gsvaParam_as_list(param)
     attr(dataMatrix, "assay") <- assay
+    attr(dataMatrix, "gsvaVersion") <- omd$gsvaVersion
+    attr(dataMatrix, "ranksNrow") <- omd$ranksNrow
     if (!is.na(first) || !is.na(last))
         attr(dataMatrix, "restrict") <- list(first=first, last=last,
                                              rem=rem, whdim=whdim)
@@ -139,8 +154,11 @@ setMethod("wrapData", signature(container="ExpressionSet"),
                           phenoData=pdata,
                           experimentData=experimentData(container),
                           annotation="")
+              omd <- .gsva_output_metadata(dataMatrix, assay)
               attr(rval, "gsvaParam") <- .gsvaParam_as_list(param)
               attr(rval, "assay") <- assay
+              attr(rval, "gsvaVersion") <- omd$gsvaVersion
+              attr(rval, "ranksNrow") <- omd$ranksNrow
               if (!is.na(first) || !is.na(last))
                   attr(rval, "restrict") <- list(first=first, last=last,
                                                  rem=rem, whdim=whdim)
@@ -189,6 +207,9 @@ setMethod("wrapData", signature(container="SummarizedExperiment"),
                                            rowData=rdata,
                                            metadata=metadata(container))
               metadata(rval)$gsvaParam <- .gsvaParam_as_list(param)
+              omd <- .gsva_output_metadata(dataMatrix, assay)
+              metadata(rval)$gsvaVersion <- omd$gsvaVersion
+              metadata(rval)$ranksNrow <- omd$ranksNrow
               if (!is.na(first) || !is.na(last))
                   metadata(rval)$restrict <- list(first=first, last=last,
                                                   rem=rem, whdim=whdim)
@@ -248,6 +269,9 @@ setMethod("wrapData", signature(container="SingleCellExperiment"),
                                            altExps=aexpsdata,
                                            metadata=metadata(container))
               metadata(rval)$gsvaParam <- .gsvaParam_as_list(param)
+              omd <- .gsva_output_metadata(dataMatrix, assay)
+              metadata(rval)$gsvaVersion <- omd$gsvaVersion
+              metadata(rval)$ranksNrow <- omd$ranksNrow
               if (!is.na(first) || !is.na(last))
                   metadata(rval)$restrict <- list(first=first, last=last,
                                                   rem=rem, whdim=whdim)
@@ -304,6 +328,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                   imgData=imgData(container),
                   spatialCoords=spatialCoords(container))
               metadata(rval)$gsvaParam <- .gsvaParam_as_list(param)
+              omd <- .gsva_output_metadata(dataMatrix, assay)
+              metadata(rval)$gsvaVersion <- omd$gsvaVersion
+              metadata(rval)$ranksNrow <- omd$ranksNrow
               if (!is.na(first) || !is.na(last))
                   metadata(rval)$restrict <- list(first=first, last=last,
                                                   rem=rem, whdim=whdim)
@@ -762,8 +789,16 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             rep <- "sparse"
             if (recompute_nzcount)
                 spa <- .estimate_nzcount(get_exprData(param), assay, FALSE) / tot
-            else
+            else {
                 spa <- nzcount(param) / tot
+                ## the number of nonzero values in the parameter object
+                ## may correspond to a larger data set, e.g., when columns
+                ## have been removed, and then it has to be recomputed
+                if (spa > 1)
+                    spa <- .estimate_nzcount(get_exprData(param), assay,
+                                             FALSE) / tot
+            }
+            spa <- min(spa, 1)
         }
         sze <- 0
         if (is.na(first) && is.na(last))

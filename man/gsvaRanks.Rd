@@ -114,7 +114,8 @@ In the case of 'gsvaRowNorm()', an object of the same class as the
 input expresssion data given in the argument \code{exprData} of the \code{gsvaParam}
 object, containing the row-normalized expression values. The resulting
 object will have metadata with a copy of the input \code{gsvaParam} object,
-except for the \code{exprData} slot, and in the case of being a derivative of a
+except for the \code{exprData} slot, and with the version of GSVA that produced
+it, and in the case of being a derivative of a
 \code{\link[SummarizedExperiment:SummarizedExperiment]{SummarizedExperiment}} object,
 an additional assay called "gsvarnorm" storing the row-normalized expression
 values.
@@ -123,7 +124,9 @@ In the case of 'gsvaColRanks()', an object of the same class as the
 input expresssion data given in the argument \code{exprData} of the \code{gsvaParam}
 object, containing the column rank values. The resulting object will have
 metadata with a copy of the input \code{gsvaParam} object, except for the
-\code{exprData} slot, and in the case of being a derivative of a
+\code{exprData} slot, with the version of GSVA that produced it, and with the
+number of rows on which the ranks were calculated, and in the case of being
+a derivative of a
 \code{\link[SummarizedExperiment:SummarizedExperiment]{SummarizedExperiment}} object,
 an additional assay called "gsvaranks" storing the column rank values.
 
@@ -139,6 +142,15 @@ Calculate GSVA scores in three steps: (1) normalize values of
 expression by row; (2) calculate GSVA ranks by column from the previous
 row-normalized values; and (3) calculate GSVA scores by column from the
 previously calculated column ranks.
+}
+\details{
+Column ranks are only valid for the rows on which they were
+calculated, because GSVA scores are calculated from the ranking of all
+those rows. For this reason, rows cannot be removed from the output of
+'gsvaColRanks()', and 'gsvaColScores()' gives an error when the number of
+rows of its input differs from the number of rows on which the ranks were
+calculated. Rows should be removed before calling 'gsvaRowNorm()' instead.
+Removing columns does not affect the validity of the ranks.
 }
 \examples{
 library(GSVA)

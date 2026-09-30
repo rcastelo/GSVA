@@ -729,6 +729,8 @@ setMethod("details",
         metadata(exprData)$assay <- NULL
         metadata(exprData)$gsvaParam <- NULL
         metadata(exprData)$restrict <- NULL
+        metadata(exprData)$gsvaVersion <- NULL
+        metadata(exprData)$ranksNrow <- NULL
     } else {
         mask <- is.null(attr(exprData, "gsvaParam")) ||
                 is.null(attr(exprData, "assay"))
@@ -742,6 +744,8 @@ setMethod("details",
         attr(exprData, "assay") <- NULL
         attr(exprData, "gsvaParam") <- NULL
         attr(exprData, "restrict") <- NULL
+        attr(exprData, "gsvaVersion") <- NULL
+        attr(exprData, "ranksNrow") <- NULL
     }
 
     param <- new("gsvaParam",
@@ -756,6 +760,30 @@ setMethod("details",
                  nzcount=p$nzcount, ondisk=p$ondisk)
 
     return(param)
+}
+
+## column ranks are only valid for the rows on which they were calculated,
+## because GSVA scores are calculated from the ranking of all those rows, and
+## the ranks of a subset of them may be larger than the number of rows, which
+## the calculation of GSVA scores cannot handle. Objects produced by versions
+## of GSVA that did not record the number of rows of the ranks are not checked
+#' @importFrom S4Vectors metadata
+#' @importFrom cli cli_abort
+.check_ranks_nrow <- function(rankExprData) {
+    if (is(rankExprData, "SummarizedExperiment"))
+        ranksnrow <- metadata(rankExprData)$ranksNrow
+    else
+        ranksnrow <- attr(rankExprData, "ranksNrow", exact=TRUE)
+
+    nr <- nrow(rankExprData)
+    if (!is.null(ranksnrow) && ranksnrow != nr)
+        cli_abort(c("x"=paste("The ranks were calculated on {ranksnrow} rows,",
+                              "but the input data has {nr} rows."),
+                    "i"=paste("Rows cannot be removed after calculating the",
+                              "ranks with 'gsvaColRanks()'; remove them",
+                              "before calling 'gsvaRowNorm()' instead.")))
+
+    invisible(TRUE)
 }
 
 
@@ -869,7 +897,8 @@ setMethod("details",
 #' input expresssion data given in the argument `exprData` of the `gsvaParam`
 #' object, containing the row-normalized expression values. The resulting
 #' object will have metadata with a copy of the input `gsvaParam` object,
-#' except for the `exprData` slot, and in the case of being a derivative of a
+#' except for the `exprData` slot, and with the version of GSVA that produced
+#' it, and in the case of being a derivative of a
 #' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment] object,
 #' an additional assay called "gsvarnorm" storing the row-normalized expression
 #' values.
@@ -978,9 +1007,19 @@ gsvaRowNorm <- function(param,
 #' input expresssion data given in the argument `exprData` of the `gsvaParam`
 #' object, containing the column rank values. The resulting object will have
 #' metadata with a copy of the input `gsvaParam` object, except for the
-#' `exprData` slot, and in the case of being a derivative of a
+#' `exprData` slot, with the version of GSVA that produced it, and with the
+#' number of rows on which the ranks were calculated, and in the case of being
+#' a derivative of a
 #' [`SummarizedExperiment`][SummarizedExperiment::SummarizedExperiment] object,
 #' an additional assay called "gsvaranks" storing the column rank values.
+#'
+#' @details Column ranks are only valid for the rows on which they were
+#' calculated, because GSVA scores are calculated from the ranking of all
+#' those rows. For this reason, rows cannot be removed from the output of
+#' 'gsvaColRanks()', and 'gsvaColScores()' gives an error when the number of
+#' rows of its input differs from the number of rows on which the ranks were
+#' calculated. Rows should be removed before calling 'gsvaRowNorm()' instead.
+#' Removing columns does not affect the validity of the ranks.
 #'
 #' @rdname gsvaRanks
 #'
@@ -1106,6 +1145,7 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
     }
 
     param <- .pull_param(rankExprData)
+    .check_ranks_nrow(rankExprData)
 
     if (!missing(geneSets)) {
         if (!is(geneSets, "GsvaGeneSets"))
@@ -1313,6 +1353,7 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
         cli_abort(c("x"="'column' should be a positive integer."))
           
     param <- .pull_param(rankExprData)
+    .check_ranks_nrow(rankExprData)
 
     plot <- match.arg(plot)
 
