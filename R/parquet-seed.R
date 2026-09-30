@@ -112,6 +112,36 @@ setValidity("GsvaParquetSeed", function(object) {
 
 .is_uri <- function(path) grepl("^[a-zA-Z][a-zA-Z0-9+.-]*://", path)
 
+## credentials that a URI may carry, such as 'KEY:SECRET' in
+## 's3://KEY:SECRET@bucket/path', or NULL if it carries none. Because AWS
+## secret keys may contain '/', the user information before the first '@' is
+## considered credentials when it contains ':', or no '/', except for the user
+## name 'anonymous'
+.uri_credentials <- function(path) {
+    if (!.is_uri(path))
+        return(NULL)
+    rest <- sub("^[a-zA-Z][a-zA-Z0-9+.-]*://", "", path)
+    at <- regexpr("@", rest, fixed=TRUE)
+    if (at < 1L)
+        return(NULL)
+    userinfo <- substring(rest, 1L, at - 1L)
+    if (userinfo == "anonymous" ||
+        (grepl("/", userinfo, fixed=TRUE) && !grepl(":", userinfo, fixed=TRUE)))
+        return(NULL)
+    userinfo
+}
+
+## hide the credentials that a URI, or a message showing it, may carry
+.hide_credentials <- function(text, path=text) {
+    cred <- .uri_credentials(path)
+    if (is.null(cred) || !nzchar(cred))
+        return(text)
+    gsub(cred, "<credentials>", text, fixed=TRUE)
+}
+
+## URI or path to show in messages
+.display_path <- function(path) .hide_credentials(path)
+
 #' @importFrom cli cli_abort
 .require_arrow <- function(path=NULL) {
     if (!requireNamespace("arrow", quietly=TRUE)) {
@@ -122,16 +152,17 @@ setValidity("GsvaParquetSeed", function(object) {
     }
 
     if (!is.null(path) && .is_uri(path)) {
+        dpath <- .display_path(path)
         scheme <- tolower(sub("://.*$", "", path))
         if (scheme == "s3" && !arrow::arrow_with_s3())
             cli_abort(c("x"=paste("The installed 'arrow' package was built",
                                   "without support for Amazon S3, which is",
-                                  "necessary to access {.val {path}}.")))
+                                  "necessary to access {.val {dpath}}.")))
         else if (scheme %in% c("gs", "gcs") && !arrow::arrow_with_gcs())
             cli_abort(c("x"=paste("The installed 'arrow' package was built",
                                   "without support for Google Cloud Storage,",
                                   "which is necessary to access",
-                                  "{.val {path}}.")))
+                                  "{.val {dpath}}.")))
         else if (!scheme %in% c("s3", "gs", "gcs", "file"))
             cli_abort(c("x"=paste("URIs with scheme {.val {scheme}} are not",
                                   "supported; only 's3://' and 'gs://' URIs",
@@ -142,13 +173,70 @@ setValidity("GsvaParquetSeed", function(object) {
     invisible(TRUE)
 }
 
+## default limit, in seconds, of the retries of Google Cloud Storage requests
+## that arrow uses for 'gs://' URIs without the 'retry_limit_seconds' query
+## parameter; without it, when no Google Cloud credentials are available,
+## e.g., outside Google Cloud, the Google Cloud C++ client may keep retrying
+## to reach the Google Cloud metadata server for many minutes without any
+## message, and with it, opening the file fails after about 20 seconds
+.GSVA_GCS_RETRY_LIMIT_SECONDS <- 15
+
+.is_gcs_uri <- function(path) grepl("^(gs|gcs)://", path, ignore.case=TRUE)
+
+.is_s3_uri <- function(path) grepl("^s3://", path, ignore.case=TRUE)
+
+## add the 'retry_limit_seconds' query parameter to a 'gs://' URI without it
+.gcs_uri_with_retry_limit <- function(uri,
+                                      seconds=.GSVA_GCS_RETRY_LIMIT_SECONDS) {
+    if (!.is_gcs_uri(uri) || grepl("[?&]retry_limit_seconds=", uri))
+        return(uri)
+    paste0(uri, if (grepl("?", uri, fixed=TRUE)) "&" else "?",
+           "retry_limit_seconds=", seconds)
+}
+
+#' @importFrom cli cli_abort
 .open_parquet_reader <- function(path) {
-    if (.is_uri(path)) {
-        fsp <- arrow::FileSystem$from_uri(path)
+    if (!.is_uri(path))
+        return(arrow::ParquetFileReader$create(path))
+
+    uri <- .gcs_uri_with_retry_limit(path)
+    tryCatch({
+        fsp <- arrow::FileSystem$from_uri(uri)
         f <- fsp$fs$OpenInputFile(fsp$path)
         arrow::ParquetFileReader$create(f)
-    } else
-        arrow::ParquetFileReader$create(path)
+    }, error=function(e) {
+        ## arrow error messages may contain braces, which cli interpolates
+        ## unless they are given through a variable
+        errmsg <- sub("\\s*error_info=\\{.*$", "", conditionMessage(e))
+        errmsg <- .hide_credentials(errmsg, path)
+        dpath <- .display_path(path)
+        msg <- c("x"="Cannot open {.val {dpath}}.",
+                 "i"="{errmsg}")
+        ## accessing a bucket without anonymous access requires credentials
+        if (.is_gcs_uri(path) && !grepl("^[a-zA-Z]+://anonymous@", path))
+            msg <- c(msg,
+                     "i"=paste("If the bucket is public, use anonymous access",
+                               "with a URI of the form",
+                               "'gs://anonymous@<bucket>/<path>'. Otherwise,",
+                               "set up Google Cloud credentials, e.g., with",
+                               "'gcloud auth application-default login' or",
+                               "the environment variable",
+                               "'GOOGLE_APPLICATION_CREDENTIALS'."))
+        else if (.is_s3_uri(path) &&
+                 grepl(paste("ACCESS_DENIED|AccessDenied|InvalidAccessKeyId",
+                             "SignatureDoesNotMatch", sep="|"), errmsg))
+            msg <- c(msg,
+                     "i"=paste("The bucket may be private, or your AWS",
+                               "credentials may not give access to it. The",
+                               "arrow package reads AWS credentials from the",
+                               "environment variables 'AWS_ACCESS_KEY_ID' and",
+                               "'AWS_SECRET_ACCESS_KEY' (and",
+                               "'AWS_SESSION_TOKEN' for temporary",
+                               "credentials), or from the file",
+                               "'~/.aws/credentials', whose profile can be",
+                               "selected with 'AWS_PROFILE'."))
+        cli_abort(msg, call=NULL)
+    })
 }
 
 ## Parquet readers hold pointers to external (C++) objects that cannot be
@@ -186,13 +274,14 @@ setValidity("GsvaParquetSeed", function(object) {
 
 #' @importFrom cli cli_abort
 .parse_gsva_parquet_metadata <- function(md, path) {
+    dpath <- .display_path(path)
     if (is.null(md$gsva_format) || md$gsva_format != .GSVA_PARQUET_FORMAT)
-        cli_abort(c("x"=paste("The file {.file {path}} does not contain GSVA",
+        cli_abort(c("x"=paste("The file {.file {dpath}} does not contain GSVA",
                               "output in Apache Parquet format.")))
 
     if (is.null(md$gsva_format_version) ||
         !md$gsva_format_version %in% .GSVA_PARQUET_FORMAT_VERSIONS)
-        cli_abort(c("x"=paste("The file {.file {path}} stores GSVA output in",
+        cli_abort(c("x"=paste("The file {.file {dpath}} stores GSVA output in",
                               "a version of the GSVA Parquet format",
                               "({md$gsva_format_version}) that this version",
                               "of GSVA cannot read.")))
@@ -200,7 +289,7 @@ setValidity("GsvaParquetSeed", function(object) {
     fields <- c("gsva_layout", "gsva_dim", "gsva_type", "gsva_firsts")
     missingfields <- fields[!fields %in% names(md)]
     if (length(missingfields) > 0)
-        cli_abort(c("x"=paste("The file {.file {path}} lacks the metadata",
+        cli_abort(c("x"=paste("The file {.file {dpath}} lacks the metadata",
                               "field{?s} {.val {missingfields}}.")))
 
     dim <- suppressWarnings(as.integer(strsplit(md$gsva_dim, ",")[[1]]))
@@ -224,6 +313,7 @@ GsvaParquetSeed <- function(path) {
     }
 
     r <- .parquet_reader(path)
+    dpath <- .display_path(path)
     md <- .parse_gsva_parquet_metadata(r$GetSchema()$metadata, path)
 
     seed <- new("GsvaParquetSeed", path=path, dim=md$dim, type=md$type,
@@ -235,7 +325,7 @@ GsvaParquetSeed <- function(path) {
     ncols <- if (seed@layout == "dense") 2L else 3L
     if (r$num_rows != nrows || r$num_columns != ncols ||
         (seed@dim[2] > 0L && r$num_row_groups != length(seed@firsts)))
-        cli_abort(c("x"=paste("The contents of the file {.file {path}} do",
+        cli_abort(c("x"=paste("The contents of the file {.file {dpath}} do",
                               "not correspond to its GSVA metadata.")))
 
     seed
@@ -315,9 +405,11 @@ GsvaParquetSeed <- function(path) {
     function(r, gs, cols) {
         tb <- r$ReadRowGroups(gs - 1L, column_indices=1L) ## skip 'col'
         v <- as.vector(tb$value)
-        if (length(v) != as.numeric(x@dim[1]) * length(cols))
+        if (length(v) != as.numeric(x@dim[1]) * length(cols)) {
+            dpath <- .display_path(x@path)
             cli_abort(c("x"=paste("Unexpected number of values read from",
-                                  "the file {.file {x@path}}.")))
+                                  "the file {.file {dpath}}.")))
+        }
         storage.mode(v) <- x@type
         matrix(v, nrow=x@dim[1])
     }
@@ -345,9 +437,11 @@ GsvaParquetSeed <- function(path) {
         rows <- as.vector(arrow::call_function("list_flatten", tb$row))
         vals <- as.vector(arrow::call_function("list_flatten", tb$value))
         if (length(lens) != length(cols) || length(rows) != sum(lens) ||
-            length(vals) != length(rows))
+            length(vals) != length(rows)) {
+            dpath <- .display_path(x@path)
             cli_abort(c("x"=paste("Unexpected number of values read from",
-                                  "the file {.file {x@path}}.")))
+                                  "the file {.file {dpath}}.")))
+        }
         m <- new("dgCMatrix", Dim=c(x@dim[1], length(cols)),
                  i=.decode_row_deltas(rows, lens) - 1L,
                  p=c(0L, cumsum(lens)), x=as.double(vals))

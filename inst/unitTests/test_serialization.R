@@ -338,3 +338,57 @@ test_serializationscoresandeset <- function() {
         }
     }
 }
+
+test_gcsuriretrylimit <- function() {
+
+    message("Running unit tests for the retry limit of 'gs://' URIs")
+
+    addlimit <- GSVA:::.gcs_uri_with_retry_limit
+
+    ## 'gs://' URIs without a retry limit get the default one
+    checkIdentical("gs://bucket/x.parquet?retry_limit_seconds=15",
+                   addlimit("gs://bucket/x.parquet", 15))
+    checkIdentical("gs://anonymous@bucket/x.parquet?retry_limit_seconds=15",
+                   addlimit("gs://anonymous@bucket/x.parquet", 15))
+    checkIdentical("gs://bucket/x.parquet?scheme=http&retry_limit_seconds=15",
+                   addlimit("gs://bucket/x.parquet?scheme=http", 15))
+
+    ## a retry limit given in the URI is kept, and other URIs are not changed
+    checkIdentical("gs://bucket/x.parquet?retry_limit_seconds=60",
+                   addlimit("gs://bucket/x.parquet?retry_limit_seconds=60", 15))
+    checkIdentical("s3://bucket/x.parquet",
+                   addlimit("s3://bucket/x.parquet", 15))
+    checkIdentical("/tmp/x.parquet", addlimit("/tmp/x.parquet", 15))
+}
+
+test_uricredentials <- function() {
+
+    message("Running unit tests for hiding credentials in URIs")
+
+    cred <- GSVA:::.uri_credentials
+    disp <- GSVA:::.display_path
+    hide <- GSVA:::.hide_credentials
+
+    ## credentials, also with secrets containing '/' or '+'
+    checkIdentical("KEY:SECRET", cred("s3://KEY:SECRET@bucket/x.parquet"))
+    checkIdentical("s3://<credentials>@bucket/x.parquet",
+                   disp("s3://KEY:SECRET@bucket/x.parquet"))
+    checkIdentical("s3://<credentials>@bucket/x.parquet",
+                   disp("s3://KEY:SE/CR+ET@bucket/x.parquet"))
+    checkIdentical("gs://<credentials>@bucket/x.parquet",
+                   disp("gs://user@bucket/x.parquet"))
+
+    ## no credentials
+    checkTrue(is.null(cred("s3://bucket/x.parquet")))
+    checkTrue(is.null(cred("gs://anonymous@bucket/x.parquet")))
+    checkTrue(is.null(cred("s3://bucket/dir@x/y.parquet")))
+    checkTrue(is.null(cred("/tmp/x@y.parquet")))
+    checkIdentical("gs://anonymous@bucket/x.parquet",
+                   disp("gs://anonymous@bucket/x.parquet"))
+    checkIdentical("/tmp/x@y.parquet", disp("/tmp/x@y.parquet"))
+
+    ## credentials within a message showing the URI
+    checkIdentical("Cannot parse 's3://<credentials>@bucket/x.parquet'",
+                   hide("Cannot parse 's3://KEY:SECRET@bucket/x.parquet'",
+                        "s3://KEY:SECRET@bucket/x.parquet"))
+}

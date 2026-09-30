@@ -106,7 +106,24 @@ the file only when needed, by blocks of columns, and \code{\link{gsvaColScores}}
 processes ranks stored in this way from disk. \code{loadParquetGSVA()} can also
 read files stored in Amazon S3 or Google Cloud Storage, given as \verb{s3://} or
 \verb{gs://} URIs, as long as the installed arrow package supports them; see
-\code{\link[arrow:arrow_with_s3]{arrow_with_s3}}.
+\code{\link[arrow:arrow_with_s3]{arrow_with_s3}}. Files in public Google Cloud Storage
+buckets should be given with URIs of the form
+\verb{gs://anonymous@<bucket>/<path>}, which request anonymous access, since
+otherwise arrow first looks for Google Cloud credentials, and opening the
+file fails if they are not available. Files in private buckets require
+setting up such credentials, e.g., with
+\verb{gcloud auth application-default login}. Requests to Google Cloud Storage
+are retried for at most 15 seconds, unless the URI sets another limit with
+the query parameter \code{retry_limit_seconds}, e.g.,
+\verb{gs://<bucket>/<path>?retry_limit_seconds=60}. Files in private Amazon S3
+buckets require AWS credentials, which arrow reads from the environment
+variables \code{AWS_ACCESS_KEY_ID} and \code{AWS_SECRET_ACCESS_KEY} (and
+\code{AWS_SESSION_TOKEN} for temporary credentials), or from the file
+\verb{~/.aws/credentials}, whose profile can be selected with the environment
+variable \code{AWS_PROFILE}. Although arrow also accepts credentials within the
+URI, e.g., \verb{s3://<key>:<secret>@<bucket>/<path>}, this is not recommended,
+because they may end up stored in scripts and in the R history; GSVA hides
+them in its messages.
 }
 \examples{
 

@@ -25,7 +25,24 @@
 #' processes ranks stored in this way from disk. `loadParquetGSVA()` can also
 #' read files stored in Amazon S3 or Google Cloud Storage, given as `s3://` or
 #' `gs://` URIs, as long as the installed arrow package supports them; see
-#' [`arrow_with_s3`][arrow::arrow_with_s3].
+#' [`arrow_with_s3`][arrow::arrow_with_s3]. Files in public Google Cloud Storage
+#' buckets should be given with URIs of the form
+#' `gs://anonymous@<bucket>/<path>`, which request anonymous access, since
+#' otherwise arrow first looks for Google Cloud credentials, and opening the
+#' file fails if they are not available. Files in private buckets require
+#' setting up such credentials, e.g., with
+#' `gcloud auth application-default login`. Requests to Google Cloud Storage
+#' are retried for at most 15 seconds, unless the URI sets another limit with
+#' the query parameter `retry_limit_seconds`, e.g.,
+#' `gs://<bucket>/<path>?retry_limit_seconds=60`. Files in private Amazon S3
+#' buckets require AWS credentials, which arrow reads from the environment
+#' variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (and
+#' `AWS_SESSION_TOKEN` for temporary credentials), or from the file
+#' `~/.aws/credentials`, whose profile can be selected with the environment
+#' variable `AWS_PROFILE`. Although arrow also accepts credentials within the
+#' URI, e.g., `s3://<key>:<secret>@<bucket>/<path>`, this is not recommended,
+#' because they may end up stored in scripts and in the R history; GSVA hides
+#' them in its messages.
 #'
 #' @param gsvaExprData An object obtained with [`gsvaRowNorm`],
 #' [`gsvaColRanks`] or [`gsvaColScores`]. Must be one of the classes supported by
@@ -393,9 +410,11 @@ saveParquetGSVA <- function(gsvaExprData, file, assay="auto",
 loadParquetGSVA <- function(file, assay="auto") {
     seed <- GsvaParquetSeed(file)
     md <- .parquet_reader(path(seed))$GetSchema()$metadata
-    if (is.null(md$gsva_assay) || is.null(md$gsva_shell))
-        cli_abort(c("x"=paste("The file {.file {file}} does not contain GSVA",
+    if (is.null(md$gsva_assay) || is.null(md$gsva_shell)) {
+        dpath <- .display_path(file)
+        cli_abort(c("x"=paste("The file {.file {dpath}} does not contain GSVA",
                               "output saved with 'saveParquetGSVA()'.")))
+    }
 
     gsvacontainer <- .decode_r_object(md$gsva_shell)
     X <- DelayedArray(seed)
@@ -433,8 +452,10 @@ loadParquetGSVA <- function(file, assay="auto") {
         cli_abort(c("x"="{path} cannot be found in the filesystem"))
 
     if (verbose) {
-        if (.is_uri(path))
-            cli_alert_info("Loading {path}")
+        if (.is_uri(path)) {
+            dpath <- .display_path(path)
+            cli_alert_info("Loading {dpath}")
+        }
         else
             cli_alert_info("Loading {basename(path)} from disk")
     }
