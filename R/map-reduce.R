@@ -415,6 +415,10 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, path2save, ncpus, maxmem,
             nrmdata$assay <- attributes(x)$assay
         if (!is.null(attributes(x)$geneSets))
             nrmdata$geneSets <- attributes(x)$geneSets
+        if (!is.null(attributes(x)$gsvaVersion))
+            nrmdata$gsvaVersion <- attributes(x)$gsvaVersion
+        if (!is.null(attributes(x)$ranksNrow))
+            nrmdata$ranksNrow <- attributes(x)$ranksNrow
     }
 
     nrmdata
@@ -476,6 +480,8 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, path2save, ncpus, maxmem,
             attributes(x)$geneSets <- NULL
             attributes(x)$gsvaParam <- NULL
             attributes(x)$restrict <- NULL
+            attributes(x)$gsvaVersion <- NULL
+            attributes(x)$ranksNrow <- NULL
             x
         })
     }

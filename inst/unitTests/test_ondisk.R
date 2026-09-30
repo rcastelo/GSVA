@@ -74,6 +74,7 @@ test_ondisk <- function() {
                         verbose=FALSE)
     es_h5ondiskmat <- as.matrix(es_h5ondisk)
     attr(es_noh5, "gsvaParam") <- attr(es_noh5, "assay") <- attr(es_noh5, "geneSets") <- NULL
+    attr(es_noh5, "gsvaVersion") <- NULL
     checkIdentical(es_noh5, es_h5ondiskmat)
 
     ## test the block processing of a small toy HDF5 input and output by
