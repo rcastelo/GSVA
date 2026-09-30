@@ -290,7 +290,7 @@ fetch_intcol_dblmatrix(SEXP XR, int nr, int j, int* col) {
   double* X=REAL(XR);
 
   for (int i=0; i < nr; i++)
-    col[i] = (int) X[nr*j+i];
+    col[i] = ISNAN(X[nr*j+i]) ? NA_INTEGER : (int) X[nr*j+i];
 
   return nr;
 }
@@ -313,7 +313,7 @@ fetch_intcol_dgCMatrix(SEXP XCspR, int nr, int j, int* col) {
 
   /* put the sparse column into a dense vector */
   for (int i=XCsp_p[j]; i < XCsp_p[j+1]; i++)
-    col[XCsp_i[i]] = (int) XCsp_x[i];
+    col[XCsp_i[i]] = ISNAN(XCsp_x[i]) ? NA_INTEGER : (int) XCsp_x[i];
 
   return XCsp_p[j+1]-XCsp_p[j];
 }
@@ -383,7 +383,7 @@ fetch_intcol_dblSVT_SparseMatrix(SEXP XsvtR, int nr, int j, int* col) {
     if (nvals > 0) {
       vals = REAL(valsR);
       for (int i=0; i < nvals; i++)
-        col[offsets[i]] = (int) vals[i];
+        col[offsets[i]] = ISNAN(vals[i]) ? NA_INTEGER : (int) vals[i];
     } else { /* lacunar */
       for (int i=0; i < noffsets; i++)
         col[offsets[i]] = 1;
@@ -508,10 +508,15 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
       if (verbose)
         cli_progress_done(pb);
       UNPROTECT(nunprotect); /* esR pb */
-      error("GSVA ranks are out of range for the %d rows of the input data. "
-            "This may happen when rows are removed after calculating the "
-            "ranks with 'gsvaColRanks()'; remove them before calling "
-            "'gsvaRowNorm()' instead.", p);
+      if (invalidranks == 2)
+        error("GSVA ranks have missing values, but the GSVA parameters "
+              "indicate that the input data has none, e.g., because "
+              "'checkNA=\"no\"' was used in 'gsvaParam()'.");
+      else
+        error("GSVA ranks are out of range for the %d rows of the input "
+              "data. This may happen when rows are removed after "
+              "calculating the ranks with 'gsvaColRanks()'; remove them "
+              "before calling 'gsvaRowNorm()' instead.", p);
     }
 
     for (int j=0; j < m; j++) {
@@ -611,7 +616,8 @@ invalid_rank(int r, int p, int nnz, int nnas) {
 }         
 
 /* j is a 0-based column index on ranksR
- * returned value - 1 if some rank is out of range, 0 otherwise
+ * returned value - 1 if some rank is out of range, 2 if some rank is missing,
+ *                  which is not expected here, and 0 otherwise
  */
 int
 ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
@@ -621,7 +627,7 @@ ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
   int* r = R_Calloc(p, int);       /* assume 0s are set */
   int* r_dense = R_Calloc(p, int); /* assume 0s are set */
   int  nnz, nzs;
-  Rboolean irankflag=FALSE;
+  int  irankflag=0;
 
   nnz = (*fetch_col)(ranksR, p, j, r);
   nzs = p - nnz;
@@ -630,7 +636,8 @@ ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
     int  k = 1;
 
     for (int i=0; i < p && !irankflag; i++) {
-      irankflag = invalid_rank(r[i], p, nnz, 0);
+      /* missing ranks are not expected when calling this function */
+      irankflag = r[i] == NA_INTEGER ? 2 : invalid_rank(r[i], p, nnz, 0);
       if (!irankflag) {
         if (r[i] == 0)       /* sparse ranks into dense ranks */
           r_dense[i] = k++;
@@ -640,7 +647,8 @@ ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
     }
   } else         /* input is a dense matrix */
     for (int i=0; i < p && !irankflag; i++) {
-      irankflag = invalid_rank(r[i], p, nnz, 0);
+      /* missing ranks are not expected when calling this function */
+      irankflag = r[i] == NA_INTEGER ? 2 : invalid_rank(r[i], p, nnz, 0);
       if (!irankflag)
         r_dense[i] = r[i];
     }
@@ -648,7 +656,7 @@ ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
   if (irankflag) {
     R_Free(r_dense);
     R_Free(r);
-    return 1;
+    return irankflag;
   }
 
   /* dense ranks into decreasing order statistics */

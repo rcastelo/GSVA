@@ -93,3 +93,43 @@ test_rankbounds <- function() {
         checkTrue(is.character(msg) && grepl("out of range", msg))
     }
 }
+
+## missing GSVA ranks are either handled as such, when the GSVA parameters
+## indicate that the input data has missing values, or give an error,
+## regardless of whether ranks are stored as integer or double values
+test_rankmissing <- function() {
+
+    message("Running unit tests for missing GSVA ranks")
+
+    suppressPackageStartupMessages({
+        library(SparseArray)
+    })
+
+    scores <- function(R, any_na)
+        GSVA:::.gsva_score_genesets(R, list(1:5, 6:12),
+                                    intrnks=is.integer(R[1, 1]),
+                                    sparse=is(R, "SVT_SparseMatrix"),
+                                    maxDiff=TRUE, absRanking=FALSE, tau=1,
+                                    any_na=any_na, na_use="na.rm", minSize=1L,
+                                    wna_env=new.env(), verbose=FALSE)
+
+    p <- 20 ## number of genes
+    n <- 8 ## number of samples
+    set.seed(123)
+    R <- vapply(seq_len(n), function(j) sample.int(p), integer(p))
+    R[c(4, 9), 3] <- NA
+    R[!is.na(R[, 3]), 3] <- sample.int(p - 2)
+
+    ## missing ranks when the input data is assumed to have none
+    for (X in list(R, 1 * R, as(R, "SVT_SparseMatrix"),
+                   as(1 * R, "SVT_SparseMatrix"))) {
+        msg <- tryCatch(scores(X, any_na=FALSE), error=conditionMessage)
+        checkTrue(is.character(msg) && grepl("missing values", msg))
+    }
+
+    ## missing ranks stored as double values are handled in the same way as
+    ## when they are stored as integer values
+    es_int <- scores(R, any_na=TRUE)
+    es_dbl <- scores(1 * R, any_na=TRUE)
+    checkEquals(es_int, es_dbl)
+}
