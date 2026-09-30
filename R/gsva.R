@@ -1971,7 +1971,26 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 }
 
 ## convert ranks into decreasing order statistics and symmetric rank statistics
+## check that the ranks 'r' of a column are either zero, for zero values in
+## sparse data, or between 1 and the number of nonzero nonmissing values,
+## which is required to convert them into decreasing order statistics; this
+## may not hold, e.g., when rows are removed after calculating the ranks
+#' @importFrom cli cli_abort
+.check_rank_bounds <- function(r) {
+    nz <- !is.na(r) & r != 0
+    if (any(r[nz] < 1 | r[nz] > sum(nz)))
+        cli_abort(c("x"=paste("GSVA ranks are out of range for the",
+                              "{length(r)} rows of the input data."),
+                    "i"=paste("This may happen when rows are removed after",
+                              "calculating the ranks with 'gsvaColRanks()';",
+                              "remove them before calling 'gsvaRowNorm()'",
+                              "instead.")))
+
+    invisible(TRUE)
+}
+
 .ranks2stats <- function(r, sparse) {
+    .check_rank_bounds(r)
     mask <- r == 0
     p <- length(r)
     r_dense <- as.integer(r)          ## assume ranks are integer
@@ -2000,6 +2019,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 ## convert ranks into decreasing order statistics and symmetric rank statistics
 ## skipping NA values
 .ranks2stats_nas <- function(r, sparse) {
+    .check_rank_bounds(r)
     na_mask <- is.na(r)
 
     if (all(na_mask))

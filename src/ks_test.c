@@ -428,13 +428,13 @@ find_dim_and_fetchcolfun(SEXP XR, Rboolean intrnks, int** dim) {
   return fetch_col;
 }
 
-void
+int
 ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
             FetchColFunDef fetch_col,
             int* decordstat_col, double* symrnkstat_col,
             int* nzeros_col, double* zerosymrnkstat);
 
-void
+int
 ranks2stats_nas(SEXP ranksR, int p, int n, int j, Rboolean sparse,
                 FetchColFunDef fetch_col,
                 int* decordstat_col, double* symrnkstat_col,
@@ -466,6 +466,7 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
   double*  symrnkstat_col;
   int      nzeros_col=0;
   double   zerosymrnkstat=0;
+  int      invalidranks=0;
   FetchColFunDef fetch_col;
 
   fetch_col = find_dim_and_fetchcolfun(ranksR, intrnks, &dimranks);
@@ -490,11 +491,28 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
     }
 
     if (anyna)
-      ranks2stats_nas(ranksR, p, n, i, sparse, fetch_col, decordstat_col,
-                      symrnkstat_col, &nzeros_col, &zerosymrnkstat, &nnas);
+      invalidranks = ranks2stats_nas(ranksR, p, n, i, sparse, fetch_col,
+                                     decordstat_col, symrnkstat_col,
+                                     &nzeros_col, &zerosymrnkstat, &nnas);
     else
-      ranks2stats(ranksR, p, n, i, sparse, fetch_col, decordstat_col,
-                  symrnkstat_col, &nzeros_col, &zerosymrnkstat);
+      invalidranks = ranks2stats(ranksR, p, n, i, sparse, fetch_col,
+                                 decordstat_col, symrnkstat_col,
+                                 &nzeros_col, &zerosymrnkstat);
+
+    /* ranks out of range would lead to reading and writing out of the
+     * bounds of the arrays used in the random walk; memory allocated with
+     * R_Calloc() is not released by error(), so it is released before */
+    if (invalidranks) {
+      R_Free(decordstat_col);
+      R_Free(symrnkstat_col);
+      if (verbose)
+        cli_progress_done(pb);
+      UNPROTECT(nunprotect); /* esR pb */
+      error("GSVA ranks are out of range for the %d rows of the input data. "
+            "This may happen when rows are removed after calculating the "
+            "ranks with 'gsvaColRanks()'; remove them before calling "
+            "'gsvaRowNorm()' instead.", p);
+    }
 
     for (int j=0; j < m; j++) {
       SEXP     gsetidxR = VECTOR_ELT(genesetsidxR, j);
@@ -570,8 +588,32 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
   return(esR);
 }
 
-/* j is a 0-based column index on ranksR */
-void
+/* check that a rank 'r' of a column with 'p' rows, of which 'nnz' are
+ * stored values (all 'p' in a dense column) and 'nnas' are missing, is
+ * either zero, only when there are zeros in a sparse column, or between 1
+ * and the number of stored nonmissing values, which is required to convert
+ * it into a decreasing order statistic between 1 and 'p' minus 'nnas'.
+ * returned value - 1 if the rank is out of range, 0 otherwise
+ */ 
+static Rboolean
+invalid_rank(int r, int p, int nnz, int nnas) {
+  int maxrank = nnz - nnas;
+    
+  if (r != NA_INTEGER) {
+    if (r == 0) {
+      if (nnz == p)   /* a dense column cannot have zero ranks */
+        return TRUE;
+    } else if (r < 1 || r > maxrank)
+      return TRUE;
+  } 
+      
+  return FALSE;
+}         
+
+/* j is a 0-based column index on ranksR
+ * returned value - 1 if some rank is out of range, 0 otherwise
+ */
+int
 ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
             FetchColFunDef fetch_col,
             int* decordstat_col, double* symrnkstat_col,
@@ -579,6 +621,7 @@ ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
   int* r = R_Calloc(p, int);       /* assume 0s are set */
   int* r_dense = R_Calloc(p, int); /* assume 0s are set */
   int  nnz, nzs;
+  Rboolean irankflag=FALSE;
 
   nnz = (*fetch_col)(ranksR, p, j, r);
   nzs = p - nnz;
@@ -586,15 +629,27 @@ ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
   if (nzs > 0) { /* if ranks have zeros, then input is a sparse matrix */
     int  k = 1;
 
-    for (int i=0; i < p; i++) {
-      if (r[i] == 0)       /* sparse ranks into dense ranks */
-        r_dense[i] = k++;
-      else
-        r_dense[i] = r[i] + nzs;
+    for (int i=0; i < p && !irankflag; i++) {
+      irankflag = invalid_rank(r[i], p, nnz, 0);
+      if (!irankflag) {
+        if (r[i] == 0)       /* sparse ranks into dense ranks */
+          r_dense[i] = k++;
+        else
+          r_dense[i] = r[i] + nzs;
+      }
     }
   } else         /* input is a dense matrix */
-    for (int i=0; i < p; i++)
-      r_dense[i] = r[i];
+    for (int i=0; i < p && !irankflag; i++) {
+      irankflag = invalid_rank(r[i], p, nnz, 0);
+      if (!irankflag)
+        r_dense[i] = r[i];
+    }
+
+  if (irankflag) {
+    R_Free(r_dense);
+    R_Free(r);
+    return 1;
+  }
 
   /* dense ranks into decreasing order statistics */
   for (int i=0; i < p; i++)
@@ -618,6 +673,8 @@ ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
 
   R_Free(r_dense);
   R_Free(r);
+
+  return 0;
 }
 
 /* j is a 0-based column index on ranksR
@@ -625,8 +682,9 @@ ranks2stats(SEXP ranksR, int p, int n, int j, Rboolean sparse,
  * type double and missingess of integer values should be tested
  * by equality to NA_INTEGER, see
  * https://cran.r-project.org/doc/manuals/r-devel/R-exts.html#Missing-and-special-values-1
+ * returned value - 1 if some rank is out of range, 0 otherwise
  */
-void
+int
 ranks2stats_nas(SEXP ranksR, int p, int n, int j, Rboolean sparse,
                 FetchColFunDef fetch_col,
                 int* decordstat_col, double* symrnkstat_col,
@@ -634,6 +692,7 @@ ranks2stats_nas(SEXP ranksR, int p, int n, int j, Rboolean sparse,
   int* r = R_Calloc(p, int);       /* assume 0s are set */
   int* r_dense = R_Calloc(p, int); /* assume 0s are set */
   int  nnz, nzs;
+  Rboolean irankflag=FALSE;
 
   nnz = (*fetch_col)(ranksR, p, j, r);
   *nnas = 0;
@@ -646,18 +705,30 @@ ranks2stats_nas(SEXP ranksR, int p, int n, int j, Rboolean sparse,
   if (nzs > 0) { /* if ranks have zeroes, then input is a sparse matrix */
     int  k = 1;
 
-    for (int i=0; i < p; i++) {
-      if (r[i] != NA_INTEGER) {
-        if (r[i] == 0)       /* sparse ranks into dense ranks */
-          r_dense[i] = k++;
-        else
-          r_dense[i] = r[i] + nzs;
-      } else
-        r_dense[i] = NA_INTEGER;
+    for (int i=0; i < p && !irankflag; i++) {
+      irankflag = invalid_rank(r[i], p, nnz, *nnas);
+      if (!irankflag) {
+        if (r[i] != NA_INTEGER) {
+          if (r[i] == 0)       /* sparse ranks into dense ranks */
+            r_dense[i] = k++;
+          else
+            r_dense[i] = r[i] + nzs;
+        } else
+          r_dense[i] = NA_INTEGER;
+      }
     }
   } else         /* input is a dense matrix */
-    for (int i=0; i < p; i++)
-      r_dense[i] = r[i];
+    for (int i=0; i < p && !irankflag; i++) {
+      irankflag = invalid_rank(r[i], p, nnz, *nnas);
+      if (!irankflag)
+        r_dense[i] = r[i];
+    }
+
+  if (irankflag) {
+    R_Free(r_dense);
+    R_Free(r);
+    return 1;
+  }
 
   /* dense ranks into decreasing order statistics */
   for (int i=0; i < p; i++)
@@ -687,4 +758,6 @@ ranks2stats_nas(SEXP ranksR, int p, int n, int j, Rboolean sparse,
 
   R_Free(r_dense);
   R_Free(r);
+
+  return 0;
 }
