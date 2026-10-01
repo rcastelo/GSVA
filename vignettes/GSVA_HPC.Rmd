@@ -148,7 +148,8 @@ as [tmux](https://github.com/tmux/tmux/wiki), log interactively into a node of
 the HPC environment using a job submission command such as:
 
 ```{r, eval=FALSE}
-srun --mpi=none --mem=10G --nodes=1 --ntasks-per-node=1 --partition=short --pty bash -i
+srun --mpi=none --mem=10G --nodes=1 --ntasks-per-node=1 \
+     --partition=short --pty bash -i
 ```
 start an R session, call interactively the `gsvaMap()` function and detach the
 tmux session to be able to log out and leave the jobs running in the background.
@@ -166,30 +167,33 @@ only the failed jobs.
 
 # Accessing GSVA ranks stored in the cloud
 
-Column ranks calculated with `gsvaColRanks()`, e.g., in an HPC environment
-as shown in the previous section, can be stored in a single file in
+Column ranks calculated with `gsvaColRanks()` can be stored in a single file in
 [Apache Parquet](https://parquet.apache.org) format with the function
-`saveParquetGSVA()`. This requires the CRAN package
-[arrow](https://cran.r-project.org/package=arrow).
+`saveParquetGSVA()`. This requires having installed the CRAN package
+[arrow](https://cran.r-project.org/package=arrow) [@richardson2026arrow].
 
 ```{r, eval=FALSE}
 saveParquetGSVA(gsvaranks, "gsvaranks.parquet")
 ```
-When the ranks are calculated with `gsvaMap()`, as in the previous section,
-each part can be directly saved in Parquet format with the argument
-`output="Parquet"`, and then the parts can be combined into a single file
-with `gsvaReduce()` and `saveParquetGSVA()`.
+When the ranks are calculated with `gsvaMap()` in an HPC environment, as in the
+previous section, the results of each worker can be directly saved in Parquet
+format with the argument `output="Parquet"` in the call to `gsvaMap()`, and
+then those results can be combined into a single file with `gsvaReduce()` and
+stored in a single Parquet file with `saveParquetGSVA()`.
 
 ```{r, eval=FALSE}
 gsvamapranks <- gsvaMap(gsvaColRanks, gsvarnorm, output="Parquet",
                         BTPARAM=gsvabtpar)
 saveParquetGSVA(gsvaReduce(gsvamapranks), "gsvaranks.parquet")
 ```
-This file is organized to read efficiently blocks of columns, as GSVA does
-when calculating enrichment scores. Once it has been uploaded to a bucket in
+The particular Parquet format file written by GSVA is organized to enable
+efficiently reading blocks of columns, such as when we want to calculate
+enrichment scores for our gene sets of interest. This is useful when the
+Parquet file with GSVA ranks has been uploaded to a cloud storage bucket in
 Amazon S3 or GCS, e.g., with the command-line tools `aws s3 cp` or
-`gcloud storage cp`, it can be loaded from any computer with the function
-`loadParquetGSVA()`, giving an `s3://` or `gs://` URI to the file.
+`gcloud storage cp`, because it can be lazily loaded, i.e., without downloading
+the whole Parquet file, from any computer with the function `loadParquetGSVA()`,
+giving an `s3://` or `gs://` URI a the main file argument.
 
 ```{r, eval=FALSE}
 gsvaranks <- loadParquetGSVA("s3://my-bucket/gsvaranks.parquet")
@@ -210,22 +214,25 @@ single column, e.g., a single cell, with the function `gsvaEnrichment()`,
 only downloads the chunk of columns that contains that column.
 
 ```{r, eval=FALSE}
-res <- gsvaEnrichment(gsvaranks, column=10000, geneSet=newgsets[[1]],
-                      plot="no")
+res <- gsvaEnrichment(gsvaranks, column=10000, geneSet=newgsets[[1]])
 ```
 Accessing the file requires an arrow installation with support for the
 corresponding cloud storage, which can be checked with
-`arrow::arrow_with_s3()` and `arrow::arrow_with_gcs()`. Files in private S3
-buckets require AWS credentials, which arrow reads, e.g., from the file
-`~/.aws/credentials`. Files in public GCS buckets should be given with
-URIs of the form `gs://anonymous@my-bucket/gsvaranks.parquet`, which request
+`arrow::arrow_with_s3()` and `arrow::arrow_with_gcs()`^[Note that CRAN builds of arrow include S3 support but not GCS support. The latter can be obtained by installing arrow from R-universe; see https://arrow.apache.org/docs/r/articles/fs.html].
+Files stored in private cloude storage buckets require that the arrow package
+to read the necessary credentials to access them. Please consult the
+corresponding documentation for AWS and GCS on how to set up the credentials
+in your system. Files in public S3 buckets can be accessed directly with the
+`s3://` URI, e.g., `s3://my-bucket/gsvaranks.parquet`, which already requests
+anonymous access, while files in public GCS buckets should be specified with
+URIs of the form `gs://anonymous@my-bucket/gsvaranks.parquet` to request
 anonymous access. See `help(loadParquetGSVA)` for further details.
 
 Since each block of columns is downloaded every time it is read, the time
 to access the data depends mostly on the network, and it will be shorter
-when the bucket is located in a region close to where the calculations run.
-If the same ranks are going to be processed many times, it may be faster to
-download the file once and work with the local copy.
+when the cloud storage bucket is located in a region close to where the
+calculations run. If the same ranks are going to be processed many times, it
+may be faster to download the file once and work with the local copy.
 
 # Session information {.unnumbered}
 Here is the output of `sessionInfo()` on the system on which this document was
