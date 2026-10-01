@@ -392,3 +392,82 @@ test_uricredentials <- function() {
                    hide("Cannot parse 's3://KEY:SECRET@bucket/x.parquet'",
                         "s3://KEY:SECRET@bucket/x.parquet"))
 }
+
+## the DuckDB backend, used to read GSVA output in Parquet format through
+## HTTP(S), reads the same values as the arrow backend, which is checked here
+## with local files, also readable with DuckDB without its extension 'httpfs'
+test_parquetduckdbbackend <- function() {
+
+    if (!requireNamespace("arrow", quietly=TRUE) ||
+        !requireNamespace("duckdb", quietly=TRUE) ||
+        !requireNamespace("DBI", quietly=TRUE)) {
+        message(paste("Skipping unit tests for the DuckDB backend",
+                      "(no 'arrow' or 'duckdb')"))
+        return(invisible(TRUE))
+    }
+
+    message("Running unit tests for the DuckDB backend")
+
+    suppressPackageStartupMessages({
+        library(Matrix)
+        library(S4Arrays)
+        library(SparseArray)
+        library(DelayedArray)
+    })
+
+    p <- 40 ## number of genes
+    n <- 90 ## number of samples
+    gsets <- list(gset1=paste0("g", 1:10), gset2=paste0("g", 11:30))
+    set.seed(123)
+    y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+                dimnames=list(paste0("g", 1:p), paste0("s", 1:n)))
+    cnt <- integer(n*p)
+    idx <- sample(length(cnt), size=round(length(cnt)*0.15))
+    cnt[idx] <- rpois(length(idx), lambda=2)+1
+    cnt <- Matrix(matrix(cnt, nrow=p, ncol=n, dimnames=dimnames(y)),
+                  sparse=TRUE)
+
+    files <- character(0)
+    for (input in list(y, cnt)) {
+        gsvarownorm <- gsvaRowNorm(gsvaParam(input, gsets, verbose=FALSE),
+                                   verbose=FALSE)
+        gsvacolranks <- gsvaColRanks(gsvarownorm, verbose=FALSE)
+        ## small row groups, to read columns from several of them
+        for (x in list(gsvarownorm, gsvacolranks))
+            files <- c(files, saveParquetGSVA(x, tempfile(fileext=".parquet"),
+                                              colsPerRowGroup=7))
+    }
+
+    colsets <- list(NULL, 10:30, c(80L, 3L, 3L, 45L, 90L, 1L))
+    for (f in files) {
+        sa <- GSVA:::GsvaParquetSeed(f)
+        sd <- GSVA:::GsvaParquetSeed(f, backend="duckdb")
+        checkIdentical("duckdb", sd@backend)
+        checkIdentical(dim(sa), dim(sd))
+        checkIdentical(type(sa), type(sd))
+        checkIdentical(is_sparse(sa), is_sparse(sd))
+        checkIdentical(chunkdim(sa), chunkdim(sd))
+
+        ia <- GSVA:::.parquet_file_info(sa@path, "arrow")
+        id <- GSVA:::.parquet_file_info(sd@path, "duckdb")
+        gsvafields <- grep("^gsva_", names(ia$metadata), value=TRUE)
+        checkIdentical(ia$metadata[gsvafields], id$metadata[gsvafields])
+        checkEquals(ia[c("num_rows", "num_columns", "num_row_groups")],
+                    id[c("num_rows", "num_columns", "num_row_groups")],
+                    check.attributes=FALSE)
+
+        for (j in colsets) {
+            checkIdentical(extract_array(sa, list(NULL, j)),
+                           extract_array(sd, list(NULL, j)))
+            checkIdentical(extract_array(sa, list(c(5L, 1L, 40L), j)),
+                           extract_array(sd, list(c(5L, 1L, 40L), j)))
+            if (is_sparse(sa)) {
+                spa <- extract_sparse_array(sa, list(NULL, j))
+                spd <- extract_sparse_array(sd, list(NULL, j))
+                checkIdentical(as.matrix(spa), as.matrix(spd))
+            }
+        }
+    }
+
+    unlink(files)
+}

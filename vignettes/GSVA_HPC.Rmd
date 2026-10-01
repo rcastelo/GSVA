@@ -7,7 +7,8 @@ author:
   email: robert.castelo@upf.edu
 abstract: >
   Here we illustrate how to use GSVA in an HPC environment, and how to access
-  GSVA ranks stored in cloud object storage.
+  GSVA ranks stored in cloud object storage or on HTTPS servers, without the
+  need to download them.
 date: "`r BiocStyle::doc_date()`"
 package: "`r pkg_ver('GSVA')`"
 vignette: >
@@ -64,8 +65,8 @@ by the functions `gsvaMap()` and `gsvaReduce()`.
 
 In the last section, we show how GSVA column ranks stored in Apache Parquet
 format in cloud object storage, such as Amazon S3 or Google Cloud Storage
-(GCS), can be accessed lazily, downloading only the parts of the data that
-each calculation needs.
+(GCS), or on HTTPS public servers, can be accessed lazily, downloading only the
+parts of the data that each calculation needs.
 
 # Using a SLURM workload manager
 
@@ -165,7 +166,7 @@ partial completion of the jobs. So, if any of the jobs fail, the user will have
 to resubmit the entire calculation. We are working to enable the resubmission of
 only the failed jobs.
 
-# Accessing GSVA ranks stored in the cloud
+# Accessing remotely stored GSVA ranks
 
 Column ranks calculated with `gsvaColRanks()` can be stored in a single file in
 [Apache Parquet](https://parquet.apache.org) format with the function
@@ -191,9 +192,9 @@ efficiently reading blocks of columns, such as when we want to calculate
 enrichment scores for our gene sets of interest. This is useful when the
 Parquet file with GSVA ranks has been uploaded to a cloud storage bucket in
 Amazon S3 or GCS, e.g., with the command-line tools `aws s3 cp` or
-`gcloud storage cp`, because it can be lazily loaded, i.e., without downloading
-the whole Parquet file, from any computer with the function `loadParquetGSVA()`,
-giving an `s3://` or `gs://` URI a the main file argument.
+`gcloud storage cp`, because it can be lazily loaded with the function
+`loadParquetGSVA()`, giving an `s3://` or `gs://` URI as the main file
+argument, i.e., without downloading the whole Parquet file.
 
 ```{r, eval=FALSE}
 gsvaranks <- loadParquetGSVA("s3://my-bucket/gsvaranks.parquet")
@@ -219,14 +220,31 @@ res <- gsvaEnrichment(gsvaranks, column=10000, geneSet=newgsets[[1]])
 Accessing the file requires an arrow installation with support for the
 corresponding cloud storage, which can be checked with
 `arrow::arrow_with_s3()` and `arrow::arrow_with_gcs()`^[Note that CRAN builds of arrow include S3 support but not GCS support. The latter can be obtained by installing arrow from R-universe; see https://arrow.apache.org/docs/r/articles/fs.html].
-Files stored in private cloude storage buckets require that the arrow package
-to read the necessary credentials to access them. Please consult the
-corresponding documentation for AWS and GCS on how to set up the credentials
-in your system. Files in public S3 buckets can be accessed directly with the
-`s3://` URI, e.g., `s3://my-bucket/gsvaranks.parquet`, which already requests
-anonymous access, while files in public GCS buckets should be specified with
-URIs of the form `gs://anonymous@my-bucket/gsvaranks.parquet` to request
-anonymous access. See `help(loadParquetGSVA)` for further details.
+Files stored in private cloud storage buckets require the arrow package to
+read the necessary credentials to access them. Please consult the corresponding
+documentation for AWS and GCS on how to set up the credentials in your system.
+Files in public S3 buckets can be accessed directly with the `s3://` URI, e.g.,
+`s3://my-bucket/gsvaranks.parquet`, which already requests anonymous access,
+while files in public GCS buckets should be specified with URIs of the form
+`gs://anonymous@my-bucket/gsvaranks.parquet` to request anonymous access. See
+`help(loadParquetGSVA)` for further details.
+
+Parquet files with GSVA ranks deposited on public HTTPS servers can be also
+lazily loaded in the same way, by giving their `https://` URL to
+`loadParquetGSVA()`. In this case, the file is read using the API of the CRAN
+package [duckdb](https://cran.r-project.org/package=duckdb)
+[@muehleisen2026duckdb], which needs to be installed, and the HTTPS server must
+support HTTP range requests, which most servers do.
+
+```{r, eval=FALSE}
+gsvaranks <- loadParquetGSVA("https://my-server.org/data/gsvaranks.parquet")
+```
+The first time a file is accessed through HTTPS, the duckdb package downloads
+its extension `httpfs`, which GSVA keeps for subsequent R sessions. If the
+certificate of the HTTPS server cannot be verified, e.g., because the server
+does not send its intermediate certificates, a file with the certificates of
+the certification authorities can be given with
+`options(GSVA.ca_cert_file="<file>")`.
 
 Since each block of columns is downloaded every time it is read, the time
 to access the data depends mostly on the network, and it will be shorter

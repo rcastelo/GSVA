@@ -93,7 +93,8 @@ that same session or script.}
 \code{\link{gsvaRowNorm}}. It can be either a single character string with the path
 to a directory containing the row-normalized data stored with
 \code{\link{saveHDF5GSVA}}, the path to a file containing that data stored with
-\code{\link{saveParquetGSVA}} or an \verb{s3://} or \verb{gs://} URI to such a file, or an
+\code{\link{saveParquetGSVA}}, an \verb{s3://} or \verb{gs://} URI, or an \verb{http://} or
+\verb{https://} URL to such a file, or an
 object of one of the classes supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.
 For a list of these classes, see \code{class ? GsvaExprData}.}
 
@@ -101,7 +102,8 @@ For a list of these classes, see \code{class ? GsvaExprData}.}
 \code{\link{gsvaColRanks}}. It can be either a single character string with the path
 to a directory containing the column-rank data stored with
 \code{\link{saveHDF5GSVA}}, the path to a file containing that data stored with
-\code{\link{saveParquetGSVA}} or an \verb{s3://} or \verb{gs://} URI to such a file, or an
+\code{\link{saveParquetGSVA}}, an \verb{s3://} or \verb{gs://} URI, or an \verb{http://} or
+\verb{https://} URL to such a file, or an
 object of one of the classes supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.
 For a list of these classes, see \code{class ? GsvaExprData}.}
 
@@ -148,13 +150,13 @@ row-normalized values; and (3) calculate GSVA scores by column from the
 previously calculated column ranks.
 }
 \details{
-Column ranks are only valid for the rows on which they were calculated, because
-GSVA scores are calculated from the ranking of all those rows. For this reason,
-rows should not be subsetted or removed from the output of 'gsvaColRanks()',
-and 'gsvaColScores()' gives an error when the number of rows of its input
-differs from the number of rows on which the ranks were calculated. Rows should
-be subsetted or removed before calling 'gsvaRowNorm()' instead. Removing columns
-does not affect the validity of the ranks.
+Column ranks are only valid for the rows on which they were
+calculated, because GSVA scores are calculated from the ranking of all
+those rows. For this reason, rows cannot be removed from the output of
+'gsvaColRanks()', and 'gsvaColScores()' gives an error when the number of
+rows of its input differs from the number of rows on which the ranks were
+calculated. Rows should be removed before calling 'gsvaRowNorm()' instead.
+Removing columns does not affect the validity of the ranks.
 
 When the column ranks given to 'gsvaColScores()' are stored in
 Apache Parquet format, they are processed from disk by blocks of columns,

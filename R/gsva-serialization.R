@@ -44,6 +44,26 @@
 #' because they may end up stored in scripts and in the R history; GSVA hides
 #' them in its messages.
 #'
+#' `loadParquetGSVA()` can also lazily read files available at public `http://`
+#' or `https://` URLs using the API of the package
+#' [duckdb](https://cran.r-project.org/package=duckdb), which only downloads
+#' the parts of the file that are needed, as with `s3://` and `gs://` URIs.
+#' This requires that the HTTP(S) server supports range requests, which most do.
+#' The first time, DuckDB downloads its extension `httpfs` from its own servers,
+#' which GSVA installs in the directory
+#' `file.path(tools::R_user_dir("GSVA", which="cache"), "duckdb")`. If DuckDB
+#' cannot verify the certificate of an HTTPS server, e.g., because the server
+#' does not send its intermediate certificates, a file with the certificates
+#' of the certification authorities can be given with
+#' `options(GSVA.ca_cert_file="<file>")`. This file replaces the certificates of
+#' the certification authorities that DuckDB trusts, so it should only contain
+#' certificates from trustworthy sources, including the root certificates
+#' needed by every HTTPS server accessed in the same R session.
+#'
+#' Loading GSVA output in Apache Parquet format restores R objects stored in the
+#' file, as [`readRDS`][base::readRDS] does, and therefore, as with files read
+#' with `readRDS()`, files should only be loaded from trusted sources.
+#'
 #' @param gsvaExprData An object obtained with [`gsvaRowNorm`],
 #' [`gsvaColRanks`] or [`gsvaColScores`]. Must be one of the classes supported by
 #' [`GsvaExprData-class`].  For a list of these classes, see its help page
@@ -53,8 +73,8 @@
 #' data.
 #'
 #' @param file The path to the file where to save the GSVA output data in
-#' Apache Parquet format or, for loading it, either that path or an `s3://` or
-#' `gs://` URI.
+#' Apache Parquet format or, for loading it, either that path, an `s3://` or
+#' `gs://` URI, or an `http://` or `https://` URL.
 #'
 #' @param colsPerRowGroup Either `"auto"` (default), or the number of matrix
 #' columns stored in each row group of the Apache Parquet file, which is the
@@ -66,8 +86,10 @@
 #' @param replace Logical vector of length 1. When `TRUE`, an existing file in
 #' `file` is replaced. By default, `replace=FALSE`.
 #'
-#' @param verbose Logical vector of length 1. When `TRUE`, a progress bar is
-#' shown while writing the file. By default, `verbose=FALSE`.
+#' @param verbose Logical vector of length 1. In `saveParquetGSVA()`, when
+#' `TRUE`, a progress bar is shown while writing the file, and by default
+#' `verbose=FALSE`. In `loadParquetGSVA()`, when `TRUE` (default), messages
+#' inform about the steps of loading the file.
 #'
 #' @param assay A single character string specifying the assay that contains
 #' the GSVA output to be saved or loaded. By default, `assay="auto"`, which in
@@ -409,7 +431,7 @@ saveParquetGSVA <- function(gsvaExprData, file, assay="auto",
 }
 
 
-#' @importFrom cli cli_abort
+#' @importFrom cli cli_abort cli_alert_info
 #' @importFrom BiocGenerics path
 #' @importFrom DelayedArray DelayedArray
 #' @importFrom SummarizedExperiment assayNames "assay<-"
@@ -417,9 +439,17 @@ saveParquetGSVA <- function(gsvaExprData, file, assay="auto",
 #' @rdname gsva-serialization
 #'
 #' @export
-loadParquetGSVA <- function(file, assay="auto") {
-    seed <- GsvaParquetSeed(file)
-    md <- .parquet_reader(path(seed))$GetSchema()$metadata
+loadParquetGSVA <- function(file, assay="auto", verbose=TRUE) {
+    if (verbose) {
+        dpath <- .display_path(file)
+        if (!.is_uri(file))
+            cli_alert_info("Reading the metadata of {.file {dpath}}")
+        else if (!.remote_parquet_info_cached(file))
+            cli_alert_info("Downloading the metadata of {.val {dpath}}")
+    }
+
+    seed <- GsvaParquetSeed(file, verbose=verbose)
+    md <- .parquet_file_info(path(seed), seed@backend)$metadata
     if (is.null(md$gsva_assay) || is.null(md$gsva_shell)) {
         dpath <- .display_path(file)
         cli_abort(c("x"=paste("The file {.file {dpath}} does not contain GSVA",
@@ -427,6 +457,13 @@ loadParquetGSVA <- function(file, assay="auto") {
     }
 
     gsvacontainer <- .decode_r_object(md$gsva_shell)
+    if (verbose) {
+        cls <- class(gsvacontainer)[1]
+        sze <- format(structure(nchar(md$gsva_shell, type="bytes"),
+                                class="object_size"), units="auto")
+        cli_alert_info(paste("Restored a {cls} object with {nrow(seed)} rows",
+                             "and {ncol(seed)} columns from {sze} of metadata"))
+    }
     X <- DelayedArray(seed)
     dimnames(X) <- dimnames(gsvacontainer)
     assay(gsvacontainer, md$gsva_assay) <- X
@@ -440,8 +477,9 @@ loadParquetGSVA <- function(file, assay="auto") {
 ## load GSVA output given as a path in the arguments 'rowNormExprData' of
 ## gsvaColRanks() or 'rankExprData' of gsvaColScores(), named in 'argname',
 ## which can be either a directory with GSVA output saved with saveHDF5GSVA(),
-## or a file or an 's3://' or 'gs://' URI with GSVA output saved with
-## saveParquetGSVA(); 'assay' is the name of the GSVA assay to load
+## or a file, an 's3://' or 'gs://' URI, or an 'http://' or 'https://' URL
+## with GSVA output saved with saveParquetGSVA(); 'assay' is the name of the
+## GSVA assay to load
 #' @importFrom cli cli_abort cli_alert_info
 .load_gsva_path <- function(path, assay, argname, verbose) {
     if (length(path) != 1L || is.na(path))
@@ -461,17 +499,12 @@ loadParquetGSVA <- function(file, assay="auto") {
     } else
         cli_abort(c("x"="{path} cannot be found in the filesystem"))
 
-    if (verbose) {
-        if (.is_uri(path)) {
-            dpath <- .display_path(path)
-            cli_alert_info("Loading {dpath}")
-        }
-        else
-            cli_alert_info("Loading {basename(path)} from disk")
-    }
-
+    ## loadParquetGSVA() gives its own messages
     if (parquet)
-        loadParquetGSVA(path, assay=assay)
-    else
+        loadParquetGSVA(path, assay=assay, verbose=verbose)
+    else {
+        if (verbose)
+            cli_alert_info("Loading {basename(path)} from disk")
         loadHDF5GSVA(path, assay=assay)
+    }
 }

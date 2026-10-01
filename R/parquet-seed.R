@@ -78,7 +78,8 @@ setClass("GsvaParquetSeed",
                  dim="integer",
                  type="character",
                  layout="character",
-                 firsts="integer"))
+                 firsts="integer",
+                 backend="character"))
 
 setValidity("GsvaParquetSeed", function(object) {
     msg <- NULL
@@ -92,6 +93,9 @@ setValidity("GsvaParquetSeed", function(object) {
     if (length(object@layout) != 1L ||
         !object@layout %in% c("dense", "sparse"))
         msg <- c(msg, "'layout' must be either \"dense\" or \"sparse\"")
+    if (length(object@backend) != 1L ||
+        !object@backend %in% c("arrow", "duckdb"))
+        msg <- c(msg, "'backend' must be either \"arrow\" or \"duckdb\"")
     ncol <- object@dim[2]
     firsts <- object@firsts
     if (length(ncol) == 1L && !is.na(ncol) && ncol > 0L &&
@@ -165,9 +169,10 @@ setValidity("GsvaParquetSeed", function(object) {
                                   "{.val {dpath}}.")))
         else if (!scheme %in% c("s3", "gs", "gcs", "file"))
             cli_abort(c("x"=paste("URIs with scheme {.val {scheme}} are not",
-                                  "supported; only 's3://' and 'gs://' URIs",
-                                  "can be used to access remote GSVA output",
-                                  "in Apache Parquet format.")))
+                                  "supported; only 's3://', 'gs://',",
+                                  "'http://' and 'https://' URIs can be used",
+                                  "to access remote GSVA output in Apache",
+                                  "Parquet format.")))
     }
 
     invisible(TRUE)
@@ -298,13 +303,39 @@ setValidity("GsvaParquetSeed", function(object) {
     list(layout=md$gsva_layout, dim=dim, type=md$gsva_type, firsts=firsts)
 }
 
-## 'path' is either the path to a local file or an 's3://' or 'gs://' URI
+## TRUE when the metadata of the remote Parquet file in 'path' has already
+## been downloaded in this process
+.remote_parquet_info_cached <- function(path) {
+    if (.is_http_url(path))
+        return(.duckdb_file_info_cached(path))
+    !is.null(.gsva_parquet_readers[[paste(Sys.getpid(), path, sep="|")]])
+}
+
+## key-value metadata and number of rows, (leaf) columns and row groups of the
+## Parquet file in 'path', read with the given backend
+.parquet_file_info <- function(path, backend, verbose=FALSE) {
+    if (backend == "duckdb")
+        return(.duckdb_file_info(path, verbose=verbose))
+
+    r <- .parquet_reader(path)
+    list(metadata=r$GetSchema()$metadata, num_rows=r$num_rows,
+         num_columns=r$num_columns, num_row_groups=r$num_row_groups)
+}
+
+## 'path' is either the path to a local file, an 's3://' or 'gs://' URI, read
+## with arrow, or an 'http://' or 'https://' URL, read with DuckDB; 'backend'
+## allows one to choose the backend, internally used only for testing
 #' @importFrom cli cli_abort
-GsvaParquetSeed <- function(path) {
+GsvaParquetSeed <- function(path, backend=NULL, verbose=FALSE) {
     if (!is.character(path) || length(path) != 1L || is.na(path))
         cli_abort(c("x"="'path' must be a single character string."))
 
-    .require_arrow(path)
+    if (is.null(backend))
+        backend <- if (.is_http_url(path)) "duckdb" else "arrow"
+    if (backend == "duckdb")
+        .require_duckdb()
+    else
+        .require_arrow(path)
 
     if (!.is_uri(path)) {
         if (!file.exists(path))
@@ -312,19 +343,19 @@ GsvaParquetSeed <- function(path) {
         path <- normalizePath(path, mustWork=TRUE)
     }
 
-    r <- .parquet_reader(path)
+    info <- .parquet_file_info(path, backend, verbose=verbose)
     dpath <- .display_path(path)
-    md <- .parse_gsva_parquet_metadata(r$GetSchema()$metadata, path)
+    md <- .parse_gsva_parquet_metadata(info$metadata, path)
 
     seed <- new("GsvaParquetSeed", path=path, dim=md$dim, type=md$type,
-                layout=md$layout, firsts=md$firsts)
+                layout=md$layout, firsts=md$firsts, backend=backend)
 
     ## check that the index of row groups corresponds to the file contents
     nrows <- if (seed@layout == "dense") prod(as.numeric(seed@dim))
              else seed@dim[2]
     ncols <- if (seed@layout == "dense") 2L else 3L
-    if (r$num_rows != nrows || r$num_columns != ncols ||
-        (seed@dim[2] > 0L && r$num_row_groups != length(seed@firsts)))
+    if (info$num_rows != nrows || info$num_columns != ncols ||
+        (seed@dim[2] > 0L && info$num_row_groups != length(seed@firsts)))
         cli_abort(c("x"=paste("The contents of the file {.file {dpath}} do",
                               "not correspond to its GSVA metadata.")))
 
@@ -345,12 +376,11 @@ GsvaParquetSeed <- function(path) {
 ## indices, in batches of consecutive row groups with at most
 ## '.GSVA_PARQUET_MAXBATCHVALS' values (rows x columns), keeping only the
 ## requested columns of each batch before reading the next one. The function
-## 'readbatch(r, gs, cols)' reads the row groups 'gs' (1-based) holding the
-## columns 'cols' with the reader 'r', and returns them as an ordinary matrix
+## 'readbatch(gs, cols)' reads the row groups 'gs' (1-based) holding the
+## columns 'cols', and returns them as an ordinary matrix
 ## or as an 'SVT_SparseMatrix' object.
 #' @importFrom BiocGenerics cbind
 .read_parquet_seed_cols <- function(x, js, readbatch) {
-    r <- .parquet_reader(x@path)
     g <- findInterval(js, x@firsts)
     ug <- unique(g)
     nvals <- as.numeric(x@dim[1]) * (c(x@firsts[-1] - 1L, x@dim[2])[ug] -
@@ -369,7 +399,7 @@ GsvaParquetSeed <- function(path) {
 
     if (b == 1L) { ## single batch, avoid copying it into another object
         cols <- .parquet_seed_cols(x, ug)
-        m <- readbatch(r, ug, cols)
+        m <- readbatch(ug, cols)
         if (!identical(js, cols))
             m <- m[, match(js, cols), drop=FALSE]
         return(m)
@@ -385,7 +415,7 @@ GsvaParquetSeed <- function(path) {
     for (bi in seq_len(b)) {
         gs <- ug[batch == bi]
         cols <- .parquet_seed_cols(x, gs)
-        m <- readbatch(r, gs, cols)
+        m <- readbatch(gs, cols)
         m <- m[, match(js[g %in% gs], cols), drop=FALSE]
         if (sparse)
             res[[bi]] <- m
@@ -400,11 +430,41 @@ GsvaParquetSeed <- function(path) {
     res
 }
 
+## values of the row groups 'gs' (1-based), holding the matrix columns 'cols',
+## of a seed with dense layout
+.fetch_dense_values <- function(x, gs, cols) {
+    if (x@backend == "duckdb")
+        return(.duckdb_read_cols(x, gs, "value")$value)
+
+    tb <- .parquet_reader(x@path)$ReadRowGroups(gs - 1L,
+                                                column_indices=1L) ## no 'col'
+    as.vector(tb$value)
+}
+
+## number of non-zero values of each column, and row indices (stored as
+## differences) and non-zero values, of the row groups 'gs' (1-based),
+## holding the matrix columns 'cols', of a seed with sparse layout
+.fetch_sparse_values <- function(x, gs, cols) {
+    if (x@backend == "duckdb") {
+        res <- .duckdb_read_cols(x, gs, "col, row, value")
+        if (is.unsorted(res$col))
+            res <- res[order(res$col), ]
+        return(list(lens=lengths(res$row),
+                    rows=unlist(res$row, use.names=FALSE),
+                    vals=unlist(res$value, use.names=FALSE)))
+    }
+
+    tb <- .parquet_reader(x@path)$ReadRowGroups(gs - 1L,
+                                                column_indices=1:2) ## no 'col'
+    list(lens=as.vector(arrow::call_function("list_value_length", tb$row)),
+         rows=as.vector(arrow::call_function("list_flatten", tb$row)),
+         vals=as.vector(arrow::call_function("list_flatten", tb$value)))
+}
+
 #' @importFrom cli cli_abort
 .read_dense_batch <- function(x) {
-    function(r, gs, cols) {
-        tb <- r$ReadRowGroups(gs - 1L, column_indices=1L) ## skip 'col'
-        v <- as.vector(tb$value)
+    function(gs, cols) {
+        v <- .fetch_dense_values(x, gs, cols)
         if (length(v) != as.numeric(x@dim[1]) * length(cols)) {
             dpath <- .display_path(x@path)
             cli_abort(c("x"=paste("Unexpected number of values read from",
@@ -431,11 +491,11 @@ GsvaParquetSeed <- function(path) {
 #' @importFrom cli cli_abort
 #' @importFrom BiocGenerics "type<-"
 .read_sparse_batch <- function(x) {
-    function(r, gs, cols) {
-        tb <- r$ReadRowGroups(gs - 1L, column_indices=1:2) ## skip 'col'
-        lens <- as.vector(arrow::call_function("list_value_length", tb$row))
-        rows <- as.vector(arrow::call_function("list_flatten", tb$row))
-        vals <- as.vector(arrow::call_function("list_flatten", tb$value))
+    function(gs, cols) {
+        sv <- .fetch_sparse_values(x, gs, cols)
+        lens <- sv$lens
+        rows <- sv$rows
+        vals <- sv$vals
         if (length(lens) != length(cols) || length(rows) != sum(lens) ||
             length(vals) != length(rows)) {
             dpath <- .display_path(x@path)

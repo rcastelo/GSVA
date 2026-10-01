@@ -20,7 +20,7 @@ saveParquetGSVA(
   verbose = FALSE
 )
 
-loadParquetGSVA(file, assay = "auto")
+loadParquetGSVA(file, assay = "auto", verbose = TRUE)
 }
 \arguments{
 \item{gsvaExprData}{An object obtained with \code{\link{gsvaRowNorm}},
@@ -47,8 +47,8 @@ and \code{\link[HDF5Array:loadHDF5SummarizedExperiment]{loadHDF5SummarizedExperi
 respectively.}
 
 \item{file}{The path to the file where to save the GSVA output data in
-Apache Parquet format or, for loading it, either that path or an \verb{s3://} or
-\verb{gs://} URI.}
+Apache Parquet format or, for loading it, either that path, an \verb{s3://} or
+\verb{gs://} URI, or an \verb{http://} or \verb{https://} URL.}
 
 \item{colsPerRowGroup}{Either \code{"auto"} (default), or the number of matrix
 columns stored in each row group of the Apache Parquet file, which is the
@@ -60,8 +60,10 @@ columns.}
 \item{replace}{Logical vector of length 1. When \code{TRUE}, an existing file in
 \code{file} is replaced. By default, \code{replace=FALSE}.}
 
-\item{verbose}{Logical vector of length 1. When \code{TRUE}, a progress bar is
-shown while writing the file. By default, \code{verbose=FALSE}.}
+\item{verbose}{Logical vector of length 1. In \code{saveParquetGSVA()}, when
+\code{TRUE}, a progress bar is shown while writing the file, and by default
+\code{verbose=FALSE}. In \code{loadParquetGSVA()}, when \code{TRUE} (default), messages
+inform about the steps of loading the file.}
 }
 \value{
 For \code{saveHDF5GSVA()} the path to the directory where the data has
@@ -124,6 +126,26 @@ variable \code{AWS_PROFILE}. Although arrow also accepts credentials within the
 URI, e.g., \verb{s3://<key>:<secret>@<bucket>/<path>}, this is not recommended,
 because they may end up stored in scripts and in the R history; GSVA hides
 them in its messages.
+
+\code{loadParquetGSVA()} can also lazily read files available at public \verb{http://}
+or \verb{https://} URLs using the API of the package
+\href{https://cran.r-project.org/package=duckdb}{duckdb}, which only downloads
+the parts of the file that are needed, as with \verb{s3://} and \verb{gs://} URIs.
+This requires that the HTTP(S) server supports range requests, which most do.
+The first time, DuckDB downloads its extension \code{httpfs} from its own servers,
+which GSVA installs in the directory
+\code{file.path(tools::R_user_dir("GSVA", which="cache"), "duckdb")}. If DuckDB
+cannot verify the certificate of an HTTPS server, e.g., because the server
+does not send its intermediate certificates, a file with the certificates
+of the certification authorities can be given with
+\code{options(GSVA.ca_cert_file="<file>")}. This file replaces the certificates of
+the certification authorities that DuckDB trusts, so it should only contain
+certificates from trustworthy sources, including the root certificates
+needed by every HTTPS server accessed in the same R session.
+
+Loading GSVA output in Apache Parquet format restores R objects stored in the
+file, as \code{\link[base:readRDS]{readRDS}} does, and therefore, as with files read
+with \code{readRDS()}, files should only be loaded from trusted sources.
 }
 \examples{
 
