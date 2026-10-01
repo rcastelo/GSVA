@@ -86,7 +86,8 @@
 #' smallest unit of data that can be read from it. With `"auto"`, dense data is
 #' stored in row groups of at most 2^20 values, which is also the maximum
 #' number of values allowed, while sparse data is stored in row groups of 500
-#' columns.
+#' columns. Values larger than the number of columns of the matrix store all
+#' its columns in a single row group.
 #'
 #' @param replace Logical vector of length 1. When `TRUE`, an existing file in
 #' `file` is replaced. By default, `replace=FALSE`.

@@ -183,13 +183,26 @@ test_parquetserialization <- function() {
         unlink(c(rnormfile, ranksfile))
     }
 
+    ## values of 'colsPerRowGroup' larger than the number of columns, also
+    ## beyond the range of R integers, store all columns in one row group
+    f <- tempfile(fileext=".parquet")
+    saveParquetGSVA(gsvacolranks, f, colsPerRowGroup=2^31)
+    checkIdentical(1L, length(GSVA:::GsvaParquetSeed(f)@firsts))
+    checkEqualsNumeric(getvals(gsvacolranks, "gsvaranks"),
+                       getvals(loadParquetGSVA(f, verbose=FALSE),
+                               "gsvaranks"))
+    unlink(f)
+
     ## errors
     f <- tempfile(fileext=".parquet")
     checkException(saveParquetGSVA(gsvapar, f), silent=TRUE)
     checkException(saveParquetGSVA(gsvacolranks, f, colsPerRowGroup=0),
                    silent=TRUE)
-    checkException(saveParquetGSVA(gsvacolranks, f,
-                                   colsPerRowGroup=2^20), silent=TRUE)
+    ## row groups of dense values cannot have more than 2^20 values, which
+    ## only happens with matrices of more columns than this small example
+    checkException(GSVA:::.parquet_cols_per_rgroup(30000, nrow=40L,
+                                                   ncol=30000L, sparse=FALSE),
+                   silent=TRUE)
     checkException(loadParquetGSVA(f), silent=TRUE)
     arrow::write_parquet(data.frame(a=1:3), f)
     checkException(loadParquetGSVA(f), silent=TRUE)

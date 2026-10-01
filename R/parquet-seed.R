@@ -666,7 +666,10 @@ setMethod("extract_sparse_array", "GsvaParquetSeed", function(x, index) {
             colsPerRowGroup != round(colsPerRowGroup))
             cli_abort(c("x"=paste("'colsPerRowGroup' must be either \"auto\"",
                                   "or a positive integer number.")))
-        K <- as.integer(colsPerRowGroup)
+        ## a row group cannot store more columns than the matrix has, and
+        ## capping 'colsPerRowGroup' to them before converting it into an
+        ## integer also keeps it within the range of R integers
+        K <- as.integer(min(colsPerRowGroup, max(ncol, 1L)))
         if (!sparse && K > maxdense)
             cli_abort(c("x"=paste("With {nrow} rows, 'colsPerRowGroup' can be",
                                   "at most {maxdense} to store dense values,",
