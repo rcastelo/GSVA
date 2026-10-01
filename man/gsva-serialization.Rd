@@ -94,8 +94,13 @@ scores, and their corresponding metadata.
 The functions \code{saveParquetGSVA()} and \code{loadParquetGSVA()} do the same using
 a single file in Apache Parquet format, which is organized to efficiently
 read blocks of columns, as \code{\link{gsvaColRanks}} and \code{\link{gsvaColScores}} do. These
-two functions require the package
-\href{https://cran.r-project.org/package=arrow}{arrow}.
+two functions require having installed additional packages by the user. More
+concretely, loading Parquet files from the local filesystem or lazily over
+Amazon S3 or Google Cloud Storage buckets, and saving them, require the CRAN
+package \href{https://cran.r-project.org/package=arrow}{arrow}, while loading
+Parquet files lazily over HTTP(S) URLs requires the CRAN packages
+\href{https://cran.r-project.org/package=duckdb}{duckdb} and
+\href{https://cran.r-project.org/package=DBI}{DBI}.
 }
 \details{
 \code{saveParquetGSVA()} stores sparse input, such as a

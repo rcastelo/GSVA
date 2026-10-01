@@ -12,8 +12,13 @@
 #' The functions `saveParquetGSVA()` and `loadParquetGSVA()` do the same using
 #' a single file in Apache Parquet format, which is organized to efficiently
 #' read blocks of columns, as [`gsvaColRanks`] and [`gsvaColScores`] do. These
-#' two functions require the package
-#' [arrow](https://cran.r-project.org/package=arrow).
+#' two functions require having installed additional packages by the user. More
+#' concretely, loading Parquet files from the local filesystem or lazily over
+#' Amazon S3 or Google Cloud Storage buckets, and saving them, require the CRAN
+#' package [arrow](https://cran.r-project.org/package=arrow), while loading
+#' Parquet files lazily over HTTP(S) URLs requires the CRAN packages
+#' [duckdb](https://cran.r-project.org/package=duckdb) and
+#' [DBI](https://cran.r-project.org/package=DBI).
 #'
 #' @details `saveParquetGSVA()` stores sparse input, such as a
 #' [`dgCMatrix`][Matrix::dgCMatrix-class] or an
