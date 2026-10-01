@@ -29,7 +29,9 @@
       max.block.length <- min(.Machine$integer.max, max.block.length / nworkers)
       expected.block.length <- max(1, ceiling(nrow(X) / nworkers) * as.numeric(ncol(X)))
       block.length <- min(max.block.length, expected.block.length)
-      grid <- rowAutoGrid(X, block.length=block.length)
+      ## number of rows per block, as calculated by rowAutoGrid()
+      nrowblock <- min(max(1, floor(block.length / max(1, ncol(X)))), nrow(X))
+      grid <- rowAutoGrid(X, nrow=.align_to_chunks(nrowblock, X, 1L))
   }
   grid
 }
