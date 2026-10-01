@@ -3,6 +3,7 @@ test_mapReduce <- function() {
     message("Running unit tests for map reduce")
 
     suppressPackageStartupMessages({
+        library(DelayedArray)
         library(Matrix)
         library(GSEABase)
         library(BiocParallel)
@@ -40,7 +41,8 @@ test_mapReduce <- function() {
     ## calculate row-normalized expression values without map-reduce
     gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
 
-    ## calculate row-normalized expression values with map-reduce
+    ## calculate row-normalized expression values with map-reduce, using
+    ## batchtools with two workers, to test the parallel route
     gsvarnorm2 <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, verbose=FALSE),
                              verbose=FALSE)
 
@@ -57,10 +59,19 @@ test_mapReduce <- function() {
     wd <- tempfile("gsvamapwd")
     dir.create(wd)
     btregargs <- batchtoolsRegistryargs(work.dir=wd)
-    btpar <- BatchtoolsParam(workers=1, registryargs=btregargs) ## just to force unit testing internal MAP_FUN_WRAPPER()
-    ## two workers to have more than one chunk
+    ## except for two calls using batchtools with two workers, to test the
+    ## parallel route, gsvaMap() is run in this R process with one worker,
+    ## which is much faster than starting batchtools jobs, and small blocks,
+    ## together with a finite maximum memory, split the input into several
+    ## chunks, as two workers would do
+    oldautoblocksize <- getAutoBlockSize()
+    setAutoBlockSize(nrow(gsvarnorm) * 8 * 5) ## blocks of 5 columns
+    on.exit(setAutoBlockSize(oldautoblocksize), add=TRUE)
+    btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="1K"),
+                             registryargs=btregargs)
     btpar2 <- BatchtoolsParam(workers=2, registryargs=btregargs)
     gsvamapranks <- gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE, BTPARAM=btpar)
+    checkTrue(length(gsvamapranks) > 1)
     gsvaredranks <- gsvaReduce(gsvamapranks, verbose=FALSE)
 
     ## check that both approaches yield the same column rank values
@@ -91,7 +102,8 @@ test_mapReduce <- function() {
     gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
 
     ## calculate column GSVA scores with map-reduce
-    gsvaesmapred <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, verbose=FALSE),
+    gsvaesmapred <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, verbose=FALSE,
+                                       BTPARAM=btpar),
                                verbose=FALSE)
 
     ## check that both approaches yield the same column GSVA scores
@@ -118,7 +130,8 @@ test_mapReduce <- function() {
                        assay(gsvaesmaprnkflsred, "es"))
 
     ## calculate column GSVA scores with map-reduce on mapped ranks stored in
-    ## temporary files, returning paths to results
+    ## temporary files, returning paths to results, using batchtools with two
+    ## workers, which load and save files, to test the parallel route
     gsvaesmaprnkflsredfls <- gsvaReduce(gsvaMap(gsvaColScores, gsvamapranksfls,
                                                 output="HDF5", verbose=FALSE,
                                                 BTPARAM=btpar2),
@@ -137,11 +150,12 @@ test_mapReduce <- function() {
                             verbose=FALSE)
     gsvaranks <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE, BTPARAM=btpar),
                             verbose=FALSE)
-    ## returning paths also when mapping by columns an input that is not a
-    ## SummarizedExperiment, with two workers to have more than one chunk
-    gsvaranksfls <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, output="HDF5",
-                                       verbose=FALSE, BTPARAM=btpar2),
-                               verbose=FALSE)
+    ## returning paths also when mapping by columns, in several chunks, an
+    ## input that is not a SummarizedExperiment
+    gsvamapranksfls2 <- gsvaMap(gsvaColRanks, gsvarnorm, output="HDF5",
+                                verbose=FALSE, BTPARAM=btpar)
+    checkTrue(length(gsvamapranksfls2) > 1)
+    gsvaranksfls <- gsvaReduce(gsvamapranksfls2, verbose=FALSE)
     checkEqualsNumeric(gsvaranks, gsvaranksfls)
     gsvaes2 <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, verbose=FALSE, BTPARAM=btpar),
                           verbose=FALSE)
@@ -160,6 +174,7 @@ test_mapReduceParquet <- function() {
     message("Running unit tests for map reduce with Parquet files")
 
     suppressPackageStartupMessages({
+        library(DelayedArray)
         library(Matrix)
         library(SummarizedExperiment)
         library(BiocParallel)
@@ -186,8 +201,14 @@ test_mapReduceParquet <- function() {
     ## gsvaMap() saves its results in the working directory of the registry
     wd <- tempfile("gsvamapwd")
     dir.create(wd)
-    btpar <- BatchtoolsParam(workers=2,
+    ## gsvaMap() is run in this R process with one worker, which is much
+    ## faster than starting batchtools jobs, and small blocks, together with a
+    ## finite maximum memory, split the input into several chunks
+    btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="1K"),
                              registryargs=batchtoolsRegistryargs(work.dir=wd))
+    oldautoblocksize <- getAutoBlockSize()
+    setAutoBlockSize(p * 8 * 30) ## blocks of 30 columns
+    on.exit(setAutoBlockSize(oldautoblocksize), add=TRUE)
     isparquet <- function(paths)
         all(vapply(paths, function(x) grepl("\\.parquet$", x) &&
                                       GSVA:::.is_parquet_file(x), logical(1)))
@@ -227,7 +248,8 @@ test_mapReduceParquet <- function() {
         gsvaes2 <- gsvaColScores(gsvaranks2, verbose=FALSE)
         checkEqualsNumeric(getvals(gsvaes, "es"), getvals(gsvaes2, "es"))
         gsvaes3 <- gsvaReduce(gsvaMap(gsvaColScores, rankspaths,
-                                      verbose=FALSE), verbose=FALSE)
+                                      verbose=FALSE, BTPARAM=btpar),
+                              verbose=FALSE)
         checkEqualsNumeric(getvals(gsvaes, "es"), getvals(gsvaes3, "es"))
 
         unlink(c(unlist(rnormpaths), unlist(rankspaths)))
@@ -241,6 +263,7 @@ test_mapReduceScoresOutput <- function() {
     message("Running unit tests for map reduce saving GSVA scores")
 
     suppressPackageStartupMessages({
+        library(DelayedArray)
         library(SummarizedExperiment)
         library(BiocParallel)
     })
@@ -264,8 +287,14 @@ test_mapReduceScoresOutput <- function() {
     ## gsvaMap() saves its results in the working directory of the registry
     wd <- tempfile("gsvamapwd")
     dir.create(wd)
-    btpar <- BatchtoolsParam(workers=2,
+    ## gsvaMap() is run in this R process with one worker, which is much
+    ## faster than starting batchtools jobs, and small blocks, together with a
+    ## finite maximum memory, split the input into several chunks
+    btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="1K"),
                              registryargs=batchtoolsRegistryargs(work.dir=wd))
+    oldautoblocksize <- getAutoBlockSize()
+    setAutoBlockSize(p * 8 * 30) ## blocks of 30 columns
+    on.exit(setAutoBlockSize(oldautoblocksize), add=TRUE)
 
     for (input in list(y, SummarizedExperiment(assays=list(exprs=y)))) {
         gsvaranks <- gsvaColRanks(gsvaRowNorm(gsvaParam(input, gsets,

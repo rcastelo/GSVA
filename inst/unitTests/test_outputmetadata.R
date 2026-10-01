@@ -103,6 +103,7 @@ test_outputmetadatamapreduce <- function() {
     message("Running unit tests for metadata in GSVA map-reduce output")
 
     suppressPackageStartupMessages({
+        library(DelayedArray)
         library(SummarizedExperiment)
         library(BiocParallel)
     })
@@ -117,7 +118,13 @@ test_outputmetadatamapreduce <- function() {
                 dimnames=list(paste0("g", 1:p), paste0("s", 1:n)))
 
     gsvaversion <- as.character(packageVersion("GSVA"))
-    btpar <- BatchtoolsParam(workers=2) ## two workers for more than one chunk
+    ## gsvaMap() is run in this R process with one worker, which is much
+    ## faster than starting batchtools jobs, and small blocks, together with a
+    ## finite maximum memory, split the input into several chunks
+    btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="1K"))
+    oldautoblocksize <- getAutoBlockSize()
+    setAutoBlockSize(p * 8 * 30) ## blocks of 30 columns
+    on.exit(setAutoBlockSize(oldautoblocksize), add=TRUE)
 
     for (input in list(y, SummarizedExperiment(assays=list(exprs=y)))) {
         gsvapar <- gsvaParam(input, gsets, verbose=FALSE)
