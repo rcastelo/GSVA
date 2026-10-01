@@ -661,8 +661,8 @@ setMethod("extract_sparse_array", "GsvaParquetSeed", function(x, index) {
     if (identical(colsPerRowGroup, "auto"))
         K <- if (sparse) .GSVA_PARQUET_SPARSE_COLS_PER_RGROUP else maxdense
     else {
-        if (!is.numeric(colsPerRowGroup) || length(colsPerRowGroup) != 1L ||
-            is.na(colsPerRowGroup) || colsPerRowGroup < 1 ||
+        if (!.isNumLength1(colsPerRowGroup) || !is.finite(colsPerRowGroup) ||
+            length(colsPerRowGroup) != 1L || colsPerRowGroup < 1 ||
             colsPerRowGroup != round(colsPerRowGroup))
             cli_abort(c("x"=paste("'colsPerRowGroup' must be either \"auto\"",
                                   "or a positive integer number.")))

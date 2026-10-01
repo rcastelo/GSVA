@@ -440,7 +440,7 @@ saveParquetGSVA <- function(gsvaExprData, file, assay="auto",
 #'
 #' @export
 loadParquetGSVA <- function(file, assay="auto", verbose=TRUE) {
-    if (!isCharLength1(file))
+    if (!.isCharLength1(file))
         cli_abort(c("x"="'file' must be a single character string."))
 
     if (verbose) {
