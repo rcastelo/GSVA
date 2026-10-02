@@ -40,7 +40,21 @@
 #' `gsvaMap()` is a list of paths instead of a list of objects. Note that, by
 #' default, the working directory of the registry is the current working
 #' directory. Saving in Apache Parquet format requires the package
-#' [arrow](https://cran.r-project.org/package=arrow).
+#' [arrow](https://cran.r-project.org/package=arrow). When this argument is
+#' not given, its default value is `"HDF5"` if `BTPARAM` sends the jobs to a
+#' workload manager, such as Slurm, and `"object"` otherwise, i.e., when the
+#' `cluster` field of `BTPARAM` is `"socket"`, `"multicore"` or
+#' `"interactive"`. When `MAPREDO` is given, its default value is the one
+#' used to produce `MAPREDO`.
+#'
+#' @param MAPREDO In `gsvaMap()`, the output of a previous call to `gsvaMap()`
+#' with the same `FUN` and `inputData` arguments, in which some of the chunks
+#' failed. When this argument is given, only the failed chunks are computed
+#' again, using the same chunk boundaries as in the previous call, and the
+#' result combines them with the chunks that did not fail. This makes it
+#' possible to resubmit the failed chunks with a different `BTPARAM` argument,
+#' for instance with more memory or a longer wall time. Default: `NULL`,
+#' which computes all chunks.
 #'
 #' @param mapOutput In `gsvaReduce()`, the output of `gsvaMap()`, which can be
 #' a list of objects or a list of paths to GSVA output saved with
@@ -84,7 +98,12 @@
 #'
 #' @return The `gsvaMap()` function returns either a list of objects with the
 #' results of the GSVA calculations for each compute node, or a list of file paths
-#' where the results are saved. The `gsvaReduce()` function returns a single
+#' where the results are saved. If the calculations in some of the chunks
+#' failed, `gsvaMap()` gives a warning and the corresponding elements of this
+#' list are condition objects describing the errors. This partial result can
+#' be given to the `MAPREDO` argument of a new call to `gsvaMap()` to compute
+#' only the failed chunks, but not to `gsvaReduce()`, which gives an error.
+#' The `gsvaReduce()` function returns a single
 #' object that combines the results from all compute nodes. The
 #' `gsvaBatchtoolsSlurmParam()` function returns a `BatchtoolsParam` object with
 #' some sensible defaults for running GSVA calculations on a SLURM cluster.
@@ -130,23 +149,48 @@
 #' \dontrun{
 #' gsvabtpar <- gsvaBatchtoolsSlurmParam(partition="short")
 #' gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar))
+#'
+#' ## if some of the chunks fail, gsvaMap() gives a warning and returns a
+#' ## partial result, whose failed chunks can be resubmitted, for instance
+#' ## with more memory per task, without computing again the other chunks
+#' gsvamapes <- gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar)
+#' gsvabtpar2 <- gsvaBatchtoolsSlurmParam(partition="short", mem="20G")
+#' gsvamapes <- gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar2,
+#'                      MAPREDO=gsvamapes)
+#' gsvaes <- gsvaReduce(gsvamapes)
 #' }
 #'
-#' @importFrom BiocParallel BatchtoolsParam bpnworkers bplapply
+#' @importFrom BiocParallel BatchtoolsParam bpnworkers
+#' @importFrom IRanges IRanges start end
+#' @importFrom cli cli_abort cli_alert_info cli_warn
 #' @rdname map-reduce
 #' @export gsvaMap
 gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
                     verbose=TRUE,
-                    BTPARAM=BatchtoolsParam(workers=2, progressbar=verbose)) {
+                    BTPARAM=BatchtoolsParam(workers=2, progressbar=verbose),
+                    MAPREDO=NULL) {
 
     FUN <- match.fun(FUN)
-    output <- match.arg(output)
-    if (output == "Parquet") ## fail before sending any job to the workers
-        .require_arrow()
-
     .check_FUN_inputData(FUN, inputData)
+    funname <- .map_fun_name(FUN)
+    mapinfo <- NULL
+    if (!is.null(MAPREDO))
+        mapinfo <- .check_MAPREDO(MAPREDO, funname)
 
     BTPARAM <- .check_batchtools_param(BTPARAM, verbose)
+
+    if (missing(output)) {
+        output <- .default_map_output(BTPARAM)
+        if (!is.null(mapinfo))
+            output <- mapinfo$output
+    } else
+        output <- match.arg(output)
+    if (!is.null(mapinfo) && output != mapinfo$output)
+        cli_abort(c("x"=paste("{.arg MAPREDO} was produced with",
+                              "output=\"{mapinfo$output}\", which differs",
+                              "from output=\"{output}\".")))
+    if (output == "Parquet") ## fail before sending any job to the workers
+        .require_arrow()
 
     nworkers <- bpnworkers(BTPARAM)
     ncpus <- BTPARAM$resources$ncpus
@@ -197,11 +241,20 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         path2save <- path.expand(BTPARAM$registryargs$work.dir)
 
     X <- inputData
-    totalInputDim <- NULL
+    totalInputDim <- chunks <- NULL
     if (!is.list(X)) {
-        grid <- gridsizefun(unwrapData(get_exprData(inputData), assay),
-                            nworkers, maxmem)
-        X <- splitinrangesfun(grid)
+        if (is.null(mapinfo)) {
+            grid <- gridsizefun(unwrapData(get_exprData(inputData), assay),
+                                nworkers, maxmem)
+            X <- splitinrangesfun(grid)
+            chunks <- data.frame(first=vapply(X, start, integer(1)),
+                                 last=vapply(X, end, integer(1)))
+        } else { ## the chunks of the previous run, which may have used a
+                 ## different number of workers or maximum memory
+            chunks <- mapinfo$chunks
+            X <- lapply(seq_len(nrow(chunks)), function(i)
+                            IRanges(start=chunks$first[i], end=chunks$last[i]))
+        }
         totalInputDim <- dim(get_exprData(inputData))
     } else {
         if (is.null(attributes(X)$totalInputDim))
@@ -209,23 +262,50 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
                                   "the attribute 'totalInputDim'.")))
         totalInputDim <- attributes(X)$totalInputDim
     }
+    fingerprint <- .map_fingerprint(funname, inputData, totalInputDim)
 
-    res <- NULL
-    if (nworkers > 1)
-        res <- do.call("bplapply", args=c(list(X=X, FUN=MAP_FUN_WRAPPER,
-                                               WRAPPED_FUN=FUN,
-                                               output=output,
-                                               path2save=path2save,
-                                               ncpus=ncpus, maxmem=maxmem,
-                                               BPPARAM=BTPARAM), funargs))
-    else ## mainly to be able to unit test this
-        res <- do.call("lapply", args=c(list(X=X, FUN=MAP_FUN_WRAPPER,
-                                             WRAPPED_FUN=FUN,
-                                             output=output,
-                                             path2save=path2save,
-                                             ncpus=ncpus, maxmem=maxmem),
-                                        funargs))
+    idx <- seq_along(X)
+    if (!is.null(mapinfo)) {
+        if (fingerprint != mapinfo$fingerprint || length(MAPREDO) != length(X))
+            cli_abort(c("x"=paste("{.arg MAPREDO} was not produced by",
+                                  "{.fn gsvaMap} with FUN={funname} on the",
+                                  "same {.arg inputData}.")))
+        idx <- which(.map_failed(MAPREDO))
+        if (length(idx) == 0) {
+            if (verbose)
+                cli_alert_info(paste("No failed chunks in {.arg MAPREDO},",
+                                     "nothing to resubmit."))
+            return(MAPREDO)
+        }
+        if (verbose)
+            cli_alert_info(paste("Resubmitting {length(idx)} failed chunk{?s}",
+                                 "out of {length(X)}."))
+    }
+
+    res <- .map_chunks(X[idx], BTPARAM,
+                       c(list(WRAPPED_FUN=FUN, output=output,
+                              path2save=path2save, ncpus=ncpus,
+                              maxmem=maxmem), funargs))
+    if (!is.null(mapinfo)) {
+        redo <- res
+        res <- MAPREDO
+        res[idx] <- redo
+    }
     attributes(res)$totalInputDim <- totalInputDim
+    attributes(res)$mapInfo <- list(FUN=funname, output=output,
+                                    fingerprint=fingerprint, chunks=chunks)
+
+    failed <- .map_failed(res)
+    if (any(failed)) {
+        nfailed <- sum(failed)
+        firsterr <- conditionMessage(res[[which(failed)[1]]])
+        cli_warn(c("!"="{nfailed} out of {length(res)} chunk{?s} failed.",
+                   "i"="First error: {firsterr}",
+                   "i"=paste("Resubmit only the failed chunks by calling",
+                             "{.fn gsvaMap} again with the same {.arg FUN}",
+                             "and {.arg inputData}, and this result in",
+                             "{.arg MAPREDO}.")))
+    }
 
     return(res)
 }
@@ -237,6 +317,15 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
 gsvaReduce <- function(mapOutput, verbose=TRUE) {
     if (!is.list(mapOutput))
         cli_abort(c("x"="argument 'mapOutput' must be a list."))
+
+    failed <- .map_failed(mapOutput)
+    if (any(failed)) {
+        nfailed <- sum(failed)
+        cli_abort(c("x"=paste("{nfailed} out of {length(mapOutput)}",
+                              "chunk{?s} in {.arg mapOutput} failed."),
+                    "i"=paste("Resubmit them by calling {.fn gsvaMap} with",
+                              "{.arg MAPREDO} set to {.arg mapOutput}.")))
+    }
 
     cls <- unique(lapply(mapOutput, class))
     if (length(cls) > 1)
@@ -317,7 +406,7 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
                                               walltime=walltime,
                                               memory=mem),
                                registryargs=registryargs,
-                               stop.on.error=TRUE, log=TRUE, logdir=dir)
+                               stop.on.error=FALSE, log=TRUE, logdir=dir)
     return(BTPARAM)
 } # nocov end
 
@@ -608,4 +697,105 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, path2save, ncpus, maxmem,
         cli_abort(c("x"=paste("FUN=gsvaColScores requires inputData of",
                               "class either 'GsvaExprData' or a 'list'",
                               "output from gsvaMap(gsvaColRanks, ...)")))
+
+    if (is.list(inputData) && any(.map_failed(inputData)))
+        cli_abort(c("x"=paste("Some chunks in {.arg inputData} failed."),
+                    "i"=paste("Resubmit them by calling {.fn gsvaMap} with",
+                              "{.arg MAPREDO} set to {.arg inputData}.")))
+}
+
+.map_fun_name <- function(FUN) {
+    for (funname in c("gsvaRowNorm", "gsvaColRanks", "gsvaColScores"))
+        if (identical(FUN, get(funname)))
+            return(funname)
+    cli_abort(c("x"="Internal error, invalid FUN argument."))
+}
+
+## which chunks of a gsvaMap() output failed: those whose element is a
+## condition, either a 'bperror' object from bplapply(), or an error caught by
+## .map_chunks() when running in this R process
+.map_failed <- function(x) {
+    vapply(x, function(el) inherits(el, "condition"), logical(1))
+}
+
+## map the chunks in 'X' with MAP_FUN_WRAPPER() and the arguments in 'args',
+## returning failed chunks as condition objects instead of aborting
+#' @importFrom BiocParallel bplapply bpnworkers bptry
+.map_chunks <- function(X, BTPARAM, args) {
+    if (bpnworkers(BTPARAM) > 1) {
+        res <- bptry(do.call("bplapply", args=c(list(X=X, FUN=MAP_FUN_WRAPPER,
+                                                     BPPARAM=BTPARAM), args)))
+        ## bptry() returns, instead of a list of results, a 'bperror' raised
+        ## for reasons other than failed chunks, such as a timeout
+        if (inherits(res, "condition"))
+            stop(res)
+    } else ## mainly to be able to unit test this
+        res <- lapply(X, function(x)
+                          tryCatch(do.call("MAP_FUN_WRAPPER",
+                                           args=c(list(X=x), args)),
+                                   error=identity))
+
+    res
+}
+
+## default value of the 'output' argument of gsvaMap(), which saves results
+## to disk when jobs are sent to a workload manager, enabling MAPREDO to
+## recover them
+.default_map_output <- function(BTPARAM) {
+    output <- "object"
+    if (!BTPARAM$cluster %in% c("socket", "multicore", "interactive"))
+        output <- "HDF5"
+
+    output
+}
+
+#' @importFrom cli cli_abort
+.check_MAPREDO <- function(MAPREDO, funname) {
+    mapinfo <- attributes(MAPREDO)$mapInfo
+    if (!is.list(MAPREDO) || is.null(mapinfo))
+        cli_abort(c("x"=paste("{.arg MAPREDO} must be the output of a",
+                              "previous call to {.fn gsvaMap}.")))
+    if (mapinfo$FUN != funname)
+        cli_abort(c("x"=paste("{.arg MAPREDO} was produced with",
+                              "FUN={mapinfo$FUN}, which differs from",
+                              "FUN={funname}.")))
+
+    mapinfo
+}
+
+## fingerprint identifying the input of a gsvaMap() call, built from the
+## dimensions, dimension names and GSVA parameters of the input data, without
+## its values, which can be too large to read, or from the chunk boundaries or
+## paths of a list output from a previous call to gsvaMap()
+.map_fingerprint <- function(funname, inputData, totalInputDim) {
+    if (is.list(inputData)) {
+        elems <- lapply(inputData, function(x) {
+            if (is.character(x))
+                x
+            else
+                .pull_restrict_metadata(x)[c("first", "last", "whdim")]
+        })
+        fp <- list(funname, totalInputDim, elems)
+    } else {
+        param <- inputData
+        if (!is(inputData, "GsvaMethodParam"))
+            param <- .pull_param(inputData)
+        exprData <- get_exprData(param)
+        fp <- list(funname, class(inputData), dim(exprData),
+                   dimnames(exprData), .gsvaParam_as_list(param))
+    }
+
+    .md5_object(fp)
+}
+
+## MD5 hash of an R object, serialized without its header, which stores the
+## version of R that serialized it, and with serialization format version 2,
+## which writes ALTREP vectors in the same way as regular ones
+#' @importFrom tools md5sum
+.md5_object <- function(x) {
+    bytes <- serialize(x, connection=NULL, version=2L)
+    fname <- tempfile()
+    on.exit(unlink(fname))
+    writeBin(bytes[-seq_len(14L)], fname)
+    unname(md5sum(fname))
 }

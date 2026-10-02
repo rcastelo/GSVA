@@ -11,7 +11,8 @@ gsvaMap(
   inputData,
   output = c("object", "HDF5", "Parquet"),
   verbose = TRUE,
-  BTPARAM = BatchtoolsParam(workers = 2, progressbar = verbose)
+  BTPARAM = BatchtoolsParam(workers = 2, progressbar = verbose),
+  MAPREDO = NULL
 )
 
 gsvaReduce(mapOutput, verbose = TRUE)
@@ -46,7 +47,12 @@ registry of \code{BTPARAM} with \code{\link{saveHDF5GSVA}} (\code{"HDF5"}) or wi
 \code{gsvaMap()} is a list of paths instead of a list of objects. Note that, by
 default, the working directory of the registry is the current working
 directory. Saving in Apache Parquet format requires the package
-\href{https://cran.r-project.org/package=arrow}{arrow}.}
+\href{https://cran.r-project.org/package=arrow}{arrow}. When this argument is
+not given, its default value is \code{"HDF5"} if \code{BTPARAM} sends the jobs to a
+workload manager, such as Slurm, and \code{"object"} otherwise, i.e., when the
+\code{cluster} field of \code{BTPARAM} is \code{"socket"}, \code{"multicore"} or
+\code{"interactive"}. When \code{MAPREDO} is given, its default value is the one
+used to produce \code{MAPREDO}.}
 
 \item{verbose}{Gives information about the progress of the calculations.
 Default: \code{TRUE}.}
@@ -62,6 +68,15 @@ object themselves with appropriate arguments or, if an SLURM HPC environment
 is available, they may use the wrapper function \code{gsvaBatchtoolsSlurmParam()},
 which is provided to create a \code{BatchtoolsParam} object with some sensible
 defaults for running GSVA calculations on a SLURM cluster.}
+
+\item{MAPREDO}{In \code{gsvaMap()}, the output of a previous call to \code{gsvaMap()}
+with the same \code{FUN} and \code{inputData} arguments, in which some of the chunks
+failed. When this argument is given, only the failed chunks are computed
+again, using the same chunk boundaries as in the previous call, and the
+result combines them with the chunks that did not fail. This makes it
+possible to resubmit the failed chunks with a different \code{BTPARAM} argument,
+for instance with more memory or a longer wall time. Default: \code{NULL},
+which computes all chunks.}
 
 \item{mapOutput}{In \code{gsvaReduce()}, the output of \code{gsvaMap()}, which can be
 a list of objects or a list of paths to GSVA output saved with
@@ -91,7 +106,12 @@ each independent task executed within a compute node. Default: "10G".}
 \value{
 The \code{gsvaMap()} function returns either a list of objects with the
 results of the GSVA calculations for each compute node, or a list of file paths
-where the results are saved. The \code{gsvaReduce()} function returns a single
+where the results are saved. If the calculations in some of the chunks
+failed, \code{gsvaMap()} gives a warning and the corresponding elements of this
+list are condition objects describing the errors. This partial result can
+be given to the \code{MAPREDO} argument of a new call to \code{gsvaMap()} to compute
+only the failed chunks, but not to \code{gsvaReduce()}, which gives an error.
+The \code{gsvaReduce()} function returns a single
 object that combines the results from all compute nodes. The
 \code{gsvaBatchtoolsSlurmParam()} function returns a \code{BatchtoolsParam} object with
 some sensible defaults for running GSVA calculations on a SLURM cluster.
@@ -158,6 +178,15 @@ gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks))
 \dontrun{
 gsvabtpar <- gsvaBatchtoolsSlurmParam(partition="short")
 gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar))
+
+## if some of the chunks fail, gsvaMap() gives a warning and returns a
+## partial result, whose failed chunks can be resubmitted, for instance
+## with more memory per task, without computing again the other chunks
+gsvamapes <- gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar)
+gsvabtpar2 <- gsvaBatchtoolsSlurmParam(partition="short", mem="20G")
+gsvamapes <- gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar2,
+                     MAPREDO=gsvamapes)
+gsvaes <- gsvaReduce(gsvamapes)
 }
 
 }

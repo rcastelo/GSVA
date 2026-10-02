@@ -194,7 +194,8 @@ importFrom(cli,
   cli_alert_warning,
   cli_progress_bar,
   cli_progress_done,
-  cli_progress_update
+  cli_progress_update,
+  cli_warn
 )
 importFrom(graphics,
   abline,
@@ -227,7 +228,10 @@ importFrom(stats,
   rpois,
   sd
 )
-importFrom(tools,R_user_dir)
+importFrom(tools,
+  R_user_dir,
+  md5sum
+)
 importFrom(utils,
   capture.output,
   globalVariables,
