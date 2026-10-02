@@ -380,7 +380,7 @@ test_mapReduceRedo <- function() {
     ## also computed, instead of being reported as failed
     wds <- character(0)
     on.exit(unlink(wds, recursive=TRUE), add=TRUE)
-    newbtpar <- function(workers=1, memory="1K") {
+    newbtpar <- function(workers=1, memory="1K", stopOnError=FALSE) {
         wd <- tempfile("gsvamapwd")
         dir.create(wd)
         wds <<- c(wds, wd)
@@ -388,7 +388,7 @@ test_mapReduceRedo <- function() {
                                     file.dir=file.path(wd, "registry"))
         BatchtoolsParam(workers=workers, registryargs=regargs,
                         resources=list(ncpus=1, memory=memory),
-                        stop.on.error=FALSE)
+                        stop.on.error=stopOnError)
     }
     oldautoblocksize <- getAutoBlockSize()
     setAutoBlockSize(p * 8 * 10) ## blocks of 10 columns
@@ -542,6 +542,28 @@ test_mapReduceRedo <- function() {
         checkTrue(!any(GSVA:::.map_failed(redone)))
         checkEqualsNumeric(gsvaes, gsvaReduce(redone, verbose=FALSE))
     }
+
+    ## with stop.on.error=TRUE, chunks following the failed one in the same
+    ## job are not run, which the warning explains, giving as first error the
+    ## one of the chunk that failed, and they are resubmitted with it
+    bp <- newbtpar(workers=2, stopOnError=TRUE)
+    file.rename(rankspaths[[2]], tmppath)
+    mw <- mapwarn(gsvaMap(gsvaColScores, rankspaths, verbose=FALSE,
+                          BTPARAM=bp))
+    file.rename(tmppath, rankspaths[[2]])
+    failed <- which(GSVA:::.map_failed(mw$res))
+    unevaluated <- vapply(mw$res, inherits, logical(1),
+                          what="unevaluated_error")
+    checkTrue(2L %in% failed && !unevaluated[2])
+    if (any(unevaluated)) {
+        wmsg <- conditionMessage(mw$warning)
+        checkTrue(grepl("stop.on.error=TRUE", wmsg, fixed=TRUE))
+        checkTrue(grepl("cannot be found", wmsg, fixed=TRUE))
+    }
+    redone <- gsvaMap(gsvaColScores, rankspaths, verbose=FALSE,
+                      BTPARAM=bp, MAPREDO=mw$res)
+    checkTrue(!any(GSVA:::.map_failed(redone)))
+    checkEqualsNumeric(gsvaes, gsvaReduce(redone, verbose=FALSE))
 
     ## jobs saving the same chunk use different temporary names, also when
     ## they run in forked processes, where tempfile() gives names that only

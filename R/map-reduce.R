@@ -380,16 +380,34 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     failed <- .map_failed(res)
     if (any(failed)) {
         nfailed <- sum(failed)
-        firsterr <- conditionMessage(res[[which(failed)[1]]])
+        ## chunks not run because an earlier chunk of the same job failed,
+        ## when 'BTPARAM' has stop.on.error=TRUE; the first error is taken
+        ## from a chunk that was run, if any, because batchtools does not
+        ## assign consecutive chunks to the same job
+        unevaluated <- vapply(res, inherits, logical(1),
+                              what="unevaluated_error")
+        firsterr <- which(failed & !unevaluated)[1]
+        if (is.na(firsterr))
+            firsterr <- which(failed)[1]
+        firsterr <- conditionMessage(res[[firsterr]])
+        nuneval <- sum(unevaluated)
         redo <- "this result"
         if (output != "object")
             redo <- paste("this result, or the directory", outdir)
-        cli_warn(c("!"="{nfailed} out of {length(res)} chunk{?s} failed.",
-                   "i"="First error: {firsterr}",
-                   "i"=paste("Resubmit only the failed chunks by calling",
-                             "{.fn gsvaMap} again with the same {.arg FUN}",
-                             "and {.arg inputData}, and {redo} in",
-                             "{.arg MAPREDO}.")))
+        msg <- c("!"="{nfailed} out of {length(res)} chunk{?s} failed.",
+                 "i"="First error: {firsterr}")
+        if (nuneval > 0)
+            msg <- c(msg,
+                     "i"=paste("{nuneval} of them {?was/were} not run because",
+                               "an earlier chunk of the same job failed and",
+                               "{.arg BTPARAM} has stop.on.error=TRUE; set",
+                               "it to FALSE to run every chunk."))
+        msg <- c(msg,
+                 "i"=paste("Resubmit only the failed chunks by calling",
+                           "{.fn gsvaMap} again with the same {.arg FUN}",
+                           "and {.arg inputData}, and {redo} in",
+                           "{.arg MAPREDO}."))
+        cli_warn(msg)
     }
 
     return(res)
