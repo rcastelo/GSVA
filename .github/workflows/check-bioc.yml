@@ -48,7 +48,7 @@ env:
   has_testthat: 'false'
   run_covr: 'true'
   run_pkgdown: 'false'
-  has_RUnit: 'true'
+  has_RUnit: 'false'
   cache-version: 'cache-v1'
 
 jobs:
@@ -63,9 +63,11 @@ jobs:
       - id: findinfo
         run: |
           ## Find what Bioconductor RELEASE branch we are working on
-          ## otherwise, assume we are working on bioc-devel.
-          if echo "$GITHUB_REF" | grep -q "RELEASE_"; then
-            biocversion="$(basename -- $GITHUB_REF | tr '[:lower:]' '[:upper:]')"
+          ## otherwise, assume we are working on bioc-devel. On pull requests,
+          ## GITHUB_REF is refs/pull/N/merge, so use the target branch instead.
+          ref="${GITHUB_BASE_REF:-$GITHUB_REF}"
+          if echo "$ref" | grep -q "RELEASE_"; then
+            biocversion="$(basename -- $ref | tr '[:lower:]' '[:upper:]')"
           else
             biocversion="devel"
           fi
@@ -155,10 +157,12 @@ jobs:
       - id: findrversion
         name: Find Bioc and R versions
         run: |
-          ## Find what branch we are working on
-          if echo "$GITHUB_REF" | grep -q "devel"; then
+          ## Find what branch we are working on. On pull requests, GITHUB_REF
+          ## is refs/pull/N/merge, so use the target branch instead.
+          ref="${GITHUB_BASE_REF:-$GITHUB_REF}"
+          if echo "$ref" | grep -q "devel"; then
               biocversion="devel"
-          elif echo "$GITHUB_REF" | grep -q "RELEASE_"; then
+          elif echo "$ref" | grep -q "RELEASE_"; then
               biocversion="release"
           fi
 
@@ -280,7 +284,7 @@ jobs:
 
       - name: Upload check results
         if: failure()
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ runner.os }}-biocdocker-biocbranch-${{ needs.define-docker-info.outputs.biocversion }}-r-${{ steps.findrversion.outputs.rversion }}-bioc-${{ steps.findrversion.outputs.biocversionnum }}-results
           path: check
