@@ -169,10 +169,11 @@ setValidity("GsvaParquetSeed", function(object) {
                                   "{.val {dpath}}.")))
         else if (!scheme %in% c("s3", "gs", "gcs", "file"))
             cli_abort(c("x"=paste("URIs with scheme {.val {scheme}} are not",
-                                  "supported; only 's3://', 'gs://',",
+                                  "supported; only 's3://', 'gs://', 'gcs://'",
                                   "'http://' and 'https://' URIs can be used",
                                   "to access remote GSVA output in Apache",
-                                  "Parquet format.")))
+                                  "Parquet format. For local files use either a",
+                                  "filesystem path or the 'file://' scheme.")))
     }
 
     invisible(TRUE)
