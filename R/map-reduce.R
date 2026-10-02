@@ -19,6 +19,10 @@
 #' R session calling `gsvaMap()` was launched. The user must ensure that this
 #' path is reachable by all compute nodes in the HPC environment, and must
 #' manually delete its contents after the GSVA calculations are finished.
+#' Each job saves its results under a temporary name ending in `.partial`,
+#' which it renames once they are complete, so files or directories with that
+#' ending left in that path belong to jobs that did not finish, and can be
+#' deleted once no job of those calculations is running.
 #'
 #' @param FUN In `gsvaMap()`, function to map to the data in the `inputData`
 #' argument.
@@ -558,14 +562,19 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     }
     if (output != "object") {
         ## save to a temporary name and rename it when complete, so that a
-        ## job killed while saving does not leave a result that looks complete
-        tmpname <- paste0(fname, ".partial")
-        unlink(tmpname, recursive=TRUE)
+        ## job killed while saving does not leave a result that looks complete.
+        ## the temporary name is unique to this job, because a job left
+        ## running by a call to gsvaMap() whose R session ended may be saving
+        ## the same chunk. renaming fails when another job has already saved
+        ## an HDF5 directory with this chunk, in which case only the output of
+        ## this job is discarded, while a Parquet file of another job is
+        ## replaced by the identical one of this job
+        tmpname <- .unique_tmpname(fname)
         if (output == "HDF5")
             saveHDF5GSVA(res, tmpname)
         else
             saveParquetGSVA(res, tmpname)
-        if (!file.rename(tmpname, fname)) {
+        if (!suppressWarnings(file.rename(tmpname, fname))) {
             unlink(tmpname, recursive=TRUE)
             if (!file.exists(fname))
                 cli_abort(c("x"="cannot save results to {fname}."))
@@ -930,11 +939,20 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     manifest <- c(list(manifestVersion=1L), manifest,
                   list(totalInputDim=totalInputDim,
                        gsvaVersion=as.character(packageVersion("GSVA"))))
-    tmpname <- paste0(fname, ".partial")
+    tmpname <- .unique_tmpname(fname)
     saveRDS(manifest, tmpname)
     file.rename(tmpname, fname)
 
     invisible(fname)
+}
+
+## temporary name in the directory of 'fname', unique to this R process
+## across compute nodes, because the name given by tempfile() only includes
+## the process id and a random part that is the same in forked processes
+.unique_tmpname <- function(fname) {
+    tempfile(pattern=paste0(basename(fname), ".", Sys.info()[["nodename"]],
+                            "."),
+             tmpdir=dirname(fname), fileext=".partial")
 }
 
 ## read the manifest in 'path', or the one in the directory 'path' that

@@ -102,7 +102,10 @@ the intermediate results will be stored. The user can change this directory by
 specifying a different value for the `dir` argument, but it is important that this
 directory is accessible from all nodes in the HPC environment. The user is also
 responsible for deleting the contents of this directory after the GSVA calculations
-are finished.
+are finished. Each job saves its results under a temporary name ending in
+`.partial`, which it renames once they are complete, so files or directories with
+that ending left in this directory belong to jobs that did not finish, and can be
+deleted once no job of those calculations is running.
 
 The next step is to run the function `gsvaMap()`, which will submit the jobs to the
 SLURM workload manager, and return a list object, where each of its elements will be

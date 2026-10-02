@@ -543,6 +543,68 @@ test_mapReduceRedo <- function() {
         checkEqualsNumeric(gsvaes, gsvaReduce(redone, verbose=FALSE))
     }
 
+    ## jobs saving the same chunk use different temporary names, also when
+    ## they run in forked processes, where tempfile() gives names that only
+    ## differ in the process id
+    if (.Platform$OS.type == "unix") {
+        fname <- file.path(tempdir(), "chunk_1_10")
+        tmpnames <- unlist(parallel::mclapply(1:4, function(i)
+                                                  GSVA:::.unique_tmpname(fname),
+                                              mc.cores=4))
+        tmpnames <- c(tmpnames, GSVA:::.unique_tmpname(fname))
+        checkTrue(!anyDuplicated(tmpnames))
+        checkTrue(all(dirname(tmpnames) == dirname(fname)))
+        checkTrue(all(startsWith(basename(tmpnames), "chunk_1_10.")))
+        checkTrue(all(grepl("\\.partial$", tmpnames)))
+    }
+
+    ## another job, such as one left running by a call to gsvaMap() whose R
+    ## session ended, saves the same chunk while this job is saving it,
+    ## simulated by creating the result of that other job when this job has
+    ## saved its own under a temporary name. An HDF5 directory saved by the
+    ## other job is kept, while a Parquet file saved by the other job is
+    ## replaced, and the temporary output of this job is not left on disk
+    node <- gsub(".", "\\.", Sys.info()[["nodename"]], fixed=TRUE)
+    final <- function(tmpname)
+        sub(paste0("\\.", node, "\\.[0-9a-f]+\\.partial$"), "", tmpname)
+    formats <- list(list(output="HDF5", fun="saveHDF5GSVA",
+                         other=quote({
+                             fname <- final(dir)
+                             dir.create(fname)
+                             file.copy(list.files(dir, full.names=TRUE),
+                                       fname, recursive=TRUE)
+                             file.create(file.path(fname, "otherjob"))
+                         })))
+    if (requireNamespace("arrow", quietly=TRUE))
+        formats <- c(formats,
+                     list(list(output="Parquet", fun="saveParquetGSVA",
+                               other=quote(writeLines("otherjob",
+                                                      final(file))))))
+    for (fmt in formats) {
+        bp <- newbtpar()
+        wd <- wds[length(wds)]
+        ## count the calls to the tracer, to check that it was run
+        ncalls <- new.env()
+        ncalls$n <- 0L
+        tracer <- substitute({
+            final <- FINAL
+            OTHER
+            assign("n", NCALLS$n + 1L, envir=NCALLS)
+        }, list(FINAL=final, OTHER=fmt$other, NCALLS=ncalls))
+        suppressMessages(trace(fmt$fun, where=asNamespace("GSVA"),
+                               print=FALSE, exit=tracer))
+        mapout <- tryCatch(gsvaMap(gsvaColRanks, gsvarnorm, output=fmt$output,
+                                   verbose=FALSE, BTPARAM=bp),
+                           finally=suppressMessages(untrace(fmt$fun,
+                                                    where=asNamespace("GSVA"))))
+        checkTrue(!any(GSVA:::.map_failed(mapout)))
+        checkIdentical(ncalls$n, length(mapout))
+        checkTrue(!any(grepl("partial$", list.files(wd))))
+        if (fmt$output == "HDF5")
+            checkTrue(all(file.exists(file.path(unlist(mapout), "otherjob"))))
+        checkEqualsNumeric(gsvaranks, gsvaReduce(mapout, verbose=FALSE))
+    }
+
     ## a job killed by the workload manager, simulated by a batchtools job
     ## killing its own process, in a call to gsvaMap() whose registry
     ## directory was left by a previous call whose R session ended
