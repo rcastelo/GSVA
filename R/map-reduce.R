@@ -932,10 +932,15 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
 }
 
 ## write the manifest of the results of gsvaMap() saved to disk, which allows
-## MAPREDO to find them; the directory is not stored, to allow moving it
+## MAPREDO to find them; the directory is not stored, to allow moving it. It
+## gives an error when the manifest cannot be written, before submitting any
+## job, because their results could not be found afterwards. 'rename' allows
+## one to simulate failures, internally used only for testing
 #' @importFrom cli cli_abort
 #' @importFrom utils packageVersion
-.write_map_manifest <- function(mapinfo, totalInputDim, mustNotExist) {
+.write_map_manifest <- function(mapinfo, totalInputDim, mustNotExist,
+                                rename=file.rename) {
+    rename <- match.fun(rename)
     fname <- .map_manifest_path(mapinfo)
     if (file.exists(fname)) {
         if (mustNotExist) {
@@ -958,8 +963,10 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
                   list(totalInputDim=totalInputDim,
                        gsvaVersion=as.character(packageVersion("GSVA"))))
     tmpname <- .unique_tmpname(fname)
+    on.exit(unlink(tmpname)) ## nothing to remove after renaming it
     saveRDS(manifest, tmpname)
-    file.rename(tmpname, fname)
+    if (!isTRUE(rename(tmpname, fname)))
+        cli_abort(c("x"="Cannot write the manifest {.file {fname}}."))
 
     invisible(fname)
 }

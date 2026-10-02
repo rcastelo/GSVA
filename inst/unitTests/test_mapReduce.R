@@ -409,6 +409,18 @@ test_mapReduceRedo <- function() {
     checkTrue(all(file.exists(unlist(rankspaths))))
     checkTrue(!any(grepl("partial$", list.files(wds[1]))))
 
+    ## when the manifest cannot be written, gsvaMap() gives an error before
+    ## submitting any job, without leaving the manifest or its temporary file
+    mapinfo <- list(FUN="gsvaColRanks", output="HDF5", fingerprint="abc",
+                    chunks=NULL, files="x_1_10", dir=normalizePath(wds[1]))
+    nfiles <- length(list.files(wds[1]))
+    checkException(GSVA:::.write_map_manifest(mapinfo, c(1L, 10L),
+                                              mustNotExist=TRUE,
+                                              rename=function(from, to) FALSE),
+                   silent=TRUE)
+    checkIdentical(length(list.files(wds[1])), nfiles)
+    checkTrue(!file.exists(GSVA:::.map_manifest_path(mapinfo)))
+
     ## a second call with the same input and output format in the same
     ## directory refuses to overwrite the results of the first one
     checkException(gsvaMap(gsvaColRanks, gsvarnorm, output="HDF5",
