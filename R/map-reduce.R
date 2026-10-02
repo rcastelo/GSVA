@@ -37,7 +37,7 @@
 #' having to call to `gsvaReduce()` in between.
 #'
 #' @param output In `gsvaMap()`, a character string specifying what each
-#' worker returns: either the resulting object (`"object"`, default), or the
+#' worker returns: either the resulting object (`"object"`), or the
 #' path to that object after saving it in the working directory of the
 #' registry of `BTPARAM` with [`saveHDF5GSVA`] (`"HDF5"`) or with
 #' [`saveParquetGSVA`] (`"Parquet"`). In the latter two cases, the output of
@@ -1052,6 +1052,8 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     k <- 1L
     while (dir.exists(newdir <- paste0(regdir, "-", k)))
         k <- k + 1L
+    ## 'BatchtoolsParam' is a reference class, so this change reaches the
+    ## object of the caller, which must restore it afterwards
     BTPARAM$registryargs$file.dir <- newdir
     if (verbose)
         cli_alert_warning(paste("The registry directory {.file {regdir}}",
