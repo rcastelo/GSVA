@@ -998,9 +998,12 @@ gsvaRowNorm <- function(param,
 
 
 #' @param rowNormExprData A row-normalized expression data set obtained with
-#' [`gsvaRowNorm`]. It can be either a single character string with path to
-#' a directory containing the column-rank data stored with [`saveHDF5GSVA`],
-#' or an object of one of the classes supported by [`GsvaExprData-class`].
+#' [`gsvaRowNorm`]. It can be either a single character string with the path
+#' to a directory containing the row-normalized data stored with
+#' [`saveHDF5GSVA`], the path to a file containing that data stored with
+#' [`saveParquetGSVA`], an `s3://` or `gs://` URI, or an `http://` or
+#' `https://` URL to such a file, or an
+#' object of one of the classes supported by [`GsvaExprData-class`].
 #' For a list of these classes, see `class ? GsvaExprData`.
 #'
 #' @return In the case of 'gsvaColRanks()', an object of the same class as the
@@ -1038,15 +1041,9 @@ gsvaColRanks <- function(rowNormExprData,
                               "string or an object of one of the classes",
                               "supported by 'GsvaExprData'; See class ?",
                               "GsvaExprData.")))
-    else if (is.character(rowNormExprData)) {
-        if (!dir.exists(rowNormExprData))
-            cli_abort(c("x"=paste("{rowNormExprData} cannot be found in the",
-                                  "filesystem")))
-        if (verbose)
-            cli_alert_info(paste("Loading {basename(rowNormExprData)}",
-                                 "from disk"))
-        rowNormExprData <- loadHDF5GSVA(rowNormExprData)
-    }
+    else if (is.character(rowNormExprData))
+        rowNormExprData <- .load_gsva_path(rowNormExprData, "gsvarnorm",
+                                           "rowNormExprData", verbose)
 
     param <- .pull_param(rowNormExprData)
 
@@ -1099,9 +1096,12 @@ gsvaColRanks <- function(rowNormExprData,
 
 
 #' @param rankExprData A column-rank expression data set obtained with
-#' [`gsvaColRanks`]. It can be either a single character string with path to
-#' a directory containing the column-rank data stored with [`saveHDF5GSVA`],
-#' or an object of one of the classes supported by [`GsvaExprData-class`].
+#' [`gsvaColRanks`]. It can be either a single character string with the path
+#' to a directory containing the column-rank data stored with
+#' [`saveHDF5GSVA`], the path to a file containing that data stored with
+#' [`saveParquetGSVA`], an `s3://` or `gs://` URI, or an `http://` or
+#' `https://` URL to such a file, or an
+#' object of one of the classes supported by [`GsvaExprData-class`].
 #' For a list of these classes, see `class ? GsvaExprData`.
 #'
 #' @param geneSets An object of the classes supported by [`GsvaGeneSets-class`].
@@ -1111,6 +1111,11 @@ gsvaColRanks <- function(rowNormExprData,
 #' @param recompute_nzcount Logical vector of length 1. When `TRUE`, the number
 #' of non-zero rows in the input expression data will be recomputed, internally
 #' used only.
+#'
+#' @details When the column ranks given to 'gsvaColScores()' are stored in
+#' Apache Parquet format, they are processed from disk by blocks of columns,
+#' even if they would fit in main memory, unless `ondisk="no"` was set in the
+#' original [`gsvaParam`] object.
 #'
 #' @return In the case of 'gsvaColScores()', an object of the same class as the
 #' input expression data given in the argument `exprData` of the `gsvaParam`
@@ -1135,14 +1140,9 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                               "string or an object of one of the classes",
                               "supported by 'GsvaExprData'; See class ?",
                               "GsvaExprData.")))
-    else if (is.character(rankExprData)) {
-        if (!dir.exists(rankExprData))
-            cli_abort(c("x"=paste("{rankExprData} cannot be found",
-                                  "in the filesystem")))
-        if (verbose)
-            cli_alert_info("Loading {basename(rankExprData)} from disk")
-        rankExprData <- loadHDF5GSVA(rankExprData)
-    }
+    else if (is.character(rankExprData))
+        rankExprData <- .load_gsva_path(rankExprData, "gsvaranks",
+                                        "rankExprData", verbose)
 
     param <- .pull_param(rankExprData)
     .check_ranks_nrow(rankExprData)
@@ -1189,10 +1189,18 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
 
     maxmem <- .check_maxmem(param, assay="gsvaranks", maxmem=maxmem,
                             verbose=verbose)
-    ondisk <- .check_ondisk(param, assay="gsvaranks",
-                            first=first, last=last, whdim=2,
-                            recompute_nzcount=recompute_nzcount,
-                            maxmem=maxmem, verbose=verbose)
+    ## ranks stored in Parquet format are processed from disk by blocks of
+    ## columns, even if they fit in main memory, unless 'ondisk="no"'
+    if (.get_ondisk(param) == "auto" && .is_parquet_backed(filtDataMatrix)) {
+        if (verbose)
+            cli_alert_info(paste("Processing ranks stored in Parquet format",
+                                 "from disk"))
+        ondisk <- TRUE
+    } else
+        ondisk <- .check_ondisk(param, assay="gsvaranks",
+                                first=first, last=last, whdim=2,
+                                recompute_nzcount=recompute_nzcount,
+                                maxmem=maxmem, verbose=verbose)
 
     filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix, "GSVA",
                                                     first, last, whdim=2,
@@ -1702,7 +1710,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                 sam <- sample(expr@x, size=min(1000, length(expr@x)),
                               replace=FALSE)
                 Gaussk <- any((sam < 0) | (sam != floor(sam)))
-            } else if (is.integer(expr[1, 1]))
+            } else if (type(expr) == "integer")
                 Gaussk <- FALSE
         }
     } else if (rowNorm == "ecdf") {
@@ -2070,7 +2078,9 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     es <- NULL
     if (sparse && !is_sparse(R))
         sparse <- FALSE
-    intrnks <- is.integer(R[1, 1])
+    ## use the type rather than reading a value, which in an on-disk 'R'
+    ## would read at least a whole chunk of it
+    intrnks <- type(R) == "integer"
 
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)

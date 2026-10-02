@@ -25,10 +25,12 @@ export(guessGeneIdType)
 export(igsva)
 export(loadHDF5GSVA)
 export(loadHDF5GSVAranks)
+export(loadParquetGSVA)
 export(plageParam)
 export(readGMT)
 export(saveHDF5GSVA)
 export(saveHDF5GSVAranks)
+export(saveParquetGSVA)
 export(spatCor)
 export(ssgseaParam)
 export(zscoreParam)
@@ -62,6 +64,7 @@ importClassesFrom(HDF5Array,HDF5Array)
 importClassesFrom(HDF5Array,HDF5Matrix)
 importClassesFrom(IRanges,IRanges)
 importClassesFrom(Matrix,dgCMatrix)
+importClassesFrom(S4Arrays,Array)
 importClassesFrom(SingleCellExperiment,SingleCellExperiment)
 importClassesFrom(SparseArray,SVT_SparseMatrix)
 importClassesFrom(SpatialExperiment,SpatialExperiment)
@@ -72,6 +75,7 @@ importFrom(BiocGenerics,
   "type<-",
   annotation,
   cbind,
+  path,
   rbind,
   sort,
   type
@@ -91,6 +95,7 @@ importFrom(BiocParallel,
   bptry
 )
 importFrom(DelayedArray,
+  DelayedArray,
   blockApply,
   blockReduce,
   chunkGrid,
@@ -99,10 +104,12 @@ importFrom(DelayedArray,
   colAutoGrid,
   defaultAutoGrid,
   getAutoBlockLength,
+  getAutoBlockSize,
   gridReduce,
   rowAutoGrid,
   rowRanges,
   seed,
+  seedApply,
   setAutoBPPARAM
 )
 importFrom(DelayedMatrixStats,rowSds)
@@ -146,6 +153,7 @@ importFrom(MatrixGenerics,
 importFrom(S4Arrays,
   ArrayViewport,
   DummyArrayGrid,
+  extract_array,
   is_sparse,
   read_block,
   refdim,
@@ -165,6 +173,7 @@ importFrom(SingleCellExperiment,
 importFrom(SparseArray,
   NaArray,
   SparseArray,
+  extract_sparse_array,
   is_nonna,
   nzcount,
   rowMeans,
@@ -218,6 +227,7 @@ importFrom(stats,
   rpois,
   sd
 )
+importFrom(tools,R_user_dir)
 importFrom(utils,
   capture.output,
   globalVariables,

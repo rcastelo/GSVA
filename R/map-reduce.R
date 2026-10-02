@@ -32,12 +32,20 @@
 #' row-normalized expression values, column ranks, and GSVA scores without
 #' having to call to `gsvaReduce()` in between.
 #'
-#' @param returnPath In `gsvaMap()`, if `TRUE`, the output of the function will
-#' be a list of file paths where the resulting objects have been serialized
-#' using [`saveHDF5GSVA`], instead returning the list of resulting objects
-#' themselves, which is the default behavior (`FALSE`).
+#' @param output In `gsvaMap()`, a character string specifying what each
+#' worker returns: either the resulting object (`"object"`, default), or the
+#' path to that object after saving it in the working directory of the
+#' registry of `BTPARAM` with [`saveHDF5GSVA`] (`"HDF5"`) or with
+#' [`saveParquetGSVA`] (`"Parquet"`). In the latter two cases, the output of
+#' `gsvaMap()` is a list of paths instead of a list of objects. Note that, by
+#' default, the working directory of the registry is the current working
+#' directory. Saving in Apache Parquet format requires the package
+#' [arrow](https://cran.r-project.org/package=arrow).
 #'
-#' @param mapOutput In `gsvaReduce()`, the output of `gsvaMap()`.
+#' @param mapOutput In `gsvaReduce()`, the output of `gsvaMap()`, which can be
+#' a list of objects or a list of paths to GSVA output saved with
+#' [`saveHDF5GSVA`] or [`saveParquetGSVA`], such as the one returned by
+#' `gsvaMap()` with `output="HDF5"` or `output="Parquet"`.
 #'
 #' @param verbose Gives information about the progress of the calculations.
 #' Default: `TRUE`.
@@ -127,10 +135,14 @@
 #' @importFrom BiocParallel BatchtoolsParam bpnworkers bplapply
 #' @rdname map-reduce
 #' @export gsvaMap
-gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
+gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
+                    verbose=TRUE,
                     BTPARAM=BatchtoolsParam(workers=2, progressbar=verbose)) {
 
     FUN <- match.fun(FUN)
+    output <- match.arg(output)
+    if (output == "Parquet") ## fail before sending any job to the workers
+        .require_arrow()
 
     .check_FUN_inputData(FUN, inputData)
 
@@ -181,7 +193,7 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
         cli_abort(c("x"="Internal error, invalid FUN argument."))
 
     path2save <- ""
-    if (returnPath)
+    if (output != "object")
         path2save <- path.expand(BTPARAM$registryargs$work.dir)
 
     X <- inputData
@@ -202,12 +214,14 @@ gsvaMap <- function(FUN, inputData, returnPath=FALSE, verbose=TRUE,
     if (nworkers > 1)
         res <- do.call("bplapply", args=c(list(X=X, FUN=MAP_FUN_WRAPPER,
                                                WRAPPED_FUN=FUN,
+                                               output=output,
                                                path2save=path2save,
                                                ncpus=ncpus, maxmem=maxmem,
                                                BPPARAM=BTPARAM), funargs))
     else ## mainly to be able to unit test this
         res <- do.call("lapply", args=c(list(X=X, FUN=MAP_FUN_WRAPPER,
                                              WRAPPED_FUN=FUN,
+                                             output=output,
                                              path2save=path2save,
                                              ncpus=ncpus, maxmem=maxmem),
                                         funargs))
@@ -233,13 +247,9 @@ gsvaReduce <- function(mapOutput, verbose=TRUE) {
         cli_abort(c("x"=paste("The input list argument in 'mapOutput' must",
                               "contain the attribute 'totalInputDim'.")))
 
-    if (is.character(mapOutput[[1]])) {
-        mapOutput <- lapply(mapOutput, function(x) {
-            if (!dir.exists(x))
-                cli_abort(c("x"="Cannot find {x}."))
-            loadHDF5GSVA(x)
-        })
-    }
+    if (is.character(mapOutput[[1]]))
+        mapOutput <- lapply(mapOutput, .load_gsva_path, assay="auto",
+                            argname="mapOutput", verbose=FALSE)
 
     param <- .pull_param(mapOutput[[1]])
     nrmdata <- .pull_nonrestrict_metadata(mapOutput[[1]])
@@ -316,7 +326,8 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
 
 #' @importFrom BiocParallel SerialParam MulticoreParam SnowParam
 #' @importFrom IRanges IRanges start end
-MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
+MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, path2save, ncpus, maxmem,
+                            ...) {
     rng <- X
     res <- whdim <- NULL
     parallelbackend <- SerialParam()
@@ -375,15 +386,20 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, path2save, ncpus, maxmem, ...) {
             }
         }
     }
-    if (nchar(path2save) > 0) {
+    if (output != "object") {
         fname <- file.path(path2save, sprintf("%s_%d_%d",
                                               basename(tempfile()),
                                               start(rng), end(rng)))
-        if (dir.exists(fname))
+        if (output == "Parquet")
+            fname <- paste0(fname, ".parquet")
+        if (file.exists(fname))
             cli_abort(c("x"=paste("cannot save results to {fname} because",
                                   "it already exists. You probably should",
                                   "delete the contents of {path2save}.")))
-        res <- saveHDF5GSVA(res, fname)
+        if (output == "HDF5")
+            res <- saveHDF5GSVA(res, fname)
+        else
+            res <- saveParquetGSVA(res, fname)
     }
     return(res)
 }

@@ -3,15 +3,28 @@
 \name{saveHDF5GSVA}
 \alias{saveHDF5GSVA}
 \alias{loadHDF5GSVA}
-\title{Save/load GSVA output to disk using HDF5 format}
+\alias{saveParquetGSVA}
+\alias{loadParquetGSVA}
+\title{Save/load GSVA output to disk using HDF5 or Apache Parquet format}
 \usage{
 saveHDF5GSVA(gsvaExprData, dir, assay = "auto", ...)
 
 loadHDF5GSVA(dir, assay = "auto", ...)
+
+saveParquetGSVA(
+  gsvaExprData,
+  file,
+  assay = "auto",
+  colsPerRowGroup = "auto",
+  replace = FALSE,
+  verbose = FALSE
+)
+
+loadParquetGSVA(file, assay = "auto", verbose = TRUE)
 }
 \arguments{
-\item{gsvaExprData}{An object obtained with \code{\link{gsvaRowNorm}} or
-\code{\link{gsvaColRanks}}. Must be one of the classes supported by
+\item{gsvaExprData}{An object obtained with \code{\link{gsvaRowNorm}},
+\code{\link{gsvaColRanks}} or \code{\link{gsvaColScores}}. Must be one of the classes supported by
 \code{\link[=GsvaExprData-class]{GsvaExprData}}.  For a list of these classes, see its help page
 using \code{help(GsvaExprData)}.}
 
@@ -27,15 +40,36 @@ named \code{gsvaranks}, and if not found, it will look for an assay named
 derivatives, then the assay to be saved will be determined by the \code{assay}
 attribute of the \code{gsvaExprData} object.}
 
-\item{...}{Additional arguments to be passed to the underlying HDF5
-saving/loading functions
+\item{...}{Only for \code{saveHDF5GSVA()} and \code{loadHDF5GSVA()}, additional
+arguments to be passed to the underlying HDF5 saving/loading functions
 \code{\link[HDF5Array:saveHDF5SummarizedExperiment]{saveHDF5SummarizedExperiment}}
 and \code{\link[HDF5Array:loadHDF5SummarizedExperiment]{loadHDF5SummarizedExperiment}},
 respectively.}
+
+\item{file}{The path to the file where to save the GSVA output data in
+Apache Parquet format or, for loading it, either that path, an \verb{s3://} or
+\verb{gs://} URI, or an \verb{http://} or \verb{https://} URL.}
+
+\item{colsPerRowGroup}{Either \code{"auto"} (default), or the number of matrix
+columns stored in each row group of the Apache Parquet file, which is the
+smallest unit of data that can be read from it. With \code{"auto"}, dense data is
+stored in row groups of at most 2^20 values, which is also the maximum
+number of values allowed, while sparse data is stored in row groups of 500
+columns. Values larger than the number of columns of the matrix store all
+its columns in a single row group.}
+
+\item{replace}{Logical vector of length 1. When \code{TRUE}, an existing file in
+\code{file} is replaced. By default, \code{replace=FALSE}.}
+
+\item{verbose}{Logical vector of length 1. In \code{saveParquetGSVA()}, when
+\code{TRUE}, a progress bar is shown while writing the file, and by default
+\code{verbose=FALSE}. In \code{loadParquetGSVA()}, when \code{TRUE} (default), messages
+inform about the steps of loading the file.}
 }
 \value{
 For \code{saveHDF5GSVA()} the path to the directory where the data has
-been saved is returned invisibly. For \code{loadHDF5GSVA()}, an object is returned
+been saved is returned invisibly, and for \code{saveParquetGSVA()} the path to
+the file. For \code{loadHDF5GSVA()} and \code{loadParquetGSVA()}, an object is returned
 containing the corresponding loaded GSVA row-normalized or rank expression
 values, and their corresponding metadata. If the saved GSVA output was
 originally stored in a
@@ -43,17 +77,81 @@ originally stored in a
 or one of its derived classes, then the returned object will be a
 \code{\link[SummarizedExperiment:SummarizedExperiment]{SummarizedExperiment}}.
 Otherwise, the returned object will be a
-\code{\link[DelayedArray:DelayedMatrix]{DelayedMatrix}} object.
+\code{\link[DelayedArray:DelayedMatrix]{DelayedMatrix}} object. This is also the case
+for GSVA output originally stored in an
+\code{\link[Biobase:ExpressionSet]{ExpressionSet}} object, of which only the values
+and the GSVA metadata are saved.
 }
 \description{
 The functions \code{saveHDF5GSVA()} and \code{loadHDF5GSVA()} allow one
 to save and load the output from GSVA to/from disk. The \code{saveHDF5GSVA()}
-function takes the output of \code{\link{gsvaRowNorm}} or \code{\link{gsvaColRanks}} as input,
-and saves the output from these methods with the relevant metadata to a
-specified directory. The \code{loadHDF5GSVA()} function reads the saved data from
-the specified directory and returns an object with the corresponding
-GSVA row-normalized or rank expression values, and their corresponding
-metadata.
+function takes the output of \code{\link{gsvaRowNorm}}, \code{\link{gsvaColRanks}} or
+\code{\link{gsvaColScores}} as input, and saves the output from these methods with the
+relevant metadata to a specified directory. The \code{loadHDF5GSVA()} function
+reads the saved data from the specified directory and returns an object with
+the corresponding GSVA row-normalized or rank expression values, or GSVA
+scores, and their corresponding metadata.
+
+The functions \code{saveParquetGSVA()} and \code{loadParquetGSVA()} do the same using
+a single file in Apache Parquet format, which is organized to efficiently
+read blocks of columns, as \code{\link{gsvaColRanks}} and \code{\link{gsvaColScores}} do. These
+two functions require having installed additional packages by the user. More
+concretely, loading Parquet files from the local filesystem or lazily over
+Amazon S3 or Google Cloud Storage buckets, and saving them, require the CRAN
+package \href{https://cran.r-project.org/package=arrow}{arrow}, while loading
+Parquet files lazily over HTTP(S) URLs requires the CRAN packages
+\href{https://cran.r-project.org/package=duckdb}{duckdb} and
+\href{https://cran.r-project.org/package=DBI}{DBI}.
+}
+\details{
+\code{saveParquetGSVA()} stores sparse input, such as a
+\code{\link[Matrix:dgCMatrix-class]{dgCMatrix}} or an
+\code{\link[SparseArray:SVT_SparseMatrix-class]{SVT_SparseMatrix}} object, keeping
+only its non-zero values, and stores GSVA ranks as integer values. The
+object returned by \code{loadParquetGSVA()} holds its values in a
+\code{\link[DelayedArray:DelayedMatrix]{DelayedMatrix}} object that reads them from
+the file only when needed, by blocks of columns, and \code{\link{gsvaColScores}}
+processes ranks stored in this way from disk. \code{loadParquetGSVA()} can also
+read files stored in Amazon S3 or Google Cloud Storage, given as \verb{s3://} or
+\verb{gs://} URIs, as long as the installed arrow package supports them; see
+\code{\link[arrow:arrow_with_s3]{arrow_with_s3}}. Files in public Google Cloud Storage
+buckets should be given with URIs of the form
+\verb{gs://anonymous@<bucket>/<path>}, which request anonymous access, since
+otherwise arrow first looks for Google Cloud credentials, and opening the
+file fails if they are not available. Files in private buckets require
+setting up such credentials, e.g., with
+\verb{gcloud auth application-default login}. Requests to Google Cloud Storage
+are retried for at most 15 seconds, unless the URI sets another limit with
+the query parameter \code{retry_limit_seconds}, e.g.,
+\verb{gs://<bucket>/<path>?retry_limit_seconds=60}. Files in private Amazon S3
+buckets require AWS credentials, which arrow reads from the environment
+variables \code{AWS_ACCESS_KEY_ID} and \code{AWS_SECRET_ACCESS_KEY} (and
+\code{AWS_SESSION_TOKEN} for temporary credentials), or from the file
+\verb{~/.aws/credentials}, whose profile can be selected with the environment
+variable \code{AWS_PROFILE}. Although arrow also accepts credentials within the
+URI, e.g., \verb{s3://<key>:<secret>@<bucket>/<path>}, this is not recommended,
+because they may end up stored in scripts and in the R history; GSVA hides
+them in its messages.
+
+\code{loadParquetGSVA()} can also lazily read files available at public \verb{http://}
+or \verb{https://} URLs using the API of the package
+\href{https://cran.r-project.org/package=duckdb}{duckdb}, which only downloads
+the parts of the file that are needed, as with \verb{s3://} and \verb{gs://} URIs.
+This requires that the HTTP(S) server supports range requests, which most do.
+The first time, DuckDB downloads its extension \code{httpfs} from its own servers,
+which GSVA installs in the directory
+\code{file.path(tools::R_user_dir("GSVA", which="cache"), "duckdb")}. If DuckDB
+cannot verify the certificate of an HTTPS server, e.g., because the server
+does not send its intermediate certificates, a file with the certificates
+of the certification authorities can be given with
+\code{options(GSVA.ca_cert_file="<file>")}. This file replaces the certificates of
+the certification authorities that DuckDB trusts, so it should only contain
+certificates from trustworthy sources, including the root certificates
+needed by every HTTPS server accessed in the same R session.
+
+Loading GSVA output in Apache Parquet format restores R objects stored in the
+file, as \code{\link[base:readRDS]{readRDS}} does, and therefore, as with files read
+with \code{readRDS()}, files should only be loaded from trusted sources.
 }
 \examples{
 
@@ -107,5 +205,14 @@ loaded_gsvacolranks <- loadHDF5GSVA(ranksdir)
 ## same scores as the original ranks
 loaded_es <- gsvaColScores(loaded_gsvacolranks)
 identical(es, loaded_es)
+
+## the same using Apache Parquet files
+if (requireNamespace("arrow", quietly=TRUE)) {
+    ranksfile <- tempfile(fileext=".parquet")
+    saveParquetGSVA(gsvacolranks, ranksfile)
+    loaded_gsvacolranks <- loadParquetGSVA(ranksfile)
+    loaded_es <- gsvaColScores(loaded_gsvacolranks)
+    all.equal(es, loaded_es, check.attributes=FALSE)
+}
 
 }

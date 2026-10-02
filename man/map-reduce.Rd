@@ -9,7 +9,7 @@
 gsvaMap(
   FUN,
   inputData,
-  returnPath = FALSE,
+  output = c("object", "HDF5", "Parquet"),
   verbose = TRUE,
   BTPARAM = BatchtoolsParam(workers = 2, progressbar = verbose)
 )
@@ -38,10 +38,15 @@ the classes supported by \code{\link[=GsvaExprData-class]{GsvaExprData}} as outp
 row-normalized expression values, column ranks, and GSVA scores without
 having to call to \code{gsvaReduce()} in between.}
 
-\item{returnPath}{In \code{gsvaMap()}, if \code{TRUE}, the output of the function will
-be a list of file paths where the resulting objects have been serialized
-using \code{\link{saveHDF5GSVA}}, instead returning the list of resulting objects
-themselves, which is the default behavior (\code{FALSE}).}
+\item{output}{In \code{gsvaMap()}, a character string specifying what each
+worker returns: either the resulting object (\code{"object"}, default), or the
+path to that object after saving it in the working directory of the
+registry of \code{BTPARAM} with \code{\link{saveHDF5GSVA}} (\code{"HDF5"}) or with
+\code{\link{saveParquetGSVA}} (\code{"Parquet"}). In the latter two cases, the output of
+\code{gsvaMap()} is a list of paths instead of a list of objects. Note that, by
+default, the working directory of the registry is the current working
+directory. Saving in Apache Parquet format requires the package
+\href{https://cran.r-project.org/package=arrow}{arrow}.}
 
 \item{verbose}{Gives information about the progress of the calculations.
 Default: \code{TRUE}.}
@@ -58,7 +63,10 @@ is available, they may use the wrapper function \code{gsvaBatchtoolsSlurmParam()
 which is provided to create a \code{BatchtoolsParam} object with some sensible
 defaults for running GSVA calculations on a SLURM cluster.}
 
-\item{mapOutput}{In \code{gsvaReduce()}, the output of \code{gsvaMap()}.}
+\item{mapOutput}{In \code{gsvaReduce()}, the output of \code{gsvaMap()}, which can be
+a list of objects or a list of paths to GSVA output saved with
+\code{\link{saveHDF5GSVA}} or \code{\link{saveParquetGSVA}}, such as the one returned by
+\code{gsvaMap()} with \code{output="HDF5"} or \code{output="Parquet"}.}
 
 \item{dir}{In \code{gsvaBatchtoolsSlurmParam()}, path to a directory where the
 output of the GSVA calculations will be saved. Default: "GSVAOUTPUT" in the
