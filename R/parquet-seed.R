@@ -809,11 +809,63 @@ setMethod("extract_sparse_array", "GsvaParquetSeed", function(x, index) {
     if (verbose)
         cli_progress_done(id=idpb)
 
-    if (!file.rename(tmpfile, file))
+    if (!.replace_file(tmpfile, file)) {
+        if (file.exists(file))
+            cli_abort(c("x"="Cannot replace the file {.file {file}}.",
+                        "i"=paste("The file may be open in another program",
+                                  "or R session.")))
         cli_abort(c("x"="Cannot write the file {.file {file}}."))
+    }
     done <- TRUE
 
     invisible(file)
+}
+
+## close the Parquet readers of the local file in 'path' cached in this
+## process, releasing the memory mapping of the file, which on Windows
+## prevents replacing it
+.close_parquet_readers <- function(path) {
+    path <- normalizePath(path, mustWork=FALSE)
+    keys <- ls(.gsva_parquet_readers)
+    cached <- startsWith(keys, paste0(Sys.getpid(), "|", path, "|"))
+    if (any(cached)) {
+        rm(list=keys[cached], envir=.gsva_parquet_readers)
+        invisible(gc(verbose=FALSE)) ## run the finalizers of the readers
+    }
+
+    invisible(any(cached))
+}
+
+## move the file 'tmpfile' to 'file', replacing it if it exists, and keeping
+## it if the replacement fails; returns TRUE if 'file' has been replaced.
+## file.rename() replaces existing files where permissions allow it, but on
+## Windows it fails when the file is open, e.g., by a Parquet reader of this
+## R session, which is closed first, or by another program. When renaming
+## over the existing file fails, it is first moved aside and, if the new file
+## cannot then take its place, moved back. 'rename' allows one to simulate
+## failures, internally used only for testing
+.replace_file <- function(tmpfile, file, rename=file.rename) {
+    rename <- match.fun(rename)
+    mv <- function(from, to) isTRUE(suppressWarnings(rename(from, to)))
+
+    if (file.exists(file))
+        .close_parquet_readers(file)
+    if (mv(tmpfile, file))
+        return(TRUE)
+    if (!file.exists(file))
+        return(FALSE)
+
+    bakfile <- tempfile(pattern=paste0(".", basename(file), ".bak."),
+                        tmpdir=dirname(file))
+    if (!mv(file, bakfile))
+        return(FALSE)
+    if (mv(tmpfile, file)) {
+        unlink(bakfile)
+        return(TRUE)
+    }
+    mv(bakfile, file) ## restore the existing file
+
+    FALSE
 }
 
 

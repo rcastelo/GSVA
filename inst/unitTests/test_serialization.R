@@ -484,3 +484,76 @@ test_parquetduckdbbackend <- function() {
 
     unlink(files)
 }
+
+## saveParquetGSVA() with 'replace=TRUE' replaces an existing file, also when
+## it has been loaded, and keeps it when the replacement fails; on Windows,
+## renaming a file over an open one fails, which is simulated here
+test_parquetreplacefile <- function() {
+
+    if (!requireNamespace("arrow", quietly=TRUE)) {
+        message(paste("Skipping unit tests for replacing Parquet files",
+                      "(no 'arrow')"))
+        return(invisible(TRUE))
+    }
+
+    message("Running unit tests for replacing Parquet files")
+
+    p <- 40 ## number of genes
+    n <- 60 ## number of samples
+    gsets <- list(gset1=paste0("g", 1:10), gset2=paste0("g", 11:30))
+    ranks <- lapply(1:2, function(i) {
+        y <- matrix(rnorm(n*p), nrow=p, ncol=n,
+                    dimnames=list(paste0("g", 1:p), paste0("s", 1:n)))
+        gsvaColRanks(gsvaRowNorm(gsvaParam(y, gsets, verbose=FALSE),
+                                 verbose=FALSE), verbose=FALSE)
+    })
+    vals <- function(x) {
+        x <- as.matrix(x)
+        attributes(x) <- list(dim=dim(x))
+        x
+    }
+
+    d <- tempfile("gsvareplace")
+    dir.create(d)
+    f <- file.path(d, "ranks.parquet")
+
+    ## replacing a file that has been loaded, whose reader is cached
+    saveParquetGSVA(ranks[[1]], f)
+    checkEqualsNumeric(vals(ranks[[1]]),
+                       vals(loadParquetGSVA(f, verbose=FALSE)))
+    saveParquetGSVA(ranks[[2]], f, replace=TRUE)
+    checkEqualsNumeric(vals(ranks[[2]]),
+                       vals(loadParquetGSVA(f, verbose=FALSE)))
+    checkIdentical("ranks.parquet", list.files(d, all.files=TRUE, no..=TRUE))
+
+    ## renaming that cannot replace an existing file, as on Windows when
+    ## the file is open, replaces it after moving it aside
+    winrename <- function(from, to) {
+        if (file.exists(to))
+            return(FALSE)
+        file.rename(from, to)
+    }
+    old <- file.path(d, "old.txt")
+    new <- file.path(d, "new.txt")
+    writeLines("old", old)
+    writeLines("new", new)
+    checkTrue(GSVA:::.replace_file(new, old, rename=winrename))
+    checkIdentical("new", readLines(old))
+    checkIdentical(c("old.txt", "ranks.parquet"),
+                   sort(list.files(d, all.files=TRUE, no..=TRUE)))
+
+    ## when the new file cannot be moved, the existing file is kept
+    writeLines("new", new)
+    norename <- function(from, to) {
+        if (from == new)
+            return(FALSE)
+        file.rename(from, to)
+    }
+    checkTrue(!GSVA:::.replace_file(new, old, rename=norename))
+    checkIdentical("new", readLines(old))
+    checkTrue(file.exists(new))
+    checkIdentical(c("new.txt", "old.txt", "ranks.parquet"),
+                   sort(list.files(d, all.files=TRUE, no..=TRUE)))
+
+    unlink(d, recursive=TRUE)
+}
