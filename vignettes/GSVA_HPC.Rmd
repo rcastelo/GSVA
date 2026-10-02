@@ -183,12 +183,30 @@ gsvamapes <- gsvaMap(gsvaColScores, gsvamapranks, BTPARAM=gsvabtpar2,
                      MAPREDO=gsvamapes)
 gsvaes <- gsvaReduce(gsvamapes)
 ```
-The current implementation can only resubmit chunks whose calculations failed
-with an error in R. It cannot yet recover from jobs that the workload manager
-kills, for instance for exceeding their wall time or memory limits, or from the
-R session that called `gsvaMap()` ending before the jobs finish. In those
-cases, the user will still have to resubmit the entire calculation. We are
-working to enable the resubmission of only the failed jobs in those cases too.
+Since `gsvaMap()` saves the results of each chunk to disk as soon as it is
+completed, chunks of jobs killed by the workload manager, for instance for
+exceeding their wall time or memory limits, are also reported as failed in the
+partial result, and can be resubmitted in the same way. If the R session that
+called `gsvaMap()` ended before the jobs finished, for instance because it was
+running in an interactive job that reached its own wall time limit, the
+partial result is not available. In that case, we can give to the `MAPREDO`
+argument the directory where `gsvaMap()` saved the results, which by default
+is `GSVAOUTPUT`, and the chunks whose results are not found in that directory
+will be resubmitted.
+
+```{r, eval=FALSE}
+gsvamapes <- gsvaMap(gsvaColScores, gsvamapranks, BTPARAM=gsvabtpar,
+                     MAPREDO="GSVAOUTPUT")
+```
+To find the results of a previous call, `gsvaMap()` writes in that directory a
+manifest file, whose name ends in `_manifest.rds`, and gives the results of
+each chunk a file name that only depends on the input data, the output format
+and the chunk boundaries. For this reason, calling `gsvaMap()` again with the
+same input data and output format, without the `MAPREDO` argument, gives an
+error when that directory already has the results of a previous call. The input
+data is identified by its dimensions, dimension names and GSVA parameters, but
+not by its values, so the user should not change the values of the input data
+between the call to `gsvaMap()` and the one resubmitting the failed chunks.
 
 # Accessing remotely stored GSVA ranks
 

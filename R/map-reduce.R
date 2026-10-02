@@ -45,7 +45,13 @@
 #' workload manager, such as Slurm, and `"object"` otherwise, i.e., when the
 #' `cluster` field of `BTPARAM` is `"socket"`, `"multicore"` or
 #' `"interactive"`. When `MAPREDO` is given, its default value is the one
-#' used to produce `MAPREDO`.
+#' used to produce `MAPREDO`. The names of the saved files depend only on
+#' `FUN`, `inputData`, `output` and the chunk boundaries, and `gsvaMap()`
+#' also writes in that directory a manifest file, ending in `_manifest.rds`,
+#' which allows the `MAPREDO` argument to find them. For this reason,
+#' `gsvaMap()` gives an error when that directory already has results of a
+#' previous call with the same `FUN`, `inputData` and `output` arguments,
+#' unless `MAPREDO` is given.
 #'
 #' @param MAPREDO In `gsvaMap()`, the output of a previous call to `gsvaMap()`
 #' with the same `FUN` and `inputData` arguments, in which some of the chunks
@@ -53,8 +59,18 @@
 #' again, using the same chunk boundaries as in the previous call, and the
 #' result combines them with the chunks that did not fail. This makes it
 #' possible to resubmit the failed chunks with a different `BTPARAM` argument,
-#' for instance with more memory or a longer wall time. Default: `NULL`,
-#' which computes all chunks.
+#' for instance with more memory or a longer wall time. When the previous call
+#' saved its results to disk (see the `output` argument), this argument can
+#' also be the path to the directory where they were saved, or to the
+#' manifest file that `gsvaMap()` writes there, and the chunks whose results
+#' are not found in that directory are computed again and saved in it. This
+#' allows one to resubmit chunks whose jobs were killed by the workload
+#' manager, or that were running when the R session calling `gsvaMap()`
+#' ended. If that directory has results of several calls matching `FUN` and
+#' `inputData`, saved in different formats, the `output` argument selects
+#' one of them. Note that `inputData` is matched by its dimensions, dimension
+#' names and GSVA parameters, but not by its values. Default: `NULL`, which
+#' computes all chunks.
 #'
 #' @param mapOutput In `gsvaReduce()`, the output of `gsvaMap()`, which can be
 #' a list of objects or a list of paths to GSVA output saved with
@@ -103,7 +119,10 @@
 #' list are condition objects describing the errors. This partial result can
 #' be given to the `MAPREDO` argument of a new call to `gsvaMap()` to compute
 #' only the failed chunks, but not to `gsvaReduce()`, which gives an error.
-#' The `gsvaReduce()` function returns a single
+#' When results are saved to disk, chunks of jobs that did not deliver any
+#' result, such as jobs killed by the workload manager, are also reported as
+#' failed, unless no chunk was completed, in which case `gsvaMap()` gives an
+#' error. The `gsvaReduce()` function returns a single
 #' object that combines the results from all compute nodes. The
 #' `gsvaBatchtoolsSlurmParam()` function returns a `BatchtoolsParam` object with
 #' some sensible defaults for running GSVA calculations on a SLURM cluster.
@@ -127,17 +146,21 @@
 #' ## build GSVA parameter object
 #' gsvapar <- gsvaParam(y, geneSets)
 #'
-#' ## calculate row-normalized expression values in parallel across multiple
-#' ## compute nodes in a high-performance computing (HPC) environment
-#' gsvarnorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar))
+#' ## to keep this example short, the calculations below are split in chunks
+#' ## that run in this R session, by using a single worker. See further below
+#' ## how to distribute them across multiple compute nodes in a
+#' ## high-performance computing (HPC) environment
+#' library(BiocParallel)
+#' btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="1G"))
 #'
-#' ## calculate column GSVA ranks in parallel across multiple
-#' ## compute nodes in a high-performance computing (HPC) environment
-#' gsvaranks <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm))
+#' ## calculate row-normalized expression values
+#' gsvarnorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, BTPARAM=btpar))
 #'
-#' ## calculate column GSVA scores in parallel across multiple
-#' ## compute nodes in a high-performance computing (HPC) environment
-#' gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks))
+#' ## calculate column GSVA ranks
+#' gsvaranks <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, BTPARAM=btpar))
+#'
+#' ## calculate column GSVA scores
+#' gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, BTPARAM=btpar))
 #'
 #' ## the example below assumes that a SLURM HPC environment is available
 #' ## with a partition named 'short' and that the user has write access to a
@@ -158,6 +181,12 @@
 #' gsvamapes <- gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar2,
 #'                      MAPREDO=gsvamapes)
 #' gsvaes <- gsvaReduce(gsvamapes)
+#'
+#' ## if the R session calling gsvaMap() ended before the jobs finished, the
+#' ## chunks without results can be resubmitted from a new R session using
+#' ## the directory where gsvaMap() saved its results
+#' gsvamapes <- gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar,
+#'                      MAPREDO="GSVAOUTPUT")
 #' }
 #'
 #' @importFrom BiocParallel BatchtoolsParam bpnworkers
@@ -173,11 +202,28 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     FUN <- match.fun(FUN)
     .check_FUN_inputData(FUN, inputData)
     funname <- .map_fun_name(FUN)
-    mapinfo <- NULL
-    if (!is.null(MAPREDO))
-        mapinfo <- .check_MAPREDO(MAPREDO, funname)
 
     BTPARAM <- .check_batchtools_param(BTPARAM, verbose)
+
+    totalInputDim <- NULL
+    if (!is.list(inputData))
+        totalInputDim <- dim(get_exprData(inputData))
+    else {
+        if (is.null(attributes(inputData)$totalInputDim))
+            cli_abort(c("x"=paste("If inputData is a list, it must contain",
+                                  "the attribute 'totalInputDim'.")))
+        totalInputDim <- attributes(inputData)$totalInputDim
+    }
+    fingerprint <- .map_fingerprint(funname, inputData, totalInputDim)
+
+    mapinfo <- NULL
+    if (!is.null(MAPREDO)) {
+        if (is.character(MAPREDO)) ## path to a manifest or its directory
+            MAPREDO <- .read_map_manifest(MAPREDO, funname, fingerprint,
+                                          if (missing(output)) NULL
+                                          else match.arg(output))
+        mapinfo <- .check_MAPREDO(MAPREDO, funname)
+    }
 
     if (missing(output)) {
         output <- .default_map_output(BTPARAM)
@@ -236,12 +282,8 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     } else
         cli_abort(c("x"="Internal error, invalid FUN argument."))
 
-    path2save <- ""
-    if (output != "object")
-        path2save <- path.expand(BTPARAM$registryargs$work.dir)
-
     X <- inputData
-    totalInputDim <- chunks <- NULL
+    chunks <- NULL
     if (!is.list(X)) {
         if (is.null(mapinfo)) {
             grid <- gridsizefun(unwrapData(get_exprData(inputData), assay),
@@ -255,55 +297,94 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
             X <- lapply(seq_len(nrow(chunks)), function(i)
                             IRanges(start=chunks$first[i], end=chunks$last[i]))
         }
-        totalInputDim <- dim(get_exprData(inputData))
     } else {
-        if (is.null(attributes(X)$totalInputDim))
-            cli_abort(c("x"=paste("If inputData is a list, it must contain",
-                                  "the attribute 'totalInputDim'.")))
-        totalInputDim <- attributes(X)$totalInputDim
+        chunks <- .list_input_chunks(inputData)
+        attributes(X) <- NULL
     }
-    fingerprint <- .map_fingerprint(funname, inputData, totalInputDim)
+
+    if (!is.null(mapinfo) && (fingerprint != mapinfo$fingerprint ||
+                              length(MAPREDO) != length(X)))
+        cli_abort(c("x"=paste("{.arg MAPREDO} was not produced by",
+                              "{.fn gsvaMap} with FUN={funname} on the",
+                              "same {.arg inputData}.")))
+
+    ## results saved to disk get file names that depend only on the input
+    ## and the chunk boundaries, and a manifest that allows MAPREDO to find
+    ## them, even after the R session calling gsvaMap() has ended
+    outdir <- files <- paths <- NULL
+    if (output != "object") {
+        if (is.null(mapinfo)) {
+            outdir <- normalizePath(path.expand(BTPARAM$registryargs$work.dir),
+                                    mustWork=TRUE)
+            files <- .map_file_names(funname, fingerprint, output, chunks,
+                                     length(X))
+        } else {
+            outdir <- mapinfo$dir
+            files <- mapinfo$files
+        }
+        paths <- file.path(outdir, files)
+    }
+    mapinfo <- list(FUN=funname, output=output, fingerprint=fingerprint,
+                    chunks=chunks, files=files, dir=outdir)
+    if (output != "object")
+        .write_map_manifest(mapinfo, totalInputDim,
+                            mustNotExist=is.null(MAPREDO))
 
     idx <- seq_along(X)
-    if (!is.null(mapinfo)) {
-        if (fingerprint != mapinfo$fingerprint || length(MAPREDO) != length(X))
-            cli_abort(c("x"=paste("{.arg MAPREDO} was not produced by",
-                                  "{.fn gsvaMap} with FUN={funname} on the",
-                                  "same {.arg inputData}.")))
-        idx <- which(.map_failed(MAPREDO))
+    res <- vector("list", length(X))
+    if (!is.null(MAPREDO)) {
+        res <- MAPREDO
+        if (output == "object")
+            idx <- which(.map_failed(MAPREDO))
+        else { ## the results on disk tell which chunks are missing
+            done <- file.exists(paths)
+            res[done] <- as.list(paths[done])
+            idx <- which(!done)
+        }
         if (length(idx) == 0) {
             if (verbose)
                 cli_alert_info(paste("No failed chunks in {.arg MAPREDO},",
                                      "nothing to resubmit."))
-            return(MAPREDO)
+            attributes(res) <- list(totalInputDim=totalInputDim,
+                                    mapInfo=mapinfo)
+            return(res)
         }
         if (verbose)
             cli_alert_info(paste("Resubmitting {length(idx)} failed chunk{?s}",
                                  "out of {length(X)}."))
     }
 
-    res <- .map_chunks(X[idx], BTPARAM,
-                       c(list(WRAPPED_FUN=FUN, output=output,
-                              path2save=path2save, ncpus=ncpus,
-                              maxmem=maxmem), funargs))
-    if (!is.null(mapinfo)) {
-        redo <- res
-        res <- MAPREDO
-        res[idx] <- redo
+    if (output != "object") ## each worker gets the name of its output file
+        X <- lapply(seq_along(X), function(i)
+                        structure(list(chunk=X[[i]], fname=paths[i]),
+                                  class="gsvaMapChunk"))
+
+    ## a registry left on disk by a call whose R session ended prevents
+    ## starting a new one in the same directory
+    if (nworkers > 1) {
+        regdir <- .free_registry_dir(BTPARAM, verbose)
+        if (!is.null(regdir))
+            on.exit(BTPARAM$registryargs$file.dir <- regdir, add=TRUE)
     }
-    attributes(res)$totalInputDim <- totalInputDim
-    attributes(res)$mapInfo <- list(FUN=funname, output=output,
-                                    fingerprint=fingerprint, chunks=chunks)
+
+    res[idx] <- .map_chunks(X[idx], BTPARAM,
+                            c(list(WRAPPED_FUN=FUN, output=output,
+                                   ncpus=ncpus, maxmem=maxmem), funargs),
+                            paths[idx], outdir)
+    attributes(res) <- list(totalInputDim=totalInputDim, mapInfo=mapinfo)
 
     failed <- .map_failed(res)
     if (any(failed)) {
         nfailed <- sum(failed)
         firsterr <- conditionMessage(res[[which(failed)[1]]])
+        redo <- "this result"
+        if (output != "object")
+            redo <- paste("this result, or the directory", outdir)
         cli_warn(c("!"="{nfailed} out of {length(res)} chunk{?s} failed.",
                    "i"="First error: {firsterr}",
                    "i"=paste("Resubmit only the failed chunks by calling",
                              "{.fn gsvaMap} again with the same {.arg FUN}",
-                             "and {.arg inputData}, and this result in",
+                             "and {.arg inputData}, and {redo} in",
                              "{.arg MAPREDO}.")))
     }
 
@@ -415,8 +496,16 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
 
 #' @importFrom BiocParallel SerialParam MulticoreParam SnowParam
 #' @importFrom IRanges IRanges start end
-MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, path2save, ncpus, maxmem,
-                            ...) {
+MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
+    fname <- NULL
+    if (is(X, "gsvaMapChunk")) { ## output is saved to the file 'fname'
+        fname <- X$fname
+        X <- X$chunk
+        ## completed by another job, such as one left running by a call to
+        ## gsvaMap() whose R session ended
+        if (file.exists(fname))
+            return(fname)
+    }
     rng <- X
     res <- whdim <- NULL
     parallelbackend <- SerialParam()
@@ -465,30 +554,23 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, path2save, ncpus, maxmem,
                                              last=end(rng),
                                              rem=rem,
                                              whdim=whdim)
-        } else { ## X is a path, restrict metadata is in the loaded object
-            if (is(res, "SummarizedExperiment")) {
-                rng <- IRanges(start=metadata(res)$restrict$first,
-                               end=metadata(res)$restrict$last)
-            } else if (is(res, "GsvaExprData")) {
-                rng <- IRanges(start=attributes(res)$restrict$first,
-                               end=attributes(res)$restrict$last)
-            }
-        }
+        } ## if X is a path, restrict metadata is in the loaded object
     }
     if (output != "object") {
-        fname <- file.path(path2save, sprintf("%s_%d_%d",
-                                              basename(tempfile()),
-                                              start(rng), end(rng)))
-        if (output == "Parquet")
-            fname <- paste0(fname, ".parquet")
-        if (file.exists(fname))
-            cli_abort(c("x"=paste("cannot save results to {fname} because",
-                                  "it already exists. You probably should",
-                                  "delete the contents of {path2save}.")))
+        ## save to a temporary name and rename it when complete, so that a
+        ## job killed while saving does not leave a result that looks complete
+        tmpname <- paste0(fname, ".partial")
+        unlink(tmpname, recursive=TRUE)
         if (output == "HDF5")
-            res <- saveHDF5GSVA(res, fname)
+            saveHDF5GSVA(res, tmpname)
         else
-            res <- saveParquetGSVA(res, fname)
+            saveParquetGSVA(res, tmpname)
+        if (!file.rename(tmpname, fname)) {
+            unlink(tmpname, recursive=TRUE)
+            if (!file.exists(fname))
+                cli_abort(c("x"="cannot save results to {fname}."))
+        }
+        res <- fname
     }
     return(res)
 }
@@ -719,16 +801,21 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, path2save, ncpus, maxmem,
 }
 
 ## map the chunks in 'X' with MAP_FUN_WRAPPER() and the arguments in 'args',
-## returning failed chunks as condition objects instead of aborting
+## returning failed chunks as condition objects instead of aborting. When
+## results are saved to the files in 'paths', the chunks of jobs that did not
+## deliver a result, such as jobs killed by the workload manager, are
+## recovered from those files
 #' @importFrom BiocParallel bplapply bpnworkers bptry
-.map_chunks <- function(X, BTPARAM, args) {
+.map_chunks <- function(X, BTPARAM, args, paths=NULL, outdir=NULL) {
     if (bpnworkers(BTPARAM) > 1) {
-        res <- bptry(do.call("bplapply", args=c(list(X=X, FUN=MAP_FUN_WRAPPER,
-                                                     BPPARAM=BTPARAM), args)))
+        res <- tryCatch(bptry(do.call("bplapply",
+                                      args=c(list(X=X, FUN=MAP_FUN_WRAPPER,
+                                                  BPPARAM=BTPARAM), args))),
+                        error=identity)
         ## bptry() returns, instead of a list of results, a 'bperror' raised
         ## for reasons other than failed chunks, such as a timeout
         if (inherits(res, "condition"))
-            stop(res)
+            res <- .map_recover_from_disk(res, paths, outdir)
     } else ## mainly to be able to unit test this
         res <- lapply(X, function(x)
                           tryCatch(do.call("MAP_FUN_WRAPPER",
@@ -736,6 +823,202 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, path2save, ncpus, maxmem,
                                    error=identity))
 
     res
+}
+
+## after the error 'err' raised by bplapply(), build the result of the chunks
+## whose output is saved in the files in 'paths', from those files
+#' @importFrom cli cli_abort
+.map_recover_from_disk <- function(err, paths, outdir) {
+    if (is.null(paths))
+        stop(err)
+    done <- file.exists(paths)
+    if (!any(done)) {
+        errmsg <- conditionMessage(err)
+        cli_abort(c("x"="No chunk was completed: {errmsg}",
+                    "i"=paste("Once the problem is fixed, resubmit the",
+                              "calculations by calling {.fn gsvaMap} again",
+                              "with the same {.arg FUN} and {.arg inputData},",
+                              "and MAPREDO=\"{outdir}\".")),
+                  parent=err)
+    }
+    errmsg <- paste("The job of this chunk did not save any result, which",
+                    "happens, for instance, when the workload manager kills",
+                    "it. The error reported was:", conditionMessage(err))
+    res <- lapply(seq_along(paths), function(i) {
+        if (done[i])
+            paths[i]
+        else
+            simpleError(errmsg)
+    })
+
+    res
+}
+
+## chunk boundaries of the elements of a list output from a previous call to
+## gsvaMap(), taken from their 'restrict' metadata or, when they are paths,
+## from the output of gsvaMap(); NULL when they cannot be known without
+## loading the elements from disk
+.list_input_chunks <- function(inputData) {
+    if (any(vapply(inputData, is.character, logical(1)))) {
+        chunks <- attributes(inputData)$mapInfo$chunks
+        if (!is.null(chunks) && nrow(chunks) != length(inputData))
+            chunks <- NULL
+        return(chunks)
+    }
+    rmdata <- lapply(inputData, .pull_restrict_metadata)
+    if (any(vapply(rmdata, is.null, logical(1))))
+        return(NULL)
+
+    data.frame(first=as.integer(vapply(rmdata, function(x) x$first,
+                                       numeric(1))),
+               last=as.integer(vapply(rmdata, function(x) x$last, numeric(1))))
+}
+
+## identifier of the results of gsvaMap() saved to disk, given by its input
+## and its output format
+.map_runid <- function(funname, fingerprint, output) {
+    step <- c(gsvaRowNorm="rnorm", gsvaColRanks="ranks",
+              gsvaColScores="es")[funname]
+    paste(substr(.md5_object(list(fingerprint, output)), 1L, 12L), step,
+          sep="_")
+}
+
+## names of the files with the results of each chunk, given by the identifier
+## of the run and the chunk boundaries or, when these are unknown, the chunk
+## number
+.map_file_names <- function(funname, fingerprint, output, chunks, nchunks) {
+    runid <- .map_runid(funname, fingerprint, output)
+    if (!is.null(chunks))
+        files <- sprintf("%s_%d_%d", runid, chunks$first, chunks$last)
+    else
+        files <- sprintf("%s_chunk%d", runid, seq_len(nchunks))
+    if (output == "Parquet")
+        files <- paste0(files, ".parquet")
+
+    files
+}
+
+.map_manifest_path <- function(mapinfo) {
+    file.path(mapinfo$dir,
+              paste0(.map_runid(mapinfo$FUN, mapinfo$fingerprint,
+                                mapinfo$output), "_manifest.rds"))
+}
+
+## write the manifest of the results of gsvaMap() saved to disk, which allows
+## MAPREDO to find them; the directory is not stored, to allow moving it
+#' @importFrom cli cli_abort
+#' @importFrom utils packageVersion
+.write_map_manifest <- function(mapinfo, totalInputDim, mustNotExist) {
+    fname <- .map_manifest_path(mapinfo)
+    if (file.exists(fname)) {
+        if (mustNotExist) {
+            dir <- mapinfo$dir
+            runid <- sub("_manifest\\.rds$", "", basename(fname))
+            cli_abort(c("x"=paste("The directory {.file {dir}} has results of",
+                                  "a previous call to {.fn gsvaMap} with the",
+                                  "same {.arg FUN} and {.arg inputData}."),
+                        "i"=paste("Set MAPREDO=\"{dir}\" to resubmit only",
+                                  "the chunks without results, or delete the",
+                                  "files starting with {.val {runid}} to",
+                                  "compute them all again.")))
+        }
+        return(invisible(fname))
+    }
+
+    manifest <- mapinfo
+    manifest$dir <- NULL
+    manifest <- c(list(manifestVersion=1L), manifest,
+                  list(totalInputDim=totalInputDim,
+                       gsvaVersion=as.character(packageVersion("GSVA"))))
+    tmpname <- paste0(fname, ".partial")
+    saveRDS(manifest, tmpname)
+    file.rename(tmpname, fname)
+
+    invisible(fname)
+}
+
+## read the manifest in 'path', or the one in the directory 'path' that
+## matches the given FUN, input fingerprint and, if not NULL, output, and
+## build from it and the results saved to disk the output of gsvaMap()
+#' @importFrom cli cli_abort
+.read_map_manifest <- function(path, funname, fingerprint, output) {
+    if (length(path) != 1L || is.na(path))
+        cli_abort(c("x"=paste("{.arg MAPREDO} must be either the output of",
+                              "a previous call to {.fn gsvaMap}, or a single",
+                              "path to a directory or a manifest file with",
+                              "results saved by {.fn gsvaMap}.")))
+    if (dir.exists(path))
+        fnames <- list.files(path, pattern="_manifest\\.rds$",
+                             full.names=TRUE)
+    else if (file.exists(path))
+        fnames <- path
+    else
+        cli_abort(c("x"="{.arg MAPREDO} {.file {path}} cannot be found."))
+
+    manifests <- lapply(fnames, function(f) tryCatch(readRDS(f),
+                                                     error=function(e) NULL))
+    match <- vapply(manifests, function(m) {
+        is.list(m) && !is.null(m$manifestVersion) &&
+            identical(m$FUN, funname) &&
+            identical(m$fingerprint, fingerprint) &&
+            (is.null(output) || identical(m$output, output))
+    }, logical(1))
+    if (!any(match))
+        cli_abort(c("x"=paste("No manifest of {.fn gsvaMap} results in",
+                              "{.file {path}} matches FUN={funname} and",
+                              "the given {.arg inputData}",
+                              if (!is.null(output)) "and {.arg output}",
+                              "")))
+    if (sum(match) > 1)
+        cli_abort(c("x"=paste("Several manifests of {.fn gsvaMap} results",
+                              "in {.file {path}} match FUN={funname} and",
+                              "the given {.arg inputData}."),
+                    "i"=paste("Set the {.arg output} argument or give the",
+                              "path to one of these manifests:",
+                              "{.file {basename(fnames[match])}}.")))
+
+    m <- manifests[[which(match)]]
+    dir <- dirname(normalizePath(fnames[match]))
+    paths <- file.path(dir, m$files)
+    res <- lapply(paths, function(p) {
+        if (file.exists(p))
+            p
+        else
+            simpleError(sprintf("No result was saved in %s", p))
+    })
+    attributes(res) <- list(totalInputDim=m$totalInputDim,
+                            mapInfo=list(FUN=m$FUN, output=m$output,
+                                         fingerprint=m$fingerprint,
+                                         chunks=m$chunks, files=m$files,
+                                         dir=dir))
+
+    res
+}
+
+## when the registry directory of 'BTPARAM' exists, which happens when the R
+## session of a previous call to gsvaMap() ended before removing it, set it
+## to a new directory, returning the previous one to restore it afterwards
+#' @importFrom BiocParallel bpisup
+#' @importFrom cli cli_alert_warning
+.free_registry_dir <- function(BTPARAM, verbose) {
+    regdir <- BTPARAM$registryargs$file.dir
+    if (is.null(regdir) || is.na(regdir) || !dir.exists(regdir) ||
+        bpisup(BTPARAM) || isTRUE(BTPARAM$saveregistry))
+        return(NULL)
+
+    k <- 1L
+    while (dir.exists(newdir <- paste0(regdir, "-", k)))
+        k <- k + 1L
+    BTPARAM$registryargs$file.dir <- newdir
+    if (verbose)
+        cli_alert_warning(paste("The registry directory {.file {regdir}}",
+                                "already exists, probably left by a previous",
+                                "call to {.fn gsvaMap} whose R session ended.",
+                                "Using {.file {newdir}} instead. Delete",
+                                "{.file {regdir}} once its jobs are not",
+                                "running anymore."))
+
+    regdir
 }
 
 ## default value of the 'output' argument of gsvaMap(), which saves results
@@ -770,8 +1053,8 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, path2save, ncpus, maxmem,
 .map_fingerprint <- function(funname, inputData, totalInputDim) {
     if (is.list(inputData)) {
         elems <- lapply(inputData, function(x) {
-            if (is.character(x))
-                x
+            if (is.character(x)) ## allow moving the directory with the files
+                basename(x)
             else
                 .pull_restrict_metadata(x)[c("first", "last", "whdim")]
         })

@@ -1,6 +1,21 @@
+## batchtools waits 5 seconds before removing a registry, and checks the state
+## of the jobs every 5 seconds or more, which makes each call to gsvaMap()
+## using batchtools last about 10 seconds, even with the small data in these
+## tests. Setting the option BIOCPARALLEL_BATCHTOOLS_REMOVE_REGISTRY_WAIT=0
+## and giving the registry the configuration file below shorten those waits,
+## without changing how the jobs are run
+fastRegistryargs <- function(...) {
+    conf <- tempfile("batchtools.conf", fileext=".R")
+    writeLines("sleep <- 0.1", conf)
+    batchtoolsRegistryargs(conf.file=conf, ...)
+}
+
 test_mapReduce <- function() {
 
     message("Running unit tests for map reduce")
+
+    oldopt <- options(BIOCPARALLEL_BATCHTOOLS_REMOVE_REGISTRY_WAIT=0)
+    on.exit(options(oldopt), add=TRUE)
 
     suppressPackageStartupMessages({
         library(DelayedArray)
@@ -43,7 +58,9 @@ test_mapReduce <- function() {
 
     ## calculate row-normalized expression values with map-reduce, using
     ## batchtools with two workers, to test the parallel route
-    gsvarnorm2 <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, verbose=FALSE),
+    gsvarnorm2 <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, verbose=FALSE,
+                                     BTPARAM=BatchtoolsParam(workers=2,
+                                         registryargs=fastRegistryargs())),
                              verbose=FALSE)
 
     ## check that both approaches yield same row-normalized expression values
@@ -58,7 +75,7 @@ test_mapReduce <- function() {
     ## which by default is the current working directory
     wd <- tempfile("gsvamapwd")
     dir.create(wd)
-    btregargs <- batchtoolsRegistryargs(work.dir=wd)
+    btregargs <- fastRegistryargs(work.dir=wd)
     ## except for two calls using batchtools with two workers, to test the
     ## parallel route, gsvaMap() is run in this R process with one worker,
     ## which is much faster than starting batchtools jobs, and small blocks,
@@ -324,6 +341,9 @@ test_mapReduceRedo <- function() {
 
     message("Running unit tests for map reduce resubmitting failed chunks")
 
+    oldopt <- options(BIOCPARALLEL_BATCHTOOLS_REMOVE_REGISTRY_WAIT=0)
+    on.exit(options(oldopt), add=TRUE)
+
     suppressPackageStartupMessages({
         library(DelayedArray)
         library(BiocParallel)
@@ -348,25 +368,28 @@ test_mapReduceRedo <- function() {
         list(res=res, warning=w)
     }
 
-    ## gsvaMap() saves its results in the working directory of the registry
-    wd <- tempfile("gsvamapwd")
-    dir.create(wd)
-    on.exit(unlink(wd, recursive=TRUE), add=TRUE)
-    btregargs <- batchtoolsRegistryargs(work.dir=wd)
-    ## gsvaMap() is run in this R process with one worker, and small blocks,
-    ## together with a finite maximum memory, split the input into several
-    ## chunks, except for one call using batchtools with two workers, to test
-    ## the parallel route
-    btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="1K"),
-                             registryargs=btregargs)
-    ## with stop.on.error=FALSE, chunks following a failed one in the same
-    ## job are also computed, instead of being reported as failed
-    btpar2 <- BatchtoolsParam(workers=2, registryargs=btregargs,
-                              stop.on.error=FALSE)
-    ## with this maximum memory, the input would be split in a single chunk
-    btparbig <- BatchtoolsParam(workers=1,
-                                resources=list(ncpus=1, memory="10G"),
-                                registryargs=btregargs)
+    ## gsvaMap() saves its results in the working directory of the registry,
+    ## where a second call with the same input and output format would find
+    ## the results of the first one, so each call starting a new calculation
+    ## gets a new working directory. gsvaMap() is run in this R process with
+    ## one worker, and small blocks, together with a finite maximum memory,
+    ## split the input into several chunks, except for the calls using
+    ## batchtools with two workers, to test the parallel route, where a large
+    ## maximum memory splits the input into two chunks. With
+    ## stop.on.error=FALSE, chunks following a failed one in the same job are
+    ## also computed, instead of being reported as failed
+    wds <- character(0)
+    on.exit(unlink(wds, recursive=TRUE), add=TRUE)
+    newbtpar <- function(workers=1, memory="1K") {
+        wd <- tempfile("gsvamapwd")
+        dir.create(wd)
+        wds <<- c(wds, wd)
+        regargs <- fastRegistryargs(work.dir=wd,
+                                    file.dir=file.path(wd, "registry"))
+        BatchtoolsParam(workers=workers, registryargs=regargs,
+                        resources=list(ncpus=1, memory=memory),
+                        stop.on.error=FALSE)
+    }
     oldautoblocksize <- getAutoBlockSize()
     setAutoBlockSize(p * 8 * 10) ## blocks of 10 columns
     on.exit(setAutoBlockSize(oldautoblocksize), add=TRUE)
@@ -380,36 +403,76 @@ test_mapReduceRedo <- function() {
     gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
     gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
     gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+    btparranks <- newbtpar()
     rankspaths <- gsvaMap(gsvaColRanks, gsvarnorm, output="HDF5",
-                          verbose=FALSE, BTPARAM=btpar)
+                          verbose=FALSE, BTPARAM=btparranks)
+    checkTrue(all(file.exists(unlist(rankspaths))))
+    checkTrue(!any(grepl("partial$", list.files(wds[1]))))
 
-    ## simulate the failure of some chunks in each of the three steps, and
-    ## check that only those chunks are computed again, with the chunk
-    ## boundaries of the previous call, even if the new BTPARAM argument would
-    ## split the input differently
+    ## a second call with the same input and output format in the same
+    ## directory refuses to overwrite the results of the first one
+    checkException(gsvaMap(gsvaColRanks, gsvarnorm, output="HDF5",
+                           verbose=FALSE, BTPARAM=btparranks), silent=TRUE)
+
+    ## simulate the failure of some chunks with in-memory results, and check
+    ## that only those chunks are computed again, with the chunk boundaries of
+    ## the previous call, even if the new BTPARAM argument, with a maximum
+    ## memory that would put the input in a single chunk, splits it otherwise
+    btpar <- newbtpar()
+    mapout <- gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE, BTPARAM=btpar)
+    nchunks <- length(mapout)
+    checkTrue(nchunks > 2)
+    whfail <- c(2L, nchunks)
+    partial <- mapout
+    partial[whfail] <- list(simpleError("simulated failure"))
+    checkException(gsvaReduce(partial, verbose=FALSE), silent=TRUE)
+    redone <- gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE,
+                      BTPARAM=newbtpar(memory="10G"), MAPREDO=partial)
+    checkIdentical(length(redone), nchunks)
+    checkIdentical(redone[-whfail], mapout[-whfail])
+    checkEqualsNumeric(gsvaranks, gsvaReduce(redone, verbose=FALSE))
+
+    ## simulate the failure of some chunks in each of the three steps, with
+    ## results saved to disk, by deleting their files, as if their jobs had
+    ## been killed. Only those chunks are computed again, saving them in the
+    ## directory of the previous call, given either the output of the previous
+    ## call, or the path to its directory or manifest, as if the R session of
+    ## the previous call had ended
     steps <- list(list(FUN=gsvaRowNorm, input=gsvapar, ref=gsvarnorm),
                   list(FUN=gsvaColRanks, input=gsvarnorm, ref=gsvaranks),
                   list(FUN=gsvaColScores, input=gsvaranks, ref=gsvaes),
                   list(FUN=gsvaColScores, input=rankspaths, ref=gsvaes))
     for (st in steps) {
+        btpar <- newbtpar()
+        wd <- wds[length(wds)]
         mapout <- gsvaMap(st$FUN, st$input, output="HDF5", verbose=FALSE,
                           BTPARAM=btpar)
+        paths <- unlist(mapout)
         nchunks <- length(mapout)
         checkTrue(nchunks > 2)
+        checkTrue(all(dirname(paths) == normalizePath(wd)))
+        manifest <- list.files(wd, pattern="_manifest\\.rds$",
+                               full.names=TRUE)
+        checkIdentical(length(manifest), 1L)
         whfail <- c(2L, nchunks)
-        partial <- mapout
-        partial[whfail] <- list(simpleError("simulated failure"))
-        checkException(gsvaReduce(partial, verbose=FALSE), silent=TRUE)
-        redone <- gsvaMap(st$FUN, st$input, verbose=FALSE, BTPARAM=btparbig,
-                          MAPREDO=partial)
-        checkIdentical(length(redone), nchunks)
-        checkIdentical(redone[-whfail], mapout[-whfail])
-        checkTrue(all(vapply(redone[whfail], is.character, logical(1))))
-        checkTrue(!any(unlist(redone[whfail]) %in% unlist(mapout)))
+        mtimes <- file.mtime(paths[-whfail])
+        for (redo in list("output", "dir", "manifest")) {
+            unlink(paths[whfail], recursive=TRUE)
+            partial <- mapout
+            partial[whfail] <- list(simpleError("simulated failure"))
+            mapredo <- switch(redo, output=partial, dir=wd, manifest=manifest)
+            redone <- gsvaMap(st$FUN, st$input, verbose=FALSE,
+                              BTPARAM=newbtpar(memory="10G"), MAPREDO=mapredo)
+            checkIdentical(redone, mapout)
+            checkTrue(all(file.exists(paths)))
+        }
+        checkIdentical(file.mtime(paths[-whfail]), mtimes)
         checkEqualsNumeric(st$ref, gsvaReduce(redone, verbose=FALSE))
         ## nothing to resubmit
         checkIdentical(gsvaMap(st$FUN, st$input, verbose=FALSE,
                                BTPARAM=btpar, MAPREDO=redone), redone)
+        checkIdentical(gsvaMap(st$FUN, st$input, verbose=FALSE,
+                               BTPARAM=btpar, MAPREDO=wd), redone)
     }
 
     ## a partial output cannot be the input of the next step
@@ -430,15 +493,44 @@ test_mapReduceRedo <- function() {
     checkException(gsvaMap(gsvaColRanks, gsvarnorm, output="object",
                            verbose=FALSE, BTPARAM=btpar, MAPREDO=partial),
                    silent=TRUE)
+    ## and a path must have a manifest matching FUN and inputData
+    checkException(gsvaMap(gsvaColRanks, gsvarnorm2, verbose=FALSE,
+                           BTPARAM=btpar, MAPREDO=wds[1]), silent=TRUE)
+    checkException(gsvaMap(gsvaColScores, gsvaranks, verbose=FALSE,
+                           BTPARAM=btpar, MAPREDO=wds[1]), silent=TRUE)
+    checkException(gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE,
+                           BTPARAM=btpar, MAPREDO=tempfile()), silent=TRUE)
+    checkException(gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE,
+                           BTPARAM=btpar, MAPREDO=c(wds[1], wds[2])),
+                   silent=TRUE)
     ## while the right ones resubmit the failed chunk
+    unlink(rankspaths[[2]], recursive=TRUE)
     redone <- gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE, BTPARAM=btpar,
                       MAPREDO=partial)
-    checkEqualsNumeric(gsvaranks, gsvaReduce(redone, verbose=FALSE))
+    checkIdentical(redone, rankspaths)
+
+    ## the same input saved in two formats in the same directory requires
+    ## setting the output format to choose between their manifests
+    if (requireNamespace("arrow", quietly=TRUE)) {
+        pqpaths <- gsvaMap(gsvaColRanks, gsvarnorm, output="Parquet",
+                           verbose=FALSE, BTPARAM=btparranks)
+        checkTrue(all(grepl("\\.parquet$", unlist(pqpaths))))
+        checkException(gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE,
+                               BTPARAM=btpar, MAPREDO=wds[1]), silent=TRUE)
+        unlink(pqpaths[[1]])
+        redone <- gsvaMap(gsvaColRanks, gsvarnorm, output="Parquet",
+                          verbose=FALSE, BTPARAM=btpar, MAPREDO=wds[1])
+        checkIdentical(redone, pqpaths)
+        checkIdentical(gsvaMap(gsvaColRanks, gsvarnorm, output="HDF5",
+                               verbose=FALSE, BTPARAM=btpar, MAPREDO=wds[1]),
+                       rankspaths)
+    }
 
     ## real failure of a chunk whose input cannot be read, running in this R
     ## process and through batchtools, which is fixed before resubmitting it
     tmppath <- paste0(rankspaths[[2]], "_moved")
-    for (bp in list(btpar, btpar2)) {
+    for (workers in 1:2) {
+        bp <- newbtpar(workers=workers)
         file.rename(rankspaths[[2]], tmppath)
         mw <- mapwarn(gsvaMap(gsvaColScores, rankspaths, verbose=FALSE,
                               BTPARAM=bp))
@@ -449,5 +541,34 @@ test_mapReduceRedo <- function() {
                           BTPARAM=bp, MAPREDO=mw$res)
         checkTrue(!any(GSVA:::.map_failed(redone)))
         checkEqualsNumeric(gsvaes, gsvaReduce(redone, verbose=FALSE))
+    }
+
+    ## a job killed by the workload manager, simulated by a batchtools job
+    ## killing its own process, in a call to gsvaMap() whose registry
+    ## directory was left by a previous call whose R session ended
+    if (.Platform$OS.type == "unix") {
+        bp <- newbtpar(workers=2, memory="10G")
+        wd <- wds[length(wds)]
+        regdir <- bp$registryargs$file.dir
+        dir.create(regdir)
+        suppressMessages(trace("MAP_FUN_WRAPPER", where=asNamespace("GSVA"),
+                               print=FALSE,
+                               tracer=quote(if (is(X, "gsvaMapChunk") &&
+                                                IRanges::start(X$chunk) > 1)
+                                                tools::pskill(Sys.getpid(),
+                                                              tools::SIGKILL))))
+        mw <- tryCatch(mapwarn(gsvaMap(gsvaColRanks, gsvarnorm, output="HDF5",
+                                       verbose=FALSE, BTPARAM=bp)),
+                       finally=suppressMessages(untrace("MAP_FUN_WRAPPER",
+                                                where=asNamespace("GSVA"))))
+        checkTrue(!is.null(mw$warning))
+        checkIdentical(which(GSVA:::.map_failed(mw$res)), 2L)
+        checkTrue(file.exists(mw$res[[1]]))
+        ## the registry directory given in BTPARAM is restored
+        checkIdentical(bp$registryargs$file.dir, regdir)
+        redone <- gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE,
+                          BTPARAM=newbtpar(), MAPREDO=wd)
+        checkTrue(!any(GSVA:::.map_failed(redone)))
+        checkEqualsNumeric(gsvaranks, gsvaReduce(redone, verbose=FALSE))
     }
 }
