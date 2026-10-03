@@ -1109,11 +1109,31 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         if (!is(inputData, "GsvaMethodParam"))
             param <- .pull_param(inputData)
         exprData <- get_exprData(param)
+        paramlist <- .gsvaParam_as_list(param)
+        paramlist$geneSets <- .map_fingerprint_geneSets(paramlist$geneSets)
         fp <- list(funname, class(inputData), dim(exprData),
-                   dimnames(exprData), .gsvaParam_as_list(param))
+                   dimnames(exprData), paramlist)
     }
 
     .md5_object(fp)
+}
+
+## content of the gene sets that identifies them in the fingerprint of the
+## input of gsvaMap(), which excludes the identifier and creation date that
+## GSEABase gives to every 'GeneSet' object, because they change every time
+## the gene sets are created, e.g., by reading them again with readGMT() in a
+## new R session
+#' @importFrom GSEABase geneIds geneIdType
+#' @importFrom BiocGenerics annotation
+.map_fingerprint_geneSets <- function(geneSets) {
+    if (is(geneSets, "GeneSetCollection"))
+        geneSets <- list(geneIds=geneIds(geneSets),
+                         geneIdType=lapply(geneSets, function(gs) {
+                             idtype <- geneIdType(gs)
+                             list(class(idtype), annotation(idtype))
+                         }))
+
+    geneSets
 }
 
 ## MD5 hash of an R object, serialized without its header, which stores the

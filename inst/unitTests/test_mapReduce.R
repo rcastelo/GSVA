@@ -487,6 +487,35 @@ test_mapReduceRedo <- function() {
                                BTPARAM=btpar, MAPREDO=wd), redone)
     }
 
+    ## the input is recognized when the gene sets are read again with
+    ## readGMT(), as in a new R session, which gives them new identifiers,
+    ## while different gene sets give a different input
+    gmt <- tempfile(fileext=".gmt")
+    on.exit(unlink(gmt), add=TRUE)
+    writeLines(vapply(names(gsets), function(nm)
+                          paste(c(nm, "na", gsets[[nm]]), collapse="\t"),
+                      character(1)), gmt)
+    gsc1 <- readGMT(gmt)
+    gsc2 <- readGMT(gmt)
+    checkTrue(GSEABase::setIdentifier(gsc1[[1]]) !=
+              GSEABase::setIdentifier(gsc2[[1]]))
+    gsvapar1 <- gsvaParam(y, gsc1, verbose=FALSE)
+    gsvapar2 <- gsvaParam(y, gsc2, verbose=FALSE)
+    checkIdentical(GSVA:::.map_fingerprint("gsvaRowNorm", gsvapar1, dim(y)),
+                   GSVA:::.map_fingerprint("gsvaRowNorm", gsvapar2, dim(y)))
+    checkTrue(GSVA:::.map_fingerprint("gsvaRowNorm", gsvapar1, dim(y)) !=
+              GSVA:::.map_fingerprint("gsvaRowNorm",
+                                      gsvaParam(y, gsc1[1:2], verbose=FALSE),
+                                      dim(y)))
+    btpar <- newbtpar()
+    wd <- wds[length(wds)]
+    mapout <- gsvaMap(gsvaRowNorm, gsvapar1, output="HDF5", verbose=FALSE,
+                      BTPARAM=btpar)
+    unlink(mapout[[2]], recursive=TRUE)
+    redone <- gsvaMap(gsvaRowNorm, gsvapar2, verbose=FALSE, BTPARAM=btpar,
+                      MAPREDO=wd)
+    checkIdentical(redone, mapout)
+
     ## a partial output cannot be the input of the next step
     partial <- rankspaths
     partial[[2]] <- simpleError("simulated failure")
