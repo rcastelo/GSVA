@@ -85,8 +85,16 @@
 #' Default: `TRUE`.
 #'
 #' @param dir In `gsvaBatchtoolsSlurmParam()`, path to a directory where the
-#' output of the GSVA calculations will be saved. Default: "GSVAOUTPUT" in the
-#' current working directory.
+#' output of the GSVA calculations will be saved. In this directory,
+#' `gsvaBatchtoolsSlurmParam()` also writes a file `gsvainit.R`, which is
+#' run at the start of each job, and a configuration file for the package
+#' [batchtools](https://cran.r-project.org/package=batchtools),
+#' `gsvabatchtools.conf.R`, which makes `gsvaMap()` check the state of the
+#' jobs at most every 30 seconds, instead of up to every two minutes, to notice
+#' sooner jobs killed by the workload manager. This file also loads the
+#' batchtools configuration file of the user, if any, whose settings,
+#' including the interval between checks, take precedence. Default:
+#' "GSVAOUTPUT" in the current working directory.
 #'
 #' @param partition In `gsvaBatchtoolsSlurmParam()`, name of the Slurm partition
 #' to use for the GSVA calculations. No default value, the user must provide a
@@ -500,7 +508,8 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
 
     registryargs <- batchtoolsRegistryargs(file.dir=file.path(dir, "registry"),
                                            work.dir=dir, packages="GSVA",
-                                           source="gsvainit.R")
+                                           source="gsvainit.R",
+                                           conf.file=.write_batchtools_conf(dir))
 
     BTPARAM <- BatchtoolsParam(workers=nodes, cluster="slurm",
                                jobname="gsva",
@@ -515,6 +524,30 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
 
 
 ## private functions
+
+## batchtools checks the state of the jobs at intervals growing up to two
+## minutes, and considers that a job without results has ended only after not
+## finding it in the queue in more than three consecutive checks, which can
+## delay by several minutes noticing the end of jobs killed by the workload
+## manager. write in 'dir' a batchtools configuration file that caps that
+## interval to 30 seconds, after loading the batchtools configuration file of
+## the user, if any, which batchtools does not load anymore when a registry is
+## given a configuration file, and keeping the interval set in it, if any. its
+## name differs from 'batchtools.conf.R' because findConfFile() would find it
+## when 'dir' is the working directory. returns the path to that file
+.write_batchtools_conf <- function(dir) {
+    conffile <- file.path(dir, "gsvabatchtools.conf.R")
+    writeLines(c("## written by GSVA::gsvaBatchtoolsSlurmParam()",
+                 ".userconf <- batchtools::findConfFile()",
+                 "if (!is.na(.userconf))",
+                 "    sys.source(.userconf, envir=environment(), keep.source=FALSE)",
+                 "rm(.userconf)",
+                 "if (!exists(\"sleep\", inherits=FALSE))",
+                 "    sleep <- function(i) min(5 + 2 * i, 30)"),
+               conffile)
+
+    conffile
+}
 
 #' @importFrom BiocParallel SerialParam MulticoreParam SnowParam
 #' @importFrom IRanges IRanges start end

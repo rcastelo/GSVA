@@ -211,6 +211,14 @@ data is identified by its dimensions, dimension names and GSVA parameters, but
 not by its values, so the user should not change the values of the input data
 between the call to `gsvaMap()` and the one resubmitting the failed chunks.
 
+Note that `gsvaMap()` may take a few minutes to return after the last job has
+ended when some jobs were killed, because `r CRANpkg("batchtools")` only
+considers that a job without results has ended after not finding it in the
+queue of the workload manager in several consecutive checks. To shorten this
+delay, `gsvaBatchtoolsSlurmParam()` writes in the directory given in its `dir`
+argument a batchtools configuration file that makes those checks at most 30
+seconds apart, instead of up to two minutes.
+
 # Accessing remotely stored GSVA ranks
 
 Column ranks calculated with `gsvaColRanks()` can be stored in a single file in

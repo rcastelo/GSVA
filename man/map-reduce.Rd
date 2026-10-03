@@ -40,7 +40,7 @@ row-normalized expression values, column ranks, and GSVA scores without
 having to call to \code{gsvaReduce()} in between.}
 
 \item{output}{In \code{gsvaMap()}, a character string specifying what each
-worker returns: either the resulting object (\code{"object"}, default), or the
+worker returns: either the resulting object (\code{"object"}), or the
 path to that object after saving it in the working directory of the
 registry of \code{BTPARAM} with \code{\link{saveHDF5GSVA}} (\code{"HDF5"}) or with
 \code{\link{saveParquetGSVA}} (\code{"Parquet"}). In the latter two cases, the output of
@@ -100,8 +100,16 @@ a list of objects or a list of paths to GSVA output saved with
 \code{gsvaMap()} with \code{output="HDF5"} or \code{output="Parquet"}.}
 
 \item{dir}{In \code{gsvaBatchtoolsSlurmParam()}, path to a directory where the
-output of the GSVA calculations will be saved. Default: "GSVAOUTPUT" in the
-current working directory.}
+output of the GSVA calculations will be saved. In this directory,
+\code{gsvaBatchtoolsSlurmParam()} also writes a file \code{gsvainit.R}, which is
+run at the start of each job, and a configuration file for the package
+\href{https://cran.r-project.org/package=batchtools}{batchtools},
+\code{gsvabatchtools.conf.R}, which makes \code{gsvaMap()} check the state of the
+jobs at most every 30 seconds, instead of up to every two minutes, to notice
+sooner jobs killed by the workload manager. This file also loads the
+batchtools configuration file of the user, if any, whose settings,
+including the interval between checks, take precedence. Default:
+"GSVAOUTPUT" in the current working directory.}
 
 \item{partition}{In \code{gsvaBatchtoolsSlurmParam()}, name of the Slurm partition
 to use for the GSVA calculations. No default value, the user must provide a

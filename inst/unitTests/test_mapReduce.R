@@ -697,3 +697,52 @@ test_mapReduceRedo <- function() {
         checkEqualsNumeric(gsvaranks, gsvaReduce(redone, verbose=FALSE))
     }
 }
+
+test_batchtoolsConf <- function() {
+
+    message("Running unit tests for the batchtools configuration file")
+
+    ## source the configuration file as batchtools does when creating a
+    ## registry, with the batchtools configuration file of the user, if any,
+    ## found in the directory 'searchpath'
+    sourceconf <- function(conffile, searchpath="") {
+        oldpath <- Sys.getenv("R_BATCHTOOLS_SEARCH_PATH", unset=NA)
+        on.exit(if (is.na(oldpath)) Sys.unsetenv("R_BATCHTOOLS_SEARCH_PATH")
+                else Sys.setenv(R_BATCHTOOLS_SEARCH_PATH=oldpath))
+        Sys.setenv(R_BATCHTOOLS_SEARCH_PATH=searchpath)
+        env <- new.env()
+        sys.source(conffile, envir=env, keep.source=FALSE)
+        env
+    }
+
+    dir <- tempfile("gsvaconf")
+    dir.create(dir)
+    on.exit(unlink(dir, recursive=TRUE), add=TRUE)
+    conffile <- GSVA:::.write_batchtools_conf(dir)
+    checkIdentical(conffile, file.path(dir, "gsvabatchtools.conf.R"))
+
+    ## without a configuration file of the user, the interval between checks
+    ## grows from 7 seconds up to 30 seconds
+    if (is.na(batchtools::findConfFile())) {
+        env <- sourceconf(conffile)
+        checkIdentical(sort(ls(env, all.names=TRUE)), "sleep")
+        checkEqualsNumeric(vapply(c(1, 5, 12, 13, 100), env$sleep, numeric(1)),
+                           c(7, 15, 29, 30, 30))
+    }
+
+    ## the settings of the configuration file of the user are kept, also the
+    ## interval between checks, when it sets it
+    userdir <- file.path(dir, "user")
+    dir.create(userdir)
+    userconf <- file.path(userdir, "batchtools.conf.R")
+    writeLines("default.resources <- list(walltime=60)", userconf)
+    env <- sourceconf(conffile, searchpath=userdir)
+    checkIdentical(env$default.resources, list(walltime=60))
+    checkEqualsNumeric(env$sleep(100), 30)
+    writeLines(c("default.resources <- list(walltime=60)", "sleep <- 1"),
+               userconf)
+    env <- sourceconf(conffile, searchpath=userdir)
+    checkIdentical(env$default.resources, list(walltime=60))
+    checkIdentical(env$sleep, 1)
+    checkTrue(!exists(".userconf", envir=env, inherits=FALSE))
+}
