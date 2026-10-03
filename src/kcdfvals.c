@@ -435,12 +435,24 @@ kcdfvals_svt_to_svt_R(SEXP XsvtR, SEXP GausskR, SEXP verboseR) {
                  mkChar("double"));
   SET_SLOT(kcdfRobj, SVT_SparseArray_svtSym, duplicate(Xsvt_SVT));
   kcdfRobj_SVT = GET_SLOT(kcdfRobj, SVT_SparseArray_svtSym);
-  if (itypevals) { /* if input is integer then replace integer values by double */
+  /* the output stores a double value for every nonzero position, which
+   * requires replacing the integer values of an integer input by doubles,
+   * and allocating the values of 'lacunar' leaves, which have no values
+   * because all their nonzero values are equal to 1. the SVT of a matrix
+   * with only zeros is NULL */
+  if (kcdfRobj_SVT != R_NilValue) {
     for (int i=0; i < nc; i++) {
-      if (VECTOR_ELT(kcdfRobj_SVT, i) != R_NilValue)
-        SET_VECTOR_ELT(VECTOR_ELT(kcdfRobj_SVT, i), 0,
-                       coerceVector(VECTOR_ELT(VECTOR_ELT(kcdfRobj_SVT, i), 0),
-                                    REALSXP));
+      SEXP leaf = VECTOR_ELT(kcdfRobj_SVT, i);
+
+      if (leaf != R_NilValue) {
+        SEXP valsR = VECTOR_ELT(leaf, 0);
+
+        if (length(valsR) == 0)
+          SET_VECTOR_ELT(leaf, 0,
+                         allocVector(REALSXP, length(VECTOR_ELT(leaf, 1))));
+        else if (itypevals)
+          SET_VECTOR_ELT(leaf, 0, coerceVector(valsR, REALSXP));
+      }
     }
   }
 
