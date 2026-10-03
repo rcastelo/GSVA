@@ -11,7 +11,8 @@ gsvaMap(
   inputData,
   output = c("object", "HDF5", "Parquet"),
   verbose = TRUE,
-  BTPARAM = BatchtoolsParam(workers = 2, progressbar = verbose)
+  BTPARAM = BatchtoolsParam(workers = 2, progressbar = verbose),
+  MAPREDO = NULL
 )
 
 gsvaReduce(mapOutput, verbose = TRUE)
@@ -39,14 +40,25 @@ row-normalized expression values, column ranks, and GSVA scores without
 having to call to \code{gsvaReduce()} in between.}
 
 \item{output}{In \code{gsvaMap()}, a character string specifying what each
-worker returns: either the resulting object (\code{"object"}, default), or the
+worker returns: either the resulting object (\code{"object"}), or the
 path to that object after saving it in the working directory of the
 registry of \code{BTPARAM} with \code{\link{saveHDF5GSVA}} (\code{"HDF5"}) or with
 \code{\link{saveParquetGSVA}} (\code{"Parquet"}). In the latter two cases, the output of
 \code{gsvaMap()} is a list of paths instead of a list of objects. Note that, by
 default, the working directory of the registry is the current working
 directory. Saving in Apache Parquet format requires the package
-\href{https://cran.r-project.org/package=arrow}{arrow}.}
+\href{https://cran.r-project.org/package=arrow}{arrow}. When this argument is
+not given, its default value is \code{"HDF5"} if \code{BTPARAM} sends the jobs to a
+workload manager, such as Slurm, and \code{"object"} otherwise, i.e., when the
+\code{cluster} field of \code{BTPARAM} is \code{"socket"}, \code{"multicore"} or
+\code{"interactive"}. When \code{MAPREDO} is given, its default value is the one
+used to produce \code{MAPREDO}. The names of the saved files depend only on
+\code{FUN}, \code{inputData}, \code{output} and the chunk boundaries, and \code{gsvaMap()}
+also writes in that directory a manifest file, ending in \verb{_manifest.rds},
+which allows the \code{MAPREDO} argument to find them. For this reason,
+\code{gsvaMap()} gives an error when that directory already has results of a
+previous call with the same \code{FUN}, \code{inputData} and \code{output} arguments,
+unless \code{MAPREDO} is given.}
 
 \item{verbose}{Gives information about the progress of the calculations.
 Default: \code{TRUE}.}
@@ -63,14 +75,41 @@ is available, they may use the wrapper function \code{gsvaBatchtoolsSlurmParam()
 which is provided to create a \code{BatchtoolsParam} object with some sensible
 defaults for running GSVA calculations on a SLURM cluster.}
 
+\item{MAPREDO}{In \code{gsvaMap()}, the output of a previous call to \code{gsvaMap()}
+with the same \code{FUN} and \code{inputData} arguments, in which some of the chunks
+failed. When this argument is given, only the failed chunks are computed
+again, using the same chunk boundaries as in the previous call, and the
+result combines them with the chunks that did not fail. This makes it
+possible to resubmit the failed chunks with a different \code{BTPARAM} argument,
+for instance with more memory or a longer wall time. When the previous call
+saved its results to disk (see the \code{output} argument), this argument can
+also be the path to the directory where they were saved, or to the
+manifest file that \code{gsvaMap()} writes there, and the chunks whose results
+are not found in that directory are computed again and saved in it. This
+allows one to resubmit chunks whose jobs were killed by the workload
+manager, or that were running when the R session calling \code{gsvaMap()}
+ended. If that directory has results of several calls matching \code{FUN} and
+\code{inputData}, saved in different formats, the \code{output} argument selects
+one of them. Note that \code{inputData} is matched by its dimensions, dimension
+names and GSVA parameters, but not by its values. Default: \code{NULL}, which
+computes all chunks.}
+
 \item{mapOutput}{In \code{gsvaReduce()}, the output of \code{gsvaMap()}, which can be
 a list of objects or a list of paths to GSVA output saved with
 \code{\link{saveHDF5GSVA}} or \code{\link{saveParquetGSVA}}, such as the one returned by
 \code{gsvaMap()} with \code{output="HDF5"} or \code{output="Parquet"}.}
 
 \item{dir}{In \code{gsvaBatchtoolsSlurmParam()}, path to a directory where the
-output of the GSVA calculations will be saved. Default: "GSVAOUTPUT" in the
-current working directory.}
+output of the GSVA calculations will be saved. In this directory,
+\code{gsvaBatchtoolsSlurmParam()} also writes a file \code{gsvainit.R}, which is
+run at the start of each job, and a configuration file for the package
+\href{https://cran.r-project.org/package=batchtools}{batchtools},
+\code{gsvabatchtools.conf.R}, which makes \code{gsvaMap()} check the state of the
+jobs at most every 30 seconds, instead of up to every two minutes, to notice
+sooner jobs killed by the workload manager. This file also loads the
+batchtools configuration file of the user, if any, whose settings,
+including the interval between checks, take precedence. Default:
+"GSVAOUTPUT" in the current working directory.}
 
 \item{partition}{In \code{gsvaBatchtoolsSlurmParam()}, name of the Slurm partition
 to use for the GSVA calculations. No default value, the user must provide a
@@ -91,7 +130,15 @@ each independent task executed within a compute node. Default: "10G".}
 \value{
 The \code{gsvaMap()} function returns either a list of objects with the
 results of the GSVA calculations for each compute node, or a list of file paths
-where the results are saved. The \code{gsvaReduce()} function returns a single
+where the results are saved. If the calculations in some of the chunks
+failed, \code{gsvaMap()} gives a warning and the corresponding elements of this
+list are condition objects describing the errors. This partial result can
+be given to the \code{MAPREDO} argument of a new call to \code{gsvaMap()} to compute
+only the failed chunks, but not to \code{gsvaReduce()}, which gives an error.
+When results are saved to disk, chunks of jobs that did not deliver any
+result, such as jobs killed by the workload manager, are also reported as
+failed, unless no chunk was completed, in which case \code{gsvaMap()} gives an
+error. The \code{gsvaReduce()} function returns a single
 object that combines the results from all compute nodes. The
 \code{gsvaBatchtoolsSlurmParam()} function returns a \code{BatchtoolsParam} object with
 some sensible defaults for running GSVA calculations on a SLURM cluster.
@@ -116,6 +163,10 @@ directory named "GSVAOUTPUT" in the current working directory from where the
 R session calling \code{gsvaMap()} was launched. The user must ensure that this
 path is reachable by all compute nodes in the HPC environment, and must
 manually delete its contents after the GSVA calculations are finished.
+Each job saves its results under a temporary name ending in \code{.partial},
+which it renames once they are complete, so files or directories with that
+ending left in that path belong to jobs that did not finish, and can be
+deleted once no job of those calculations is running.
 }
 \examples{
 
@@ -136,17 +187,21 @@ y <- matrix(rnorm(n*p), nrow=p, ncol=n,
 ## build GSVA parameter object
 gsvapar <- gsvaParam(y, geneSets)
 
-## calculate row-normalized expression values in parallel across multiple
-## compute nodes in a high-performance computing (HPC) environment
-gsvarnorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar))
+## to keep this example short, the calculations below are split in chunks
+## that run in this R session, by using a single worker. See further below
+## how to distribute them across multiple compute nodes in a
+## high-performance computing (HPC) environment
+library(BiocParallel)
+btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="1G"))
 
-## calculate column GSVA ranks in parallel across multiple
-## compute nodes in a high-performance computing (HPC) environment
-gsvaranks <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm))
+## calculate row-normalized expression values
+gsvarnorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, BTPARAM=btpar))
 
-## calculate column GSVA scores in parallel across multiple
-## compute nodes in a high-performance computing (HPC) environment
-gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks))
+## calculate column GSVA ranks
+gsvaranks <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, BTPARAM=btpar))
+
+## calculate column GSVA scores
+gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, BTPARAM=btpar))
 
 ## the example below assumes that a SLURM HPC environment is available
 ## with a partition named 'short' and that the user has write access to a
@@ -158,6 +213,21 @@ gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks))
 \dontrun{
 gsvabtpar <- gsvaBatchtoolsSlurmParam(partition="short")
 gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar))
+
+## if some of the chunks fail, gsvaMap() gives a warning and returns a
+## partial result, whose failed chunks can be resubmitted, for instance
+## with more memory per task, without computing again the other chunks
+gsvamapes <- gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar)
+gsvabtpar2 <- gsvaBatchtoolsSlurmParam(partition="short", mem="20G")
+gsvamapes <- gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar2,
+                     MAPREDO=gsvamapes)
+gsvaes <- gsvaReduce(gsvamapes)
+
+## if the R session calling gsvaMap() ended before the jobs finished, the
+## chunks without results can be resubmitted from a new R session using
+## the directory where gsvaMap() saved its results
+gsvamapes <- gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar,
+                     MAPREDO="GSVAOUTPUT")
 }
 
 }

@@ -102,12 +102,18 @@ the intermediate results will be stored. The user can change this directory by
 specifying a different value for the `dir` argument, but it is important that this
 directory is accessible from all nodes in the HPC environment. The user is also
 responsible for deleting the contents of this directory after the GSVA calculations
-are finished.
+are finished. Each job saves its results under a temporary name ending in
+`.partial`, which it renames once they are complete, so files or directories with
+that ending left in this directory belong to jobs that did not finish, and can be
+deleted once no job of those calculations is running.
 
 The next step is to run the function `gsvaMap()`, which will submit the jobs to the
 SLURM workload manager, and return a list object, where each of its elements will be
-of the same class as the input expression data, but with the intermediate results
-stored in an on-disk data structure.
+the path to the intermediate results of one chunk of the input data, saved in the
+`GSVAOUTPUT` directory with the function `saveHDF5GSVA()`. Saving these results
+to disk is the default behavior of `gsvaMap()` when jobs are sent to a workload
+manager, such as SLURM, and can be changed with the `output` argument of
+`gsvaMap()`.
 
 ```{r, eval=FALSE}
 gsvamaprnorm <- gsvaMap(gsvaRowNorm, gsvapar, BTPARAM=gsvabtpar)
@@ -161,10 +167,57 @@ submitted must have a walltime limit that is long enough to allow the jobs to fi
 The second way is to submit a job with the R script that calls the `gsvaMap()`
 function, which will submit the jobs to the SLURM workload manager.
 
-The current implementation of `gsvaMap()` and `gsvaReduce()` does not yet handle
-partial completion of the jobs. So, if any of the jobs fail, the user will have
-to resubmit the entire calculation. We are working to enable the resubmission of
-only the failed jobs.
+## Resubmitting failed chunks
+
+If the calculations on some of the chunks of the input data fail, `gsvaMap()`
+gives a warning and returns a partial result, in which the elements of the
+failed chunks are condition objects describing the errors. Such a partial
+result cannot be given to `gsvaReduce()`, but it can be given to the `MAPREDO`
+argument of a new call to `gsvaMap()`, with the same `FUN` and `inputData`
+arguments, to compute only the failed chunks, using the same chunk boundaries
+as in the previous call. This allows one, for instance, to resubmit the failed
+chunks with more memory per task.
+
+```{r, eval=FALSE}
+gsvamapes <- gsvaMap(gsvaColScores, gsvamapranks, BTPARAM=gsvabtpar)
+gsvabtpar2 <- gsvaBatchtoolsSlurmParam(partition="short", nodes=10,
+                                       ncpus_per_task=4, mem="20G")
+gsvamapes <- gsvaMap(gsvaColScores, gsvamapranks, BTPARAM=gsvabtpar2,
+                     MAPREDO=gsvamapes)
+gsvaes <- gsvaReduce(gsvamapes)
+```
+Since `gsvaMap()` saves the results of each chunk to disk as soon as it is
+completed, chunks of jobs killed by the workload manager, for instance for
+exceeding their wall time or memory limits, are also reported as failed in the
+partial result, and can be resubmitted in the same way. If the R session that
+called `gsvaMap()` ended before the jobs finished, for instance because it was
+running in an interactive job that reached its own wall time limit, the
+partial result is not available. In that case, we can give to the `MAPREDO`
+argument the directory where `gsvaMap()` saved the results, which by default
+is `GSVAOUTPUT`, and the chunks whose results are not found in that directory
+will be resubmitted.
+
+```{r, eval=FALSE}
+gsvamapes <- gsvaMap(gsvaColScores, gsvamapranks, BTPARAM=gsvabtpar,
+                     MAPREDO="GSVAOUTPUT")
+```
+To find the results of a previous call, `gsvaMap()` writes in that directory a
+manifest file, whose name ends in `_manifest.rds`, and gives the results of
+each chunk a file name that only depends on the input data, the output format
+and the chunk boundaries. For this reason, calling `gsvaMap()` again with the
+same input data and output format, without the `MAPREDO` argument, gives an
+error when that directory already has the results of a previous call. The input
+data is identified by its dimensions, dimension names and GSVA parameters, but
+not by its values, so the user should not change the values of the input data
+between the call to `gsvaMap()` and the one resubmitting the failed chunks.
+
+Note that `gsvaMap()` may take a few minutes to return after the last job has
+ended when some jobs were killed, because `r CRANpkg("batchtools")` only
+considers that a job without results has ended after not finding it in the
+queue of the workload manager in several consecutive checks. To shorten this
+delay, `gsvaBatchtoolsSlurmParam()` writes in the directory given in its `dir`
+argument a batchtools configuration file that makes those checks at most 30
+seconds apart, instead of up to two minutes.
 
 # Accessing remotely stored GSVA ranks
 
