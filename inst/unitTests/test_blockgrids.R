@@ -59,3 +59,40 @@ test_blockgrids <- function() {
     checkIdentical(31L, ncol(GSVA:::.colgridsize(H, 3)[[1L]]))
     checkIdentical(25L, ncol(GSVA:::.colgridsize(H, 5)[[1L]]))
 }
+
+test_blockprocessing_bpparam_unchanged <- function() {
+
+    message("Running unit tests for block processing keeping BPPARAM unchanged")
+
+    suppressPackageStartupMessages(library(BiocParallel))
+
+    set.seed(123)
+    X <- matrix(rnorm(200 * 150), nrow=200, ncol=150)
+    newbpparam <- function() {
+        if (.Platform$OS.type == "unix")
+            MulticoreParam(workers=2, stop.on.error=TRUE, progressbar=FALSE)
+        else
+            SnowParam(workers=2, stop.on.error=TRUE, progressbar=FALSE)
+    }
+    identity_fun <- function(x, verbose) x
+    failing_fun <- function(x, verbose) stop("simulated failure")
+
+    ## the parallel execution in chunks sets stop.on.error=FALSE and, with
+    ## verbose=TRUE, progressbar=TRUE, in BPPARAM, which is a reference class
+    ## object, and these settings are restored when the calculations finish,
+    ## also when they fail
+    for (proc in list(GSVA:::.processMatrixRows, GSVA:::.processMatrixCols)) {
+        bpparam <- newbpparam()
+        res <- suppressMessages(proc(X, FUN=identity_fun, verbose=TRUE,
+                                     BPPARAM=bpparam))
+        checkEqualsNumeric(X, res)
+        checkTrue(bpstopOnError(bpparam))
+        checkTrue(!bpprogressbar(bpparam))
+
+        bpparam <- newbpparam()
+        checkException(suppressMessages(proc(X, FUN=failing_fun, verbose=TRUE,
+                                             BPPARAM=bpparam)), silent=TRUE)
+        checkTrue(bpstopOnError(bpparam))
+        checkTrue(!bpprogressbar(bpparam))
+    }
+}

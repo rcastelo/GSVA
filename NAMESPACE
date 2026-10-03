@@ -93,6 +93,7 @@ importFrom(BiocParallel,
   bpnworkers,
   bpok,
   bpprogressbar,
+  bpstopOnError,
   bptry
 )
 importFrom(DelayedArray,
