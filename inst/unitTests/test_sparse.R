@@ -182,3 +182,47 @@ test_kcdfvals <- function() {
     res_C_sparseh5_to_sparseh5 <- GSVA:::compute.gene.cdf(zzs, Gaussk=TRUE, kernel=TRUE, sparse=TRUE)
     checkEqualsNumeric(res_R_sparse_to_sparse, res_C_sparseh5_to_sparseh5, tolerance=0.0001)
 }
+
+test_svt_lacunar <- function() {
+    message("Running unit tests for ECDF and KCDF values on lacunar SVT leaves")
+
+    suppressPackageStartupMessages({
+        library(Matrix)
+        library(SparseArray)
+    })
+
+    ## sparse count data, where the first column has only ones as nonzero
+    ## values, which SparseArray stores in a 'lacunar' leaf without values,
+    ## and the fourth column has only zeros
+    m <- matrix(0L, nrow=6, ncol=5)
+    m[c(1, 3, 5), 1] <- 1L
+    m[c(1, 2, 4), 2] <- c(2L, 3L, 1L)
+    m[c(1, 3, 5, 6), 3] <- c(1L, 4L, 2L, 7L)
+    m[c(2, 3, 4, 6), 5] <- c(5L, 1L, 2L, 3L)
+
+    for (type in c("integer", "double")) {
+        storage.mode(m) <- type
+        svt <- as(m, "SVT_SparseMatrix")
+        ## check that the first column is stored in a lacunar leaf
+        checkTrue(is.null(svt@SVT[[1]][[1]]))
+        dgc <- as(m, "dgCMatrix")
+
+        res_svt <- GSVA:::.ecdfvals_svt_to_svt(svt, FALSE)
+        checkEqualsNumeric(as.matrix(GSVA:::.ecdfvals_sparse_to_sparse(dgc,
+                                                                       FALSE)),
+                           as.matrix(res_svt))
+
+        for (Gaussk in c(TRUE, FALSE)) {
+            res_svt <- GSVA:::.kcdfvals_svt_to_svt(svt, Gaussk, FALSE)
+            res_dgc <- GSVA:::.kcdfvals_sparse_to_sparse(dgc, Gaussk, FALSE)
+            checkEqualsNumeric(as.matrix(res_dgc), as.matrix(res_svt))
+        }
+    }
+
+    ## a matrix with only zeros, whose SVT is NULL
+    svt <- as(matrix(0L, nrow=3, ncol=2), "SVT_SparseMatrix")
+    checkEqualsNumeric(matrix(0, nrow=3, ncol=2),
+                       as.matrix(GSVA:::.ecdfvals_svt_to_svt(svt, FALSE)))
+    checkEqualsNumeric(matrix(0, nrow=3, ncol=2),
+                       as.matrix(GSVA:::.kcdfvals_svt_to_svt(svt, TRUE, FALSE)))
+}
