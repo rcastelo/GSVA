@@ -82,6 +82,7 @@ setMethod("spatCor", signature("SpatialExperiment"),
         df_res <- data.frame(observed=numeric(), expected=numeric(),
                              sd=numeric(), p.value=numeric(),
                              sample_id=character())
+        oldprogressbar <- NULL
         for (sample in unique(colData(spe)$sample_id)) {
             spe_Moran <- list()
             logc <- assay(spe[,colData(spe)$sample_id == sample], assay)
@@ -109,8 +110,17 @@ setMethod("spatCor", signature("SpatialExperiment"),
                 if (verbose)
                     cli_progress_done(get("idpb", envir=env))
             } else {                               ## parallel execution
-                if (verbose)
+                if (verbose) {
+                    ## 'BPPARAM' is a reference class object, so this change
+                    ## reaches the object of the caller, which is restored on
+                    ## exit to its value before the loop over the samples
+                    if (is.null(oldprogressbar)) {
+                        oldprogressbar <- bpprogressbar(BPPARAM)
+                        on.exit(bpprogressbar(BPPARAM) <- oldprogressbar,
+                                add=TRUE)
+                    }
                     bpprogressbar(BPPARAM) <- TRUE ## reporting progress wo/ cli
+                }
                 spe_Moran <- bplapply(rowns, function(x) {
                     res <- list(observed=NA, expected=NA, sd=NA, p.value=NA)
                     if (x %in% rownames(logc))

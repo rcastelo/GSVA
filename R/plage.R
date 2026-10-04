@@ -279,8 +279,13 @@ plage <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
         if (verbose)
             cli_progress_done(get("idpb", envir=env))
     } else {
-        if (verbose)
+        if (verbose) {
+            ## 'BPPARAM' is a reference class object, so this change
+            ## reaches the object of the caller, which is restored on exit
+            oldprogressbar <- bpprogressbar(BPPARAM)
+            on.exit(bpprogressbar(BPPARAM) <- oldprogressbar, add=TRUE)
             bpprogressbar(BPPARAM) <- TRUE ## reporting progress wo/ cli
+        }
 
         es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
                        BPPARAM=BPPARAM)
