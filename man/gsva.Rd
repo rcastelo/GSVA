@@ -70,7 +70,7 @@ or terabytes (T), which GSVA will use to attempt bounding the maximum amount
 of main memory used across all threads of execution to that given quantity.
 By default \code{maxmem="auto"}, indicating that the maximum memory will be the
 90\% of the total main memory, as calculated by
-\code{\link[memuse:meminfo]{Sys.meminfo()}}. To avoid setting any bound on the
+\code{\link[memuse:Sys.meminfo]{Sys.meminfo()}}. To avoid setting any bound on the
 maximum memory, use \code{maxmem=Inf}. Note that the amount of main memory used
 in an R session or script may depend on other commands and packages used in
 that same session or script.}
@@ -81,18 +81,18 @@ container object of the same type as the input expression data container,
 except for the fact that enrichment scores are always dense, irrespective of
 whether the input is sparse, such as in single-cell data. If the input was a
 base matrix, a \code{\link[Matrix:dgCMatrix-class]{dgCMatrix}}, a
-\code{\link[SparseArray:SVT_SparseArray-class]{SVT_SparseMatrix}}, or a
-\code{\link[DelayedArray:DelayedArray-class]{DelayedMatrix}} object, then the output
+\code{\link[SparseArray:SVT_SparseMatrix-class]{SVT_SparseMatrix}}, or a
+\code{\link[DelayedArray:DelayedMatrix-class]{DelayedMatrix}} object, then the output
 will be either a base matrix object or a
-\code{\link[DelayedArray:DelayedArray-class]{DelayedMatrix}}, with the gene sets
+\code{\link[DelayedArray:DelayedMatrix-class]{DelayedMatrix}}, with the gene sets
 employed in the calculations stored in an attribute called \code{geneSets} of that
 object. If the input was an \code{ExpressionSet} object, then the output will be
 also an \code{ExpressionSet} object with the gene sets employed in the
 calculations stored in an attribute called \code{geneSets}. If the input was an
 object of either class
 \code{\link[SummarizedExperiment:SummarizedExperiment-class]{SummarizedExperiment}},
-\code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}},
-or \code{\link[SpatialExperiment:SpatialExperiment]{SpatialExperiment}},
+\code{\link[SingleCellExperiment:SingleCellExperiment-class]{SingleCellExperiment}},
+or \code{\link[SpatialExperiment:SpatialExperiment-class]{SpatialExperiment}},
 then the output will be of the same class, where enrichment scores will be
 stored in an assay called \code{es} and the gene sets employed in the
 calculations will be stored in the \code{rowData} slot of the object under the
@@ -175,5 +175,5 @@ using singular value decomposition.
 \code{\link[BiocParallel:BiocParallelParam-class]{BiocParallelParam}},
 \code{\link[Matrix:dgCMatrix-class]{dgCMatrix}},
 \code{\link[Biobase]{ExpressionSet}},
-\code{\link[SingleCellExperiment:SingleCellExperiment]{SingleCellExperiment}}
+\code{\link[SingleCellExperiment:SingleCellExperiment-class]{SingleCellExperiment}}
 }

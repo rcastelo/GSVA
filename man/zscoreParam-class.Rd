@@ -19,11 +19,11 @@ zscoreParam(
 }
 \arguments{
 \item{exprData}{The expression data set. Must be one of the classes
-supported by \code{\linkS4class{GsvaExprData}}. For a list of these classes, see its
+supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}. For a list of these classes, see its
 help page using \code{help(GsvaExprData)}.}
 
 \item{geneSets}{The gene sets.  Must be one of the classes supported by
-\code{\linkS4class{GsvaGeneSets}}.  For a list of these classes, see its help page using
+\code{\link[=GsvaGeneSets-class]{GsvaGeneSets}}.  For a list of these classes, see its help page using
 \code{help(GsvaGeneSets)}.}
 
 \item{assay}{Character vector of length 1. The name of the assay to use in
@@ -63,7 +63,7 @@ decisions made by the software during parameter object construction when
 \code{verbose=TRUE} (default) and remains silent otherwise.}
 }
 \value{
-A new \code{\linkS4class{zscoreParam}} object.
+A new \code{\link[=zscoreParam-class]{zscoreParam}} object.
 }
 \description{
 S4 class for combined z-scores method parameter objects.
@@ -104,12 +104,12 @@ disease classification.
 \doi{10.1371/journal.pcbi.1000217}
 }
 \seealso{
-\code{\linkS4class{GsvaExprData}},
-\code{\linkS4class{GsvaGeneSets}},
-\code{\linkS4class{GsvaMethodParam}},
-\code{\linkS4class{plageParam}},
-\code{\linkS4class{ssgseaParam}},
-\code{\linkS4class{gsvaParam}}
+\code{\link[=GsvaExprData-class]{GsvaExprData}},
+\code{\link[=GsvaGeneSets-class]{GsvaGeneSets}},
+\code{\link[=GsvaMethodParam-class]{GsvaMethodParam}},
+\code{\link[=plageParam-class]{plageParam}},
+\code{\link[=ssgseaParam-class]{ssgseaParam}},
+\code{\link[=gsvaParam-class]{gsvaParam}}
 
 \code{\link[GSEABase:GeneIdentifierType-class]{GeneIdentifierType}}
 }

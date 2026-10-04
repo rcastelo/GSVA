@@ -246,7 +246,6 @@ setValidity("plageParam", function(object) {
 
 ## ------ internal functions ------
 
-#' @importFrom BiocSingular runExactSVD
 rightsingularsvdvectorgset <- function(gSetIdx, Z) {
   s <- svd(Z[gSetIdx, ])
   s$v[, 1]
