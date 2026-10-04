@@ -84,7 +84,7 @@
 #' @importFrom BiocGenerics type
 #' @importFrom cli cli_abort cli_progress_bar cli_alert_warning
 #' @importFrom BiocParallel bplapply bpnworkers "bpprogressbar<-" bptry
-#' @importFrom BiocParallel bpok "bpstopOnError<-"
+#' @importFrom BiocParallel bpok bpstopOnError "bpstopOnError<-"
 #' @importFrom memuse howbig
 #' @importClassesFrom IRanges IRanges
 #' @importFrom IRanges start end width
@@ -135,6 +135,14 @@
         if (verbose)
             cli_progress_done(get("idpb", envir=env))
     } else {                                  ## parallel execution in chunks
+        ## 'BPPARAM' is a reference class object, so the following changes
+        ## reach the object of the caller, which is restored on exit
+        oldprogressbar <- bpprogressbar(BPPARAM)
+        oldstoponerror <- bpstopOnError(BPPARAM)
+        on.exit({
+            bpprogressbar(BPPARAM) <- oldprogressbar
+            bpstopOnError(BPPARAM) <- oldstoponerror
+        }, add=TRUE)
         if (verbose)
             bpprogressbar(BPPARAM) <- TRUE    ## reporting progress wo/ cli
         bpstopOnError(BPPARAM) <- FALSE
@@ -174,7 +182,7 @@
 #' @importFrom BiocGenerics type
 #' @importFrom cli cli_abort
 #' @importFrom BiocParallel bplapply bpnworkers "bpprogressbar<-" bptry
-#' @importFrom BiocParallel bpok "bpstopOnError<-"
+#' @importFrom BiocParallel bpok bpstopOnError "bpstopOnError<-"
 #' @importClassesFrom IRanges IRanges
 #' @importFrom IRanges start end width
 .processMatrixCols <- function(X, FUN, ..., verbose=TRUE,
@@ -219,6 +227,14 @@
                       idpbe=env, WRAPPED_FUN=FUN, ...)
         cli_progress_done(get("idpb", envir=env))
     } else {                                  ## parallel execution in chunks
+        ## 'BPPARAM' is a reference class object, so the following changes
+        ## reach the object of the caller, which is restored on exit
+        oldprogressbar <- bpprogressbar(BPPARAM)
+        oldstoponerror <- bpstopOnError(BPPARAM)
+        on.exit({
+            bpprogressbar(BPPARAM) <- oldprogressbar
+            bpstopOnError(BPPARAM) <- oldstoponerror
+        }, add=TRUE)
         if (verbose)
             bpprogressbar(BPPARAM) <- TRUE    ## reporting progress wo/ cli
         bpstopOnError(BPPARAM) <- FALSE
