@@ -201,7 +201,8 @@
 #'                      MAPREDO="GSVAOUTPUT")
 #' }
 #'
-#' @importFrom BiocParallel BatchtoolsParam bpnworkers
+#' @importFrom BiocParallel BatchtoolsParam bpnworkers bpprogressbar
+#' @importFrom BiocParallel "bpprogressbar<-"
 #' @importFrom IRanges IRanges start end
 #' @importFrom cli cli_abort cli_alert_info cli_warn
 #' @rdname map-reduce
@@ -216,6 +217,13 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     funname <- .map_fun_name(FUN)
 
     BTPARAM <- .check_batchtools_param(BTPARAM, verbose)
+    ## 'BTPARAM' is a reference class object, so this change reaches the
+    ## object of the caller, which is restored on exit
+    if (bpprogressbar(BTPARAM) != verbose) {
+        oldprogressbar <- bpprogressbar(BTPARAM)
+        on.exit(bpprogressbar(BTPARAM) <- oldprogressbar, add=TRUE)
+        bpprogressbar(BTPARAM) <- verbose
+    }
 
     totalInputDim <- NULL
     if (!is.list(inputData))
@@ -764,7 +772,6 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
 }
 
 #' @importFrom cli cli_abort cli_alert_warning
-#' @importFrom BiocParallel bpprogressbar "bpprogressbar<-"
 .check_batchtools_param <- function(BTPARAM, verbose) {
     if (!is(BTPARAM, "BatchtoolsParam")) {
         msg <- c("{.arg BTPARAM} must be a {.cls BatchtoolsParam} object.",
@@ -810,9 +817,6 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
                                   "in its registryargs element that points to",
                                   "an existing directory.")))
     }
-
-    if (bpprogressbar(BTPARAM) != verbose)
-        bpprogressbar(BTPARAM) <- verbose
 
     return(BTPARAM)
 }
