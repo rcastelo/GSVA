@@ -46,11 +46,11 @@ test_zscoreParam <- function() {
     checkTrue(inherits(zp, "GsvaMethodParam"))
 
     gsc <- geneIdsToGeneSetCollection(gs)
-    pp <- plageParam(y, gsc)
-    show(pp)
+    zp <- zscoreParam(y, gsc)
+    show(zp)
 
-    checkTrue(inherits(pp, "plageParam"))
-    checkTrue(inherits(pp, "GsvaMethodParam"))
+    checkTrue(inherits(zp, "zscoreParam"))
+    checkTrue(inherits(zp, "GsvaMethodParam"))
 
     checkException(zscoreParam(42))
 }

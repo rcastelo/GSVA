@@ -4,6 +4,7 @@
 \name{zscoreParam-class}
 \alias{zscoreParam-class}
 \alias{zscoreParam}
+\alias{anyNA,zscoreParam-method}
 \title{\code{zscoreParam} class}
 \usage{
 zscoreParam(
@@ -16,6 +17,8 @@ zscoreParam(
   ondisk = c("auto", "yes", "no"),
   verbose = TRUE
 )
+
+\S4method{anyNA}{zscoreParam}(x, recursive = FALSE)
 }
 \arguments{
 \item{exprData}{The expression data set. Must be one of the classes
@@ -61,6 +64,13 @@ when \code{ondisk="no"} it will attempt to load all the data in main memory.}
 \item{verbose}{Logical vector of length 1. It gives information about some
 decisions made by the software during parameter object construction when
 \code{verbose=TRUE} (default) and remains silent otherwise.}
+
+\item{x}{An object of class \code{\link[=zscoreParam-class]{zscoreParam}}. Since the z-score method does
+not handle missing (\code{NA}) values, \code{anyNA()} always returns \code{FALSE} for
+this class, without checking the input expression data.}
+
+\item{recursive}{Not used with \code{x} being an object of
+class \code{\link[=zscoreParam-class]{zscoreParam}}.}
 }
 \value{
 A new \code{\link[=zscoreParam-class]{zscoreParam}} object.
