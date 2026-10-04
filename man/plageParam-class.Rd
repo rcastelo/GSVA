@@ -4,6 +4,7 @@
 \name{plageParam-class}
 \alias{plageParam-class}
 \alias{plageParam}
+\alias{anyNA,plageParam-method}
 \title{\code{plageParam} class}
 \usage{
 plageParam(
@@ -16,6 +17,8 @@ plageParam(
   ondisk = c("auto", "yes", "no"),
   verbose = TRUE
 )
+
+\S4method{anyNA}{plageParam}(x, recursive = FALSE)
 }
 \arguments{
 \item{exprData}{The expression data set.  Must be one of the classes
@@ -61,6 +64,13 @@ when \code{ondisk="no"} it will attempt to load all the data in main memory.}
 \item{verbose}{Logical vector of length 1. It gives information about some
 decisions made by the software during parameter object construction when
 \code{verbose=TRUE} (default) and remains silent otherwise.}
+
+\item{x}{An object of class \code{\link[=plageParam-class]{plageParam}}. Since the PLAGE method does
+not handle missing (\code{NA}) values, \code{anyNA()} always returns \code{FALSE} for
+this class, without checking the input expression data.}
+
+\item{recursive}{Not used with \code{x} being an object of
+class \code{\link[=plageParam-class]{plageParam}}.}
 }
 \value{
 A new \code{\link[=plageParam-class]{plageParam}} object.

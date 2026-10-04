@@ -251,6 +251,20 @@ setValidity("zscoreParam", function(object) {
     return(if(length(inv) == 0) TRUE else inv)
 })
 
+## ----- anyNA method -----
+
+#' @param x An object of class [`zscoreParam-class`]. Since the z-score method does
+#' not handle missing (`NA`) values, `anyNA()` always returns `FALSE` for
+#' this class, without checking the input expression data.
+#'
+#' @param recursive Not used with `x` being an object of
+#' class [`zscoreParam-class`].
+#'
+#' @aliases anyNA,zscoreParam-method
+#' @rdname zscoreParam-class
+setMethod("anyNA", signature=c("zscoreParam"),
+          function(x, recursive=FALSE)
+            return(FALSE))
 
 ## ------ internal functions ------
 

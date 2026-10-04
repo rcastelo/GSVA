@@ -251,6 +251,21 @@ setValidity("plageParam", function(object) {
     return(if(length(inv) == 0) TRUE else inv)
 })
 
+## ----- anyNA method -----
+
+#' @param x An object of class [`plageParam-class`]. Since the PLAGE method does
+#' not handle missing (`NA`) values, `anyNA()` always returns `FALSE` for
+#' this class, without checking the input expression data.
+#'
+#' @param recursive Not used with `x` being an object of
+#' class [`plageParam-class`].
+#'
+#' @aliases anyNA,plageParam-method
+#' @rdname plageParam-class
+setMethod("anyNA", signature=c("plageParam"),
+          function(x, recursive=FALSE)
+            return(FALSE))
+
 ## ------ internal functions ------
 
 rightsingularsvdvectorgset <- function(gSetIdx, Z) {
