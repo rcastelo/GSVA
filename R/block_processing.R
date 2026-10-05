@@ -255,14 +255,14 @@
         if (verbose)
             bpprogressbar(BPPARAM) <- TRUE    ## reporting progress wo/ cli
         bpstopOnError(BPPARAM) <- FALSE
-        bptry(res <- bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
+        res <- bptry(bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
                               idpbe=NULL, WRAPPED_FUN=FUN, ...,
                               BPPARAM=BPPARAM))
         bpokmask <- bpok(res)
         if (any(!bpokmask)) {
             .report_parallel_errors(res)
             cli_alert_warning("Trying to execute again the failing thread(s)")
-            bptry(res <- bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
+            res <- bptry(bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
                                   idpbe=NULL, WRAPPED_FUN=FUN, ...,
                                   BPREDO=res, BPPARAM=BPPARAM))
             bpokmask <- bpok(res)

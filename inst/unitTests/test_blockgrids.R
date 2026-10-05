@@ -90,8 +90,11 @@ test_blockprocessing_bpparam_unchanged <- function() {
         checkTrue(!bpprogressbar(bpparam))
 
         bpparam <- newbpparam()
-        checkException(suppressMessages(proc(X, FUN=failing_fun, verbose=TRUE,
-                                             BPPARAM=bpparam)), silent=TRUE)
+        err <- tryCatch(suppressMessages(proc(X, FUN=failing_fun, verbose=TRUE,
+                                              BPPARAM=bpparam)),
+                        error=conditionMessage)
+        checkTrue(is.character(err) &&
+                  grepl("Cancelling execution", err, fixed=TRUE))
         checkTrue(bpstopOnError(bpparam))
         checkTrue(!bpprogressbar(bpparam))
     }
