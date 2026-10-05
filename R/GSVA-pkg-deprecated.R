@@ -159,9 +159,13 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
               }
 
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+              mf <- .step_mem_factors("scores", filtDataMatrix,
+                                      ngs=length(filtMappedGeneSets))
               ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
                                       recompute_nzcount=FALSE, maxmem=maxmem,
-                                      verbose=verbose)
+                                      verbose=verbose, workfactor=mf$workfactor,
+                                      outfactor=mf$outfactor,
+                                      outextra=mf$outextra)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "GSVA", first=NA,
@@ -192,10 +196,9 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                                             ondisk=ondisk, verbose=verbose,
                                             minparrows=100, minparcols=100,
                                             BPPARAM=BPPARAM, maxmem=maxmem,
-                                            ## the memory taken by each column
-                                            ## is mostly the one of its scores
-                                            workfactor=2, outfactor=0,
-                                            outextra=8 * length(filtMappedGeneSets))
+                                            workfactor=mf$workfactor,
+                                            outfactor=mf$outfactor,
+                                            outextra=mf$outextra)
 
               rownames(gsva_es) <- names(filtMappedGeneSets)
               colnames(gsva_es) <- colnames(filtDataMatrix)

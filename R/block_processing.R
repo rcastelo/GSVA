@@ -16,40 +16,82 @@
 ## of the peak of memory resident in the process
 .mem_fraction_R <- 0.7
 
+## memory taken by the steps of GSVA to process each row or column of the
+## input data 'X', relative to its size in 'X' ('workfactor'), and by the
+## output of each row or column, relative to that size ('outfactor') plus a
+## number of bytes ('outextra'), with 'ngs' gene sets in the scores step. the
+## factors were measured on single-cell data and include a margin; the output
+## of normalizing rows is double, and of ranking columns integer
+#' @importFrom BiocGenerics type
+#' @importFrom S4Arrays is_sparse
+.step_mem_factors <- function(step=c("rownorm", "rowranges", "colranks",
+                                     "scores"), X, ngs=0) {
+    step <- match.arg(step)
+    sparse <- is_sparse(X)
+    int <- type(X) == "integer"
+    switch(step,
+           rownorm=list(workfactor=if (sparse) 6 else 4,
+                        outfactor=if (!int) 1 else if (sparse) 1.5 else 2,
+                        outextra=0),
+           rowranges=list(workfactor=2, outfactor=0,
+                          outextra=32), ## four doubles per row
+           colranks=list(workfactor=if (sparse) 7 else 2,
+                         outfactor=if (int) 1 else if (sparse) 0.7 else 0.5,
+                         outextra=0),
+           scores=list(workfactor=2, outfactor=0, outextra=8 * ngs))
+}
+
+## memory that remains allocated while a matrix with 'nunits' rows (whdim=1)
+## or columns (whdim=2) of 'unitbytes' bytes each, sparse or not, is processed
+## in blocks: the matrix itself, when it is in main memory, and the output,
+## see .step_mem_factors(). when the matrix is stored on disk, the output
+## proportional to it is written to disk block by block. otherwise, the output
+## is assembled from the blocks at the end, which takes twice its size, except
+## when binding blocks of columns of sparse data, which reuses the memory of
+## the blocks. the output given by 'outextra' is always assembled in memory
+.fixed_mem <- function(nunits, unitbytes, whdim, sparse, inmemory, outfactor,
+                       outextra) {
+    fixed <- 2 * outextra * nunits
+    if (inmemory) {
+        assembly <- if (whdim == 2L && sparse) 1 else 2
+        fixed <- fixed + nunits * unitbytes +
+                 assembly * outfactor * unitbytes * nunits
+    }
+
+    fixed
+}
+
 ## number of rows (whdim=1) or columns (whdim=2) of the blocks in which the
 ## matrix 'X' can be processed by 'nworkers' workers within the maximum main
-## memory 'maxmem'. processing each row or column takes 'workfactor' times its
-## size in 'X', and produces an output of 'outfactor' times that size plus
-## 'outextra' bytes. the memory available to the blocks of the workers is what
-## is left, from the fraction .mem_fraction_R of 'maxmem' available to the
-## allocations of R, by 'X', when it is stored in main memory, and by the
-## output, which
-## takes twice its size while it is assembled from the blocks at the end. the
-## size of a row or column of 'X' stored on disk is the one of its dense form,
-## which overestimates the size of sparse data. blocks are not smaller than
-## the automatic block size of the DelayedArray package, see getAutoBlockSize(),
-## because the overhead of processing many smaller blocks makes calculations
-## too slow, so that a smaller 'maxmem' is not honored, and they have at most
-## as many rows or columns as needed to give one block to each worker, and as
-## the DelayedArray package supports
+## memory 'maxmem', where 'workfactor', 'outfactor' and 'outextra' are given
+## by .step_mem_factors(). the memory available to the blocks of the workers
+## is what is left by the memory that remains allocated, see .fixed_mem(),
+## from the fraction .mem_fraction_R of 'maxmem' available to the allocations
+## of R. the size of a row or column of 'X' stored on disk is the one of its
+## dense form, which overestimates the size of sparse data. blocks are not
+## smaller than the automatic block size of the DelayedArray package, see
+## getAutoBlockSize(), because the overhead of processing many smaller blocks
+## makes calculations too slow, so that a smaller 'maxmem' is not honored, and
+## they have at most as many rows or columns as needed to give one block to
+## each worker, and as the DelayedArray package supports
 #' @importFrom BiocGenerics type
 #' @importFrom utils object.size
 #' @importFrom DelayedArray getAutoBlockLength
+#' @importFrom S4Arrays is_sparse
 .units_per_block <- function(X, whdim, nworkers, maxmem, workfactor=2,
                              outfactor=1, outextra=0) {
     nunits <- dim(X)[whdim]
-    if (is(X, "DelayedArray")) {
-        resident <- 0
+    inmemory <- !is(X, "DelayedArray")
+    if (inmemory)
+        unitbytes <- as.numeric(object.size(X)) / max(1, nunits)
+    else
         unitbytes <- as.numeric(dim(X)[-whdim]) *
                      if (type(X) == "integer") 4 else 8
-    } else {
-        resident <- as.numeric(object.size(X))
-        unitbytes <- resident / max(1, nunits)
-    }
-    outbytes <- outfactor * unitbytes + outextra
-    avail <- (.mem_fraction_R * maxmem - resident - 2 * outbytes * nunits) /
-             nworkers
-    nperblock <- floor(avail / (workfactor * unitbytes + outbytes))
+    fixed <- .fixed_mem(nunits, unitbytes, whdim, is_sparse(X), inmemory,
+                        outfactor, outextra)
+    avail <- (.mem_fraction_R * maxmem - fixed) / nworkers
+    nperblock <- floor(avail / ((workfactor + outfactor) * unitbytes +
+                                outextra))
     otherdim <- max(1, as.numeric(dim(X)[-whdim]))
     nperblock <- max(nperblock, floor(getAutoBlockLength(type(X)) / otherdim))
     ## the DelayedArray package does not support blocks with more than

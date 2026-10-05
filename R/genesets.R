@@ -1073,10 +1073,11 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
     ## third and fourth columns, if they exist, they correspond to the
     ## minimum and maximum nonzero values of each row, which will be NAs if
     ## there are no nonzero values.
+    mf <- .step_mem_factors("rowranges", expr)
     rowrngs <- .processMatrixRows(expr, .rowNzRanges, anyna=anyna,
                                   verbose=verbose, BPPARAM=BPPARAM,
-                                  maxmem=maxmem, workfactor=2, outfactor=0,
-                                  outextra=32) ## four doubles per row
+                                  maxmem=maxmem, workfactor=mf$workfactor,
+                                  outfactor=mf$outfactor, outextra=mf$outextra)
 
     constantRows <- (rowrngs[, 1] == rowrngs[, 2])
     mask <- is.na(constantRows)

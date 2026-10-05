@@ -88,24 +88,33 @@ test_units_per_block <- function() {
         GSVA:::.units_per_block(X, 2L, nworkers, maxmem / frac, ...)
 
     ## memory for 50 columns per block, with 'workfactor' times the size of a
-    ## column of working memory and an output of the same size as the input
-    maxmem <- insize + 2 * insize + 50 * (2 + 1) * colbytes
+    ## column of working memory and an output of the same size as the input;
+    ## budgets have half a column more, to be robust to rounding errors
+    maxmem <- insize + 2 * insize + 50.5 * (2 + 1) * colbytes
     checkIdentical(upb(1, maxmem), 50L)
     ## shared by two workers
     checkIdentical(upb(2, maxmem), 25L)
     ## more working memory per column
     checkIdentical(upb(1, maxmem, workfactor=4), 30L)
     ## an output of 8 bytes per gene set per column for 100 gene sets
-    maxmem <- insize + 2 * 800 * 500 + 50 * (2 * colbytes + 800)
+    maxmem <- insize + 2 * 800 * 500 + 50.5 * (2 * colbytes + 800)
     checkIdentical(upb(1, maxmem, outfactor=0, outextra=800), 50L)
     ## not smaller than the automatic block size, of 10 columns
     checkIdentical(upb(1, insize), 10L)
     ## not more than one block per worker
     checkIdentical(upb(3, Inf), 167L)
-    ## data on disk is not in main memory and has the size of its dense form
+    ## data on disk is not in main memory, has the size of its dense form,
+    ## and its output, written to disk by blocks, is not assembled in memory
     D <- DelayedArray(X)
-    maxmem <- 2 * insize + 50 * (2 + 1) * colbytes
+    maxmem <- 50.5 * (2 + 1) * 1000 * 8
     checkIdentical(GSVA:::.units_per_block(D, 2L, 1, maxmem / frac), 50L)
+    ## binding blocks of columns of sparse data reuses their memory, so that
+    ## the output is assembled once, and not twice
+    S <- Matrix::rsparsematrix(1000, 500, density=0.1)
+    ssize <- as.numeric(object.size(S))
+    scolbytes <- ssize / 500
+    maxmem <- ssize + ssize + 50.5 * (2 + 1) * scolbytes
+    checkIdentical(GSVA:::.units_per_block(S, 2L, 1, maxmem / frac), 50L)
     ## blocks have at most .Machine$integer.max values, which large sparse
     ## data in main memory could otherwise exceed
     S <- Matrix::sparseMatrix(i=1, j=1, x=1, dims=c(60000, 50000))

@@ -83,7 +83,12 @@ test_ondisk <- function() {
     setAutoBlockSize(1024)
     es_noh5 <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE)
     es_chunks <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=TRUE, maxmem="25K")
-    checkIdentical(es_noh5, es_chunks)
+    ## the input data, the output and a block do not fit in such a small
+    ## maximum memory, and calculations are done on disk
+    checkTrue(is(es_chunks, "DelayedMatrix"))
+    attr(es_noh5, "gsvaParam") <- attr(es_noh5, "assay") <- NULL
+    attr(es_noh5, "geneSets") <- attr(es_noh5, "gsvaVersion") <- NULL
+    checkIdentical(es_noh5, as.matrix(es_chunks))
     setAutoBlockSize(oldautoblocksize)
 }
 

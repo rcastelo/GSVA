@@ -936,9 +936,11 @@ gsvaRowNorm <- function(param,
     last <- checkedfl$last
 
     maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+    mf <- .step_mem_factors("rownorm", dataMatrix)
     ondisk <- .check_ondisk(param, first=first, last=last, whdim=1,
                             recompute_nzcount=FALSE, maxmem=maxmem,
-                            verbose=verbose)
+                            verbose=verbose, workfactor=mf$workfactor,
+                            outfactor=mf$outfactor, outextra=mf$outextra)
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=1,
@@ -1067,10 +1069,12 @@ gsvaColRanks <- function(rowNormExprData,
 
     maxmem <- .check_maxmem(param, assay="gsvarnorm", maxmem=maxmem,
                             verbose=verbose)
+    mf <- .step_mem_factors("colranks", dataMatrix)
     ondisk <- .check_ondisk(param, assay="gsvarnorm",
                             first=first, last=last, whdim=2,
                             recompute_nzcount=FALSE, maxmem=maxmem,
-                            verbose=verbose)
+                            verbose=verbose, workfactor=mf$workfactor,
+                            outfactor=mf$outfactor, outextra=mf$outextra)
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=2,
@@ -1192,6 +1196,8 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
 
     maxmem <- .check_maxmem(param, assay="gsvaranks", maxmem=maxmem,
                             verbose=verbose)
+    mf <- .step_mem_factors("scores", filtDataMatrix,
+                            ngs=length(filtMappedGeneSets))
     ## ranks stored in Parquet format are processed from disk by blocks of
     ## columns, even if they fit in main memory, unless 'ondisk="no"'
     if (.get_ondisk(param) == "auto" && .is_parquet_backed(filtDataMatrix)) {
@@ -1203,7 +1209,9 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
         ondisk <- .check_ondisk(param, assay="gsvaranks",
                                 first=first, last=last, whdim=2,
                                 recompute_nzcount=recompute_nzcount,
-                                maxmem=maxmem, verbose=verbose)
+                                maxmem=maxmem, verbose=verbose,
+                                workfactor=mf$workfactor,
+                                outfactor=mf$outfactor, outextra=mf$outextra)
 
     filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix, "GSVA",
                                                     first, last, whdim=2,
@@ -1233,10 +1241,9 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                   ondisk=ondisk, verbose=verbose,
                                   minparrows=100, minparcols=100,
                                   BPPARAM=BPPARAM, maxmem=maxmem,
-                                  ## the memory taken by each column is
-                                  ## mostly the one of its GSVA scores
-                                  workfactor=2, outfactor=0,
-                                  outextra=8 * length(filtMappedGeneSets))
+                                  workfactor=mf$workfactor,
+                                  outfactor=mf$outfactor,
+                                  outextra=mf$outextra)
 
     rownames(gsva_es) <- names(filtMappedGeneSets)
     colnames(gsva_es) <- colnames(filtDataMatrix)
@@ -1776,23 +1783,21 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
     kernel <- kcdfparam$kernel
     Gaussk <- kcdfparam$Gaussk
 
-    ## memory taken to normalize each row, relative to its size in 'expr',
-    ## measured for row ECDFs, plus a margin, and producing an output of
-    ## double values that may come from integer input values
-    workfactor <- if (is_sparse(expr)) 6 else 4
+    mf <- .step_mem_factors("rownorm", expr)
     Z <- NULL
     if (rowNorm == "ecdf")
         Z <- .processMatrixRows(expr, FUN=compute.gene.cdf, Gaussk=Gaussk,
                                 kernel=kernel, sparse=sparse, any_na=any_na,
                                 na_use=na_use, verbose=verbose, minparrows=100,
                                 minparcols=100, BPPARAM=BPPARAM, maxmem=maxmem,
-                                workfactor=workfactor, outfactor=1.5)
+                                workfactor=mf$workfactor,
+                                outfactor=mf$outfactor, outextra=mf$outextra)
     else if (rowNorm == "clr")
         Z <- .processMatrixRows(expr, FUN=compute.gene.clr, sparse=sparse,
                                 any_na=any_na, na_use=na_use, verbose=verbose,
                                 minparrows=100, minparcols=100, BPPARAM=BPPARAM,
-                                maxmem=maxmem, workfactor=workfactor,
-                                outfactor=1.5)
+                                maxmem=maxmem, workfactor=mf$workfactor,
+                                outfactor=mf$outfactor, outextra=mf$outextra)
     else
         cli_abort(c("x"=paste(".compute_row_norm: 'rowNorm' should be one of",
                               "'ecdf' or 'clr'.")))
@@ -1843,13 +1848,13 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
  
     ## here 'ties.method="last"' allows one to obtain the result
     ## from 'order()' based on ranks
-    ## memory taken to rank each column, relative to its size in 'Z',
-    ## measured, plus a margin
+    mf <- .step_mem_factors("colranks", Z)
     R <- .processMatrixCols(Z, FUN=compute.col.ranks, ties.method="last",
                             drop.sparsity=FALSE, verbose=verbose,
                             minparrows=100, minparcols=100,
                             BPPARAM=BPPARAM, maxmem=maxmem,
-                            workfactor=if (is_sparse(Z)) 7 else 2)
+                            workfactor=mf$workfactor, outfactor=mf$outfactor,
+                            outextra=mf$outextra)
 
     return(R)
 }

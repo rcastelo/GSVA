@@ -876,18 +876,23 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 
 
 ## verifies that the 'ondisk' parameter is either 'auto', 'yes' or 'no' and, if
-## 'auto', checks whether the input data fits in the maximum available main
-## memory and sets 'ondisk' to 'yes' or 'no' accordingly. If the input data is
-## a DelayedArray, also reports whether it fits in the maximum available main
-## memory. If 'ondisk' is set to 'yes', then this function returns TRUE,
-## otherwise it returns FALSE.
+## 'auto', checks whether the calculations fit in the maximum available main
+## memory with the input data in it, and sets 'ondisk' to 'yes' or 'no'
+## accordingly. the calculations fit when the input data, the output, and the
+## working memory of a block of the default size of the DelayedArray package,
+## given by 'workfactor', 'outfactor' and 'outextra', see .step_mem_factors(),
+## fit in the fraction .mem_fraction_R of 'maxmem' available to the
+## allocations of R. If the input data is a DelayedArray, also reports whether
+## the calculations fit in the maximum available main memory. If 'ondisk' is
+## set to 'yes', then this function returns TRUE, otherwise it returns FALSE.
 
 #' @importFrom cli cli_abort cli_alert_info
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
-#' @importFrom memuse howbig
+#' @importFrom DelayedArray getAutoBlockSize
 .check_ondisk <- function(param, assay=get_assay(param), first, last, whdim,
-                          recompute_nzcount=FALSE, maxmem, verbose) {
+                          recompute_nzcount=FALSE, maxmem, verbose,
+                          workfactor=2, outfactor=1, outextra=0) {
     insize <- NA_real_ ## estimated size of the input data
     ondisk <- .get_ondisk(param)
     if (ondisk == "auto") {
@@ -910,30 +915,39 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             }
             spa <- min(spa, 1)
         }
-        sze <- 0
-        if (is.na(first) && is.na(last))
-            sze <- howbig(as.numeric(nrow(X)), as.numeric(ncol(X)),
-                          representation=rep, sparsity=spa, type=type(X))
-        else {
-            if (whdim == 1) {
-                sze <- howbig(as.numeric(last - first + 1), as.numeric(ncol(X)),
-                              representation=rep, sparsity=spa, type=type(X))
-            } else if (whdim == 2) {
-                sze <- howbig(as.numeric(nrow(X)), as.numeric(last - first + 1),
-                              representation=rep, sparsity=spa, type=type(X))
-            } else
+        nr <- as.numeric(nrow(X))
+        nc <- as.numeric(ncol(X))
+        if (!is.na(first) || !is.na(last)) {
+            if (whdim == 1)
+                nr <- as.numeric(last - first + 1)
+            else if (whdim == 2)
+                nc <- as.numeric(last - first + 1)
+            else
                 cli_abort(c("x"="Invalid internal value for 'whdim' argument."))
         }
+        ## size of the input data in main memory, where sparse data, in an
+        ## SVT_SparseMatrix object, store each nonzero value and its row index
+        eltbytes <- if (type(X) == "integer") 4 else 8
+        insize <- nr * nc * eltbytes
+        if (rep == "sparse")
+            insize <- spa * nr * nc * (eltbytes + 4)
 
-        insize <- as.numeric(sze)
+        nunits <- dim(X)[whdim]
+        if (!is.na(first) || !is.na(last))
+            nunits <- last - first + 1
+        need <- .fixed_mem(nunits, insize / max(1, nunits), whdim,
+                           is_sparse(X), TRUE, outfactor, outextra) +
+                workfactor * min(getAutoBlockSize(), insize)
         ondisk <- "no"
-        if (insize > maxmem) {
+        if (need > .mem_fraction_R * maxmem) {
             ondisk <- "yes"
             if (is(X, "DelayedArray") && verbose)
-                cli_alert_info(paste("On-disk input data does not fit in the",
-                                     "maximum available main memory"))
+                cli_alert_info(paste("Calculations with on-disk input data",
+                                     "loaded in main memory do not fit in",
+                                     "the maximum available main memory"))
         } else if (is(X, "DelayedArray") && verbose)
-            cli_alert_info(paste("On-disk input data fits in the maximum",
+            cli_alert_info(paste("Calculations with on-disk input data",
+                                 "loaded in main memory fit in the maximum",
                                  "available main memory"))
 
     } else if (ondisk != "yes" && ondisk != "no")
