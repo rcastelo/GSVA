@@ -959,6 +959,9 @@ gsvaRowNorm <- function(param,
                                  verbose=verbose,
                                  BPPARAM=BPPARAM, maxmem=maxmem)
         rem <- nrow(dataMatrix) - nrow(filtDataMatrix)
+        ## release the input data not filtered, which may be in main memory,
+        ## to leave that memory available to the normalization of the rows
+        rm(dataMatrix)
     } else if (verbose)
         cli_alert_warning(paste("Skipping filtering of constant rows",
                                 "(filterRows=FALSE)"))
@@ -1229,10 +1232,11 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                   minSize=get_minSize(param),
                                   ondisk=ondisk, verbose=verbose,
                                   minparrows=100, minparcols=100,
-                                  BPPARAM=BPPARAM,
-                                  maxmem=ceiling(maxmem/100)) ## use
-                                  ## of memory increases here about
-                                  ## 10-fold over block size memory
+                                  BPPARAM=BPPARAM, maxmem=maxmem,
+                                  ## the memory taken by each column is
+                                  ## mostly the one of its GSVA scores
+                                  workfactor=2, outfactor=0,
+                                  outextra=8 * length(filtMappedGeneSets))
 
     rownames(gsva_es) <- names(filtMappedGeneSets)
     colnames(gsva_es) <- colnames(filtDataMatrix)
@@ -1772,17 +1776,23 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
     kernel <- kcdfparam$kernel
     Gaussk <- kcdfparam$Gaussk
 
+    ## memory taken to normalize each row, relative to its size in 'expr',
+    ## measured for row ECDFs, plus a margin, and producing an output of
+    ## double values that may come from integer input values
+    workfactor <- if (is_sparse(expr)) 6 else 4
     Z <- NULL
     if (rowNorm == "ecdf")
         Z <- .processMatrixRows(expr, FUN=compute.gene.cdf, Gaussk=Gaussk,
                                 kernel=kernel, sparse=sparse, any_na=any_na,
                                 na_use=na_use, verbose=verbose, minparrows=100,
-                                minparcols=100, BPPARAM=BPPARAM, maxmem=maxmem)
+                                minparcols=100, BPPARAM=BPPARAM, maxmem=maxmem,
+                                workfactor=workfactor, outfactor=1.5)
     else if (rowNorm == "clr")
         Z <- .processMatrixRows(expr, FUN=compute.gene.clr, sparse=sparse,
                                 any_na=any_na, na_use=na_use, verbose=verbose,
                                 minparrows=100, minparcols=100, BPPARAM=BPPARAM,
-                                maxmem=maxmem)
+                                maxmem=maxmem, workfactor=workfactor,
+                                outfactor=1.5)
     else
         cli_abort(c("x"=paste(".compute_row_norm: 'rowNorm' should be one of",
                               "'ecdf' or 'clr'.")))
@@ -1833,10 +1843,13 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
  
     ## here 'ties.method="last"' allows one to obtain the result
     ## from 'order()' based on ranks
+    ## memory taken to rank each column, relative to its size in 'Z',
+    ## measured, plus a margin
     R <- .processMatrixCols(Z, FUN=compute.col.ranks, ties.method="last",
                             drop.sparsity=FALSE, verbose=verbose,
                             minparrows=100, minparcols=100,
-                            BPPARAM=BPPARAM, maxmem=maxmem)
+                            BPPARAM=BPPARAM, maxmem=maxmem,
+                            workfactor=if (is_sparse(Z)) 7 else 2)
 
     return(R)
 }
@@ -1978,7 +1991,6 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     walkStat
 }
 
-## convert ranks into decreasing order statistics and symmetric rank statistics
 ## check that the ranks 'r' of a column are either zero, for zero values in
 ## sparse data, or between 1 and the number of nonzero nonmissing values,
 ## which is required to convert them into decreasing order statistics; this
@@ -1997,6 +2009,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     invisible(TRUE)
 }
 
+## convert ranks into decreasing order statistics and symmetric rank statistics
 .ranks2stats <- function(r, sparse) {
     .check_rank_bounds(r)
     mask <- r == 0

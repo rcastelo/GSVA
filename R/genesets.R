@@ -1074,7 +1074,9 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
     ## minimum and maximum nonzero values of each row, which will be NAs if
     ## there are no nonzero values.
     rowrngs <- .processMatrixRows(expr, .rowNzRanges, anyna=anyna,
-                                  verbose=verbose, BPPARAM=BPPARAM, maxmem=maxmem)
+                                  verbose=verbose, BPPARAM=BPPARAM,
+                                  maxmem=maxmem, workfactor=2, outfactor=0,
+                                  outextra=32) ## four doubles per row
 
     constantRows <- (rowrngs[, 1] == rowrngs[, 2])
     mask <- is.na(constantRows)

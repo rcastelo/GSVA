@@ -9,24 +9,77 @@
 ## internally by the functions that need to process the rows or the columns of
 ## a matrix in blocks.
 
-## adapted from .define_multiworker_grid() in beachmat/R/colBlockApply.R
+## fraction of the maximum main memory available to the allocations of R, the
+## rest being taken by the memory that R releases but that the process keeps,
+## and by allocations outside R, e.g., by the HDF5 library; in the steps of
+## GSVA on single-cell data, the peak of memory allocated by R was 70% to 80%
+## of the peak of memory resident in the process
+.mem_fraction_R <- 0.7
+
+## number of rows (whdim=1) or columns (whdim=2) of the blocks in which the
+## matrix 'X' can be processed by 'nworkers' workers within the maximum main
+## memory 'maxmem'. processing each row or column takes 'workfactor' times its
+## size in 'X', and produces an output of 'outfactor' times that size plus
+## 'outextra' bytes. the memory available to the blocks of the workers is what
+## is left, from the fraction .mem_fraction_R of 'maxmem' available to the
+## allocations of R, by 'X', when it is stored in main memory, and by the
+## output, which
+## takes twice its size while it is assembled from the blocks at the end. the
+## size of a row or column of 'X' stored on disk is the one of its dense form,
+## which overestimates the size of sparse data. blocks are not smaller than
+## the automatic block size of the DelayedArray package, see getAutoBlockSize(),
+## because the overhead of processing many smaller blocks makes calculations
+## too slow, so that a smaller 'maxmem' is not honored, and they have at most
+## as many rows or columns as needed to give one block to each worker, and as
+## the DelayedArray package supports
+#' @importFrom BiocGenerics type
+#' @importFrom utils object.size
+#' @importFrom DelayedArray getAutoBlockLength
+.units_per_block <- function(X, whdim, nworkers, maxmem, workfactor=2,
+                             outfactor=1, outextra=0) {
+    nunits <- dim(X)[whdim]
+    if (is(X, "DelayedArray")) {
+        resident <- 0
+        unitbytes <- as.numeric(dim(X)[-whdim]) *
+                     if (type(X) == "integer") 4 else 8
+    } else {
+        resident <- as.numeric(object.size(X))
+        unitbytes <- resident / max(1, nunits)
+    }
+    outbytes <- outfactor * unitbytes + outextra
+    avail <- (.mem_fraction_R * maxmem - resident - 2 * outbytes * nunits) /
+             nworkers
+    nperblock <- floor(avail / (workfactor * unitbytes + outbytes))
+    otherdim <- max(1, as.numeric(dim(X)[-whdim]))
+    nperblock <- max(nperblock, floor(getAutoBlockLength(type(X)) / otherdim))
+    ## the DelayedArray package does not support blocks with more than
+    ## .Machine$integer.max values
+    nperblock <- min(ceiling(nunits / nworkers),
+                     floor(.Machine$integer.max / otherdim), nperblock)
+
+    as.integer(max(1, nperblock))
+}
+
+## adapted from .define_multiworker_grid() in beachmat/R/colBlockApply.R; with a
+## finite maximum main memory 'maxmem', blocks have as many rows as fit in it,
+## see .units_per_block(), and otherwise the default block length of the
+## DelayedArray package, when there are several workers or 'X' is stored on
+## disk, or form a single block
 #' @importFrom BiocGenerics type
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
-.rowgridsize <- function(X, nworkers=1, maxmem=Inf) {
-  typesze <- c("integer"=4, "double"=8) ## 4 bytes for integers, 8 bytes for doubles
+.rowgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
+                         outextra=0) {
   grid <- DummyArrayGrid(dim(X))
-  if (!is.infinite(maxmem) || nworkers > 1 || is(X, "DelayedMatrix")) {
-      ## initially maximum block length is the maximum of the default auto block
-      ## length and the maximum available memory divided by the size of stored number
-      ## if no finite maximum available memory is specified, then it becomes the
-      ## default auto block length
-      max.block.length <- getAutoBlockLength(type(X))
-      if (!is.infinite(maxmem))
-          max.block.length <- max(max.block.length, ceiling(maxmem / typesze[type(X)]))
+  if (is.finite(maxmem)) {
+      nrowblock <- .units_per_block(X, 1L, nworkers, maxmem, workfactor,
+                                    outfactor, outextra)
+      grid <- rowAutoGrid(X, nrow=.align_to_chunks(nrowblock, X, 1L))
+  } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
-      ## by the number of workers to avoid exceeding the maximum available memory
-      ## and, in any case, it cannot exceed .Machine$integer.max
-      max.block.length <- min(.Machine$integer.max, max.block.length / nworkers)
+      ## by the number of workers and, in any case, it cannot exceed
+      ## .Machine$integer.max
+      max.block.length <- min(.Machine$integer.max,
+                              getAutoBlockLength(type(X)) / nworkers)
       expected.block.length <- max(1, ceiling(nrow(X) / nworkers) * as.numeric(ncol(X)))
       block.length <- min(max.block.length, expected.block.length)
       ## number of rows per block, as calculated by rowAutoGrid()
@@ -36,25 +89,27 @@
   grid
 }
 
-## adapted from .define_multiworker_grid() in beachmat/R/colBlockApply.R
+## adapted from .define_multiworker_grid() in beachmat/R/colBlockApply.R; with a
+## finite maximum main memory 'maxmem', blocks have as many columns as fit in
+## it, see .units_per_block(), and otherwise the default block length of the
+## DelayedArray package, when there are several workers or 'X' is stored on
+## disk, or form a single block
 #' @importFrom BiocGenerics type
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
-.colgridsize <- function(X, nworkers=1, maxmem=Inf) {
-  typesze <- c("integer"=4, "double"=8) ## 4 bytes for integers, 8 bytes for doubles
+.colgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
+                         outextra=0) {
   grid <- DummyArrayGrid(dim(X))
-  if (!is.infinite(maxmem) || nworkers > 1 || is(X, "DelayedMatrix")) {
-      ## initially maximum block length is the maximum of the default auto block
-      ## length and the maximum available memory divided by the size of stored number
-      ## if no finite maximum available memory is specified, then it becomes the
-      ## default auto block length
-      max.block.length <- getAutoBlockLength(type(X))
-      if (!is.infinite(maxmem))
-          max.block.length <- max(max.block.length, ceiling(maxmem / typesze[type(X)]))
+  if (is.finite(maxmem)) {
+      ncolblock <- .units_per_block(X, 2L, nworkers, maxmem, workfactor,
+                                    outfactor, outextra)
+      grid <- colAutoGrid(X, ncol=.align_to_chunks(ncolblock, X, 2L))
+  } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
-      ## by the number of workers to avoid exceeding the maximum available memory
-      ## and, in any case, it cannot exceed .Machine$integer.max
-      max.block.length <- min(.Machine$integer.max, max.block.length / nworkers)
-      expected.block.length <- max(1, ceiling(nrow(X) / nworkers) * as.numeric(ncol(X)))
+      ## by the number of workers and, in any case, it cannot exceed
+      ## .Machine$integer.max
+      max.block.length <- min(.Machine$integer.max,
+                              getAutoBlockLength(type(X)) / nworkers)
+      expected.block.length <- max(1, ceiling(ncol(X) / nworkers) * as.numeric(nrow(X)))
       block.length <- min(max.block.length, expected.block.length)
       ## number of columns per block, as calculated by colAutoGrid()
       ncolblock <- min(max(1, floor(block.length / max(1, nrow(X)))), ncol(X))
@@ -134,7 +189,10 @@
 
 ## process the rows of a matrix with a given function FUN, opening parallelism
 ## through a BiocParallelParam object BPPARAM, when different from NULL, and
-## reporting progress using the 'cli' package when possible
+## reporting progress using the 'cli' package when possible. the arguments
+## 'workfactor', 'outfactor' and 'outextra' give the memory that FUN takes to
+## process the rows of 'X' within the maximum main memory 'maxmem', see
+## .units_per_block()
 
 #' @importFrom BiocGenerics type
 #' @importFrom cli cli_abort cli_progress_bar cli_alert_warning
@@ -146,7 +204,8 @@
 .processMatrixRows <- function(X, FUN, ..., verbose=TRUE,
                                minparrows=100, minparcols=100,
                                progressmsg="Progress", BPPARAM=NULL,
-                               maxmem=Inf) {
+                               maxmem=Inf, workfactor=2, outfactor=1,
+                               outextra=0) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
@@ -155,7 +214,7 @@
         nworkers <- bpnworkers(BPPARAM)
     }
 
-    grid <- .rowgridsize(X, nworkers, maxmem)
+    grid <- .rowgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra)
     rir <- .splitRowsInRanges(grid)
     if (length(rir) > 1 && verbose) {
         sze <- howbig(as.numeric(width(rir[[1]])), as.numeric(ncol(X)),
@@ -232,7 +291,10 @@
 
 ## process the columns of a matrix with a given function FUN, opening parallelism
 ## through a BiocParallelParam object BPPARAM, when different from NULL, and
-## reporting progress using the 'cli' package when possible
+## reporting progress using the 'cli' package when possible. the arguments
+## 'workfactor', 'outfactor' and 'outextra' give the memory that FUN takes to
+## process the columns of 'X' within the maximum main memory 'maxmem', see
+## .units_per_block()
 
 #' @importFrom BiocGenerics type
 #' @importFrom cli cli_abort
@@ -243,7 +305,8 @@
 .processMatrixCols <- function(X, FUN, ..., verbose=TRUE,
                                minparrows=100, minparcols=100,
                                progressmsg="Progress", BPPARAM=NULL,
-                               maxmem=Inf) {
+                               maxmem=Inf, workfactor=2, outfactor=1,
+                               outextra=0) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
@@ -252,7 +315,7 @@
         nworkers <- bpnworkers(BPPARAM)
     }
 
-    grid <- .colgridsize(X, nworkers, maxmem)
+    grid <- .colgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra)
     cir <- .splitColsInRanges(grid)
 
     if (length(cir) > 1 && verbose) {

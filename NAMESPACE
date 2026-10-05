@@ -241,6 +241,7 @@ importFrom(utils,
   globalVariables,
   head,
   installed.packages,
+  object.size,
   packageDescription,
   packageVersion,
   tail

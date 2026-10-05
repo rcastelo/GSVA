@@ -12,16 +12,21 @@ test_blockgrids <- function() {
         library(HDF5Array)
     })
 
-    ## blocks calculated without alignment, as before aligning them
-    unaligned <- function(X, nworkers, maxmem, autogrid) {
-        typesze <- c("integer"=4, "double"=8)
-        if (is.infinite(maxmem) && nworkers == 1 && !is(X, "DelayedMatrix"))
+    ## blocks calculated without alignment, as before aligning them: with a
+    ## finite maximum memory, as many rows or columns as fit in it and,
+    ## otherwise, the default block length, split among the workers
+    unaligned <- function(X, nworkers, maxmem, whdim) {
+        autogrid <- if (whdim == 1) rowAutoGrid else colAutoGrid
+        if (is.finite(maxmem)) {
+            n <- GSVA:::.units_per_block(X, whdim, nworkers, maxmem)
+            return(if (whdim == 1) rowAutoGrid(X, nrow=n)
+                   else colAutoGrid(X, ncol=n))
+        }
+        if (nworkers == 1 && !is(X, "DelayedMatrix"))
             return(DummyArrayGrid(dim(X)))
-        mbl <- getAutoBlockLength(type(X))
-        if (!is.infinite(maxmem))
-            mbl <- max(mbl, ceiling(maxmem / typesze[type(X)]))
-        mbl <- min(.Machine$integer.max, mbl / nworkers)
-        ebl <- max(1, ceiling(nrow(X) / nworkers) * as.numeric(ncol(X)))
+        mbl <- min(.Machine$integer.max, getAutoBlockLength(type(X)) / nworkers)
+        ebl <- max(1, ceiling(dim(X)[whdim] / nworkers) *
+                      as.numeric(dim(X)[-whdim]))
         autogrid(X, block.length=min(mbl, ebl))
     }
 
@@ -37,9 +42,9 @@ test_blockgrids <- function() {
     for (X in list(m, rsparsematrix(777, 3000, 0.1), DelayedArray(m))) {
         for (nw in c(1, 3)) {
             for (mm in c(Inf, 5e6)) {
-                checkIdentical(blockdims(unaligned(X, nw, mm, rowAutoGrid)),
+                checkIdentical(blockdims(unaligned(X, nw, mm, 1)),
                                blockdims(GSVA:::.rowgridsize(X, nw, mm)))
-                checkIdentical(blockdims(unaligned(X, nw, mm, colAutoGrid)),
+                checkIdentical(blockdims(unaligned(X, nw, mm, 2)),
                                blockdims(GSVA:::.colgridsize(X, nw, mm)))
             }
         }
@@ -58,6 +63,54 @@ test_blockgrids <- function() {
     checkIdentical(124L, ncol(GSVA:::.colgridsize(H)[[1L]]))
     checkIdentical(31L, ncol(GSVA:::.colgridsize(H, 3)[[1L]]))
     checkIdentical(25L, ncol(GSVA:::.colgridsize(H, 5)[[1L]]))
+}
+
+## the number of rows or columns of a block is the one that fits in the memory
+## left by the input in main memory and the output, among the workers, while
+## blocks are not smaller than the automatic block size, nor more than one per
+## worker
+test_units_per_block <- function() {
+
+    message("Running unit tests for the size of blocks within a memory budget")
+
+    suppressPackageStartupMessages(library(DelayedArray))
+
+    oldautoblocksize <- getAutoBlockSize()
+    on.exit(setAutoBlockSize(oldautoblocksize))
+    setAutoBlockSize(8 * 1000 * 10) ## 10 columns of 1000 doubles
+
+    X <- matrix(0, nrow=1000, ncol=500)
+    insize <- as.numeric(object.size(X))
+    colbytes <- insize / 500
+    ## the budgets below are for the allocations of R, a fraction of 'maxmem'
+    frac <- GSVA:::.mem_fraction_R
+    upb <- function(nworkers, maxmem, ...)
+        GSVA:::.units_per_block(X, 2L, nworkers, maxmem / frac, ...)
+
+    ## memory for 50 columns per block, with 'workfactor' times the size of a
+    ## column of working memory and an output of the same size as the input
+    maxmem <- insize + 2 * insize + 50 * (2 + 1) * colbytes
+    checkIdentical(upb(1, maxmem), 50L)
+    ## shared by two workers
+    checkIdentical(upb(2, maxmem), 25L)
+    ## more working memory per column
+    checkIdentical(upb(1, maxmem, workfactor=4), 30L)
+    ## an output of 8 bytes per gene set per column for 100 gene sets
+    maxmem <- insize + 2 * 800 * 500 + 50 * (2 * colbytes + 800)
+    checkIdentical(upb(1, maxmem, outfactor=0, outextra=800), 50L)
+    ## not smaller than the automatic block size, of 10 columns
+    checkIdentical(upb(1, insize), 10L)
+    ## not more than one block per worker
+    checkIdentical(upb(3, Inf), 167L)
+    ## data on disk is not in main memory and has the size of its dense form
+    D <- DelayedArray(X)
+    maxmem <- 2 * insize + 50 * (2 + 1) * colbytes
+    checkIdentical(GSVA:::.units_per_block(D, 2L, 1, maxmem / frac), 50L)
+    ## blocks have at most .Machine$integer.max values, which large sparse
+    ## data in main memory could otherwise exceed
+    S <- Matrix::sparseMatrix(i=1, j=1, x=1, dims=c(60000, 50000))
+    checkIdentical(GSVA:::.units_per_block(S, 1L, 1, 2^40),
+                   as.integer(floor(.Machine$integer.max / 50000)))
 }
 
 test_blockprocessing_bpparam_unchanged <- function() {

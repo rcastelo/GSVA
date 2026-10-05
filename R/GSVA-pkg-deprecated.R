@@ -191,10 +191,11 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                                             minSize=get_minSize(param),
                                             ondisk=ondisk, verbose=verbose,
                                             minparrows=100, minparcols=100,
-                                            BPPARAM=BPPARAM,
-                                            maxmem=ceiling(maxmem/100)) ## use
-                                            ## of memory increases here about
-                                            ## 10-fold over block size memory
+                                            BPPARAM=BPPARAM, maxmem=maxmem,
+                                            ## the memory taken by each column
+                                            ## is mostly the one of its scores
+                                            workfactor=2, outfactor=0,
+                                            outextra=8 * length(filtMappedGeneSets))
 
               rownames(gsva_es) <- names(filtMappedGeneSets)
               colnames(gsva_es) <- colnames(filtDataMatrix)
