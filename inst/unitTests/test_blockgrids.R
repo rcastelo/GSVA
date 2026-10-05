@@ -99,3 +99,28 @@ test_blockprocessing_bpparam_unchanged <- function() {
         checkTrue(!bpprogressbar(bpparam))
     }
 }
+
+test_blockprocessing_dead_worker <- function() {
+
+    if (.Platform$OS.type != "unix") ## forked worker processes
+        return(invisible(TRUE))
+
+    message("Running unit tests for block processing with a dead worker")
+
+    suppressPackageStartupMessages(library(BiocParallel))
+
+    ## a forked worker process that ends without returning its result, as
+    ## when it crashes, gives an error telling so
+    X <- matrix(rnorm(200 * 150), nrow=200, ncol=150)
+    killing_fun <- function(x, verbose) {
+        tools::pskill(Sys.getpid(), tools::SIGKILL)
+        x
+    }
+    err <- tryCatch(suppressWarnings(suppressMessages(
+                        GSVA:::.processMatrixRows(X, FUN=killing_fun,
+                                                  verbose=FALSE,
+                                                  BPPARAM=MulticoreParam(2)))),
+                    error=conditionMessage)
+    checkTrue(is.character(err) &&
+              grepl("parallel worker process ended", err, fixed=TRUE))
+}

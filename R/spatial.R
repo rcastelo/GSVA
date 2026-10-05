@@ -121,11 +121,11 @@ setMethod("spatCor", signature("SpatialExperiment"),
                     }
                     bpprogressbar(BPPARAM) <- TRUE ## reporting progress wo/ cli
                 }
-                spe_Moran <- bplapply(rowns, function(x) {
+                spe_Moran <- .gsva_bplapply(rowns, function(x) {
                     res <- list(observed=NA, expected=NA, sd=NA, p.value=NA)
                     if (x %in% rownames(logc))
                         res <- .internal_moran(logc[x, ], weight_list, na.rm=na.rm,
-                                               alternative=alternative)	       
+                                                     alternative=alternative)	       
                     res
                 }, BPPARAM = BPPARAM)
             }

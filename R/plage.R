@@ -309,8 +309,8 @@ plage <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
             bpprogressbar(BPPARAM) <- TRUE ## reporting progress wo/ cli
         }
 
-        es <- bplapply(geneSets, rightsingularsvdvectorgset, Z,
-                       BPPARAM=BPPARAM)
+        es <- .gsva_bplapply(geneSets, rightsingularsvdvectorgset, Z,
+                             BPPARAM=BPPARAM)
     }
         
     es <- do.call(rbind, es)

@@ -94,6 +94,44 @@
     out <- lapply(msg, cli_alert_warning)
 }
 
+## call bplapply() with the arguments in '...', replacing the uninformative
+## error that BiocParallel gives when a forked worker process ends without
+## returning its result, such as "wrong args for environment subassignment",
+## by an error that tells what happened. that error of BiocParallel follows
+## the warning of parallel::mccollect() that a parallel job did not deliver
+## its result, whose message is matched in English only, so that in other
+## languages the error of BiocParallel is given as it is. errors of the
+## workers, which BiocParallel gives as 'bperror' objects, are not replaced
+#' @importFrom BiocParallel bplapply
+#' @importFrom cli cli_abort
+.gsva_bplapply <- function(...) {
+    nodelivery <- FALSE
+    withCallingHandlers(bplapply(...),
+        warning=function(w) {
+            if (grepl("parallel jobs? did not deliver", conditionMessage(w)))
+                nodelivery <<- TRUE
+        },
+        error=function(e) {
+            if (nodelivery && !inherits(e, "bperror"))
+                cli_abort(c("x"=paste("A parallel worker process ended",
+                                      "without returning its result."),
+                            "i"=paste("This happens, for instance, when the",
+                                      "process crashes, e.g., with a",
+                                      "segmentation fault, or when the",
+                                      "operating system or the workload",
+                                      "manager kills it, e.g., for exceeding",
+                                      "a memory limit."),
+                            "i"=paste("The error output of the process,",
+                                      "such as the log of a batch job, may",
+                                      "show the cause. Running the same",
+                                      "calculations with",
+                                      "{.code BPPARAM=SerialParam()} may also",
+                                      "show it, but a crash would then end",
+                                      "the R session.")),
+                          parent=e)
+        })
+}
+
 ## process the rows of a matrix with a given function FUN, opening parallelism
 ## through a BiocParallelParam object BPPARAM, when different from NULL, and
 ## reporting progress using the 'cli' package when possible
@@ -163,16 +201,16 @@
         if (verbose)
             bpprogressbar(BPPARAM) <- TRUE    ## reporting progress wo/ cli
         bpstopOnError(BPPARAM) <- FALSE
-        res <- bptry(bplapply(rir, FUN=FUN_WRAPPER, verbose=FALSE,
-                              idpbe=NULL, WRAPPED_FUN=FUN, ...,
-                              BPPARAM=BPPARAM))
+        res <- bptry(.gsva_bplapply(rir, FUN=FUN_WRAPPER, verbose=FALSE,
+                                    idpbe=NULL, WRAPPED_FUN=FUN, ...,
+                                    BPPARAM=BPPARAM))
         bpokmask <- bpok(res)
         if (any(!bpokmask)) {
             .report_parallel_errors(res)
             cli_alert_warning("Trying to execute again the failing thread(s)")
-            res <- bptry(bplapply(rir, FUN=FUN_WRAPPER, verbose=FALSE,
-                                  idpbe=NULL, WRAPPED_FUN=FUN, ...,
-                                  BPREDO=res, BPPARAM=BPPARAM))
+            res <- bptry(.gsva_bplapply(rir, FUN=FUN_WRAPPER, verbose=FALSE,
+                                        idpbe=NULL, WRAPPED_FUN=FUN, ...,
+                                        BPREDO=res, BPPARAM=BPPARAM))
             bpokmask <- bpok(res)
             if (any(!bpokmask)) {
                 .report_parallel_errors(res)
@@ -255,16 +293,16 @@
         if (verbose)
             bpprogressbar(BPPARAM) <- TRUE    ## reporting progress wo/ cli
         bpstopOnError(BPPARAM) <- FALSE
-        res <- bptry(bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
-                              idpbe=NULL, WRAPPED_FUN=FUN, ...,
-                              BPPARAM=BPPARAM))
+        res <- bptry(.gsva_bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
+                                    idpbe=NULL, WRAPPED_FUN=FUN, ...,
+                                    BPPARAM=BPPARAM))
         bpokmask <- bpok(res)
         if (any(!bpokmask)) {
             .report_parallel_errors(res)
             cli_alert_warning("Trying to execute again the failing thread(s)")
-            res <- bptry(bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
-                                  idpbe=NULL, WRAPPED_FUN=FUN, ...,
-                                  BPREDO=res, BPPARAM=BPPARAM))
+            res <- bptry(.gsva_bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
+                                        idpbe=NULL, WRAPPED_FUN=FUN, ...,
+                                        BPREDO=res, BPPARAM=BPPARAM))
             bpokmask <- bpok(res)
             if (any(!bpokmask)) {
                 .report_parallel_errors(res)

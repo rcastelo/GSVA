@@ -535,18 +535,18 @@ average <- function(X, geneSets, method="mean",
                 bpprogressbar(BPPARAM) <- TRUE ## reporting progress wo/ cli
             }
 
-            es <- bplapply(geneSets, function(gSetIdx) {
-                               Xgset <- X[gSetIdx, , drop=FALSE]
-                               avg <- colMeans(Xgset,
-                                               na.rm=(any_na && na_use=="na.rm"))
-                               if (any_na && na_use=="na.rm") {
-                                 nnas <- colSums(!is.na(Xgset))
-                                 avg[nnas < minSize] <- NA
-                                 if (any(is.na(avg)))
-                                     assign("w", TRUE, envir=wna_env)
-                               }
-                               avg
-                           }, BPPARAM=BPPARAM)
+            es <- .gsva_bplapply(geneSets, function(gSetIdx) {
+                                     Xgset <- X[gSetIdx, , drop=FALSE]
+                                     avg <- colMeans(Xgset,
+                                                     na.rm=(any_na && na_use=="na.rm"))
+                                     if (any_na && na_use=="na.rm") {
+                                       nnas <- colSums(!is.na(Xgset))
+                                       avg[nnas < minSize] <- NA
+                                       if (any(is.na(avg)))
+                                           assign("w", TRUE, envir=wna_env)
+                                     }
+                                     avg
+                                 }, BPPARAM=BPPARAM)
         }
         es <- do.call(rbind, es)
     }

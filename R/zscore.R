@@ -397,9 +397,9 @@ zscore <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
                 bpprogressbar(BPPARAM) <- TRUE ## reporting progress wo/ cli
             }
 
-            es <- bplapply(geneSets, function(gSetIdx) {
-                               colSums(Z[gSetIdx, , drop=FALSE]) / sqrt(length(gSetIdx))
-                           }, BPPARAM=BPPARAM)
+            es <- .gsva_bplapply(geneSets, function(gSetIdx) {
+                                     colSums(Z[gSetIdx, , drop=FALSE]) / sqrt(length(gSetIdx))
+                                 }, BPPARAM=BPPARAM)
         }
         es <- do.call(rbind, es)
     }
