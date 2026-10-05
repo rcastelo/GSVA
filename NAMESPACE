@@ -208,7 +208,8 @@ importFrom(graphics,
 )
 importFrom(memuse,
   Sys.meminfo,
-  howbig
+  howbig,
+  mu
 )
 importFrom(methods,
   callNextMethod,

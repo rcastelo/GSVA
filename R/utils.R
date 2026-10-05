@@ -741,8 +741,75 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
   num * unname(fac[toupper(unit)])
 }
 
+## memory limit in bytes of the job or container where this R process runs,
+## or Inf when there is none. on Linux, workload managers such as SLURM, and
+## container engines, enforce this limit through the control group (cgroup)
+## of the process, which can be set in any of the cgroups along its path, e.g.,
+## at the level of a SLURM job and not of its steps, so that the smallest
+## limit along that path is taken, using either cgroup version 1 or 2. the
+## limit given by SLURM in its environment variables is also taken into
+## account. the paths of the files and the environment variables are
+## arguments to allow testing this function
+.job_memory_limit <- function(procfile="/proc/self/cgroup",
+                              cgroupdir="/sys/fs/cgroup",
+                              env=Sys.getenv(c("SLURM_MEM_PER_NODE",
+                                               "SLURM_MEM_PER_CPU",
+                                               "SLURM_CPUS_ON_NODE"),
+                                             unset=NA)) {
+    readnum <- function(fname) {
+        if (!file.exists(fname))
+            return(NA_real_)
+        suppressWarnings(tryCatch(as.numeric(readLines(fname, n=1L,
+                                                       warn=FALSE)),
+                                  error=function(e) NA_real_))
+    }
+    limit <- Inf
+    cglines <- character(0)
+    if (file.exists(procfile)) ## only on Linux
+        cglines <- tryCatch(readLines(procfile, warn=FALSE),
+                            error=function(e) character(0))
+    for (cgline in cglines) {
+        ## each line has the format 'hierarchy-ID:controllers:path', where
+        ## cgroup version 2 has hierarchy-ID 0 and no controllers
+        fields <- strsplit(cgline, ":", fixed=TRUE)[[1]]
+        if (length(fields) < 3L)
+            next
+        if (fields[1] == "0" && fields[2] == "") {
+            dir <- cgroupdir
+            limitfile <- "memory.max" ## 'max' when there is no limit
+        } else if ("memory" %in% strsplit(fields[2], ",", fixed=TRUE)[[1]]) {
+            dir <- file.path(cgroupdir, "memory")
+            limitfile <- "memory.limit_in_bytes"
+        } else
+            next
+        path <- strsplit(paste(fields[-(1:2)], collapse=":"), "/",
+                         fixed=TRUE)[[1]]
+        path <- path[path != ""]
+        for (k in rev(seq_len(length(path) + 1L) - 1L)) {
+            v <- readnum(do.call(file.path,
+                                 as.list(c(dir, path[seq_len(k)],
+                                           limitfile))))
+            if (!is.na(v) && v > 0)
+                limit <- min(limit, v)
+        }
+    }
+
+    ## SLURM gives memory limits in megabytes, where 0 means no limit
+    env <- suppressWarnings(as.numeric(env))
+    names(env) <- c("SLURM_MEM_PER_NODE", "SLURM_MEM_PER_CPU",
+                    "SLURM_CPUS_ON_NODE")
+    if (!is.na(env["SLURM_MEM_PER_NODE"]) && env["SLURM_MEM_PER_NODE"] > 0)
+        limit <- min(limit, env["SLURM_MEM_PER_NODE"] * 1024^2)
+    else if (!is.na(env["SLURM_MEM_PER_CPU"]) && env["SLURM_MEM_PER_CPU"] > 0 &&
+             !is.na(env["SLURM_CPUS_ON_NODE"]))
+        limit <- min(limit, env["SLURM_MEM_PER_CPU"] *
+                            env["SLURM_CPUS_ON_NODE"] * 1024^2)
+
+    unname(limit)
+}
+
 #' @importFrom cli cli_abort cli_alert_info
-#' @importFrom memuse Sys.meminfo
+#' @importFrom memuse Sys.meminfo mu
 .check_maxmem <- function(param, assay=get_assay(param), maxmem, verbose) {
     if (length(maxmem) > 1 || (!is.numeric(maxmem) && !is.character(maxmem))) {
         msg <- paste("'maxmem' should be a vector of length 1 of either a",
@@ -752,13 +819,22 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     }
 
     if (is.character(maxmem) && maxmem == "auto") {
+        ## auto takes 90% of RAM or, when smaller, of the memory limit of the
+        ## job or container where this R process runs
         totalram <- Sys.meminfo()$totalram
-        maxmem <- as.numeric(totalram * 0.9) ## auto takes 90% of RAM
+        joblimit <- .job_memory_limit()
+        avail <- totalram
+        what <- "main memory"
+        if (joblimit < as.numeric(totalram)) {
+            avail <- mu(joblimit)
+            what <- "memory of the job"
+        }
+        maxmem <- as.numeric(avail * 0.9)
         X <- unwrapData(get_exprData(param), assay)
         if (verbose && is(X, "DelayedArray") &&
             gsva_global$show_start_and_end_messages)
-            cli_alert_info(sprintf("Maximum available main memory (90%%): %s",
-                                   as.character(totalram * 0.9)))
+            cli_alert_info(sprintf("Maximum available %s (90%%): %s", what,
+                                   as.character(avail * 0.9)))
     }
 
     maxmem <- .memtext2bytes(maxmem)
