@@ -748,13 +748,15 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                                                  minparrows=100, minparcols=100,
                                                  verbose)
 
-              if (.get_filterRows(param))
+              if (.get_filterRows(param)) {
                   filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
                                                  removeConstant=TRUE,
                                                  removeNzConstant=TRUE,
                                                  verbose, BPPARAM=BPPARAM,
                                                  maxmem=maxmem)
-              else if (verbose) {
+                  rm(dataMatrix) ## avoid keeping the original copy of the data
+                  out <- gc()    ## in main memory
+              } else if (verbose) {
                   msg <- "Skipping filtering of constant rows (filterRows=FALSE)"
                   cli_alert_warning(msg)
               }
