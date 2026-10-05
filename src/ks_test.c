@@ -480,7 +480,7 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
   es = REAL(esR);
 
   if (verbose) {
-    pb = PROTECT(cli_progress_bar(p, NULL)); nunprotect++;
+    pb = PROTECT(cli_progress_bar(n, NULL)); nunprotect++; /* one tick per column */
     cli_progress_set_name(pb, "Calculating GSVA scores");
   }
 
