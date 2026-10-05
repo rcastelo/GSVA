@@ -383,6 +383,38 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     }
 }
 
+## load into main memory as an SVT_SparseMatrix object the sparse on-disk data
+## in 'X', reading one block of columns at a time, because coercing 'X' as a
+## whole with as() takes 5 to 8 times the memory of the result. while a block
+## is read and converted, it takes up to about twice the memory of the same
+## block as a dense matrix, so that blocks have as many columns as possible
+## for that memory to fit in half of the maximum main memory 'maxmem' left by
+## the result, whose estimated size is 'insize', leaving the other half for
+## memory used outside R, e.g., by the HDF5 library. when 'maxmem' or 'insize'
+## are not known, blocks have the default size of the DelayedArray package
+#' @importFrom DelayedArray colAutoGrid read_block
+#' @importFrom BiocGenerics type
+.load_sparse_by_blocks <- function(X, maxmem=Inf, insize=NA_real_) {
+    if (ncol(X) == 0L)
+        return(as(X, "SVT_SparseMatrix"))
+
+    grid <- colAutoGrid(X) ## default block size
+    if (!is.null(maxmem) && !is.null(insize) && is.finite(maxmem) &&
+        !is.na(insize)) {
+        bytespercol <- as.numeric(nrow(X)) * if (type(X) == "integer") 4 else 8
+        ncolblock <- floor((maxmem - insize) / 2 / (2 * bytespercol))
+        ncolblock <- as.integer(max(1, min(ncol(X), ncolblock)))
+        grid <- colAutoGrid(X, ncol=ncolblock)
+    }
+    blocks <- lapply(seq_along(grid), function(i)
+                         as(read_block(X, grid[[i]], as.sparse=TRUE),
+                            "SVT_SparseMatrix"))
+    res <- do.call(cbind, blocks)
+    dimnames(res) <- dimnames(X)
+
+    res
+}
+
 .check_sparse_load_input_expr <- function(expr, method, first, last, whdim,
                                           ondisk, verbose) {
     if (method != "GSVA" && is_sparse(expr)) { 
@@ -418,7 +450,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             cli_alert_info("Loading input expression data into main memory")
 
         if (method == "GSVA" && is_sparse(expr))
-            expr <- as(expr, "SVT_SparseMatrix")
+            expr <- .load_sparse_by_blocks(expr, maxmem=attr(ondisk, "maxmem"),
+                                           insize=attr(ondisk, "insize"))
         else
             expr <- as.matrix(expr)
 
@@ -855,6 +888,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 #' @importFrom memuse howbig
 .check_ondisk <- function(param, assay=get_assay(param), first, last, whdim,
                           recompute_nzcount=FALSE, maxmem, verbose) {
+    insize <- NA_real_ ## estimated size of the input data
     ondisk <- .get_ondisk(param)
     if (ondisk == "auto") {
         X <- unwrapData(get_exprData(param), assay)
@@ -891,8 +925,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                 cli_abort(c("x"="Invalid internal value for 'whdim' argument."))
         }
 
+        insize <- as.numeric(sze)
         ondisk <- "no"
-        if (as.numeric(sze) > maxmem) {
+        if (insize > maxmem) {
             ondisk <- "yes"
             if (is(X, "DelayedArray") && verbose)
                 cli_alert_info(paste("On-disk input data does not fit in the",
@@ -904,7 +939,10 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     } else if (ondisk != "yes" && ondisk != "no")
         cli_abort(c("x"="'ondisk' should be either 'auto', 'yes' or 'no'"))
 
-    ondisk == "yes"
+    ## the estimated size of the input data and the maximum main memory allow
+    ## .check_sparse_load_input_expr() to load the input data into main
+    ## memory by blocks that fit in the memory left by it
+    structure(ondisk == "yes", insize=insize, maxmem=maxmem)
 }
 
 

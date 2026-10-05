@@ -144,3 +144,38 @@ test_job_memory_limit <- function() {
                                                 env=c("2048", NA, NA)),
                        2 * gb)
 }
+
+test_load_sparse_by_blocks <- function() {
+
+    message("Running unit tests for loading sparse on-disk data by blocks")
+
+    suppressPackageStartupMessages({
+        library(Matrix)
+        library(HDF5Array)
+    })
+
+    ## sparse on-disk data, in a budget that fits it but only blocks of a few
+    ## columns, is loaded by blocks into the same object as with as()
+    set.seed(123)
+    m <- rsparsematrix(200, 90, density=0.1)
+    dimnames(m) <- list(paste0("g", 1:200), paste0("s", 1:90))
+    for (type in c("double", "integer")) {
+        if (type == "integer")
+            m@x <- round(abs(m@x) * 10) + 1
+        x <- as(writeHDF5Array(m, as.sparse=TRUE), "DelayedMatrix")
+        if (type == "integer")
+            x <- DelayedArray::DelayedArray(x)
+        type(x) <- type
+        insize <- as.numeric(object.size(as(x, "SVT_SparseMatrix")))
+        ## budget for blocks of 5 columns
+        bytespercol <- 200 * if (type == "integer") 4 else 8
+        maxmem <- insize + 2 * 2 * 5 * bytespercol
+        res <- GSVA:::.load_sparse_by_blocks(x, maxmem=maxmem, insize=insize)
+        checkTrue(is(res, "SVT_SparseMatrix"))
+        checkIdentical(type(res), type)
+        checkIdentical(res, as(x, "SVT_SparseMatrix"))
+        ## without a budget, the default block size of DelayedArray
+        checkIdentical(GSVA:::.load_sparse_by_blocks(x),
+                       as(x, "SVT_SparseMatrix"))
+    }
+}
