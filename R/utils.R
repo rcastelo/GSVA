@@ -1035,10 +1035,11 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 
 ## warn, before the calculations of a step start, when the estimated memory
 ## 'need' that they require, with 'nworkers' parallel workers, exceeds the
-## maximum main memory 'maxmem', suggesting fewer workers or a larger 'maxmem'
+## maximum main memory 'maxmem', suggesting fewer workers or a larger 'maxmem',
+## or what 'hint' says, when given
 #' @importFrom cli cli_warn
 #' @importFrom memuse mu
-.check_mem_need <- function(need, maxmem, nworkers) {
+.check_mem_need <- function(need, maxmem, nworkers, hint=NULL) {
     if (need <= maxmem)
         return(invisible(FALSE))
 
@@ -1052,9 +1053,12 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         msg <- c(msg,
                  "i"=paste("The main R process and each of its {nworkers}",
                            "parallel workers take about {wmtxt} by themselves,",
-                           "for loading GSVA and the packages it depends on."),
-                 "i"=paste("Consider using fewer parallel workers in",
-                           "{.arg BPPARAM}, or a larger {.arg maxmem}."))
+                           "for loading GSVA and the packages it depends on."))
+    if (!is.null(hint))
+        msg <- c(msg, "i"=hint)
+    else if (nworkers > 0)
+        msg <- c(msg, "i"=paste("Consider using fewer parallel workers in",
+                                "{.arg BPPARAM}, or a larger {.arg maxmem}."))
     else
         msg <- c(msg, "i"="Consider using a larger {.arg maxmem}.")
     cli_warn(msg)

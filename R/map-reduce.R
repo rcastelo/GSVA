@@ -116,7 +116,12 @@
 #' parallel workers, and each of these R processes takes about 0.8 GB by
 #' itself for loading GSVA and the packages it depends on, so that `mem`
 #' should be at least `(1 + ncpus_per_task)` times 0.8 GB, plus the memory
-#' needed by the calculations on each chunk of data. Default: "10G".
+#' needed by the calculations on each chunk of data. `gsvaBatchtoolsSlurmParam()`
+#' gives a warning when `mem` is smaller than the former, while `gsvaMap()`,
+#' before submitting any job, gives an error in that case, because such jobs
+#' would be killed by the workload manager, and a warning when `mem` is smaller
+#' than the memory it estimates that the calculations on each chunk of data
+#' require. Default: "10G".
 #'
 #' @param BTPARAM In `gsvaMap()`, an object of class
 #' [`BatchtoolsParam`][BiocParallel::BatchtoolsParam-class] specifying
@@ -334,6 +339,14 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
                               "{.fn gsvaMap} with FUN={funname} on the",
                               "same {.arg inputData}.")))
 
+    ## before submitting any job, or writing its manifest, check the memory
+    ## that each job requires
+    chunkwidth <- if (is.null(chunks)) NA_real_ else
+                      max(chunks$last - chunks$first + 1)
+    .check_map_mem(funname, inputData, assay,
+                   whdim=if (funname == "gsvaRowNorm") 1L else 2L,
+                   chunkwidth=chunkwidth, ncpus=ncpus, maxmem=maxmem)
+
     ## results saved to disk get file names that depend only on the input
     ## and the chunk boundaries, and a manifest that allows MAPREDO to find
     ## them, even after the R session calling gsvaMap() has ended
@@ -508,6 +521,8 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
         cli_abort(c("x"=paste("You must provide a valid partition name",
                               "for the Slurm cluster.")))
 
+    .check_job_mem(ncpus_per_task, .memtext2bytes(mem))
+
     ## automatically created HDF5 datasets should be stored in a filesystem
     ## path that is reachable by all compute nodes, instead of the default
     ## tempdir() path, which is local to each compute node. this also means
@@ -561,6 +576,114 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
                conffile)
 
     conffile
+}
+
+## number of parallel workers of the R process of each job of gsvaMap() using
+## 'ncpus' CPU cores, see MAP_FUN_WRAPPER(), on a chunk with dimensions 'dims',
+## see .n_par_workers(); when 'dims' is not given, such as with a list input,
+## calculations are assumed to be parallelized
+.map_job_workers <- function(ncpus, dims=NULL) {
+    if (ncpus <= 1 || (!is.null(dims) && (dims[1] <= 100 || dims[2] <= 100)))
+        return(0L)
+
+    as.integer(ncpus)
+}
+
+## warn, when creating the parameters of jobs with 'ncpus' CPU cores and 'mem'
+## bytes of memory each, that the R process of a job and its parallel workers
+## may not fit in 'mem', see .worker_mem(), unless the option
+## 'GSVA.check_memory=FALSE' is set
+#' @importFrom cli cli_warn
+#' @importFrom memuse mu
+.check_job_mem <- function(ncpus, mem) {
+    if (!getOption("GSVA.check_memory", TRUE))
+        return(invisible(FALSE))
+
+    nworkers <- .map_job_workers(ncpus)
+    need <- (1 + nworkers) * .worker_mem()
+    if (need <= mem)
+        return(invisible(FALSE))
+
+    needtxt <- as.character(mu(need))
+    memtxt <- as.character(mu(mem))
+    cli_warn(c("!"=paste("Each job may run GSVA in one R process with",
+                         "{nworkers} parallel worker{?s}, which take about",
+                         "{needtxt} by themselves, more than the {memtxt} of",
+                         "memory of each job."),
+               "i"=paste("Consider using fewer CPU cores per job",
+                         "({.arg ncpus_per_task}), or more memory per job",
+                         "({.arg mem}).")))
+
+    invisible(TRUE)
+}
+
+## check, before gsvaMap() submits any job, the memory required by the step
+## 'funname' in each job, on the input data 'inputData', of which each job
+## processes a chunk of at most 'chunkwidth' rows (whdim=1) or columns
+## (whdim=2), using 'ncpus' CPU cores and 'maxmem' bytes of memory. it gives an
+## error when the R process of each job and its parallel workers do not fit in
+## 'maxmem', because such jobs would be killed by the workload manager, and
+## otherwise it warns when the memory estimated for the step exceeds 'maxmem',
+## see .step_mem_need(). for a list input, whose chunks are not loaded to
+## know their size, only the former is checked. it is skipped with the option
+## 'GSVA.check_memory=FALSE'
+#' @importFrom cli cli_abort
+#' @importFrom memuse mu
+#' @importFrom BiocGenerics type
+#' @importFrom S4Arrays is_sparse
+.check_map_mem <- function(funname, inputData, assay, whdim, chunkwidth, ncpus,
+                           maxmem) {
+    if (!getOption("GSVA.check_memory", TRUE) || !is.finite(maxmem))
+        return(invisible(FALSE))
+
+    hint <- paste("Consider using fewer CPU cores per job, or more memory per",
+                  "job, e.g., with the arguments {.arg ncpus_per_task} and",
+                  "{.arg mem} of {.fn gsvaBatchtoolsSlurmParam}.")
+    X <- dims <- NULL
+    if (!is.list(inputData)) {
+        X <- unwrapData(get_exprData(inputData), assay)
+        dims <- dim(X)
+        dims[whdim] <- chunkwidth
+    }
+    nworkers <- .map_job_workers(ncpus, dims)
+    baseline <- (1 + nworkers) * .worker_mem()
+    if (baseline > maxmem) {
+        bltxt <- as.character(mu(baseline))
+        mmtxt <- as.character(mu(maxmem))
+        cli_abort(c("x"=paste("Each job would run GSVA in one R process with",
+                              "{nworkers} parallel worker{?s}, which take",
+                              "about {bltxt} by themselves, more than the",
+                              "{mmtxt} of memory of each job."),
+                    "i"=hint))
+    }
+    if (is.null(X))
+        return(invisible(FALSE))
+
+    ## memory of the step on the largest chunk, of size 'insize' in memory
+    sparse <- is_sparse(X)
+    eltbytes <- if (type(X) == "integer") 4 else 8
+    insize <- prod(as.numeric(dims)) * eltbytes
+    if (sparse) {
+        nzc <- if (is(X, "DelayedArray"))
+                   .estimate_nzcount(get_exprData(inputData), assay, FALSE)
+               else
+                   as.numeric(nzcount(X))
+        density <- min(1, nzc / prod(as.numeric(dim(X))))
+        insize <- density * prod(as.numeric(dims)) * (eltbytes + 4)
+    }
+    ngs <- 0
+    if (funname == "gsvaColScores")
+        ngs <- tryCatch(length(get_geneSets(.pull_param(inputData))),
+                        error=function(e) 0)
+    step <- c(gsvaRowNorm="rownorm", gsvaColRanks="colranks",
+              gsvaColScores="scores")[[funname]]
+    mf <- .step_mem_factors(step, X, ngs=ngs)
+    inmemory <- .step_data_mem(dims, whdim, insize, eltbytes, sparse, TRUE,
+                               mf) <= .mem_fraction_R * maxmem
+    need <- .step_mem_need(dims, insize, whdim, eltbytes, sparse, inmemory,
+                           mf, nworkers, .Platform$OS.type == "unix")
+
+    .check_mem_need(need, maxmem, nworkers, hint=hint)
 }
 
 #' @importFrom BiocParallel SerialParam MulticoreParam SnowParam

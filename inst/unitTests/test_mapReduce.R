@@ -762,3 +762,61 @@ test_batchtoolsConf <- function() {
     checkIdentical(env$sleep, 1)
     checkTrue(!exists(".userconf", envir=env, inherits=FALSE))
 }
+
+test_mapReduceMemCheck <- function() {
+
+    message("Running unit tests for the memory check of map-reduce jobs")
+
+    suppressPackageStartupMessages(library(BiocParallel))
+
+    gb <- 1024^3
+
+    ## the R process of each job uses 'ncpus' parallel workers only with more
+    ## than one CPU core and a chunk large enough to parallelize its
+    ## calculations, which is assumed when the size of the chunk is unknown
+    checkIdentical(GSVA:::.map_job_workers(1), 0L)
+    checkIdentical(GSVA:::.map_job_workers(4), 4L)
+    checkIdentical(GSVA:::.map_job_workers(4, c(50, 1000)), 0L)
+    checkIdentical(GSVA:::.map_job_workers(4, c(1000, 1000)), 4L)
+
+    ## the parameters of jobs warn when the R process of each job and its
+    ## workers do not fit in the memory of the job, unless the check is
+    ## disabled
+    w <- tryCatch(GSVA:::.check_job_mem(16, 10 * gb), warning=function(w) w)
+    checkTrue(is(w, "warning") && grepl("ncpus_per_task", conditionMessage(w)))
+    checkTrue(!GSVA:::.check_job_mem(2, 10 * gb))
+    oldopt <- options(GSVA.check_memory=FALSE)
+    checkTrue(!GSVA:::.check_job_mem(16, 10 * gb))
+    options(oldopt)
+
+    set.seed(123)
+    y <- matrix(rnorm(200 * 150), nrow=200, ncol=150,
+                dimnames=list(paste0("g", 1:200), paste0("s", 1:150)))
+    gsets <- list(gs1=paste0("g", 1:20), gs2=paste0("g", 21:60))
+    gsvapar <- gsvaParam(y, gsets, verbose=FALSE)
+
+    ## gsvaMap() stops before submitting any job, or writing any file, when
+    ## the R process of each job and its workers do not fit in its memory
+    wd <- tempfile("gsvamapwd")
+    dir.create(wd)
+    on.exit(unlink(wd, recursive=TRUE), add=TRUE)
+    btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=4, memory="2G"),
+                             registryargs=batchtoolsRegistryargs(work.dir=wd))
+    err <- tryCatch(gsvaMap(gsvaRowNorm, gsvapar, output="HDF5",
+                            verbose=FALSE, BTPARAM=btpar),
+                    error=conditionMessage)
+    checkTrue(is.character(err) && grepl("ncpus_per_task", err, fixed=TRUE))
+    checkIdentical(length(list.files(wd)), 0L)
+
+    ## and otherwise it warns when the memory estimated for the step on the
+    ## largest chunk exceeds the memory of each job
+    oldopt <- options(GSVA.workermem=0)
+    on.exit(options(oldopt), add=TRUE)
+    w <- tryCatch(GSVA:::.check_map_mem("gsvaRowNorm", gsvapar,
+                                        get_assay(gsvapar), 1L, 200, 1,
+                                        100 * 1024),
+                  warning=function(w) w)
+    checkTrue(is(w, "warning") && grepl("ncpus_per_task", conditionMessage(w)))
+    checkTrue(!GSVA:::.check_map_mem("gsvaRowNorm", gsvapar,
+                                     get_assay(gsvapar), 1L, 200, 1, 1 * gb))
+}

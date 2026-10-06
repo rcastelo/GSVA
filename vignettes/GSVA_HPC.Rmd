@@ -114,10 +114,13 @@ and, with more than one CPU core per job, as many parallel workers, and each of
 these R processes takes about 0.8 GB by itself for loading GSVA and the packages it
 depends on. Therefore, the memory requested for each job should be at least
 `(1 + ncpus_per_task)` times 0.8 GB, i.e., 4 GB in the previous example, plus the
-memory needed by the calculations on each chunk of the input data. When GSVA
-estimates that its calculations require more memory than available, it gives a
-warning before starting them, suggesting to use fewer CPU cores per job or to
-request more memory.
+memory needed by the calculations on each chunk of the input data. The function
+`gsvaBatchtoolsSlurmParam()` gives a warning when the memory requested for each job
+is smaller than the former, while the function `gsvaMap()`, before submitting any
+job, gives an error in that case, because such jobs would be killed by the workload
+manager, and a warning when it estimates that the calculations on each chunk of the
+input data require more memory than requested, suggesting in both cases to use
+fewer CPU cores per job or to request more memory.
 
 The next step is to run the function `gsvaMap()`, which will submit the jobs to the
 SLURM workload manager, and return a list object, where each of its elements will be
