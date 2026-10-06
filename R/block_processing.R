@@ -19,14 +19,16 @@
 ## memory taken by the steps of GSVA to process each row or column of the
 ## input data 'X', relative to its size in 'X' ('workfactor'), and by the
 ## output of each row or column, relative to that size ('outfactor') plus a
-## number of bytes ('outextra'), with 'ngs' gene sets in the scores step. the
+## number of bytes ('outextra'), with 'ngs' gene sets in the steps giving
+## enrichment scores, which are dense. the
 ## factors were measured on single-cell data and include a margin; the output
 ## of normalizing rows is double, and of ranking columns integer. instead of
 ## 'X', whether its values are sparse or integer can be given directly
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
 .step_mem_factors <- function(step=c("rownorm", "rowranges", "colranks",
-                                     "scores"), X=NULL, ngs=0,
+                                     "scores", "average", "plage", "zscore",
+                                     "ssgsea"), X=NULL, ngs=0,
                               sparse=is_sparse(X),
                               int=(type(X) == "integer")) {
     step <- match.arg(step)
@@ -39,7 +41,13 @@
            colranks=list(workfactor=if (sparse) 7 else 2,
                          outfactor=if (int) 1 else if (sparse) 0.7 else 0.5,
                          outextra=0),
-           scores=list(workfactor=2, outfactor=0, outextra=8 * ngs))
+           scores=list(workfactor=2, outfactor=0, outextra=8 * ngs),
+           ## the average method gives its scores directly, while PLAGE,
+           ## z-score and ssGSEA give them from an intermediate matrix as large
+           ## as their input, of scaled rows or column ranks
+           average=list(workfactor=2, outfactor=0, outextra=8 * ngs),
+           plage=, zscore=,
+           ssgsea=list(workfactor=2, outfactor=1, outextra=8 * ngs))
 }
 
 ## memory that remains allocated while a matrix with 'nunits' rows (whdim=1)

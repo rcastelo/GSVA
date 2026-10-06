@@ -119,3 +119,20 @@ test_mainAPI <- function() {
     checkTrue((min(a2) >= -1 && (max(a2) <= 1)))
     checkTrue(!any(is.na(a2)))
 }
+
+test_gsva_flags_on_error <- function() {
+
+    message("Running unit tests for the flags of gsva() on errors")
+
+    ## gsva() hides the start and end messages of its steps while it runs,
+    ## and shows them again afterwards, also when it gives an error
+    set.seed(123)
+    y <- matrix(rnorm(20 * 30), nrow=20, ncol=30,
+                dimnames=list(paste0("g", 1:20), paste0("s", 1:30)))
+    gsets <- list(gs1=paste0("g", 1:5), gs2=paste0("g", 6:12))
+    checkException(suppressMessages(gsva(gsvaParam(y, gsets, verbose=FALSE),
+                                         verbose=TRUE, BPPARAM="no BPPARAM")),
+                   silent=TRUE)
+    checkTrue(GSVA:::gsva_global$show_start_and_end_messages)
+    checkTrue(GSVA:::gsva_global$check_memory)
+}

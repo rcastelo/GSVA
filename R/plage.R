@@ -32,10 +32,13 @@ setMethod("gsva", signature(param="plageParam"),
               filtMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
-              ## the input data is loaded in main memory as a dense matrix
+              ## the input data is loaded in main memory as a dense matrix,
+              ## and the memory required includes the enrichment scores
+              mf <- .step_mem_factors("plage", sparse=FALSE, int=FALSE,
+                                      ngs=length(filtMappedGeneSets))
               ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
                                       recompute_nzcount=FALSE, maxmem=maxmem,
-                                      verbose=verbose, dense=TRUE)
+                                      verbose=verbose, mf=mf, dense=TRUE)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "PLAGE", first=NA,
@@ -46,9 +49,6 @@ setMethod("gsva", signature(param="plageParam"),
                                                  minparrows=100, minparcols=100,
                                                  verbose)
 
-              ondisk <- .check_es_memory_requirements(filtDataMatrix,
-                                                      filtMappedGeneSets,
-                                                      ondisk, maxmem)
 
               if (verbose) {
                   n <- length(filtMappedGeneSets)

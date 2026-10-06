@@ -162,7 +162,11 @@ setMethod("gsva", signature(param="gsvaParam"),
               if (verbose) {
                   pkgversion <- packageDescription("GSVA")[["Version"]]
                   cli_alert_info("GSVA version {pkgversion}")
+                  ## the steps do not show their own start and end messages,
+                  ## which are shown again after gsva() ends, also on errors
                   gsva_global$show_start_and_end_messages <- FALSE
+                  on.exit(gsva_global$show_start_and_end_messages <- TRUE,
+                          add=TRUE)
               }
 
               .check_bpparam(BPPARAM)
@@ -189,10 +193,8 @@ setMethod("gsva", signature(param="gsvaParam"),
               es <- gsvaColScores(rankExprData=gsvaranks, verbose=verbose,
                                   BPPARAM=BPPARAM, maxmem=maxmem)
 
-              if (verbose) {
+              if (verbose)
                   cli_alert_success("Calculations finished")
-                  gsva_global$show_start_and_end_messages <- TRUE
-              }
               
               return(es)
           })
@@ -1251,9 +1253,6 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                        minparrows=100, minparcols=100,
                                        verbose)
 
-    ondisk <- .check_es_memory_requirements(filtDataMatrix,
-                                            filtMappedGeneSets,
-                                            ondisk, maxmem)
     if (verbose) {
         n <- length(filtMappedGeneSets)
         cli_alert_info("Calculating GSVA scores for {n} gene sets")

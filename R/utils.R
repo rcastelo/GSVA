@@ -482,23 +482,6 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     BPPARAM
 }
 
-#' @importFrom memuse howbig
-#' @importFrom cli cli_alert_warning
-.check_es_memory_requirements <- function(expr, gsets, ondisk, maxmem) {
-    esreqmem <- howbig(as.numeric(length(gsets)), as.numeric(ncol(expr)),
-                       representation="dense", sparsity=1, type="double")
-
-    if (esreqmem > maxmem) {
-        msg <- paste("The resulting (dense) matrix of enrichment scores will",
-                     "not fit in the given maximum main memory size, and it",
-                     "will be returned using an on-disk data structure")
-        cli_alert_warning(msg)
-        ondisk <- TRUE
-    }
-
-    ondisk
-}
-
 ## generate dummy names, e.g. row/col names for object M that knows 'nrow()'
 .dummyNames <- function(M, n=nrow(M), prefix="row") {
     fmt <- sprintf("%s%%0%dd", prefix, floor(log10(n)) + 1)
@@ -958,7 +941,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## returns FALSE, with the estimated size of the input data in main memory and
 ## 'maxmem' as attributes.
 
-#' @importFrom cli cli_abort cli_alert_info
+#' @importFrom cli cli_abort cli_alert_info cli_alert_warning
 #' @importFrom S4Arrays is_sparse
 #' @importFrom BiocGenerics type
 .check_ondisk <- function(param, assay=get_assay(param), first, last, whdim,
@@ -986,6 +969,14 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                 cli_alert_info(paste("Calculations with on-disk input data",
                                      "loaded in main memory do not fit in",
                                      "the maximum available main memory"))
+            ## steps giving enrichment scores return them on disk, which
+            ## changes the class of their output
+            if (mf$outextra > 0)
+                cli_alert_warning(paste("The calculations do not fit in the",
+                                        "maximum available main memory, and",
+                                        "the resulting (dense) matrix of",
+                                        "enrichment scores will be returned",
+                                        "using an on-disk data structure"))
         } else if (is(X, "DelayedArray") && verbose)
             cli_alert_info(paste("Calculations with on-disk input data",
                                  "loaded in main memory fit in the maximum",

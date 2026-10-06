@@ -174,9 +174,6 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                                                  minparrows=100, minparcols=100,
                                                  verbose)
 
-              ondisk <- .check_es_memory_requirements(filtDataMatrix,
-                                                      filtMappedGeneSets,
-                                                      ondisk, maxmem)
               if (verbose) {
                   n <- length(filtMappedGeneSets)
                   cli_alert_info("Calculating GSVA scores for {n} gene sets")

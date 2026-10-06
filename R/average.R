@@ -33,9 +33,12 @@ setMethod("gsva", signature(param="avgParam"),
               filtMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+              ## the memory required includes the enrichment scores
+              mf <- .step_mem_factors("average", sparse=FALSE, int=FALSE,
+                                      ngs=length(filtMappedGeneSets))
               ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
                                       recompute_nzcount=FALSE, maxmem=maxmem,
-                                      verbose=verbose)
+                                      verbose=verbose, mf=mf)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "average", first=NA,
@@ -46,9 +49,6 @@ setMethod("gsva", signature(param="avgParam"),
                                                  minparrows=100, minparcols=100,
                                                  verbose)
 
-              ondisk <- .check_es_memory_requirements(filtDataMatrix,
-                                                      filtMappedGeneSets,
-                                                      ondisk, maxmem)
 
               if (verbose) {
                   n <- length(filtMappedGeneSets)

@@ -259,3 +259,25 @@ test_memory_check <- function() {
     checkIdentical(memwarnings(gsva(gsvapar, verbose=FALSE, maxmem="100M")),
                    0L)
 }
+
+test_scores_ondisk <- function() {
+
+    message("Running unit tests for enrichment scores returned on disk")
+
+    ## when the calculations of a method other than GSVA, including its
+    ## enrichment scores, do not fit in the maximum memory, the scores are
+    ## returned on disk, with the same values, and a warning about it
+    set.seed(123)
+    y <- matrix(rnorm(200 * 150), nrow=200, ncol=150,
+                dimnames=list(paste0("g", 1:200), paste0("s", 1:150)))
+    gsets <- list(gs1=paste0("g", 1:20), gs2=paste0("g", 21:60))
+    es <- gsva(avgParam(y, gsets), verbose=FALSE)
+    ## the memory check would warn about such a small maximum memory
+    oldopt <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldopt), add=TRUE)
+    out <- cli::cli_fmt(esdisk <- gsva(avgParam(y, gsets), verbose=FALSE,
+                                       maxmem="100K"))
+    checkTrue(is(esdisk, "DelayedMatrix"))
+    checkTrue(any(grepl("on-disk", out)))
+    checkEqualsNumeric(es, as.matrix(esdisk))
+}
