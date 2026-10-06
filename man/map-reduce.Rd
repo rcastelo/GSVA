@@ -119,13 +119,19 @@ valid partition name for the Slurm cluster.}
 for the GSVA calculations. Default: 600 seconds (10 minutes).}
 
 \item{nodes}{In \code{gsvaBatchtoolsSlurmParam()}, number of independent compute
-nodes to distribute the GSVA calculations (tasks) across. Default: 1.}
+nodes to distribute the GSVA calculations (tasks) across. Default: 2.}
 
 \item{ncpus_per_task}{In \code{gsvaBatchtoolsSlurmParam()}, number of CPU cores
-to use for each independent task executed within a compute node. Default: 1.}
+to use for each independent task executed within a compute node. Default: 2.}
 
 \item{mem}{In \code{gsvaBatchtoolsSlurmParam()}, amount of memory to allocate for
-each independent task executed within a compute node. Default: "10G".}
+each independent task executed within a compute node, which GSVA uses as its
+maximum main memory, see the \code{maxmem} argument of \code{\link[=gsva]{gsva()}}. Each
+task runs one R process and, with more than one CPU core per task, as many
+parallel workers, and each of these R processes takes about 0.8 GB by
+itself for loading GSVA and the packages it depends on, so that \code{mem}
+should be at least \code{(1 + ncpus_per_task)} times 0.8 GB, plus the memory
+needed by the calculations on each chunk of data. Default: "10G".}
 }
 \value{
 The \code{gsvaMap()} function returns either a list of objects with the

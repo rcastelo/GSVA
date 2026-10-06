@@ -13,6 +13,10 @@ fastRegistryargs <- function(...) {
 test_mapReduce <- function() {
 
     message("Running unit tests for map reduce")
+    ## small maximum memory budgets force processing by blocks, and the
+    ## memory check, which would warn about them, is skipped
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldcheckmem), add=TRUE)
 
     oldopt <- options(BIOCPARALLEL_BATCHTOOLS_REMOVE_REGISTRY_WAIT=0)
     on.exit(options(oldopt), add=TRUE)
@@ -189,6 +193,10 @@ test_mapReduceParquet <- function() {
     }
 
     message("Running unit tests for map reduce with Parquet files")
+    ## small maximum memory budgets force processing by blocks, and the
+    ## memory check, which would warn about them, is skipped
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldcheckmem), add=TRUE)
 
     suppressPackageStartupMessages({
         library(DelayedArray)
@@ -278,6 +286,10 @@ test_mapReduceParquet <- function() {
 test_mapReduceScoresOutput <- function() {
 
     message("Running unit tests for map reduce saving GSVA scores")
+    ## small maximum memory budgets force processing by blocks, and the
+    ## memory check, which would warn about them, is skipped
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldcheckmem), add=TRUE)
 
     suppressPackageStartupMessages({
         library(DelayedArray)
@@ -340,6 +352,10 @@ test_mapReduceScoresOutput <- function() {
 test_mapReduceRedo <- function() {
 
     message("Running unit tests for map reduce resubmitting failed chunks")
+    ## small maximum memory budgets force processing by blocks, and the
+    ## memory check, which would warn about them, is skipped
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldcheckmem), add=TRUE)
 
     oldopt <- options(BIOCPARALLEL_BATCHTOOLS_REMOVE_REGISTRY_WAIT=0)
     on.exit(options(oldopt), add=TRUE)

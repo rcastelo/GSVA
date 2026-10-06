@@ -17,7 +17,10 @@ test_mainAPI <- function() {
     checkException(g <- gsvaRowNorm(gsvaParam(exprData=xf, geneSets=gs),
                                     verbose=FALSE, maxmem=c(1, 2)))
 
+    ## the memory check would warn about such a small maximum memory
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
     g <- gsvaRowNorm(gsvaParam(xf, gs), verbose=FALSE, maxmem="1M")
+    options(oldcheckmem)
 
     ## check discarding rows with constant values
     library(cli)

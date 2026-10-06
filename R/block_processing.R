@@ -21,14 +21,15 @@
 ## output of each row or column, relative to that size ('outfactor') plus a
 ## number of bytes ('outextra'), with 'ngs' gene sets in the scores step. the
 ## factors were measured on single-cell data and include a margin; the output
-## of normalizing rows is double, and of ranking columns integer
+## of normalizing rows is double, and of ranking columns integer. instead of
+## 'X', whether its values are sparse or integer can be given directly
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
 .step_mem_factors <- function(step=c("rownorm", "rowranges", "colranks",
-                                     "scores"), X, ngs=0) {
+                                     "scores"), X=NULL, ngs=0,
+                              sparse=is_sparse(X),
+                              int=(type(X) == "integer")) {
     step <- match.arg(step)
-    sparse <- is_sparse(X)
-    int <- type(X) == "integer"
     switch(step,
            rownorm=list(workfactor=if (sparse) 6 else 4,
                         outfactor=if (!int) 1 else if (sparse) 1.5 else 2,
@@ -68,10 +69,11 @@
 ## is what is left by the memory that remains allocated, see .fixed_mem(),
 ## from the fraction .mem_fraction_R of 'maxmem' available to the allocations
 ## of R. the size of a row or column of 'X' stored on disk is the one of its
-## dense form, which overestimates the size of sparse data. blocks are not
-## smaller than the automatic block size of the DelayedArray package, see
-## getAutoBlockSize(), because the overhead of processing many smaller blocks
-## makes calculations too slow, so that a smaller 'maxmem' is not honored, and
+## dense form, which overestimates the size of sparse data. the blocks of all
+## workers together are not smaller than the automatic block size of the
+## DelayedArray package, see getAutoBlockSize(), because the overhead of
+## processing many smaller blocks makes calculations too slow, so that a
+## smaller 'maxmem' is not honored, and
 ## they have at most as many rows or columns as needed to give one block to
 ## each worker, and as the DelayedArray package supports
 #' @importFrom BiocGenerics type
@@ -93,7 +95,8 @@
     nperblock <- floor(avail / ((workfactor + outfactor) * unitbytes +
                                 outextra))
     otherdim <- max(1, as.numeric(dim(X)[-whdim]))
-    nperblock <- max(nperblock, floor(getAutoBlockLength(type(X)) / otherdim))
+    nperblock <- max(nperblock, floor(getAutoBlockLength(type(X)) / nworkers /
+                                      otherdim))
     ## the DelayedArray package does not support blocks with more than
     ## .Machine$integer.max values
     nperblock <- min(ceiling(nunits / nworkers),
@@ -180,30 +183,53 @@
     rir
 }
 
+## which elements of the result of bplapply() or bpiterate() did not fail;
+## bpiterate() leaves the elements that failed as NULL, and stores their
+## errors in the attribute 'errors', named by the position of the element
+#' @importFrom BiocParallel bpok
+.bp_ok <- function(res) {
+    ok <- bpok(res)
+    errs <- attr(res, "errors")
+    if (!is.null(errs))
+        ok[as.integer(names(errs))] <- FALSE
+
+    ok
+}
+
+## error of the first element of the result of bplapply() or bpiterate() that
+## failed
+.bp_first_error <- function(res) {
+    errs <- attr(res, "errors")
+    if (!is.null(errs))
+        return(errs[[1L]])
+
+    res[[which(!bpok(res))[1L]]]
+}
+
 #' @importFrom cli cli_alert_warning
 .report_parallel_errors <- function(res) {
-    bpokmask <- bpok(res)
+    bpokmask <- .bp_ok(res)
     msg <- paste("{sum(!bpokmask)} execution thread(s) gave an error,",
                  "reporting the first one.")
     cli_alert_warning(msg)
-    msg <- attr(res[[which(!bpokmask)[1]]], "traceback")
+    msg <- attr(.bp_first_error(res), "traceback")
     msg <- gsub("\\}", "]", gsub("\\{", "[", msg))
     out <- lapply(msg, cli_alert_warning)
 }
 
-## call bplapply() with the arguments in '...', replacing the uninformative
-## error that BiocParallel gives when a forked worker process ends without
-## returning its result, such as "wrong args for environment subassignment",
-## by an error that tells what happened. that error of BiocParallel follows
-## the warning of parallel::mccollect() that a parallel job did not deliver
-## its result, whose message is matched in English only, so that in other
-## languages the error of BiocParallel is given as it is. errors of the
-## workers, which BiocParallel gives as 'bperror' objects, are not replaced
-#' @importFrom BiocParallel bplapply
+## evaluate 'expr', a call to bplapply() or bpiterate(), replacing the
+## uninformative error that BiocParallel gives when a forked worker process
+## ends without returning its result, such as "wrong args for environment
+## subassignment", by an error that tells what happened. that error of
+## BiocParallel follows the warning of parallel::mccollect() that a parallel
+## job did not deliver its result, whose message is matched in English only, so
+## that in other languages the error of BiocParallel is given as it is. errors
+## of the workers, which BiocParallel gives as 'bperror' objects, are not
+## replaced
 #' @importFrom cli cli_abort
-.gsva_bplapply <- function(...) {
+.with_dead_worker_check <- function(expr) {
     nodelivery <- FALSE
-    withCallingHandlers(bplapply(...),
+    withCallingHandlers(expr,
         warning=function(w) {
             if (grepl("parallel jobs? did not deliver", conditionMessage(w)))
                 nodelivery <<- TRUE
@@ -227,6 +253,50 @@
                                       "the R session.")),
                           parent=e)
         })
+}
+
+## bplapply() and bpiterate() with the arguments in '...', see
+## .with_dead_worker_check()
+#' @importFrom BiocParallel bplapply
+.gsva_bplapply <- function(...) .with_dead_worker_check(bplapply(...))
+
+#' @importFrom BiocParallel bpiterate
+.gsva_bpiterate <- function(...) .with_dead_worker_check(bpiterate(...))
+
+## apply 'WRAPPED_FUN' to a block of rows or columns of a matrix sent to a
+## worker; defined outside the functions processing matrices by blocks, so
+## that sending it to a worker does not send their whole matrix
+BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
+    WRAPPED_FUN(block, ..., verbose=FALSE)
+}
+
+## blocks of rows (whdim=1) or columns (whdim=2) of the matrix 'X' in main
+## memory, with the ranges 'rngs', processed by the workers of 'BPPARAM'. workers
+## not forked from this process, such as socket workers, receive the blocks
+## one at a time, as they become free, while forked workers, and workers
+## processing a matrix stored on disk, take their blocks from 'X' themselves
+## with 'FUN_WRAPPER', which would send the whole 'X' to workers not forked
+## from this process. 'BPREDO' gives the result of a previous call to
+## recompute only its failed elements
+#' @importFrom BiocParallel MulticoreParam
+#' @importFrom IRanges start end
+.bp_blocks <- function(X, whdim, rngs, FUN, FUN_WRAPPER, ..., BPREDO=list(),
+                       BPPARAM) {
+    if (is(X, "DelayedArray") || is(BPPARAM, "MulticoreParam"))
+        return(.gsva_bplapply(rngs, FUN=FUN_WRAPPER, verbose=FALSE,
+                              idpbe=NULL, WRAPPED_FUN=FUN, ..., BPREDO=BPREDO,
+                              BPPARAM=BPPARAM))
+
+    i <- 0L
+    ITER <- function() {
+        i <<- i + 1L
+        if (i > length(rngs))
+            return(NULL)
+        rng <- start(rngs[[i]]):end(rngs[[i]])
+        if (whdim == 1L) X[rng, , drop=FALSE] else X[, rng, drop=FALSE]
+    }
+    .gsva_bpiterate(ITER, FUN=BLOCK_FUN_WRAPPER, WRAPPED_FUN=FUN, ...,
+                    BPREDO=BPREDO, BPPARAM=BPPARAM)
 }
 
 ## process the rows of a matrix with a given function FUN, opening parallelism
@@ -302,17 +372,15 @@
         if (verbose)
             bpprogressbar(BPPARAM) <- TRUE    ## reporting progress wo/ cli
         bpstopOnError(BPPARAM) <- FALSE
-        res <- bptry(.gsva_bplapply(rir, FUN=FUN_WRAPPER, verbose=FALSE,
-                                    idpbe=NULL, WRAPPED_FUN=FUN, ...,
-                                    BPPARAM=BPPARAM))
-        bpokmask <- bpok(res)
+        res <- bptry(.bp_blocks(X, 1L, rir, FUN, FUN_WRAPPER, ...,
+                                BPPARAM=BPPARAM))
+        bpokmask <- .bp_ok(res)
         if (any(!bpokmask)) {
             .report_parallel_errors(res)
             cli_alert_warning("Trying to execute again the failing thread(s)")
-            res <- bptry(.gsva_bplapply(rir, FUN=FUN_WRAPPER, verbose=FALSE,
-                                        idpbe=NULL, WRAPPED_FUN=FUN, ...,
-                                        BPREDO=res, BPPARAM=BPPARAM))
-            bpokmask <- bpok(res)
+            res <- bptry(.bp_blocks(X, 1L, rir, FUN, FUN_WRAPPER, ...,
+                                    BPREDO=res, BPPARAM=BPPARAM))
+            bpokmask <- .bp_ok(res)
             if (any(!bpokmask)) {
                 .report_parallel_errors(res)
                 cli_abort(c("x"="Cancelling execution"))
@@ -398,17 +466,15 @@
         if (verbose)
             bpprogressbar(BPPARAM) <- TRUE    ## reporting progress wo/ cli
         bpstopOnError(BPPARAM) <- FALSE
-        res <- bptry(.gsva_bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
-                                    idpbe=NULL, WRAPPED_FUN=FUN, ...,
-                                    BPPARAM=BPPARAM))
-        bpokmask <- bpok(res)
+        res <- bptry(.bp_blocks(X, 2L, cir, FUN, FUN_WRAPPER, ...,
+                                BPPARAM=BPPARAM))
+        bpokmask <- .bp_ok(res)
         if (any(!bpokmask)) {
             .report_parallel_errors(res)
             cli_alert_warning("Trying to execute again the failing thread(s)")
-            res <- bptry(.gsva_bplapply(cir, FUN=FUN_WRAPPER, verbose=FALSE,
-                                        idpbe=NULL, WRAPPED_FUN=FUN, ...,
-                                        BPREDO=res, BPPARAM=BPPARAM))
-            bpokmask <- bpok(res)
+            res <- bptry(.bp_blocks(X, 2L, cir, FUN, FUN_WRAPPER, ...,
+                                    BPREDO=res, BPPARAM=BPPARAM))
+            bpokmask <- .bp_ok(res)
             if (any(!bpokmask)) {
                 .report_parallel_errors(res)
                 cli_abort(c("x"="Cancelling execution"))

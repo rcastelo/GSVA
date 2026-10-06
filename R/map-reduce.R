@@ -104,13 +104,19 @@
 #' for the GSVA calculations. Default: 600 seconds (10 minutes).
 #'
 #' @param nodes In `gsvaBatchtoolsSlurmParam()`, number of independent compute
-#' nodes to distribute the GSVA calculations (tasks) across. Default: 1.
+#' nodes to distribute the GSVA calculations (tasks) across. Default: 2.
 #'
 #' @param ncpus_per_task In `gsvaBatchtoolsSlurmParam()`, number of CPU cores
-#' to use for each independent task executed within a compute node. Default: 1.
+#' to use for each independent task executed within a compute node. Default: 2.
 #'
 #' @param mem In `gsvaBatchtoolsSlurmParam()`, amount of memory to allocate for
-#' each independent task executed within a compute node. Default: "10G".
+#' each independent task executed within a compute node, which GSVA uses as its
+#' maximum main memory, see the `maxmem` argument of [`gsva()`][gsva]. Each
+#' task runs one R process and, with more than one CPU core per task, as many
+#' parallel workers, and each of these R processes takes about 0.8 GB by
+#' itself for loading GSVA and the packages it depends on, so that `mem`
+#' should be at least `(1 + ncpus_per_task)` times 0.8 GB, plus the memory
+#' needed by the calculations on each chunk of data. Default: "10G".
 #'
 #' @param BTPARAM In `gsvaMap()`, an object of class
 #' [`BatchtoolsParam`][BiocParallel::BatchtoolsParam-class] specifying

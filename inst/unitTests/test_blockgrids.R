@@ -99,8 +99,10 @@ test_units_per_block <- function() {
     ## an output of 8 bytes per gene set per column for 100 gene sets
     maxmem <- insize + 2 * 800 * 500 + 50.5 * (2 * colbytes + 800)
     checkIdentical(upb(1, maxmem, outfactor=0, outextra=800), 50L)
-    ## not smaller than the automatic block size, of 10 columns
+    ## not smaller than the automatic block size, of 10 columns, for all the
+    ## workers together
     checkIdentical(upb(1, insize), 10L)
+    checkIdentical(upb(2, insize), 5L)
     ## not more than one block per worker
     checkIdentical(upb(3, Inf), 167L)
     ## data on disk is not in main memory, has the size of its dense form,
@@ -185,4 +187,46 @@ test_blockprocessing_dead_worker <- function() {
                     error=conditionMessage)
     checkTrue(is.character(err) &&
               grepl("parallel worker process ended", err, fixed=TRUE))
+}
+
+## with workers not forked from this process, such as socket workers, blocks
+## of data in main memory are sent to the workers one at a time, with the same
+## results, retries of failed blocks and errors as with other workers
+test_blockprocessing_socket_workers <- function() {
+
+    message("Running unit tests for block processing with socket workers")
+
+    suppressPackageStartupMessages(library(BiocParallel))
+
+    set.seed(123)
+    X <- matrix(rnorm(200 * 150), nrow=200, ncol=150)
+    flag <- tempfile()
+    on.exit(unlink(flag), add=TRUE)
+    ## fails the first time it is called, in any worker
+    flaky_fun <- function(x, verbose, flag) {
+        if (!file.exists(flag)) {
+            file.create(flag)
+            stop("simulated transient failure")
+        }
+        x * 2
+    }
+    failing_fun <- function(x, verbose) stop("simulated failure")
+    ## started once, so that workers load GSVA only once
+    bpparam <- bpstart(SnowParam(workers=2, progressbar=FALSE))
+    on.exit(bpstop(bpparam), add=TRUE)
+    for (proc in list(GSVA:::.processMatrixRows, GSVA:::.processMatrixCols)) {
+        res <- suppressMessages(proc(X, FUN=function(x, verbose) x * 2,
+                                     verbose=FALSE, BPPARAM=bpparam))
+        checkEqualsNumeric(X * 2, res)
+        unlink(flag)
+        res <- suppressMessages(proc(X, FUN=flaky_fun, flag=flag,
+                                     verbose=FALSE, BPPARAM=bpparam))
+        checkEqualsNumeric(X * 2, res)
+        err <- tryCatch(suppressMessages(proc(X, FUN=failing_fun,
+                                              verbose=FALSE,
+                                              BPPARAM=bpparam)),
+                        error=conditionMessage)
+        checkTrue(is.character(err) &&
+                  grepl("Cancelling execution", err, fixed=TRUE))
+    }
 }

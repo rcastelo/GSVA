@@ -82,13 +82,18 @@ test_ondisk <- function() {
     oldautoblocksize <- getAutoBlockSize()
     setAutoBlockSize(1024)
     es_noh5 <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE)
+    ## the memory check would warn about such a small maximum memory
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
     es_chunks <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=TRUE, maxmem="25K")
-    ## the input data, the output and a block do not fit in such a small
-    ## maximum memory, and calculations are done on disk
-    checkTrue(is(es_chunks, "DelayedMatrix"))
-    attr(es_noh5, "gsvaParam") <- attr(es_noh5, "assay") <- NULL
-    attr(es_noh5, "geneSets") <- attr(es_noh5, "gsvaVersion") <- NULL
-    checkIdentical(es_noh5, as.matrix(es_chunks))
+    options(oldcheckmem)
+    ## with such a small maximum memory, steps may be done on disk, giving the
+    ## same values
+    values <- function(x) {
+        x <- as.matrix(x)
+        attributes(x) <- attributes(x)[c("dim", "dimnames")]
+        x
+    }
+    checkIdentical(values(es_noh5), values(es_chunks))
     setAutoBlockSize(oldautoblocksize)
 }
 
@@ -183,4 +188,58 @@ test_load_sparse_by_blocks <- function() {
         checkIdentical(GSVA:::.load_sparse_by_blocks(x),
                        as(x, "SVT_SparseMatrix"))
     }
+}
+
+test_memory_check <- function() {
+
+    message("Running unit tests for the check of the memory required")
+
+    suppressPackageStartupMessages(library(BiocParallel))
+
+    gb <- 1024^3
+    memwarnings <- function(expr) {
+        n <- 0L
+        withCallingHandlers(expr, warning=function(w) {
+            if (grepl("memory estimated", conditionMessage(w)))
+                n <<- n + 1L
+            invokeRestart("muffleWarning")
+        })
+        n
+    }
+
+    ## a warning only when the estimated memory exceeds the maximum memory,
+    ## suggesting fewer parallel workers when there are such workers
+    checkTrue(!GSVA:::.check_mem_need(1 * gb, 2 * gb, 0))
+    w <- tryCatch(GSVA:::.check_mem_need(3 * gb, 2 * gb, 4),
+                  warning=function(w) w)
+    checkTrue(is(w, "warning") &&
+              grepl("fewer parallel workers", conditionMessage(w)))
+
+    ## parallel workers are counted only when calculations are parallelized
+    checkIdentical(GSVA:::.n_par_workers(NULL, c(1000, 1000)), 0L)
+    checkIdentical(GSVA:::.n_par_workers(SerialParam(), c(1000, 1000)), 0L)
+    checkIdentical(GSVA:::.n_par_workers(SnowParam(4), c(50, 1000)), 0L)
+    checkIdentical(GSVA:::.n_par_workers(SnowParam(4), c(1000, 1000)), 4L)
+
+    ## each R process takes the memory given by the option 'GSVA.workermem'
+    oldopt <- options(GSVA.workermem=1 * gb)
+    on.exit(options(oldopt), add=TRUE)
+    checkEqualsNumeric(GSVA:::.worker_mem(), gb)
+
+    ## with a maximum memory smaller than the one of the R process, gsva()
+    ## warns once, before running its three steps, each of which warns when
+    ## run by itself, while the option 'GSVA.check_memory' disables the check
+    set.seed(123)
+    y <- matrix(rnorm(200 * 150), nrow=200, ncol=150,
+                dimnames=list(paste0("g", 1:200), paste0("s", 1:150)))
+    gsets <- list(gs1=paste0("g", 1:20), gs2=paste0("g", 21:60))
+    gsvapar <- gsvaParam(y, gsets, verbose=FALSE)
+    checkIdentical(memwarnings(gsva(gsvapar, verbose=FALSE, maxmem="100M")),
+                   1L)
+    checkTrue(GSVA:::gsva_global$check_memory)
+    checkIdentical(memwarnings(gsvaRowNorm(gsvapar, verbose=FALSE,
+                                           maxmem="100M")), 1L)
+    options(GSVA.check_memory=FALSE)
+    checkIdentical(memwarnings(gsva(gsvapar, verbose=FALSE, maxmem="100M")),
+                   0L)
 }

@@ -875,69 +875,103 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 }
 
 
+## estimated size in bytes of the input data of a step in main memory, i.e.,
+## of the assay 'assay' of the expression data in 'param', restricted to the
+## rows (whdim=1) or columns (whdim=2) from 'first' to 'last', when given,
+## where sparse data, in an SVT_SparseMatrix object, store each nonzero value
+## and its row index
+#' @importFrom cli cli_abort
+#' @importFrom BiocGenerics type
+#' @importFrom S4Arrays is_sparse
+.input_mem_size <- function(param, assay, first, last, whdim,
+                            recompute_nzcount=FALSE) {
+    X <- unwrapData(get_exprData(param), assay)
+    nr <- as.numeric(nrow(X))
+    nc <- as.numeric(ncol(X))
+    spa <- 1
+    if (is_sparse(X)) {
+        tot <- nr * nc
+        if (recompute_nzcount)
+            spa <- .estimate_nzcount(get_exprData(param), assay, FALSE) / tot
+        else {
+            spa <- nzcount(param) / tot
+            ## the number of nonzero values in the parameter object
+            ## may correspond to a larger data set, e.g., when columns
+            ## have been removed, and then it has to be recomputed
+            if (spa > 1)
+                spa <- .estimate_nzcount(get_exprData(param), assay,
+                                         FALSE) / tot
+        }
+        spa <- min(spa, 1)
+    }
+    if (!is.na(first) || !is.na(last)) {
+        if (whdim == 1)
+            nr <- as.numeric(last - first + 1)
+        else if (whdim == 2)
+            nc <- as.numeric(last - first + 1)
+        else
+            cli_abort(c("x"="Invalid internal value for 'whdim' argument."))
+    }
+    eltbytes <- if (type(X) == "integer") 4 else 8
+    if (is_sparse(X))
+        return(spa * nr * nc * (eltbytes + 4))
+
+    nr * nc * eltbytes
+}
+
+## memory in bytes taken by the data of a step processing in blocks a matrix
+## with dimensions 'dims', along its rows (whdim=1) or columns (whdim=2), of
+## size 'insize' in main memory and 'eltbytes' bytes per value, sparse or not,
+## and stored in main memory or not ('inmemory'): the memory that remains
+## allocated, see .fixed_mem(), and the working memory of the rows or columns
+## of a block of the default size of the DelayedArray package, shared by all
+## the workers, see .units_per_block(), which take their size in main memory
+## or, when read from disk, the one of their dense form. 'mf' gives the memory
+## factors of the step, see .step_mem_factors()
+#' @importFrom DelayedArray getAutoBlockSize
+.step_data_mem <- function(dims, whdim, insize, eltbytes, sparse, inmemory,
+                           mf) {
+    nunits <- max(1, dims[whdim])
+    denseunitbytes <- as.numeric(dims[-whdim]) * eltbytes
+    unitbytes <- if (inmemory) insize / nunits else denseunitbytes
+    minunits <- min(nunits, max(1, floor(getAutoBlockSize() / denseunitbytes)))
+    .fixed_mem(nunits, insize / nunits, whdim, sparse, inmemory,
+               mf$outfactor, mf$outextra) +
+        mf$workfactor * minunits * unitbytes
+}
+
 ## verifies that the 'ondisk' parameter is either 'auto', 'yes' or 'no' and, if
 ## 'auto', checks whether the calculations fit in the maximum available main
 ## memory with the input data in it, and sets 'ondisk' to 'yes' or 'no'
-## accordingly. the calculations fit when the input data, the output, and the
-## working memory of a block of the default size of the DelayedArray package,
-## given by 'workfactor', 'outfactor' and 'outextra', see .step_mem_factors(),
-## fit in the fraction .mem_fraction_R of 'maxmem' available to the
-## allocations of R. If the input data is a DelayedArray, also reports whether
-## the calculations fit in the maximum available main memory. If 'ondisk' is
-## set to 'yes', then this function returns TRUE, otherwise it returns FALSE.
+## accordingly. the calculations fit when the memory taken by their data, see
+## .step_data_mem(), fits in the fraction .mem_fraction_R of 'maxmem'
+## available to the allocations of R, where 'mf' gives the memory factors of
+## the step, see .step_mem_factors(). If the input data is a DelayedArray, also
+## reports whether the calculations fit in the maximum available main memory.
+## If 'ondisk' is set to 'yes', then this function returns TRUE, otherwise it
+## returns FALSE, with the estimated size of the input data in main memory and
+## 'maxmem' as attributes.
 
 #' @importFrom cli cli_abort cli_alert_info
-#' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
-#' @importFrom DelayedArray getAutoBlockSize
+#' @importFrom BiocGenerics type
 .check_ondisk <- function(param, assay=get_assay(param), first, last, whdim,
                           recompute_nzcount=FALSE, maxmem, verbose,
-                          workfactor=2, outfactor=1, outextra=0) {
-    insize <- NA_real_ ## estimated size of the input data
+                          mf=list(workfactor=2, outfactor=1, outextra=0)) {
     ondisk <- .get_ondisk(param)
+    if (ondisk != "auto" && ondisk != "yes" && ondisk != "no")
+        cli_abort(c("x"="'ondisk' should be either 'auto', 'yes' or 'no'"))
+
+    insize <- .input_mem_size(param, assay, first, last, whdim,
+                              recompute_nzcount)
     if (ondisk == "auto") {
         X <- unwrapData(get_exprData(param), assay)
-        tot <- as.numeric(nrow(X)) * as.numeric(ncol(X))
-        rep <- "dense"
-        spa <- 1
-        if (is_sparse(X)) {
-            rep <- "sparse"
-            if (recompute_nzcount)
-                spa <- .estimate_nzcount(get_exprData(param), assay, FALSE) / tot
-            else {
-                spa <- nzcount(param) / tot
-                ## the number of nonzero values in the parameter object
-                ## may correspond to a larger data set, e.g., when columns
-                ## have been removed, and then it has to be recomputed
-                if (spa > 1)
-                    spa <- .estimate_nzcount(get_exprData(param), assay,
-                                             FALSE) / tot
-            }
-            spa <- min(spa, 1)
-        }
-        nr <- as.numeric(nrow(X))
-        nc <- as.numeric(ncol(X))
-        if (!is.na(first) || !is.na(last)) {
-            if (whdim == 1)
-                nr <- as.numeric(last - first + 1)
-            else if (whdim == 2)
-                nc <- as.numeric(last - first + 1)
-            else
-                cli_abort(c("x"="Invalid internal value for 'whdim' argument."))
-        }
-        ## size of the input data in main memory, where sparse data, in an
-        ## SVT_SparseMatrix object, store each nonzero value and its row index
-        eltbytes <- if (type(X) == "integer") 4 else 8
-        insize <- nr * nc * eltbytes
-        if (rep == "sparse")
-            insize <- spa * nr * nc * (eltbytes + 4)
-
-        nunits <- dim(X)[whdim]
+        dims <- dim(X)
         if (!is.na(first) || !is.na(last))
-            nunits <- last - first + 1
-        need <- .fixed_mem(nunits, insize / max(1, nunits), whdim,
-                           is_sparse(X), TRUE, outfactor, outextra) +
-                workfactor * min(getAutoBlockSize(), insize)
+            dims[whdim] <- last - first + 1
+        need <- .step_data_mem(dims, whdim, insize,
+                               if (type(X) == "integer") 4 else 8,
+                               is_sparse(X), TRUE, mf)
         ondisk <- "no"
         if (need > .mem_fraction_R * maxmem) {
             ondisk <- "yes"
@@ -949,9 +983,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             cli_alert_info(paste("Calculations with on-disk input data",
                                  "loaded in main memory fit in the maximum",
                                  "available main memory"))
-
-    } else if (ondisk != "yes" && ondisk != "no")
-        cli_abort(c("x"="'ondisk' should be either 'auto', 'yes' or 'no'"))
+    }
 
     ## the estimated size of the input data and the maximum main memory allow
     ## .check_sparse_load_input_expr() to load the input data into main
@@ -959,6 +991,147 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     structure(ondisk == "yes", insize=insize, maxmem=maxmem)
 }
 
+## memory in bytes that each R process running GSVA takes by itself, the main
+## one and each of its parallel workers: loading GSVA and the packages it
+## depends on takes about 0.8 GB, which forked workers end up taking too,
+## because the garbage collector of R writes to the memory pages that they
+## share with the main process. it can be set with the option 'GSVA.workermem'
+.worker_mem <- function() {
+    as.numeric(getOption("GSVA.workermem", 0.8 * 1024^3))
+}
+
+## number of parallel workers of 'BPPARAM' that process a matrix with
+## dimensions 'dims', which is 0 when its calculations are not parallelized,
+## see .check_open_parallelism()
+#' @importFrom BiocParallel bpnworkers
+.n_par_workers <- function(BPPARAM, dims, minparrows=100, minparcols=100) {
+    if (is.null(BPPARAM) || bpnworkers(BPPARAM) <= 1 ||
+        dims[1] <= minparrows || dims[2] <= minparcols)
+        return(0L)
+
+    as.integer(bpnworkers(BPPARAM))
+}
+
+## estimated memory in bytes required by a step processing in blocks a matrix
+## with dimensions 'dims', along its rows (whdim=1) or columns (whdim=2), of
+## size 'insize' in main memory and 'eltbytes' bytes per value, sparse or not,
+## and stored in main memory or not ('inmemory'), with 'nworkers' parallel
+## workers, forked or not, where
+## 'mf' gives the memory factors of the step, see .step_mem_factors(). the
+## main R process and each worker take .worker_mem(), forked workers also take
+## a copy of the input data when it is in main memory, and the data of the
+## step take .step_data_mem() from the fraction .mem_fraction_R of the memory
+## available to the allocations of R
+.step_mem_need <- function(dims, insize, whdim, eltbytes, sparse, inmemory,
+                           mf, nworkers, forked) {
+    need <- (1 + nworkers) * .worker_mem() +
+            .step_data_mem(dims, whdim, insize, eltbytes, sparse, inmemory,
+                           mf) / .mem_fraction_R
+    if (forked && inmemory)
+        need <- need + nworkers * insize
+
+    need
+}
+
+## warn, before the calculations of a step start, when the estimated memory
+## 'need' that they require, with 'nworkers' parallel workers, exceeds the
+## maximum main memory 'maxmem', suggesting fewer workers or a larger 'maxmem'
+#' @importFrom cli cli_warn
+#' @importFrom memuse mu
+.check_mem_need <- function(need, maxmem, nworkers) {
+    if (need <= maxmem)
+        return(invisible(FALSE))
+
+    needtxt <- as.character(mu(need))
+    maxmemtxt <- as.character(mu(maxmem))
+    wmtxt <- as.character(mu(.worker_mem()))
+    msg <- c("!"=paste("The memory estimated for these calculations,",
+                       "{needtxt}, exceeds the maximum available main memory",
+                       "of {maxmemtxt}."))
+    if (nworkers > 0)
+        msg <- c(msg,
+                 "i"=paste("The main R process and each of its {nworkers}",
+                           "parallel workers take about {wmtxt} by themselves,",
+                           "for loading GSVA and the packages it depends on."),
+                 "i"=paste("Consider using fewer parallel workers in",
+                           "{.arg BPPARAM}, or a larger {.arg maxmem}."))
+    else
+        msg <- c(msg, "i"="Consider using a larger {.arg maxmem}.")
+    cli_warn(msg)
+
+    invisible(TRUE)
+}
+
+## check the memory required by a step processing in blocks the input data 'X',
+## along its rows (whdim=1) or columns (whdim=2), restricted to those from
+## 'first' to 'last', when given, with the on-disk decision 'ondisk' given by
+## .check_ondisk(), the memory factors 'mf' of the step, the parallel back-end
+## 'BPPARAM' and the maximum main memory 'maxmem', see .check_mem_need(). It is
+## skipped while gsva() runs the steps, because gsva() checks the memory
+## required by all of them before starting, and with the option
+## 'GSVA.check_memory=FALSE'
+#' @importFrom BiocParallel MulticoreParam
+#' @importFrom S4Arrays is_sparse
+#' @importFrom BiocGenerics type
+.check_step_mem <- function(X, whdim, first, last, ondisk, mf, BPPARAM,
+                            maxmem) {
+    if (!gsva_global$check_memory || !getOption("GSVA.check_memory", TRUE))
+        return(invisible(FALSE))
+
+    dims <- dim(X)
+    if (!is.na(first) || !is.na(last))
+        dims[whdim] <- last - first + 1
+    eltbytes <- if (type(X) == "integer") 4 else 8
+    insize <- attr(ondisk, "insize")
+    if (is.null(insize)) ## e.g., data in Parquet files, processed from disk
+        insize <- prod(as.numeric(dims)) * eltbytes
+    nworkers <- .n_par_workers(BPPARAM, dims)
+    need <- .step_mem_need(dims, insize, whdim, eltbytes, is_sparse(X),
+                           !ondisk, mf, nworkers,
+                           is(BPPARAM, "MulticoreParam"))
+
+    .check_mem_need(need, maxmem, nworkers)
+}
+
+## check the memory required by each of the three steps that gsva() runs on
+## the parameter object 'param', see .check_mem_need(), before running them,
+## estimating the size of the input data of each step from the one of the
+## previous step, and the on-disk decision of each step as .check_ondisk()
+## does
+#' @importFrom BiocParallel MulticoreParam
+#' @importFrom BiocGenerics type
+#' @importFrom S4Arrays is_sparse
+.check_gsva_mem <- function(param, BPPARAM, maxmem) {
+    if (!getOption("GSVA.check_memory", TRUE))
+        return(invisible(FALSE))
+
+    X <- unwrapData(get_exprData(param), get_assay(param))
+    dims <- dim(X)
+    sparse <- is_sparse(X)
+    nworkers <- .n_par_workers(BPPARAM, dims)
+    ondisk <- .get_ondisk(param)
+    ngs <- length(get_geneSets(param))
+    insize <- .input_mem_size(param, get_assay(param), NA, NA, 1L)
+    steps <- list(list(step="rownorm", whdim=1L, int=(type(X) == "integer")),
+                  list(step="colranks", whdim=2L, int=FALSE),
+                  list(step="scores", whdim=2L, int=TRUE))
+    need <- 0
+    for (st in steps) {
+        mf <- .step_mem_factors(st$step, ngs=ngs, sparse=sparse, int=st$int)
+        eltbytes <- if (st$int) 4 else 8
+        inmemory <- ondisk == "no"
+        if (ondisk == "auto")
+            inmemory <- .step_data_mem(dims, st$whdim, insize, eltbytes,
+                                       sparse, TRUE, mf) <=
+                        .mem_fraction_R * maxmem
+        need <- max(need, .step_mem_need(dims, insize, st$whdim, eltbytes,
+                                         sparse, inmemory, mf, nworkers,
+                                         is(BPPARAM, "MulticoreParam")))
+        insize <- insize * mf$outfactor ## size of the input of the next step
+    }
+
+    .check_mem_need(need, maxmem, nworkers)
+}
 
 ## from https://stat.ethz.ch/pipermail/r-help/2005-September/078974.html
 ## function: isPackageLoaded

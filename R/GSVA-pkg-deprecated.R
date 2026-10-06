@@ -163,9 +163,7 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                                       ngs=length(filtMappedGeneSets))
               ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
                                       recompute_nzcount=FALSE, maxmem=maxmem,
-                                      verbose=verbose, workfactor=mf$workfactor,
-                                      outfactor=mf$outfactor,
-                                      outextra=mf$outextra)
+                                      verbose=verbose, mf=mf)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "GSVA", first=NA,

@@ -107,6 +107,18 @@ are finished. Each job saves its results under a temporary name ending in
 that ending left in this directory belong to jobs that did not finish, and can be
 deleted once no job of those calculations is running.
 
+The memory requested for each job, given by the `mem` argument of
+`gsvaBatchtoolsSlurmParam()`, with a default value of `"10G"`, is also the maximum
+main memory that GSVA will attempt to use in that job. Each job runs one R process
+and, with more than one CPU core per job, as many parallel workers, and each of
+these R processes takes about 0.8 GB by itself for loading GSVA and the packages it
+depends on. Therefore, the memory requested for each job should be at least
+`(1 + ncpus_per_task)` times 0.8 GB, i.e., 4 GB in the previous example, plus the
+memory needed by the calculations on each chunk of the input data. When GSVA
+estimates that its calculations require more memory than available, it gives a
+warning before starting them, suggesting to use fewer CPU cores per job or to
+request more memory.
+
 The next step is to run the function `gsvaMap()`, which will submit the jobs to the
 SLURM workload manager, and return a list object, where each of its elements will be
 the path to the intermediate results of one chunk of the input data, saved in the

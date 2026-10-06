@@ -84,10 +84,21 @@ or terabytes (T), which GSVA will use to attempt bounding the maximum amount
 of main memory used across all threads of execution to that given quantity.
 By default \code{maxmem="auto"}, indicating that the maximum memory will be the
 90\% of the total main memory, as calculated by
-\code{\link[memuse:Sys.meminfo]{Sys.meminfo()}}. To avoid setting any bound on the
-maximum memory, use \code{maxmem=Inf}. Note that the amount of main memory used
-in an R session or script may depend on other commands and packages used in
-that same session or script.}
+\code{\link[memuse:Sys.meminfo]{Sys.meminfo()}} or, when it is smaller, of the
+memory limit of the job or container where R runs, such as a job of the
+SLURM workload manager. To avoid setting any bound on the maximum memory,
+use \code{maxmem=Inf}. Note that the amount of main memory used in an R session
+or script may depend on other commands and packages used in that same
+session or script. In particular, each R process running GSVA, the main one
+and each of its parallel workers in \code{BPPARAM}, takes about 0.8 GB by itself
+for loading GSVA and the packages it depends on, including forked workers,
+such as those of a \code{\link[BiocParallel:MulticoreParam-class]{MulticoreParam}}
+object, which end up taking most of that memory as their own while they
+run. Before starting its calculations, GSVA gives a warning when the memory
+it estimates they require exceeds \code{maxmem}, suggesting to use fewer
+parallel workers or a larger \code{maxmem}. The memory taken by each R process
+can be set with the option \code{GSVA.workermem}, in bytes, and this check can be
+disabled with \code{options(GSVA.check_memory=FALSE)}.}
 
 \item{rowNormExprData}{A row-normalized expression data set obtained with
 \code{\link{gsvaRowNorm}}. It can be either a single character string with the path
