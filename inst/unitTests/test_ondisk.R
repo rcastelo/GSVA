@@ -221,6 +221,22 @@ test_memory_check <- function() {
     checkIdentical(GSVA:::.n_par_workers(SnowParam(4), c(50, 1000)), 0L)
     checkIdentical(GSVA:::.n_par_workers(SnowParam(4), c(1000, 1000)), 4L)
 
+    ## sparse input data loaded in main memory takes the size of its nonzero
+    ## values and their row indices with the GSVA method, and the size of a
+    ## dense matrix with the other methods, which load it as such
+    suppressPackageStartupMessages(library(Matrix))
+    set.seed(123)
+    S <- rsparsematrix(200, 150, density=0.1,
+                       rand.x=function(n) as.double(rpois(n, 2) + 1))
+    dimnames(S) <- list(paste0("g", 1:200), paste0("s", 1:150))
+    sgsets <- list(gs1=paste0("g", 1:20), gs2=paste0("g", 21:60))
+    od <- GSVA:::.check_ondisk(gsvaParam(S, sgsets, verbose=FALSE), first=NA,
+                               last=NA, whdim=2, maxmem=Inf, verbose=FALSE)
+    checkEqualsNumeric(attr(od, "insize"), nnzero(S) * (8 + 4))
+    od <- GSVA:::.check_ondisk(plageParam(S, sgsets), first=NA, last=NA,
+                               whdim=2, maxmem=Inf, verbose=FALSE, dense=TRUE)
+    checkEqualsNumeric(attr(od, "insize"), 200 * 150 * 8)
+
     ## each R process takes the memory given by the option 'GSVA.workermem'
     oldopt <- options(GSVA.workermem=1 * gb)
     on.exit(options(oldopt), add=TRUE)

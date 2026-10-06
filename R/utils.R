@@ -417,7 +417,10 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 
 .check_sparse_load_input_expr <- function(expr, method, first, last, whdim,
                                           ondisk, verbose) {
-    if (method != "GSVA" && is_sparse(expr)) { 
+    ## methods that deal with sparse data, which is loaded in main memory as
+    ## sparse, while the other methods load it as a dense matrix
+    sparsemethods <- c("GSVA", "average")
+    if (!method %in% sparsemethods && is_sparse(expr)) { 
         msg <- paste("Input expression data is sparse, but the {method}",
                      "algorithm does not deal with sparsity in a specific way,",
                      "and data will be converted into a dense matrix format")
@@ -449,7 +452,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         if (verbose)
             cli_alert_info("Loading input expression data into main memory")
 
-        if (method == "GSVA" && is_sparse(expr))
+        if (method %in% sparsemethods && is_sparse(expr))
             expr <- .load_sparse_by_blocks(expr, maxmem=attr(ondisk, "maxmem"),
                                            insize=attr(ondisk, "insize"))
         else
@@ -879,17 +882,18 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## of the assay 'assay' of the expression data in 'param', restricted to the
 ## rows (whdim=1) or columns (whdim=2) from 'first' to 'last', when given,
 ## where sparse data, in an SVT_SparseMatrix object, store each nonzero value
-## and its row index
+## and its row index, unless 'dense=TRUE', when they are loaded in main memory
+## as a dense matrix, as the methods other than GSVA and average do
 #' @importFrom cli cli_abort
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
 .input_mem_size <- function(param, assay, first, last, whdim,
-                            recompute_nzcount=FALSE) {
+                            recompute_nzcount=FALSE, dense=FALSE) {
     X <- unwrapData(get_exprData(param), assay)
     nr <- as.numeric(nrow(X))
     nc <- as.numeric(ncol(X))
     spa <- 1
-    if (is_sparse(X)) {
+    if (is_sparse(X) && !dense) {
         tot <- nr * nc
         if (recompute_nzcount)
             spa <- .estimate_nzcount(get_exprData(param), assay, FALSE) / tot
@@ -913,7 +917,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             cli_abort(c("x"="Invalid internal value for 'whdim' argument."))
     }
     eltbytes <- if (type(X) == "integer") 4 else 8
-    if (is_sparse(X))
+    if (is_sparse(X) && !dense)
         return(spa * nr * nc * (eltbytes + 4))
 
     nr * nc * eltbytes
@@ -946,8 +950,10 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## accordingly. the calculations fit when the memory taken by their data, see
 ## .step_data_mem(), fits in the fraction .mem_fraction_R of 'maxmem'
 ## available to the allocations of R, where 'mf' gives the memory factors of
-## the step, see .step_mem_factors(). If the input data is a DelayedArray, also
-## reports whether the calculations fit in the maximum available main memory.
+## the step, see .step_mem_factors(), and 'dense=TRUE' indicates that the input
+## data is loaded in main memory as a dense matrix, even when it is sparse. If
+## the input data is a DelayedArray, also reports whether the calculations fit
+## in the maximum available main memory.
 ## If 'ondisk' is set to 'yes', then this function returns TRUE, otherwise it
 ## returns FALSE, with the estimated size of the input data in main memory and
 ## 'maxmem' as attributes.
@@ -957,13 +963,14 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 #' @importFrom BiocGenerics type
 .check_ondisk <- function(param, assay=get_assay(param), first, last, whdim,
                           recompute_nzcount=FALSE, maxmem, verbose,
-                          mf=list(workfactor=2, outfactor=1, outextra=0)) {
+                          mf=list(workfactor=2, outfactor=1, outextra=0),
+                          dense=FALSE) {
     ondisk <- .get_ondisk(param)
     if (ondisk != "auto" && ondisk != "yes" && ondisk != "no")
         cli_abort(c("x"="'ondisk' should be either 'auto', 'yes' or 'no'"))
 
     insize <- .input_mem_size(param, assay, first, last, whdim,
-                              recompute_nzcount)
+                              recompute_nzcount, dense)
     if (ondisk == "auto") {
         X <- unwrapData(get_exprData(param), assay)
         dims <- dim(X)
@@ -971,7 +978,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             dims[whdim] <- last - first + 1
         need <- .step_data_mem(dims, whdim, insize,
                                if (type(X) == "integer") 4 else 8,
-                               is_sparse(X), TRUE, mf)
+                               is_sparse(X) && !dense, TRUE, mf)
         ondisk <- "no"
         if (need > .mem_fraction_R * maxmem) {
             ondisk <- "yes"

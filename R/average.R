@@ -391,6 +391,7 @@ setMethod("details",
     return(es)
 }
 
+#' @importFrom BiocGenerics type "type<-"
 .compute_average_scores_block <- function(Z, geneSetsIdx, method, any_na,
                                           na_use, minSize, wna_env, verbose) {
     minSize <- as.integer(minSize)
@@ -403,6 +404,13 @@ setMethod("details",
     stopifnot(is.logical(verbose)) ## QC
     na_use <- as.integer(factor(na_use, levels=c("everything", "all.obs",
                                                  "na.rm")))
+
+    ## the C code reads double values, so that integer values, e.g., counts,
+    ## are converted to double, in this block only
+    if (is.matrix(Z) && is.integer(Z))
+        storage.mode(Z) <- "double"
+    else if (is(Z, "SVT_SparseMatrix") && type(Z) == "integer")
+        type(Z) <- "double"
 
     sco <- .Call("avg_score_genesets_R", Z, geneSetsIdx, any_na, na_use,
                  minSize, verbose)
