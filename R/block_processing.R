@@ -67,8 +67,11 @@
 ## memory 'maxmem', where 'workfactor', 'outfactor' and 'outextra' are given
 ## by .step_mem_factors(). the memory available to the blocks of the workers
 ## is what is left by the memory that remains allocated, see .fixed_mem(),
-## from the fraction .mem_fraction_R of 'maxmem' available to the allocations
-## of R. the size of a row or column of 'X' stored on disk is the one of its
+## from the fraction .mem_fraction_R, available to the allocations of R, of
+## the memory that the R processes of more than one worker, of 'workermem'
+## bytes each, see .worker_mem(), leave from 'maxmem', when they leave enough
+## for the memory that remains allocated; 'workermem=0' when the workers do
+## not share 'maxmem', such as the jobs of gsvaMap(). the size of a row or column of 'X' stored on disk is the one of its
 ## dense form, which overestimates the size of sparse data. the blocks of all
 ## workers together are not smaller than the automatic block size of the
 ## DelayedArray package, see getAutoBlockSize(), because the overhead of
@@ -81,7 +84,8 @@
 #' @importFrom DelayedArray getAutoBlockLength
 #' @importFrom S4Arrays is_sparse
 .units_per_block <- function(X, whdim, nworkers, maxmem, workfactor=2,
-                             outfactor=1, outextra=0) {
+                             outfactor=1, outextra=0,
+                             workermem=.worker_mem()) {
     nunits <- dim(X)[whdim]
     inmemory <- !is(X, "DelayedArray")
     if (inmemory)
@@ -91,6 +95,12 @@
                      if (type(X) == "integer") 4 else 8
     fixed <- .fixed_mem(nunits, unitbytes, whdim, is_sparse(X), inmemory,
                         outfactor, outextra)
+    ## with more than one worker, their R processes take memory from 'maxmem',
+    ## unless they leave no memory for the blocks, when 'maxmem' cannot be
+    ## honored anyway, and smaller blocks would only make calculations slower
+    if (nworkers > 1 &&
+        .mem_fraction_R * (maxmem - nworkers * workermem) > fixed)
+        maxmem <- maxmem - nworkers * workermem
     avail <- (.mem_fraction_R * maxmem - fixed) / nworkers
     nperblock <- floor(avail / ((workfactor + outfactor) * unitbytes +
                                 outextra))
@@ -113,11 +123,11 @@
 #' @importFrom BiocGenerics type
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .rowgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
-                         outextra=0) {
+                         outextra=0, workermem=.worker_mem()) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
       nrowblock <- .units_per_block(X, 1L, nworkers, maxmem, workfactor,
-                                    outfactor, outextra)
+                                    outfactor, outextra, workermem)
       grid <- rowAutoGrid(X, nrow=.align_to_chunks(nrowblock, X, 1L))
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
@@ -142,11 +152,11 @@
 #' @importFrom BiocGenerics type
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .colgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
-                         outextra=0) {
+                         outextra=0, workermem=.worker_mem()) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
       ncolblock <- .units_per_block(X, 2L, nworkers, maxmem, workfactor,
-                                    outfactor, outextra)
+                                    outfactor, outextra, workermem)
       grid <- colAutoGrid(X, ncol=.align_to_chunks(ncolblock, X, 2L))
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce

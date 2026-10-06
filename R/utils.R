@@ -1007,6 +1007,14 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     as.numeric(getOption("GSVA.workermem", 0.8 * 1024^3))
 }
 
+## memory in bytes that each R process takes outside R while it reads blocks
+## of input data from disk, such as the buffers of the HDF5 library to
+## decompress the chunks read: about 0.2 GB, measured on single-cell data
+## stored in chunks of about 1000 x 1000 values
+.disk_read_mem <- function() {
+    0.2 * 1024^3
+}
+
 ## number of parallel workers of 'BPPARAM' that process a matrix with
 ## dimensions 'dims', which is 0 when its calculations are not parallelized,
 ## see .check_open_parallelism()
@@ -1023,21 +1031,26 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## with dimensions 'dims', along its rows (whdim=1) or columns (whdim=2), of
 ## size 'insize' in main memory and 'eltbytes' bytes per value, sparse or not,
 ## and stored in main memory or not ('inmemory'), with 'nworkers' parallel
-## workers, forked or not, where
-## 'mf' gives the memory factors of the step, see .step_mem_factors(). the
-## main R process and each worker take .worker_mem(), forked workers also take
-## a copy of the input data when it is in main memory, and the data of the
-## step take .step_data_mem() from the fraction .mem_fraction_R of the memory
-## available to the allocations of R
+## workers, where 'mf' gives the memory factors of the step, see
+## .step_mem_factors(). the main R process and each worker take .worker_mem(),
+## and the data of the step take .step_data_mem() from the fraction
+## .mem_fraction_R of the memory available to the allocations of R. each R
+## process also takes .disk_read_mem() when the input data is read from disk,
+## i.e., when it is not loaded in main memory ('inmemory=FALSE'). forked
+## workers do not take a copy of the input data in main memory: the garbage
+## collector of R writes only to the memory page with the header of each
+## object, so that the data of large vectors remain shared, as measured on
+## Linux, while the many small objects of the packages loaded are copied, which
+## .worker_mem() includes
 .step_mem_need <- function(dims, insize, whdim, eltbytes, sparse, inmemory,
-                           mf, nworkers, forked) {
-    need <- (1 + nworkers) * .worker_mem() +
-            .step_data_mem(dims, whdim, insize, eltbytes, sparse, inmemory,
-                           mf) / .mem_fraction_R
-    if (forked && inmemory)
-        need <- need + nworkers * insize
+                           mf, nworkers) {
+    permem <- .worker_mem()
+    if (!inmemory)
+        permem <- permem + .disk_read_mem()
 
-    need
+    (1 + nworkers) * permem +
+        .step_data_mem(dims, whdim, insize, eltbytes, sparse, inmemory, mf) /
+        .mem_fraction_R
 }
 
 ## warn, before the calculations of a step start, when the estimated memory
@@ -1081,7 +1094,6 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## skipped while gsva() runs the steps, because gsva() checks the memory
 ## required by all of them before starting, and with the option
 ## 'GSVA.check_memory=FALSE'
-#' @importFrom BiocParallel MulticoreParam
 #' @importFrom S4Arrays is_sparse
 #' @importFrom BiocGenerics type
 .check_step_mem <- function(X, whdim, first, last, ondisk, mf, BPPARAM,
@@ -1098,8 +1110,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         insize <- prod(as.numeric(dims)) * eltbytes
     nworkers <- .n_par_workers(BPPARAM, dims)
     need <- .step_mem_need(dims, insize, whdim, eltbytes, is_sparse(X),
-                           !ondisk, mf, nworkers,
-                           is(BPPARAM, "MulticoreParam"))
+                           !ondisk, mf, nworkers)
 
     .check_mem_need(need, maxmem, nworkers)
 }
@@ -1109,7 +1120,6 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## estimating the size of the input data of each step from the one of the
 ## previous step, and the on-disk decision of each step as .check_ondisk()
 ## does
-#' @importFrom BiocParallel MulticoreParam
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
 .check_gsva_mem <- function(param, BPPARAM, maxmem) {
@@ -1136,8 +1146,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                                        sparse, TRUE, mf) <=
                         .mem_fraction_R * maxmem
         need <- max(need, .step_mem_need(dims, insize, st$whdim, eltbytes,
-                                         sparse, inmemory, mf, nworkers,
-                                         is(BPPARAM, "MulticoreParam")))
+                                         sparse, inmemory, mf, nworkers))
         insize <- insize * mf$outfactor ## size of the input of the next step
     }
 

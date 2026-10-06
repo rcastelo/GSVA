@@ -84,8 +84,9 @@ test_units_per_block <- function() {
     colbytes <- insize / 500
     ## the budgets below are for the allocations of R, a fraction of 'maxmem'
     frac <- GSVA:::.mem_fraction_R
-    upb <- function(nworkers, maxmem, ...)
-        GSVA:::.units_per_block(X, 2L, nworkers, maxmem / frac, ...)
+    upb <- function(nworkers, maxmem, ..., workermem=0)
+        GSVA:::.units_per_block(X, 2L, nworkers, maxmem / frac, ...,
+                                workermem=workermem)
 
     ## memory for 50 columns per block, with 'workfactor' times the size of a
     ## column of working memory and an output of the same size as the input;
@@ -94,6 +95,14 @@ test_units_per_block <- function() {
     checkIdentical(upb(1, maxmem), 50L)
     ## shared by two workers
     checkIdentical(upb(2, maxmem), 25L)
+    ## which take, with more than one worker, the memory of their R processes
+    wm <- 1e6
+    checkIdentical(GSVA:::.units_per_block(X, 2L, 2, maxmem / frac + 2 * wm,
+                                           workermem=wm), 25L)
+    ## unless they leave no memory for the blocks, which are then as large as
+    ## without them
+    checkIdentical(GSVA:::.units_per_block(X, 2L, 2, maxmem / frac,
+                                           workermem=1e12), 25L)
     ## more working memory per column
     checkIdentical(upb(1, maxmem, workfactor=4), 30L)
     ## an output of 8 bytes per gene set per column for 100 gene sets

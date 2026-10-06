@@ -317,8 +317,10 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     chunks <- NULL
     if (!is.list(X)) {
         if (is.null(mapinfo)) {
+            ## each job has its own memory 'maxmem', not shared with the
+            ## other jobs
             grid <- gridsizefun(unwrapData(get_exprData(inputData), assay),
-                                nworkers, maxmem)
+                                nworkers, maxmem, workermem=0)
             X <- splitinrangesfun(grid)
             chunks <- data.frame(first=vapply(X, start, integer(1)),
                                  last=vapply(X, end, integer(1)))
@@ -681,7 +683,7 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
     inmemory <- .step_data_mem(dims, whdim, insize, eltbytes, sparse, TRUE,
                                mf) <= .mem_fraction_R * maxmem
     need <- .step_mem_need(dims, insize, whdim, eltbytes, sparse, inmemory,
-                           mf, nworkers, .Platform$OS.type == "unix")
+                           mf, nworkers)
 
     .check_mem_need(need, maxmem, nworkers, hint=hint)
 }
