@@ -952,13 +952,20 @@ ecdfvals_sparse_to_dense_R(SEXP XCspR, SEXP XRspR, SEXP verboseR) {
 }
 
 
+/* value at position 'idx' of a dense matrix of doubles 'X' or, when 'X' is
+ * NULL, of integers 'Xi', as a double */
+#define DENSE_VALUE(X, Xi, idx) ((X) != NULL ? (X)[idx] : \
+                                 ((Xi)[idx] == NA_INTEGER ? NA_REAL : \
+                                  (double) (Xi)[idx]))
+
 /* calculate empirical cumulative distribution function values
  * on the zero and nonzero entries from the input dense matrix,
  * the returned value is a dense matrix.
  */
 SEXP
 ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR) {
-  double* X;
+  double* X=NULL;
+  int*    Xi=NULL; /* integer input, e.g., counts */
   Rboolean verbose=asLogical(verboseR);
   int     nr, nc;
   SEXP    ecdfRobj;
@@ -970,7 +977,10 @@ ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR) {
 
   nr = INTEGER(getAttrib(XR, R_DimSymbol))[0]; /* number of rows */
   nc = INTEGER(getAttrib(XR, R_DimSymbol))[1]; /* number of columns */
-  X  = REAL(XR);
+  if (TYPEOF(XR) == INTSXP)
+    Xi = INTEGER(XR);
+  else
+    X  = REAL(XR);
 
   /* create a new dense matrix object to store the result,
    * if nr * nc > INT_MAX and LONG_VECTOR_SUPPORT is not
@@ -1011,7 +1021,7 @@ ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR) {
 #else
       int      idx = (size_t) nr * j + i;
 #endif
-      uniqv[j] = x[j] = X[idx];
+      uniqv[j] = x[j] = DENSE_VALUE(X, Xi, idx);
     }
 
     R_qsort(uniqv, (size_t) 1, (size_t) nc);
@@ -1083,6 +1093,7 @@ ecdfvals_dense_to_dense_R(SEXP XR, SEXP verboseR) {
 SEXP
 ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR) {
   double* X;
+  int*    Xi=NULL; /* integer input, e.g., counts */
   Rboolean verbose=asLogical(verboseR);
   int     nr, nc;
   SEXP    ecdfRobj;
@@ -1094,7 +1105,10 @@ ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR) {
 
   nr = INTEGER(getAttrib(XR, R_DimSymbol))[0]; /* number of rows */
   nc = INTEGER(getAttrib(XR, R_DimSymbol))[1]; /* number of columns */
-  X  = REAL(XR);
+  if (TYPEOF(XR) == INTSXP)
+    Xi = INTEGER(XR);
+  else
+    X  = REAL(XR);
 
   /* create a new dense matrix object to store the result,
    * if nr * nc > INT_MAX and LONG_VECTOR_SUPPORT is not
@@ -1137,7 +1151,7 @@ ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR) {
 #else
       int      idx = (size_t) nr * j + i;
 #endif
-      x[j] = X[idx];
+      x[j] = DENSE_VALUE(X, Xi, idx);
       if (!ISNA(x[j]) && !ISNAN(x[j])) {
         uniqv[nnas] = x[j];
         nnas++;
@@ -1188,7 +1202,7 @@ ecdfvals_dense_to_dense_nas_R(SEXP XR, SEXP verboseR) {
 #else
       int      idx = (size_t) nr * j + i;
 #endif
-      if (!ISNA(X[idx]) && !ISNAN(X[idx]))
+      if (!ISNA(x[j]) && !ISNAN(x[j]))
         ecdf_vals[idx] = ecdfuniqv[mt[j]-1];
       else
         ecdf_vals[idx] = NA_REAL;
