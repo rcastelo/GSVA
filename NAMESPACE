@@ -105,6 +105,7 @@ importFrom(DelayedArray,
   defaultAutoGrid,
   getAutoBlockLength,
   getAutoBlockSize,
+  modify_seeds,
   read_block,
   rowAutoGrid,
   rowRanges,
@@ -124,8 +125,10 @@ importFrom(GSEABase,
   mapIdentifiers
 )
 importFrom(HDF5Array,
+  H5SparseMatrix,
   HDF5Array,
   getHDF5DumpChunkDim,
+  getHDF5DumpChunkLength,
   getHDF5DumpCompressionLevel,
   getHDF5DumpDir,
   loadHDF5SummarizedExperiment,
@@ -213,8 +216,11 @@ importFrom(methods,
   new
 )
 importFrom(rhdf5,
+  H5Sunlimited,
   h5createDataset,
   h5createFile,
+  h5createGroup,
+  h5set_extent,
   h5write
 )
 importFrom(sparseMatrixStats,

@@ -281,3 +281,37 @@ test_scores_ondisk <- function() {
     checkTrue(any(grepl("on-disk", out)))
     checkEqualsNumeric(es, as.matrix(esdisk))
 }
+
+test_h5file_seeds <- function() {
+
+    message("Running unit tests for on-disk input read through H5File objects")
+
+    suppressPackageStartupMessages({
+        library(HDF5Array)
+        library(BiocParallel)
+    })
+
+    set.seed(123)
+    m <- matrix(rnorm(200 * 20), nrow=200, ncol=20)
+    f <- tempfile(fileext=".h5")
+    invisible(writeHDF5Array(m, f, "x"))
+    h5file <- function(X) unlist(DelayedArray::seedApply(X, function(s)
+                                     is(s@filepath, "H5File")))
+
+    ## a local HDF5 file read through an H5File object is read through its
+    ## path instead, which the workers of any parallel back-end can open
+    x <- HDF5Array(h5mread::H5File(f), "x") * 2
+    checkTrue(h5file(x))
+    y <- GSVA:::.h5file_seeds_to_paths(x, SnowParam(2), 2L)
+    checkTrue(!h5file(y))
+    checkIdentical(as.matrix(y), m * 2)
+
+    ## a remote HDF5 file can only be read through its H5File object, which
+    ## cannot be sent to the workers of a back-end that does not fork
+    h <- h5mread::H5File(f)
+    h@s3 <- TRUE
+    x <- HDF5Array(h, "x")
+    checkException(GSVA:::.h5file_seeds_to_paths(x, SnowParam(2), 2L),
+                   silent=TRUE)
+    checkTrue(h5file(GSVA:::.h5file_seeds_to_paths(x, SerialParam(), 1L)))
+}

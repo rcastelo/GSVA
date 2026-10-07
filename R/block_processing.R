@@ -321,68 +321,249 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
     read_block(X, ArrayViewport(dim(X), IRanges(vpstart, vpend)))
 }
 
+## path to a new HDF5 file in the directory 'dumpdir', whose name starts with
+## 'prefix' and is unique to the process creating it, see tempfile()
+.h5_part_fname <- function(dumpdir, prefix) {
+    tempfile(pattern=paste0(prefix, ".", Sys.info()[["nodename"]], ".",
+                            Sys.getpid(), "."),
+             tmpdir=dumpdir, fileext=".h5")
+}
+
+## create the HDF5 file 'fname' with the dataset "x" of dimensions 'dims',
+## integer or double, and chunks 'chunkdim'. the file is written with the
+## rhdf5 package, because the functions of the HDF5Array package that create
+## HDF5 datasets lock files shared by all R processes in a way that is not
+## safe with concurrent processes
+#' @importFrom HDF5Array getHDF5DumpCompressionLevel
+#' @importFrom rhdf5 h5createFile h5createDataset
+.h5_part_create <- function(fname, dims, int, chunkdim) {
+    h5createFile(fname)
+    h5createDataset(fname, "x", dims,
+                    storage.mode=if (int) "integer" else "double",
+                    chunk=pmax(1, pmin(dims, chunkdim)),
+                    level=getHDF5DumpCompressionLevel())
+}
+
+## number of values of the chunks of the resizable datasets of the CSC layout,
+## see .h5_csc_create()
+.h5_csc_chunk <- 2^20
+
+## create the HDF5 file 'fname' with the group "matrix" holding a sparse
+## matrix in compressed sparse column (CSC) layout, as in the HDF5 files of
+## 10x Genomics, which the HDF5Array package reads with H5SparseMatrix(): its
+## nonzero values "data", integer or double, and their 0-based row indices
+## "indices" are resizable datasets, to which the nonzero values of blocks of
+## columns are appended, see .h5_csc_append(), while the 0-based positions in
+## them of the first nonzero value of each column "indptr" and the dimensions
+## "shape" are written at the end, see .h5_csc_close(). it returns the state
+## of the appending, see .h5_csc_append()
+#' @importFrom HDF5Array getHDF5DumpCompressionLevel
+#' @importFrom rhdf5 h5createFile h5createGroup h5createDataset H5Sunlimited
+.h5_csc_create <- function(fname, int) {
+    h5createFile(fname)
+    h5createGroup(fname, "matrix")
+    h5createDataset(fname, "matrix/data", 0, maxdims=H5Sunlimited(),
+                    storage.mode=if (int) "integer" else "double",
+                    chunk=.h5_csc_chunk, level=getHDF5DumpCompressionLevel())
+    h5createDataset(fname, "matrix/indices", 0, maxdims=H5Sunlimited(),
+                    storage.mode="integer", chunk=.h5_csc_chunk,
+                    level=getHDF5DumpCompressionLevel())
+    list(fname=fname, int=int, written=0, nnz=0, indptr=0,
+         x=if (int) integer(0) else double(0), i=integer(0))
+}
+
+## write in the CSC layout the first 'n' nonzero values buffered in 'st', the
+## state of the appending, see .h5_csc_append(), returning it updated
+#' @importFrom rhdf5 h5set_extent h5write
+.h5_csc_flush <- function(st, n) {
+    if (n > 0) {
+        h5set_extent(st$fname, "matrix/data", st$written + n)
+        h5write(st$x[seq_len(n)], st$fname, "matrix/data",
+                start=st$written + 1, count=n)
+        h5set_extent(st$fname, "matrix/indices", st$written + n)
+        h5write(st$i[seq_len(n)], st$fname, "matrix/indices",
+                start=st$written + 1, count=n)
+        st$x <- st$x[-seq_len(n)]
+        st$i <- st$i[-seq_len(n)]
+        st$written <- st$written + n
+    }
+    st
+}
+
+## append to the CSC layout the nonzero values of the sparse block of columns
+## 'res', given the state of the appending 'st', see .h5_csc_create(),
+## returning it updated. the nonzero values are buffered and written in whole
+## chunks, because the HDF5 library does not reuse the space of compressed
+## chunks written again, which makes files grow several times their size
+.h5_csc_append <- function(st, res) {
+    res <- as(res, "CsparseMatrix") ## nonzero values sorted by column
+    st$x <- c(st$x, if (st$int) as.integer(res@x) else as.double(res@x))
+    st$i <- c(st$i, res@i)
+    st$indptr <- c(st$indptr, res@p[-1L] + st$nnz)
+    st$nnz <- st$nnz + length(res@i)
+    .h5_csc_flush(st, floor(length(st$x) / .h5_csc_chunk) * .h5_csc_chunk)
+}
+
+## write the nonzero values left in the buffer, the column pointers and the
+## dimensions 'dims' of the CSC layout, given the state of the appending 'st',
+## see .h5_csc_append()
+#' @importFrom rhdf5 h5write
+.h5_csc_close <- function(st, dims) {
+    st <- .h5_csc_flush(st, length(st$x))
+    indptr <- st$indptr
+    if (max(indptr) <= .Machine$integer.max)
+        indptr <- as.integer(indptr)
+    h5write(indptr, st$fname, "matrix/indptr")
+    h5write(as.integer(dims), st$fname, "matrix/shape")
+}
+
 ## apply 'BLOCK_FUN' to a block of rows or columns of a matrix, read into main
-## memory when it is stored on disk, and write its output into a new HDF5 file
-## in the directory 'dumpdir', returning the path to that file, whether the
-## output is sparse and, if present, its attributes "min" and "max". the file
-## is written with the rhdf5 package, because the functions of the HDF5Array
-## package that create HDF5 datasets lock files shared by all R processes in a
-## way that is not safe with concurrent processes, while the name of the file,
-## which starts with 'prefix', is unique to the process writing it, see
-## tempfile(). its HDF5 chunks are the default ones of the HDF5Array package
+## memory when it is stored on disk, so that 'BLOCK_FUN' gives its output in
+## main memory; defined outside the functions processing matrices by blocks,
+## for the same reason as BLOCK_FUN_WRAPPER()
+#' @importFrom S4Arrays DummyArrayGrid read_block
+IN_MEMORY_BLOCK_FUN <- function(block, BLOCK_FUN, ..., verbose=FALSE) {
+    if (is(block, "DelayedArray"))
+        block <- read_block(block, DummyArrayGrid(dim(block))[[1L]])
+    BLOCK_FUN(block, ..., verbose=verbose)
+}
+
+## apply 'BLOCK_FUN' to a block of rows or columns of a matrix and write its
+## output into a new HDF5 file in the directory 'dumpdir', see
+## IN_MEMORY_BLOCK_FUN() and .h5_part_fname(), returning the path to that
+## file, whether the output is sparse and, if present, its attributes "min"
+## and "max". its HDF5 chunks are the default ones of the HDF5Array package
 ## or, when 'chunkcols' is given, span the rows of the output, with
 ## 'chunkcols' columns. defined outside the functions processing matrices by
 ## blocks, for the same reason as BLOCK_FUN_WRAPPER()
-#' @importFrom S4Arrays DummyArrayGrid read_block is_sparse
+#' @importFrom S4Arrays is_sparse
 #' @importFrom BiocGenerics type
-#' @importFrom HDF5Array getHDF5DumpChunkDim getHDF5DumpCompressionLevel
-#' @importFrom rhdf5 h5createFile h5createDataset h5write
+#' @importFrom HDF5Array getHDF5DumpChunkDim
+#' @importFrom rhdf5 h5write
 ONDISK_BLOCK_FUN <- function(block, BLOCK_FUN, dumpdir, prefix,
                              chunkcols=NULL, ..., verbose=FALSE) {
-    if (is(block, "DelayedArray"))
-        block <- read_block(block, DummyArrayGrid(dim(block))[[1L]])
-    res <- BLOCK_FUN(block, ..., verbose=verbose)
+    res <- IN_MEMORY_BLOCK_FUN(block, BLOCK_FUN, ..., verbose=verbose)
     rm(block)
 
-    fname <- tempfile(pattern=paste0(prefix, ".", Sys.info()[["nodename"]],
-                                     ".", Sys.getpid(), "."),
-                      tmpdir=dumpdir, fileext=".h5")
+    fname <- .h5_part_fname(dumpdir, prefix)
     sparse <- is_sparse(res)
     int <- type(res) == "integer"
     rmin <- attr(res, "min")
     rmax <- attr(res, "max")
     res <- as.matrix(res) ## HDF5 datasets are dense
     attributes(res) <- list(dim=dim(res))
-    h5createFile(fname)
     chunkdim <- getHDF5DumpChunkDim(dim(res))
     if (!is.null(chunkcols))
-        chunkdim <- c(nrow(res), min(ncol(res), chunkcols))
-    h5createDataset(fname, "x", dim(res),
-                    storage.mode=if (int) "integer" else "double",
-                    chunk=chunkdim,
-                    level=getHDF5DumpCompressionLevel())
+        chunkdim <- c(nrow(res), chunkcols)
+    .h5_part_create(fname, dim(res), int, chunkdim)
     h5write(res, fname, "x")
 
     list(fname=fname, sparse=sparse, min=rmin, max=rmax)
 }
 
+## apply 'BLOCK_FUN' to each of the consecutive blocks of rows (whdim=1) or
+## columns (whdim=2) of a matrix with the ranges in 'grp', taken from the
+## matrix and processed in main memory by 'FUN_WRAPPER', see .bp_blocks()
+## and IN_MEMORY_BLOCK_FUN(), and write their outputs into a single new HDF5
+## file in the directory 'dumpdir', see .h5_part_fname(), returning the path
+## to that file, whether the output is sparse and stored in CSC layout and, if
+## present, the minimum and maximum of its attributes "min" and "max". sparse
+## output of blocks of columns, such as sparse ranks, is stored in CSC layout,
+## see .h5_csc_create(), which takes less space and is read faster by blocks
+## of columns than a dense HDF5 dataset, as measured on single-cell data.
+## otherwise, the output is stored in a dense HDF5 dataset whose chunks span
+## the blocks, so that each block fills whole chunks: when the blocks are of
+## rows, chunks span their rows, with 'chunkcols' columns, and when they are
+## of columns, chunks span their columns, with as many rows as the default
+## chunk length of the HDF5Array package takes. 'verbose' and 'idpbe' are given to
+## 'FUN_WRAPPER' to report progress. defined outside the functions processing
+## matrices by blocks, for the same reason as BLOCK_FUN_WRAPPER()
+#' @importFrom S4Arrays is_sparse
+#' @importFrom BiocGenerics type
+#' @importFrom HDF5Array getHDF5DumpChunkLength
+#' @importFrom rhdf5 h5write
+#' @importFrom IRanges width
+ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
+                             prefix, chunkcols=NULL, ..., verbose=FALSE,
+                             idpbe=NULL) {
+    fname <- .h5_part_fname(dumpdir, prefix)
+    total <- sum(vapply(grp, width, integer(1)))
+    offset <- 0L
+    sparse <- csc <- NULL
+    mines <- maxes <- NULL
+    for (rng in grp) {
+        res <- FUN_WRAPPER(rng, verbose=verbose, idpbe=idpbe,
+                           WRAPPED_FUN=IN_MEMORY_BLOCK_FUN, BLOCK_FUN=BLOCK_FUN,
+                           ...)
+        if (!is.null(attr(res, "min"))) {
+            mines <- min(mines, attr(res, "min"))
+            maxes <- max(maxes, attr(res, "max"))
+        }
+        if (is.null(sparse)) { ## the file is created with the first block
+            sparse <- is_sparse(res)
+            csc <- sparse && whdim == 2L
+            int <- type(res) == "integer"
+            dims <- dim(res)
+            dims[whdim] <- total
+            if (csc)
+                st <- .h5_csc_create(fname, int)
+            else {
+                if (whdim == 1L)
+                    chunkdim <- c(nrow(res), chunkcols)
+                else
+                    chunkdim <- c(floor(getHDF5DumpChunkLength() / ncol(res)),
+                                  ncol(res))
+                .h5_part_create(fname, dims, int, chunkdim)
+            }
+        }
+        if (csc) {
+            st <- .h5_csc_append(st, res)
+            next
+        }
+        res <- as.matrix(res) ## HDF5 datasets are dense
+        attributes(res) <- list(dim=dim(res))
+        start <- c(1L, 1L)
+        start[whdim] <- offset + 1L
+        h5write(res, fname, "x", start=start, count=dim(res))
+        offset <- offset + dim(res)[whdim]
+    }
+    if (csc)
+        .h5_csc_close(st, dims)
+
+    list(fname=fname, sparse=sparse, csc=csc, min=mines, max=maxes)
+}
+
+## split the list of consecutive ranges 'rngs' into at most 'ngroups' groups
+## of consecutive ranges with about the same number of ranges
+.group_ranges <- function(rngs, ngroups) {
+    ngroups <- max(1L, min(length(rngs), ngroups))
+    unname(split(rngs, ceiling(seq_along(rngs) * ngroups / length(rngs))))
+}
+
 ## process in blocks of rows (whdim=1) or columns (whdim=2), with the ranges
 ## 'rngs', the matrix 'X' with 'FUN', giving its output in an on-disk data
-## structure, see .processMatrixRows() and .processMatrixCols(). each block is
-## processed in main memory and its output written into a separate HDF5 file,
-## see ONDISK_BLOCK_FUN(), and the output is formed by binding the HDF5 data
-## of those files. when the blocks are of rows, the chunks of those files are
-## as wide as the default blocks of columns of the output, because it is
-## later read by blocks of columns, e.g., to rank its columns, and wider
-## chunks would be read and decompressed many times. 'FUN_WRAPPER' takes the
-## blocks from 'X' in the workers, see .bp_blocks(). the minimum and maximum enrichment scores of ssGSEA, stored
-## in the attributes "min" and "max" of the output of each block, are kept in
-## the output
+## structure, see .processMatrixRows() and .processMatrixCols(). the blocks
+## are split into one group of consecutive blocks per worker, whose outputs
+## are written into one HDF5 file per group, see ONDISK_GROUP_FUN(), and the
+## output is formed by binding the HDF5 data of those files, because reading
+## blocks out of many small files is slower, as measured on single-cell data,
+## where more groups per worker were not faster; serially, there is a single
+## group and a single file. workers
+## not forked from this process processing a matrix in main memory receive
+## its blocks one at a time, see .bp_blocks(), so that the output of each
+## block is written into a separate HDF5 file, see ONDISK_BLOCK_FUN(). when
+## the blocks are of rows, the chunks of those files are as wide as the
+## default blocks of columns of the output, because it is later read by
+## blocks of columns, e.g., to rank its columns, and wider chunks would be
+## read and decompressed many times. 'FUN_WRAPPER' takes the blocks from 'X'
+## in the workers. the minimum and maximum enrichment scores of ssGSEA,
+## stored in the attributes "min" and "max" of the output of each block, are
+## kept in the output
 #' @importFrom cli cli_abort cli_alert_warning cli_progress_bar
 #' @importFrom cli cli_progress_done
 #' @importFrom BiocParallel bptry "bpprogressbar<-" bpprogressbar
-#' @importFrom BiocParallel bpstopOnError "bpstopOnError<-"
-#' @importFrom HDF5Array HDF5Array getHDF5DumpDir
+#' @importFrom BiocParallel bpstopOnError "bpstopOnError<-" MulticoreParam
+#' @importFrom HDF5Array HDF5Array H5SparseMatrix getHDF5DumpDir
 #' @importFrom DelayedArray getAutoBlockLength
 .ondisk_blocks <- function(X, whdim, rngs, FUN, FUN_WRAPPER, ..., nworkers,
                            verbose, progressmsg, BPPARAM) {
@@ -402,10 +583,9 @@ ONDISK_BLOCK_FUN <- function(block, BLOCK_FUN, dumpdir, prefix,
             assign("idpb", cli_progress_bar(progressmsg, total=dim(X)[whdim]),
                    envir=env)
         }
-        res <- lapply(rngs, FUN=FUN_WRAPPER, verbose=verbose, idpbe=env,
-                      WRAPPED_FUN=ONDISK_BLOCK_FUN, BLOCK_FUN=FUN,
-                      dumpdir=dumpdir, prefix=prefix, chunkcols=chunkcols,
-                      ...)
+        res <- list(ONDISK_GROUP_FUN(rngs, FUN_WRAPPER, FUN, whdim, dumpdir,
+                                     prefix, chunkcols, ..., verbose=verbose,
+                                     idpbe=env))
         if (verbose)
             cli_progress_done(get("idpb", envir=env))
     } else {
@@ -420,17 +600,25 @@ ONDISK_BLOCK_FUN <- function(block, BLOCK_FUN, dumpdir, prefix,
         if (verbose)
             bpprogressbar(BPPARAM) <- TRUE    ## reporting progress wo/ cli
         bpstopOnError(BPPARAM) <- FALSE
-        res <- bptry(.bp_blocks(X, whdim, rngs, ONDISK_BLOCK_FUN, FUN_WRAPPER,
-                                BLOCK_FUN=FUN, dumpdir=dumpdir, prefix=prefix,
-                                chunkcols=chunkcols, ..., BPPARAM=BPPARAM))
+        grouped <- is(X, "DelayedArray") || is(BPPARAM, "MulticoreParam")
+        run <- function(BPREDO=list()) {
+            if (grouped)
+                .gsva_bplapply(.group_ranges(rngs, nworkers),
+                               FUN=ONDISK_GROUP_FUN, FUN_WRAPPER=FUN_WRAPPER,
+                               BLOCK_FUN=FUN, whdim=whdim, dumpdir=dumpdir,
+                               prefix=prefix, chunkcols=chunkcols, ...,
+                               BPREDO=BPREDO, BPPARAM=BPPARAM)
+            else
+                .bp_blocks(X, whdim, rngs, ONDISK_BLOCK_FUN, FUN_WRAPPER,
+                           BLOCK_FUN=FUN, dumpdir=dumpdir, prefix=prefix,
+                           chunkcols=chunkcols, ..., BPREDO=BPREDO,
+                           BPPARAM=BPPARAM)
+        }
+        res <- bptry(run())
         if (any(!.bp_ok(res))) {
             .report_parallel_errors(res)
             cli_alert_warning("Trying to execute again the failing thread(s)")
-            res <- bptry(.bp_blocks(X, whdim, rngs, ONDISK_BLOCK_FUN,
-                                    FUN_WRAPPER, BLOCK_FUN=FUN,
-                                    dumpdir=dumpdir, prefix=prefix,
-                                    chunkcols=chunkcols, ...,
-                                    BPREDO=res, BPPARAM=BPPARAM))
+            res <- bptry(run(BPREDO=res))
             if (any(!.bp_ok(res))) {
                 .report_parallel_errors(res)
                 cli_abort(c("x"="Cancelling execution"))
@@ -438,9 +626,11 @@ ONDISK_BLOCK_FUN <- function(block, BLOCK_FUN, dumpdir, prefix,
         }
     }
 
-    pieces <- lapply(res, function(r) HDF5Array(r$fname, "x",
-                                                as.sparse=r$sparse))
-    out <- do.call(if (whdim == 1L) "rbind" else "cbind", pieces)
+    pieces <- lapply(res, function(r)
+        if (isTRUE(r$csc)) H5SparseMatrix(r$fname, "matrix") else
+        HDF5Array(r$fname, "x", as.sparse=r$sparse))
+    out <- if (length(pieces) == 1L) pieces[[1L]] else
+           do.call(if (whdim == 1L) "rbind" else "cbind", pieces)
 
     mines <- unlist(lapply(res, "[[", "min"))
     if (!is.null(mines)) { ## min and max enrichment scores stored by ssGSEA
@@ -480,6 +670,45 @@ ONDISK_BLOCK_FUN <- function(block, BLOCK_FUN, dumpdir, prefix,
                     BPREDO=BPREDO, BPPARAM=BPPARAM)
 }
 
+## replace in the seeds of the on-disk matrix 'X' the H5File objects of the
+## h5mread package, which hold an open connection to an HDF5 file, by the
+## path to that file, when the file is local. the connection of an H5File
+## object is lost when it is serialized, e.g., to send it to the workers of a
+## SnowParam back-end, and it is not reliable in the workers of a
+## MulticoreParam back-end, as the documentation of H5File explains, while a
+## file path is opened by each process reading from it. a remote file, such
+## as one read from Amazon S3, can only be read through its H5File object, so
+## that processing it with 'nworkers' workers of a back-end that does not
+## fork this process, such as SnowParam, gives an error before starting
+#' @importFrom DelayedArray modify_seeds seedApply
+#' @importFrom cli cli_abort
+.h5file_seeds_to_paths <- function(X, BPPARAM, nworkers) {
+    if (!is(X, "DelayedArray"))
+        return(X)
+    h5file <- function(s) .hasSlot(s, "filepath") && is(s@filepath, "H5File")
+    if (!any(unlist(seedApply(X, h5file))))
+        return(X)
+
+    X <- modify_seeds(X, function(s) {
+        if (h5file(s) && !isTRUE(s@filepath@s3))
+            s@filepath <- s@filepath@filepath
+        s
+    })
+    if (nworkers > 1L && !is(BPPARAM, "MulticoreParam") &&
+        any(unlist(seedApply(X, h5file)))) {
+        bpclass <- class(BPPARAM)[1]
+        cli_abort(c("x"=paste("The input data is read from a remote HDF5",
+                              "file through an {.cls H5File} object, which",
+                              "cannot be sent to the parallel workers of a",
+                              "{.cls {bpclass}} back-end, see",
+                              "{.help h5mread::H5File}."),
+                    "i"=paste("Use {.code BPPARAM=SerialParam()}, or a",
+                              "local copy of the HDF5 file.")))
+    }
+
+    X
+}
+
 ## process the rows of a matrix with a given function FUN, opening parallelism
 ## through a BiocParallelParam object BPPARAM, when different from NULL, and
 ## reporting progress using the 'cli' package when possible. the arguments
@@ -508,6 +737,7 @@ ONDISK_BLOCK_FUN <- function(block, BLOCK_FUN, dumpdir, prefix,
         stopifnot(is(BPPARAM, "BiocParallelParam"))
         nworkers <- bpnworkers(BPPARAM)
     }
+    X <- .h5file_seeds_to_paths(X, BPPARAM, nworkers)
 
     grid <- .rowgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra)
     rir <- .splitRowsInRanges(grid)
@@ -621,6 +851,7 @@ ONDISK_BLOCK_FUN <- function(block, BLOCK_FUN, dumpdir, prefix,
         stopifnot(is(BPPARAM, "BiocParallelParam"))
         nworkers <- bpnworkers(BPPARAM)
     }
+    X <- .h5file_seeds_to_paths(X, BPPARAM, nworkers)
 
     grid <- .colgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra)
     cir <- .splitColsInRanges(grid)
