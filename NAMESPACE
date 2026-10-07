@@ -216,10 +216,13 @@ importFrom(methods,
   new
 )
 importFrom(rhdf5,
+  H5Fis_hdf5,
   H5Sunlimited,
   h5createDataset,
   h5createFile,
   h5createGroup,
+  h5ls,
+  h5read,
   h5set_extent,
   h5write
 )

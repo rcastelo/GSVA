@@ -1047,10 +1047,9 @@ gsvaRowNorm <- function(param,
 
 #' @param rowNormExprData A row-normalized expression data set obtained with
 #' [`gsvaRowNorm`]. It can be either a single character string with the path
-#' to a directory containing the row-normalized data stored with
-#' [`saveHDF5GSVA`], the path to a file containing that data stored with
+#' to a file containing the row-normalized data stored with [`saveHDF5GSVA`] or
 #' [`saveParquetGSVA`], an `s3://` or `gs://` URI, or an `http://` or
-#' `https://` URL to such a file, or an
+#' `https://` URL to a file stored with [`saveParquetGSVA`], or an
 #' object of one of the classes supported by [`GsvaExprData-class`].
 #' For a list of these classes, see `class ? GsvaExprData`.
 #'
@@ -1147,10 +1146,9 @@ gsvaColRanks <- function(rowNormExprData,
 
 #' @param rankExprData A column-rank expression data set obtained with
 #' [`gsvaColRanks`]. It can be either a single character string with the path
-#' to a directory containing the column-rank data stored with
-#' [`saveHDF5GSVA`], the path to a file containing that data stored with
+#' to a file containing the column-rank data stored with [`saveHDF5GSVA`] or
 #' [`saveParquetGSVA`], an `s3://` or `gs://` URI, or an `http://` or
-#' `https://` URL to such a file, or an
+#' `https://` URL to a file stored with [`saveParquetGSVA`], or an
 #' object of one of the classes supported by [`GsvaExprData-class`].
 #' For a list of these classes, see `class ? GsvaExprData`.
 #'

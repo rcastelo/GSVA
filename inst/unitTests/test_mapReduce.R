@@ -640,20 +640,13 @@ test_mapReduceRedo <- function() {
     ## another job, such as one left running by a call to gsvaMap() whose R
     ## session ended, saves the same chunk while this job is saving it,
     ## simulated by creating the result of that other job when this job has
-    ## saved its own under a temporary name. An HDF5 directory saved by the
-    ## other job is kept, while a Parquet file saved by the other job is
-    ## replaced, and the temporary output of this job is not left on disk
+    ## saved its own under a temporary name. The file saved by the other job
+    ## is replaced, and the temporary output of this job is not left on disk
     node <- gsub(".", "\\.", Sys.info()[["nodename"]], fixed=TRUE)
     final <- function(tmpname)
         sub(paste0("\\.", node, "\\.[0-9a-f]+\\.partial$"), "", tmpname)
     formats <- list(list(output="HDF5", fun="saveHDF5GSVA",
-                         other=quote({
-                             fname <- final(dir)
-                             dir.create(fname)
-                             file.copy(list.files(dir, full.names=TRUE),
-                                       fname, recursive=TRUE)
-                             file.create(file.path(fname, "otherjob"))
-                         })))
+                         other=quote(writeLines("otherjob", final(file)))))
     if (requireNamespace("arrow", quietly=TRUE))
         formats <- c(formats,
                      list(list(output="Parquet", fun="saveParquetGSVA",
@@ -679,8 +672,6 @@ test_mapReduceRedo <- function() {
         checkTrue(!any(GSVA:::.map_failed(mapout)))
         checkIdentical(ncalls$n, length(mapout))
         checkTrue(!any(grepl("partial$", list.files(wd))))
-        if (fmt$output == "HDF5")
-            checkTrue(all(file.exists(file.path(unlist(mapout), "otherjob"))))
         checkEqualsNumeric(gsvaranks, gsvaReduce(mapout, verbose=FALSE))
     }
 

@@ -102,19 +102,17 @@ disabled with \code{options(GSVA.check_memory=FALSE)}.}
 
 \item{rowNormExprData}{A row-normalized expression data set obtained with
 \code{\link{gsvaRowNorm}}. It can be either a single character string with the path
-to a directory containing the row-normalized data stored with
-\code{\link{saveHDF5GSVA}}, the path to a file containing that data stored with
+to a file containing the row-normalized data stored with \code{\link{saveHDF5GSVA}} or
 \code{\link{saveParquetGSVA}}, an \verb{s3://} or \verb{gs://} URI, or an \verb{http://} or
-\verb{https://} URL to such a file, or an
+\verb{https://} URL to a file stored with \code{\link{saveParquetGSVA}}, or an
 object of one of the classes supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.
 For a list of these classes, see \code{class ? GsvaExprData}.}
 
 \item{rankExprData}{A column-rank expression data set obtained with
 \code{\link{gsvaColRanks}}. It can be either a single character string with the path
-to a directory containing the column-rank data stored with
-\code{\link{saveHDF5GSVA}}, the path to a file containing that data stored with
+to a file containing the column-rank data stored with \code{\link{saveHDF5GSVA}} or
 \code{\link{saveParquetGSVA}}, an \verb{s3://} or \verb{gs://} URI, or an \verb{http://} or
-\verb{https://} URL to such a file, or an
+\verb{https://} URL to a file stored with \code{\link{saveParquetGSVA}}, or an
 object of one of the classes supported by \code{\link[=GsvaExprData-class]{GsvaExprData}}.
 For a list of these classes, see \code{class ? GsvaExprData}.}
 

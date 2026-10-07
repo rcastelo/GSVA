@@ -20,9 +20,9 @@
 #' path is reachable by all compute nodes in the HPC environment, and must
 #' manually delete its contents after the GSVA calculations are finished.
 #' Each job saves its results under a temporary name ending in `.partial`,
-#' which it renames once they are complete, so files or directories with that
-#' ending left in that path belong to jobs that did not finish, and can be
-#' deleted once no job of those calculations is running.
+#' which it renames once they are complete, so files with that ending left in
+#' that path belong to jobs that did not finish, and can be deleted once no job
+#' of those calculations is running.
 #'
 #' @param FUN In `gsvaMap()`, function to map to the data in the `inputData`
 #' argument.
@@ -757,10 +757,8 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         ## job killed while saving does not leave a result that looks complete.
         ## the temporary name is unique to this job, because a job left
         ## running by a call to gsvaMap() whose R session ended may be saving
-        ## the same chunk. renaming fails when another job has already saved
-        ## an HDF5 directory with this chunk, in which case only the output of
-        ## this job is discarded, while a Parquet file of another job is
-        ## replaced by the identical one of this job
+        ## the same chunk, whose file, if already saved, is replaced by the
+        ## identical one of this job
         tmpname <- .unique_tmpname(fname)
         if (output == "HDF5")
             saveHDF5GSVA(res, tmpname)
@@ -1089,8 +1087,7 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         files <- sprintf("%s_%d_%d", runid, chunks$first, chunks$last)
     else
         files <- sprintf("%s_chunk%d", runid, seq_len(nchunks))
-    if (output == "Parquet")
-        files <- paste0(files, ".parquet")
+    files <- paste0(files, if (output == "Parquet") ".parquet" else ".h5")
 
     files
 }

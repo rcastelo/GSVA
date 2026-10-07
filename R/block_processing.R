@@ -329,26 +329,30 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
              tmpdir=dumpdir, fileext=".h5")
 }
 
-## create the HDF5 file 'fname' with the dataset "x" of dimensions 'dims',
-## integer or double, and chunks 'chunkdim'. the file is written with the
-## rhdf5 package, because the functions of the HDF5Array package that create
-## HDF5 datasets lock files shared by all R processes in a way that is not
-## safe with concurrent processes
+## create in the HDF5 file 'fname', creating it if it does not exist, the
+## dataset 'name' of dimensions 'dims', integer or double, and chunks
+## 'chunkdim', or no chunks when it has no values. the file is written with
+## the rhdf5 package, because the functions of the HDF5Array package that
+## create HDF5 datasets lock files shared by all R processes in a way that is
+## not safe with concurrent processes
 #' @importFrom HDF5Array getHDF5DumpCompressionLevel
 #' @importFrom rhdf5 h5createFile h5createDataset
-.h5_part_create <- function(fname, dims, int, chunkdim) {
-    h5createFile(fname)
-    h5createDataset(fname, "x", dims,
+.h5_part_create <- function(fname, dims, int, chunkdim, name="x") {
+    if (!file.exists(fname))
+        h5createFile(fname)
+    empty <- any(dims == 0)
+    h5createDataset(fname, name, dims,
                     storage.mode=if (int) "integer" else "double",
-                    chunk=pmax(1, pmin(dims, chunkdim)),
-                    level=getHDF5DumpCompressionLevel())
+                    chunk=if (empty) NULL else pmax(1, pmin(dims, chunkdim)),
+                    level=if (empty) 0 else getHDF5DumpCompressionLevel())
 }
 
 ## number of values of the chunks of the resizable datasets of the CSC layout,
 ## see .h5_csc_create()
 .h5_csc_chunk <- 2^20
 
-## create the HDF5 file 'fname' with the group "matrix" holding a sparse
+## create in the HDF5 file 'fname', creating it if it does not exist, the
+## group 'group' holding a sparse
 ## matrix in compressed sparse column (CSC) layout, as in the HDF5 files of
 ## 10x Genomics, which the HDF5Array package reads with H5SparseMatrix(): its
 ## nonzero values "data", integer or double, and their 0-based row indices
@@ -359,16 +363,17 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
 ## of the appending, see .h5_csc_append()
 #' @importFrom HDF5Array getHDF5DumpCompressionLevel
 #' @importFrom rhdf5 h5createFile h5createGroup h5createDataset H5Sunlimited
-.h5_csc_create <- function(fname, int) {
-    h5createFile(fname)
-    h5createGroup(fname, "matrix")
-    h5createDataset(fname, "matrix/data", 0, maxdims=H5Sunlimited(),
+.h5_csc_create <- function(fname, int, group="matrix") {
+    if (!file.exists(fname))
+        h5createFile(fname)
+    h5createGroup(fname, group)
+    h5createDataset(fname, paste0(group, "/data"), 0, maxdims=H5Sunlimited(),
                     storage.mode=if (int) "integer" else "double",
                     chunk=.h5_csc_chunk, level=getHDF5DumpCompressionLevel())
-    h5createDataset(fname, "matrix/indices", 0, maxdims=H5Sunlimited(),
-                    storage.mode="integer", chunk=.h5_csc_chunk,
-                    level=getHDF5DumpCompressionLevel())
-    list(fname=fname, int=int, written=0, nnz=0, indptr=0,
+    h5createDataset(fname, paste0(group, "/indices"), 0,
+                    maxdims=H5Sunlimited(), storage.mode="integer",
+                    chunk=.h5_csc_chunk, level=getHDF5DumpCompressionLevel())
+    list(fname=fname, group=group, int=int, written=0, nnz=0, indptr=0,
          x=if (int) integer(0) else double(0), i=integer(0))
 }
 
@@ -377,12 +382,14 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
 #' @importFrom rhdf5 h5set_extent h5write
 .h5_csc_flush <- function(st, n) {
     if (n > 0) {
-        h5set_extent(st$fname, "matrix/data", st$written + n)
-        h5write(st$x[seq_len(n)], st$fname, "matrix/data",
-                start=st$written + 1, count=n)
-        h5set_extent(st$fname, "matrix/indices", st$written + n)
-        h5write(st$i[seq_len(n)], st$fname, "matrix/indices",
-                start=st$written + 1, count=n)
+        data <- paste0(st$group, "/data")
+        indices <- paste0(st$group, "/indices")
+        h5set_extent(st$fname, data, st$written + n)
+        h5write(st$x[seq_len(n)], st$fname, data, start=st$written + 1,
+                count=n)
+        h5set_extent(st$fname, indices, st$written + n)
+        h5write(st$i[seq_len(n)], st$fname, indices, start=st$written + 1,
+                count=n)
         st$x <- st$x[-seq_len(n)]
         st$i <- st$i[-seq_len(n)]
         st$written <- st$written + n
@@ -413,8 +420,8 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
     indptr <- st$indptr
     if (max(indptr) <= .Machine$integer.max)
         indptr <- as.integer(indptr)
-    h5write(indptr, st$fname, "matrix/indptr")
-    h5write(as.integer(dims), st$fname, "matrix/shape")
+    h5write(indptr, st$fname, paste0(st$group, "/indptr"))
+    h5write(as.integer(dims), st$fname, paste0(st$group, "/shape"))
 }
 
 ## apply 'BLOCK_FUN' to a block of rows or columns of a matrix, read into main

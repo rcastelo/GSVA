@@ -233,6 +233,7 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
 #' Otherwise, the returned object will be a
 #' [`DelayedMatrix`][DelayedArray::DelayedMatrix] object.
 #'
+#' @importFrom HDF5Array saveHDF5SummarizedExperiment
 #' @name saveHDF5GSVAranks
 #' @rdname GSVA-pkg-deprecated
 #'
@@ -242,7 +243,12 @@ saveHDF5GSVAranks <- function(rankExprData, dir, ...) {
                 msg=paste("The 'saveHDF5GSVAranks()' function is deprecated.",
                           "Please use 'saveHDF5GSVA()' instead."))
 
-    saveHDF5GSVA(rankExprData, dir, assay="gsvaranks", ...)
+    ## saves the ranks in the directory format of the HDF5Array package, as
+    ## before saveHDF5GSVA() saved GSVA output to a single HDF5 file
+    se <- .gsva_output_to_se(rankExprData, "gsvaranks")$se
+    saveHDF5SummarizedExperiment(se, dir, ...)
+
+    invisible(dir)
 }
 
 #' @description The `loadHDF5GSVAranks()` function is deprecated. Please use
@@ -257,6 +263,8 @@ saveHDF5GSVAranks <- function(rankExprData, dir, ...) {
 #' and [`loadHDF5SummarizedExperiment`][HDF5Array::loadHDF5SummarizedExperiment],
 #' respectively.
 #'
+#' @importFrom HDF5Array loadHDF5SummarizedExperiment
+#' @importFrom SummarizedExperiment assayNames
 #' @name loadHDF5GSVAranks
 #' @rdname GSVA-pkg-deprecated
 #'
@@ -267,7 +275,11 @@ loadHDF5GSVAranks <- function(dir, ...) {
                 msg=paste("The 'loadHDF5GSVAranks()' function is deprecated.",
                           "Please use 'loadHDF5GSVA()' instead."))
 
-    rankscontainer <- loadHDF5GSVA(dir, assay="gsvaranks", ...)
+    ## loads ranks saved in the directory format of the HDF5Array package, by
+    ## saveHDF5GSVAranks() or by saveHDF5GSVA() in previous versions of GSVA
+    rankscontainer <- loadHDF5SummarizedExperiment(dir, ...)
+    assay <- .check_assay_ranks_rnorm(assayNames(rankscontainer), "gsvaranks")
+    rankscontainer <- .se_to_gsva_output(rankscontainer, assay)
 
     return(rankscontainer)
 }

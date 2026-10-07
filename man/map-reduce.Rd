@@ -175,9 +175,9 @@ R session calling \code{gsvaMap()} was launched. The user must ensure that this
 path is reachable by all compute nodes in the HPC environment, and must
 manually delete its contents after the GSVA calculations are finished.
 Each job saves its results under a temporary name ending in \code{.partial},
-which it renames once they are complete, so files or directories with that
-ending left in that path belong to jobs that did not finish, and can be
-deleted once no job of those calculations is running.
+which it renames once they are complete, so files with that ending left in
+that path belong to jobs that did not finish, and can be deleted once no job
+of those calculations is running.
 }
 \examples{
 
