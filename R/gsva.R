@@ -1278,12 +1278,14 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                   sparse=sparse, any_na=anyNA(param),
                                   na_use=.get_NAuse(param),
                                   minSize=get_minSize(param),
-                                  ondisk=ondisk, verbose=verbose,
+                                  verbose=verbose,
                                   minparrows=100, minparcols=100,
                                   BPPARAM=BPPARAM, maxmem=maxmem,
                                   workfactor=mf$workfactor,
                                   outfactor=mf$outfactor,
-                                  outextra=mf$outextra)
+                                  outextra=mf$outextra,
+                                  sinkout=(ondisk ||
+                                           is(filtDataMatrix, "DelayedMatrix")))
 
     rownames(gsva_es) <- names(filtMappedGeneSets)
     colnames(gsva_es) <- colnames(filtDataMatrix)
@@ -1577,13 +1579,14 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
     expr / g
 }
 
-#' @importFrom S4Arrays is_sparse
-#' @importFrom DelayedArray seed
+## row ECDF values of 'expr' in main memory; when the row normalization is
+## stored on disk, 'expr' is a block of rows and the output is written on
+## disk by .processMatrixRows(), see .ondisk_blocks()
 #' @importFrom cli cli_abort
 compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                              sparse=FALSE, any_na=FALSE,
                              na_use=c("everything", "all.obs", "na.rm"),
-                             grid=NULL, verbose=TRUE, BPPARAM=NULL) {
+                             verbose=TRUE, BPPARAM=NULL) {
 
     na_use <- match.arg(na_use)
     n.test.samples <- ncol(expr)
@@ -1608,23 +1611,6 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                 gene.cdf <- .kcdfvals_svt_to_svt(expr, Gaussk, verbose)
             else
                 gene.cdf <- .kcdfvals_svt_to_dense(expr, Gaussk, verbose)
-        } else if (is(expr, "DelayedMatrix")) {
-            if (sparse)
-                gene.cdf <- .kcdfvals_sparseh5_to_sparseh5(expr, Gaussk=Gaussk,
-                                                           grid=grid,
-                                                           verbose)
-            else {
-                if (is_sparse(expr)) ## input HDF5 may be sparse or not
-                    gene.cdf <- .kcdfvals_sparseh5_to_denseh5(expr,
-                                                              Gaussk=Gaussk,
-                                                              grid=grid,
-                                                              verbose)
-                else
-                    gene.cdf <- .kcdfvals_denseh5_to_denseh5(expr,
-                                                             Gaussk=Gaussk,
-                                                             grid=grid,
-                                                             verbose)
-            }
         } else if (is.matrix(expr)) {
             A <- .Call("matrix_density_R",
                        as.double(t(expr)),
@@ -1654,18 +1640,6 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                 gene.cdf <- .ecdfvals_svt_to_svt(expr, verbose)
             else
                 gene.cdf <- .ecdfvals_svt_to_dense(expr, verbose)
-        } else if (is(expr, "DelayedMatrix")) {
-            if (sparse)
-                gene.cdf <- .ecdfvals_sparseh5_to_sparseh5(expr, grid=grid,
-                                                           verbose=verbose)
-            else {
-                if (is_sparse(expr)) ## input HDF5 may be sparse or not
-                    gene.cdf <- .ecdfvals_sparseh5_to_denseh5(expr, grid=grid,
-                                                              verbose)
-                else
-                    gene.cdf <- .ecdfvals_denseh5_to_denseh5(expr, grid=grid,
-                                                             verbose)
-            }
         } else if (is.matrix(expr)) {
             if (any_na)
                 gene.cdf <- .ecdfvals_dense_to_dense_nas(expr, verbose)
@@ -1790,7 +1764,8 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                                 na_use=na_use, verbose=verbose, minparrows=100,
                                 minparcols=100, BPPARAM=BPPARAM, maxmem=maxmem,
                                 workfactor=mf$workfactor,
-                                outfactor=mf$outfactor, outextra=mf$outextra)
+                                outfactor=mf$outfactor, outextra=mf$outextra,
+                                sinkout=is(expr, "DelayedMatrix"))
     else if (rowNorm == "clr") {
         ## the statistics of the rows are calculated through blocks of
         ## columns, unless they were already calculated while filtering rows
@@ -1819,15 +1794,13 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
                               verbose=TRUE) {
     R <- NULL
 
-    if (drop.sparsity && !is(Z, "DelayedMatrix"))
+    if (drop.sparsity)
         Z <- as.matrix(Z)
 
     if (is(Z, "dgCMatrix")) { ## assumes expression values are positive
         R <- .sparseColumnApplyAndReplace(Z, rank, ties.method=ties.method)
     } else if (is(Z, "SVT_SparseMatrix")) {
         R <- .colRanks_SVT_SparseMatrix(Z, ties.method=ties.method)
-    } else if (is(Z, "DelayedMatrix")) {
-        R <- .colRanksHDF5(Z, ties.method=ties.method, drop.sparsity=drop.sparsity)
     } else {
         R <- colRanks(Z, ties.method=ties.method, preserveShape=TRUE)
     }
@@ -1856,7 +1829,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
                             minparrows=100, minparcols=100,
                             BPPARAM=BPPARAM, maxmem=maxmem,
                             workfactor=mf$workfactor, outfactor=mf$outfactor,
-                            outextra=mf$outextra)
+                            outextra=mf$outextra,
+                            sinkout=is(Z, "DelayedMatrix"))
 
     return(R)
 }
@@ -2083,63 +2057,23 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 
 
 ## this function computes the GSVA scores for all gene sets in geneSetsIdx for
-## a given rank matrix R, taking care that if 'ondisk=TRUE' because, e.g., the
-## resulting matrix of GSVA scores does not fit in main memory, the scores are
-## written into an on-disk data structure (HDF5) instead of being returned in
-## main memory.
-#' @importFrom cli cli_alert_info cli_alert_warning
-#' @importFrom S4Arrays is_sparse refdim DummyArrayGrid read_block write_block
-#' @importFrom DelayedArray close
+## a given rank matrix R in main memory. when the scores are stored on disk,
+## e.g., because they do not fit in main memory, R is a block of columns of
+## the ranks and the scores are written on disk by .processMatrixCols(), see
+## .ondisk_blocks()
+#' @importFrom cli cli_alert_warning
+#' @importFrom S4Arrays is_sparse
 .compute_gsva_scores <- function(R, geneSetsIdx, tau, maxDiff, absRanking,
-                                 sparse, any_na, na_use, minSize, ondisk,
-                                 verbose) {
-    p <- nrow(R)
-    n <- ncol(R)
-    es <- NULL
+                                 sparse, any_na, na_use, minSize, verbose) {
     if (sparse && !is_sparse(R))
         sparse <- FALSE
-    ## use the type rather than reading a value, which in an on-disk 'R'
-    ## would read at least a whole chunk of it
     intrnks <- type(R) == "integer"
 
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
-    es <- NULL
-    if (is(R, "DelayedMatrix") || ondisk) {
-        sink <- HDF5RealizationSink(c(length(geneSetsIdx), ncol(R)),
-                                    as.sparse=FALSE) ## GSVA scores are dense
-        grid <- DummyArrayGrid(dim(R))
-        grid_es <- DummyArrayGrid(dim(sink))
-
-        if (length(grid) != length(grid_es) ||
-            refdim(grid)[2] != refdim(grid_es)[2] ||
-            dim(grid)[2] != dim(grid_es)[2]) {
-            msg <- paste("Grid column blocks for ranks should match grid",
-                         "column blocks for enrichment scores")
-            cli_abort(c("x"=msg))
-        }
-
-        ## avp - ArrayViewport for reaching the (possibly sparse) rank matrix
-        ## avp_es - ArrayViewport for writing the enrichment dense scores matrix
-        colScores_byBlock <- function(avp, avp_es, sink) {
-            block <- read_block(R, avp)
-            block <- .gsva_score_genesets(block, geneSetsIdx, intrnks, sparse,
-                                          maxDiff, absRanking, tau, any_na,
-                                          na_use, minSize, wna_env, verbose)
-            write_block(sink, avp_es, block)
-        }
-
-        nblock <- length(grid)
-        for (bid in seq_len(nblock))
-            sink <- colScores_byBlock(grid[[bid]], grid_es[[bid]], sink)
-        close(sink)
-        es <- as(sink, "DelayedArray")
-
-    } else {
-        es <- .gsva_score_genesets(R, geneSetsIdx, intrnks, sparse, maxDiff,
-                                   absRanking, tau, any_na, na_use, minSize,
-                                   wna_env, verbose)
-    }
+    es <- .gsva_score_genesets(R, geneSetsIdx, intrnks, sparse, maxDiff,
+                               absRanking, tau, any_na, na_use, minSize,
+                               wna_env, verbose)
 
     if (any_na && na_use == "na.rm")
         if (get("w", envir=wna_env)) {
@@ -2352,69 +2286,6 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
   .Call("ecdfvals_svt_to_svt_R", X, verbose)
 }
 
-#' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom DelayedArray seed gridReduce close
-.ecdfvals_sparseh5_to_sparseh5 <- function(X, grid=NULL, verbose=FALSE) {
-  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-  sink <- HDF5RealizationSink(dim(X), as.sparse=TRUE)
-  if (is.null(grid))
-      grid <- DummyArrayGrid(dim(X))
-
-  rowEcdf_byBlock <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- .ecdfvals_svt_to_svt(block, verbose=verbose)
-    write_block(sink, grid, block)
-  }
-  sink <- gridReduce(rowEcdf_byBlock, grid, sink)
-  close(sink)
-  res <- as(sink, "DelayedArray")
-  res
-}
-
-#' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom DelayedArray seed gridReduce close
-.ecdfvals_sparseh5_to_denseh5 <- function(X, grid=NULL, verbose) {
-  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-  sink <- HDF5RealizationSink(dim(X), as.sparse=FALSE)
-  if (is.null(grid))
-      grid <- DummyArrayGrid(dim(X))
-
-  rowEcdf_byBlock <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- .ecdfvals_svt_to_dense(block, verbose=verbose)
-    write_block(sink, grid, block)
-  }
-  sink <- gridReduce(rowEcdf_byBlock, grid, sink)
-  close(sink)
-  res <- as(sink, "DelayedArray")
-  res
-}
-
-#' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom DelayedArray seed rowAutoGrid blockReduce close
-.ecdfvals_denseh5_to_denseh5 <- function(X, grid=NULL, verbose) {
-  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-  sink <- HDF5RealizationSink(dim(X), as.sparse=FALSE)
-  if (is.null(grid))
-      grid <- DummyArrayGrid(dim(X))
-
-  rowEcdf_byBlock <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- .ecdfvals_dense_to_dense(block, verbose=verbose)
-    write_block(sink, grid, block)
-  }
-  sink <- gridReduce(rowEcdf_byBlock, grid, sink)
-  close(sink)
-  res <- as(sink, "DelayedArray")
-  res
-}
-
 .ecdfvals_sparse_to_sparse <- function(X, verbose) {
   stopifnot(is(X, "CsparseMatrix")) ## QC
   Xrsp <- as(X, "RsparseMatrix")
@@ -2471,77 +2342,6 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
   .Call("kcdfvals_sparse_to_dense_R", X, Xrsp, Gaussk, verbose)
 }
 
-#' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom DelayedArray seed rowAutoGrid blockReduce close
-.kcdfvals_sparseh5_to_sparseh5 <- function(X, Gaussk, grid=NULL, verbose) {
-  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-  sink <- HDF5RealizationSink(dim(X), as.sparse=TRUE)
-  if (is.null(grid))
-      grid <- DummyArrayGrid(dim(X))
-
-  rowKcdf_byBlock <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- .kcdfvals_svt_to_svt(block, Gaussk=Gaussk, verbose=verbose)
-    write_block(sink, grid, block)
-  }
-  sink <- gridReduce(rowKcdf_byBlock, grid, sink)
-  close(sink)
-  res <- as(sink, "DelayedArray")
-  res
-}
-
-#' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom DelayedArray seed rowAutoGrid blockReduce close
-.kcdfvals_sparseh5_to_denseh5 <- function(X, Gaussk, grid=NULL, verbose) {
-  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-  sink <- HDF5RealizationSink(dim(X), as.sparse=FALSE)
-  if (is.null(grid))
-      grid <- DummyArrayGrid(dim(X))
-
-  rowKcdf_byBlock <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- .kcdfvals_svt_to_dense(block, Gaussk=Gaussk, verbose=verbose)
-    write_block(sink, grid, block)
-  }
-  sink <- gridReduce(rowKcdf_byBlock, grid, sink)
-  close(sink)
-  res <- as(sink, "DelayedArray")
-  res
-}
-
-#' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom DelayedArray seed rowAutoGrid blockReduce close
-.kcdfvals_denseh5_to_denseh5 <- function(X, Gaussk, grid=NULL, verbose) {
-  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-  sink <- HDF5RealizationSink(dim(X), as.sparse=FALSE)
-  if (is.null(grid))
-      grid <- DummyArrayGrid(dim(X))
-
-  rowKcdf_byBlock <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- t(matrix(.Call("matrix_density_R",
-                            as.double(t(X)),
-                            as.double(t(X)),
-                            ncol(X),
-                            ncol(X),
-                            nrow(X),
-                            as.integer(Gaussk),
-                            FALSE, 1L,
-                            verbose), ncol(X), nrow(X)))
-    write_block(sink, grid, block)
-  }
-  sink <- gridReduce(rowKcdf_byBlock, grid, sink)
-  close(sink)
-  res <- as(sink, "DelayedArray")
-  res
-}
-
 #' @importFrom cli cli_abort
 .gsva_score_genesets <- function(R, geneSetsIdx, intrnks, sparse, maxDiff,
                                  absRanking, tau, any_na, na_use, minSize,
@@ -2591,41 +2391,4 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
         R@type <- "integer" ## rank() w/ ties.method="last" returns integer
 
     R
-}
-
-## calculate ranks using an HDF5 backend
-
-#' @importFrom BiocGenerics "type<-"
-#' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom MatrixGenerics colRanks
-#' @importFrom BiocParallel SerialParam
-#' @importFrom DelayedArray close
-.colRanksHDF5 <- function(X, grid=NULL, ties.method="last",
-                          drop.sparsity=FALSE) {
-    stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-    sink <- HDF5RealizationSink(dim(X), H5type="H5T_STD_I32LE", ## integer ranks
-                                as.sparse=is_sparse(X) && !drop.sparsity)
-    if (is.null(grid))
-        grid <- DummyArrayGrid(dim(X))
-
-    colRanks_byBlock <- function(grid, sink) {
-        block <- read_block(X, grid)
-        if (is(block, "SVT_SparseMatrix") && drop.sparsity)
-            block <- as.matrix(block)
-        if (is(block, "SVT_SparseMatrix")) {
-            block <- .colRanks_SVT_SparseMatrix(block, ties.method=ties.method)
-        } else {
-            block <- colRanks(block, ties.method=ties.method,
-                              preserveShape=TRUE)
-            if (ties.method == "last")
-                type(block) <- "integer"
-        }
-        write_block(sink, grid, block)
-    }
-
-    sink <- gridReduce(colRanks_byBlock, grid, sink)
-    close(sink)
-    res <- as(sink, "DelayedArray")
-    res
 }

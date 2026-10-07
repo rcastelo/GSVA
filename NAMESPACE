@@ -100,19 +100,15 @@ importFrom(BiocParallel,
 importFrom(DelayedArray,
   DelayedArray,
   blockApply,
-  blockReduce,
   chunkGrid,
   chunkdim,
-  close,
   colAutoGrid,
   defaultAutoGrid,
   getAutoBlockLength,
   getAutoBlockSize,
-  gridReduce,
   read_block,
   rowAutoGrid,
   rowRanges,
-  seed,
   seedApply,
   setAutoBPPARAM
 )
@@ -130,7 +126,11 @@ importFrom(GSEABase,
   mapIdentifiers
 )
 importFrom(HDF5Array,
+  HDF5Array,
   HDF5RealizationSink,
+  getHDF5DumpChunkDim,
+  getHDF5DumpCompressionLevel,
+  getHDF5DumpDir,
   loadHDF5SummarizedExperiment,
   saveHDF5SummarizedExperiment,
   writeHDF5Array
@@ -159,9 +159,7 @@ importFrom(S4Arrays,
   DummyArrayGrid,
   extract_array,
   is_sparse,
-  read_block,
-  refdim,
-  write_block
+  read_block
 )
 importFrom(S4Vectors,
   "metadata<-",
@@ -217,6 +215,11 @@ importFrom(methods,
   is,
   isClass,
   new
+)
+importFrom(rhdf5,
+  h5createDataset,
+  h5createFile,
+  h5write
 )
 importFrom(sparseMatrixStats,
   colRanks,

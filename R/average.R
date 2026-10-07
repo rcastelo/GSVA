@@ -429,50 +429,15 @@ setMethod("details",
 }
 
 ## this function computes enrichment scores as average scores for all gene
-## sets in geneSetsIdx for a given rank matrix R, taking care that if
-## 'ondisk=TRUE' because, e.g., the resulting matrix of average scores does not
-## fit in main memory, the scores are written into an on-disk data structure
-## (HDF5) instead of being returned in main memory.
-#' @importFrom S4Arrays DummyArrayGrid
+## sets in geneSetsIdx for a given matrix Z in main memory. when the scores
+## are stored on disk, e.g., because they do not fit in main memory, Z is a
+## block of columns and the scores are written on disk by .processMatrixCols(),
+## see .ondisk_blocks()
 .compute_average_scores <- function(Z, geneSetsIdx, method, any_na, na_use,
-                                    minSize, wna_env, ondisk, verbose) {
-    p <- nrow(Z)
-    n <- ncol(Z)
-    es <- NULL
-
-    if (is(Z, "DelayedMatrix") || ondisk) {
-        sink <- HDF5RealizationSink(c(length(geneSetsIdx), ncol(Z)),
-                                    as.sparse=FALSE) ## enrichment scores are dense
-        grid <- DummyArrayGrid(dim(Z))
-        grid_es <- DummyArrayGrid(dim(sink))
-
-        if (length(grid) != length(grid_es) ||
-            refdim(grid)[2] != refdim(grid_es)[2] ||
-            dim(grid)[2] != dim(grid_es)[2]) {
-            msg <- paste("Grid column blocks for ranks should match grid column",
-                         "blocks for enrichment scores")
-            cli_abort(c("x"=msg))
-        }
-
-        ## avp - ArrayViewport for reaching the (possibly sparse) expr. matrix
-        ## avp_es - ArrayViewport for writing the enrichment dense scores matrix
-        colScores_byBlock <- function(avp, avp_es, sink) {
-            block <- read_block(Z, avp)
-            block <- .compute_average_scores_block(block, geneSetsIdx, method,
-                                                   any_na, na_use, minSize,
-                                                   wna_env, verbose=verbose)
-            write_block(sink, avp_es, block)
-        }
-
-        nblock <- length(grid)
-        for (bid in seq_len(nblock))
-            sink <- colScores_byBlock(grid[[bid]], grid_es[[bid]], sink)
-        close(sink)
-        es <- as(sink, "DelayedArray")
-    } else
-        es <- .compute_average_scores_block(Z, geneSetsIdx, method, any_na,
-                                            na_use, minSize, wna_env,
-                                            verbose=verbose)
+                                    minSize, wna_env, verbose) {
+    es <- .compute_average_scores_block(Z, geneSetsIdx, method, any_na,
+                                        na_use, minSize, wna_env,
+                                        verbose=verbose)
 
     if (any_na && na_use =="na.rm")
         if (get("w", envir=wna_env)) {
@@ -504,11 +469,11 @@ average <- function(X, geneSets, method="mean",
         es <- .processMatrixCols(X, .compute_average_scores, geneSets,
                                  method=method, any_na=any_na,
                                  na_use=na_use, minSize=minSize,
-                                 wna_env=wna_env, ondisk=ondisk,
-                                 verbose=verbose,
+                                 wna_env=wna_env, verbose=verbose,
                                  minparrows=100, minparcols=100,
                                  progressmsg="Calculating average scores per gene set",
-                                 BPPARAM=BPPARAM, maxmem=maxmem)
+                                 BPPARAM=BPPARAM, maxmem=maxmem,
+                                 sinkout=(ondisk || is(X, "DelayedMatrix")))
     } else {
         if (is.null(BPPARAM) || bpnworkers(BPPARAM) == 1L) {
             env <- NULL

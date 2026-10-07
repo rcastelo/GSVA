@@ -306,6 +306,151 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
     WRAPPED_FUN(block, ..., verbose=FALSE)
 }
 
+## read into main memory the rows (whdim=1) or columns (whdim=2) in the range
+## 'rng' of the on-disk matrix 'X', directly through a viewport, because
+## subsetting 'X' first, e.g., with X[, rng], takes about a second when 'X'
+## binds hundreds of HDF5 datasets, as the output of processing a matrix by
+## blocks on disk, see .ondisk_blocks()
+#' @importFrom S4Arrays ArrayViewport read_block
+#' @importFrom IRanges IRanges start end
+.read_block_range <- function(X, whdim, rng) {
+    vpstart <- c(1L, 1L)
+    vpend <- dim(X)
+    vpstart[whdim] <- start(rng)
+    vpend[whdim] <- end(rng)
+    read_block(X, ArrayViewport(dim(X), IRanges(vpstart, vpend)))
+}
+
+## apply 'BLOCK_FUN' to a block of rows or columns of a matrix, read into main
+## memory when it is stored on disk, and write its output into a new HDF5 file
+## in the directory 'dumpdir', returning the path to that file, whether the
+## output is sparse and, if present, its attributes "min" and "max". the file
+## is written with the rhdf5 package, because the functions of the HDF5Array
+## package that create HDF5 datasets lock files shared by all R processes in a
+## way that is not safe with concurrent processes, while the name of the file,
+## which starts with 'prefix', is unique to the process writing it, see
+## tempfile(). its HDF5 chunks are the default ones of the HDF5Array package
+## or, when 'chunkcols' is given, span the rows of the output, with
+## 'chunkcols' columns. defined outside the functions processing matrices by
+## blocks, for the same reason as BLOCK_FUN_WRAPPER()
+#' @importFrom S4Arrays DummyArrayGrid read_block is_sparse
+#' @importFrom BiocGenerics type
+#' @importFrom HDF5Array getHDF5DumpChunkDim getHDF5DumpCompressionLevel
+#' @importFrom rhdf5 h5createFile h5createDataset h5write
+ONDISK_BLOCK_FUN <- function(block, BLOCK_FUN, dumpdir, prefix,
+                             chunkcols=NULL, ..., verbose=FALSE) {
+    if (is(block, "DelayedArray"))
+        block <- read_block(block, DummyArrayGrid(dim(block))[[1L]])
+    res <- BLOCK_FUN(block, ..., verbose=verbose)
+    rm(block)
+
+    fname <- tempfile(pattern=paste0(prefix, ".", Sys.info()[["nodename"]],
+                                     ".", Sys.getpid(), "."),
+                      tmpdir=dumpdir, fileext=".h5")
+    sparse <- is_sparse(res)
+    int <- type(res) == "integer"
+    rmin <- attr(res, "min")
+    rmax <- attr(res, "max")
+    res <- as.matrix(res) ## HDF5 datasets are dense
+    attributes(res) <- list(dim=dim(res))
+    h5createFile(fname)
+    chunkdim <- getHDF5DumpChunkDim(dim(res))
+    if (!is.null(chunkcols))
+        chunkdim <- c(nrow(res), min(ncol(res), chunkcols))
+    h5createDataset(fname, "x", dim(res),
+                    storage.mode=if (int) "integer" else "double",
+                    chunk=chunkdim,
+                    level=getHDF5DumpCompressionLevel())
+    h5write(res, fname, "x")
+
+    list(fname=fname, sparse=sparse, min=rmin, max=rmax)
+}
+
+## process in blocks of rows (whdim=1) or columns (whdim=2), with the ranges
+## 'rngs', the matrix 'X' with 'FUN', giving its output in an on-disk data
+## structure, see .processMatrixRows() and .processMatrixCols(). each block is
+## processed in main memory and its output written into a separate HDF5 file,
+## see ONDISK_BLOCK_FUN(), and the output is formed by binding the HDF5 data
+## of those files. when the blocks are of rows, the chunks of those files are
+## as wide as the default blocks of columns of the output, because it is
+## later read by blocks of columns, e.g., to rank its columns, and wider
+## chunks would be read and decompressed many times. 'FUN_WRAPPER' takes the
+## blocks from 'X' in the workers, see .bp_blocks(). the minimum and maximum enrichment scores of ssGSEA, stored
+## in the attributes "min" and "max" of the output of each block, are kept in
+## the output
+#' @importFrom cli cli_abort cli_alert_warning cli_progress_bar
+#' @importFrom cli cli_progress_done
+#' @importFrom BiocParallel bptry "bpprogressbar<-" bpprogressbar
+#' @importFrom BiocParallel bpstopOnError "bpstopOnError<-"
+#' @importFrom HDF5Array HDF5Array getHDF5DumpDir
+#' @importFrom DelayedArray getAutoBlockLength
+.ondisk_blocks <- function(X, whdim, rngs, FUN, FUN_WRAPPER, ..., nworkers,
+                           verbose, progressmsg, BPPARAM) {
+    dumpdir <- getHDF5DumpDir()
+    if (!dir.exists(dumpdir))
+        dir.create(dumpdir, recursive=TRUE)
+    prefix <- basename(tempfile("GSVA")) ## unique to this call
+    chunkcols <- NULL
+    if (whdim == 1L) ## the output is double, as the one of normalizing rows
+        chunkcols <- max(1, floor(getAutoBlockLength("double") /
+                                  max(1, nrow(X))))
+
+    if (nworkers <= 1L) {
+        env <- NULL
+        if (verbose) {
+            env <- new.env(parent=globalenv())
+            assign("idpb", cli_progress_bar(progressmsg, total=dim(X)[whdim]),
+                   envir=env)
+        }
+        res <- lapply(rngs, FUN=FUN_WRAPPER, verbose=verbose, idpbe=env,
+                      WRAPPED_FUN=ONDISK_BLOCK_FUN, BLOCK_FUN=FUN,
+                      dumpdir=dumpdir, prefix=prefix, chunkcols=chunkcols,
+                      ...)
+        if (verbose)
+            cli_progress_done(get("idpb", envir=env))
+    } else {
+        ## 'BPPARAM' is a reference class object, so the following changes
+        ## reach the object of the caller, which is restored on exit
+        oldprogressbar <- bpprogressbar(BPPARAM)
+        oldstoponerror <- bpstopOnError(BPPARAM)
+        on.exit({
+            bpprogressbar(BPPARAM) <- oldprogressbar
+            bpstopOnError(BPPARAM) <- oldstoponerror
+        }, add=TRUE)
+        if (verbose)
+            bpprogressbar(BPPARAM) <- TRUE    ## reporting progress wo/ cli
+        bpstopOnError(BPPARAM) <- FALSE
+        res <- bptry(.bp_blocks(X, whdim, rngs, ONDISK_BLOCK_FUN, FUN_WRAPPER,
+                                BLOCK_FUN=FUN, dumpdir=dumpdir, prefix=prefix,
+                                chunkcols=chunkcols, ..., BPPARAM=BPPARAM))
+        if (any(!.bp_ok(res))) {
+            .report_parallel_errors(res)
+            cli_alert_warning("Trying to execute again the failing thread(s)")
+            res <- bptry(.bp_blocks(X, whdim, rngs, ONDISK_BLOCK_FUN,
+                                    FUN_WRAPPER, BLOCK_FUN=FUN,
+                                    dumpdir=dumpdir, prefix=prefix,
+                                    chunkcols=chunkcols, ...,
+                                    BPREDO=res, BPPARAM=BPPARAM))
+            if (any(!.bp_ok(res))) {
+                .report_parallel_errors(res)
+                cli_abort(c("x"="Cancelling execution"))
+            }
+        }
+    }
+
+    pieces <- lapply(res, function(r) HDF5Array(r$fname, "x",
+                                                as.sparse=r$sparse))
+    out <- do.call(if (whdim == 1L) "rbind" else "cbind", pieces)
+
+    mines <- unlist(lapply(res, "[[", "min"))
+    if (!is.null(mines)) { ## min and max enrichment scores stored by ssGSEA
+        attr(out, "min") <- min(mines)
+        attr(out, "max") <- max(unlist(lapply(res, "[[", "max")))
+    }
+
+    out
+}
+
 ## blocks of rows (whdim=1) or columns (whdim=2) of the matrix 'X' in main
 ## memory, with the ranges 'rngs', processed by the workers of 'BPPARAM'. workers
 ## not forked from this process, such as socket workers, receive the blocks
@@ -341,6 +486,8 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
 ## 'workfactor', 'outfactor' and 'outextra' give the memory that FUN takes to
 ## process the rows of 'X' within the maximum main memory 'maxmem', see
 ## .units_per_block()
+## with 'sinkout=TRUE', FUN processes each block in main memory and the
+## output is written into on-disk data structures, see .ondisk_blocks()
 
 #' @importFrom BiocGenerics type
 #' @importFrom cli cli_abort cli_progress_bar cli_alert_warning
@@ -353,7 +500,7 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
                                minparrows=100, minparcols=100,
                                progressmsg="Progress", BPPARAM=NULL,
                                maxmem=Inf, workfactor=2, outfactor=1,
-                               outextra=0) {
+                               outextra=0, sinkout=FALSE) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
@@ -370,18 +517,27 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
         msg <- sprintf("Splitting calculations in %d chunks of [%d, %d] and %s",
                        length(rir), width(rir[[1]]), ncol(X), as.character(sze))
         cli_alert_info(msg)
-    } else if (length(rir) == 1)          ## serial execution in one single call
+    } else if (length(rir) == 1 && !sinkout) ## serial execution in one call
         return(FUN(X, ..., verbose=verbose))
 
     FUN_WRAPPER <- function(rowsrng, verbose, idpbe, WRAPPED_FUN, ...) {
         rng <- rowsrng
         if (!is(X, "DelayedMatrix"))
             rng <- start(rowsrng):end(rowsrng)
-        res <- WRAPPED_FUN(X[rng, , drop=FALSE], ..., verbose=FALSE)
+        block <- if (sinkout && is(X, "DelayedMatrix"))
+                     .read_block_range(X, 1L, rowsrng)
+                 else
+                     X[rng, , drop=FALSE]
+        res <- WRAPPED_FUN(block, ..., verbose=FALSE)
         if (verbose && is(idpbe, "environment"))
             cli_progress_update(id=get("idpb", envir=idpbe), width(rowsrng))
         return(res)
     }
+
+    if (sinkout)
+        return(.ondisk_blocks(X, 1L, rir, FUN, FUN_WRAPPER, ...,
+                              nworkers=nworkers, verbose=verbose,
+                              progressmsg=progressmsg, BPPARAM=BPPARAM))
         
     totalnrows <- nrow(X)
     res <- NULL
@@ -443,6 +599,8 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
 ## .units_per_block()
 ## the results of FUN on each block of columns are bound by columns or,
 ## when 'combine' is a function of two results, reduced with it
+## with 'sinkout=TRUE', FUN processes each block in main memory and the
+## output is written into on-disk data structures, see .ondisk_blocks()
 
 #' @importFrom BiocGenerics type
 #' @importFrom cli cli_abort
@@ -454,7 +612,8 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
                                minparrows=100, minparcols=100,
                                progressmsg="Progress", BPPARAM=NULL,
                                maxmem=Inf, workfactor=2, outfactor=1,
-                               outextra=0, combine=NULL) {
+                               outextra=0, combine=NULL,
+                               sinkout=FALSE) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
@@ -471,18 +630,27 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
                       representation="dense", type=type(X))
         cli_alert_info(sprintf("Splitting calculations in %d chunks of [%d, %d] and %s",
                                length(cir), nrow(X), width(cir[[1]]), as.character(sze)))
-    } else if (length(cir) == 1)              ## serial execution in one single call
+    } else if (length(cir) == 1 && !sinkout) ## serial execution in one call
         return(FUN(X, ..., verbose=verbose))
 
     FUN_WRAPPER <- function(colsrng, verbose, idpbe, WRAPPED_FUN, ...) {
         rng <- colsrng
         if (!is(X, "DelayedMatrix"))
             rng <- start(colsrng):end(colsrng)
-        res <- WRAPPED_FUN(X[, rng, drop=FALSE], ..., verbose=FALSE)
+        block <- if (sinkout && is(X, "DelayedMatrix"))
+                     .read_block_range(X, 2L, colsrng)
+                 else
+                     X[, rng, drop=FALSE]
+        res <- WRAPPED_FUN(block, ..., verbose=FALSE)
         if (verbose && is(idpbe, "environment"))
             cli_progress_update(id=get("idpb", envir=idpbe), width(colsrng))
         return(res)
     }
+
+    if (sinkout)
+        return(.ondisk_blocks(X, 2L, cir, FUN, FUN_WRAPPER, ...,
+                              nworkers=nworkers, verbose=verbose,
+                              progressmsg=progressmsg, BPPARAM=BPPARAM))
         
     totalncols <- ncol(X)
     res <- NULL

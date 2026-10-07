@@ -70,6 +70,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 
               kcdfminssize <- .get_kcdfNoneMinSampleSize(param)
               gsvarnorm <- .compute_row_norm(expr=filtDataMatrix,
+                                             rowNorm=.get_rowNorm(param),
                                              kcdf=.get_kcdf(param),
                                              kcdf.min.ssize=kcdfminssize,
                                              sparse=.get_sparse(param),
@@ -94,7 +95,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                           exprData=rnkscontainer, geneSets=get_geneSets(param),
                           assay="gsvaranks", annotation=get_annotation(param),
                           minSize=get_minSize(param), maxSize=get_maxSize(param),
-                          kcdf=.get_kcdf(param),
+                          rowNorm=.get_rowNorm(param), kcdf=.get_kcdf(param),
                           kcdfNoneMinSampleSize=.get_kcdfNoneMinSampleSize(param),
                           tau=.get_tau(param), maxDiff=.get_maxDiff(param),
                           absRanking=.get_absRanking(param),
@@ -188,12 +189,15 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                                             sparse=sparse, any_na=anyNA(param),
                                             na_use=.get_NAuse(param),
                                             minSize=get_minSize(param),
-                                            ondisk=ondisk, verbose=verbose,
+                                            verbose=verbose,
                                             minparrows=100, minparcols=100,
                                             BPPARAM=BPPARAM, maxmem=maxmem,
                                             workfactor=mf$workfactor,
                                             outfactor=mf$outfactor,
-                                            outextra=mf$outextra)
+                                            outextra=mf$outextra,
+                                            sinkout=(ondisk ||
+                                                     is(filtDataMatrix,
+                                                        "DelayedMatrix")))
 
               rownames(gsva_es) <- names(filtMappedGeneSets)
               colnames(gsva_es) <- colnames(filtDataMatrix)

@@ -469,7 +469,8 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
     R <- .processMatrixCols(X, FUN=compute.col.ranks, ties.method="average",
                             drop.sparsity=TRUE, verbose=verbose, minparrows=100,
                             minparcols=100, progressmsg="Calculating ranks",
-                            BPPARAM=BPPARAM, maxmem=Inf)
+                            BPPARAM=BPPARAM, maxmem=Inf,
+                            sinkout=is(X, "DelayedMatrix"))
     if (!is(R, "dgCMatrix")) ## dgCMatrix cannot be coerced to integer
       type(R) <- "integer"
 
@@ -480,11 +481,12 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
                                     geneSetsIdx=geneSetsIdx, alpha=alpha,
                                     normalization=normalization, any_na=any_na,
                                     na_use=na_use, minSize=minSize,
-                                    wna_env=wna_env, ondisk=ondisk,
-                                    verbose=verbose,
+                                    wna_env=wna_env, verbose=verbose,
                                     minparrows=100, minparcols=100,
                                     progressmsg="Calculating scores",
-                                    BPPARAM=BPPARAM, maxmem=maxmem)
+                                    BPPARAM=BPPARAM, maxmem=maxmem,
+                                    sinkout=(ondisk ||
+                                             is(R, "DelayedMatrix")))
 
     if (any_na && na_use =="na.rm")
         if (get("w", envir=wna_env)) {
@@ -521,77 +523,18 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
 }
 
 ## this function computes the ssGSEA scores for all gene sets in geneSetsIdx for
-## a given rank matrix R, taking care that if 'ondisk=TRUE' because, e.g., the
-## resulting matrix of ssGSEA scores does not fit in main memory, the scores are
-## written into an on-disk data structure (HDF5) instead of being returned in
-## main memory.
+## a given rank matrix R in main memory. when the scores are stored on disk,
+## e.g., because they do not fit in main memory, R is a block of columns of
+## the ranks and the scores are written on disk by .processMatrixCols(), see
+## .ondisk_blocks(), which keeps the minimum and maximum scores of the blocks
 #' @importFrom IRanges IntegerList
-#' @importFrom S4Arrays DummyArrayGrid
 .compute_ssgsea_scores <- function(R, geneSetsIdx, alpha, normalization,
-                                   any_na, na_use, minSize, wna_env, ondisk,
+                                   any_na, na_use, minSize, wna_env,
                                    verbose) {
-    p <- nrow(R)
-    n <- ncol(R)
-    es <- NULL
-
     geneSetsIdx <- IntegerList(geneSetsIdx)
-
-    if (is(R, "DelayedMatrix") || ondisk) {
-        sink <- HDF5RealizationSink(c(length(geneSetsIdx), ncol(R)),
-                                    as.sparse=FALSE) ## enrichment scores are dense
-        grid <- DummyArrayGrid(dim(R))
-        grid_es <- DummyArrayGrid(dim(sink))
-
-        if (length(grid) != length(grid_es) ||
-            refdim(grid)[2] != refdim(grid_es)[2] ||
-            dim(grid)[2] != dim(grid_es)[2]) {
-            msg <- paste("Grid column blocks for ranks should match grid column",
-                         "blocks for enrichment scores")
-            cli_abort(c("x"=msg))
-        }
-
-        ## avp - ArrayViewport for reaching the (possibly sparse) rank matrix
-        ## avp_es - ArrayViewport for writing the enrichment dense scores matrix
-        colScores_byBlock <- function(avp, avp_es, sink) {
-            block <- read_block(R, avp)
-            block <- .compute_ssgsea_scores_block(block, geneSetsIdx, alpha,
-                                                  normalization, any_na,
-                                                  na_use, minSize, wna_env,
-                                                  verbose=verbose)
-            if (normalization) {
-                if (any_na) {
-                    assign("mines", min(c(mines, attr(block, "min")), na.rm=TRUE),
-                           envir=parent.frame(1))
-                    assign("maxes", max(c(maxes, attr(block, "max")), na.rm=TRUE),
-                           envir=parent.frame(1))
-                } else {
-                    assign("mines", min(c(mines, attr(block, "min")), na.rm=FALSE),
-                           envir=parent.frame(1))
-                    assign("maxes", max(c(maxes, attr(block, "max")), na.rm=FALSE),
-                           envir=parent.frame(1))
-                }
-                attr(block, "min") <- attr(block, "max") <- NULL
-            }
-            write_block(sink, avp_es, block)
-        }
-
-        mines <- Inf
-        maxes <- -Inf
-        nblock <- length(grid)
-        for (bid in seq_len(nblock))
-            sink <- colScores_byBlock(grid[[bid]], grid_es[[bid]], sink)
-        close(sink)
-        es <- as(sink, "DelayedArray")
-        if (normalization) {
-            attr(es, "min") <- mines
-            attr(es, "max") <- maxes
-        }
-
-    } else {
-        es <- .compute_ssgsea_scores_block(R, geneSetsIdx, alpha,
-                                           normalization, any_na, na_use,
-                                           minSize, wna_env, verbose=verbose)
-    }
+    es <- .compute_ssgsea_scores_block(R, geneSetsIdx, alpha,
+                                       normalization, any_na, na_use,
+                                       minSize, wna_env, verbose=verbose)
 
     if (any_na && na_use =="na.rm")
         if (get("w", envir=wna_env)) {

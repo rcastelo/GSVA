@@ -97,13 +97,15 @@ test_ecdfvals <- function() {
     res_C_svt_to_svt <- GSVA:::.ecdfvals_svt_to_svt(zzs, FALSE)
     checkEqualsNumeric(SparseArray(res_C_sparse_to_sparse), res_C_svt_to_svt)
 
+    ## on-disk input is processed by blocks of rows, read into main memory, and
+    ## its output written on disk, see GSVA:::.ondisk_blocks()
     zz <- as(zz, "HDF5Array")
-    res_C_denseh5_to_denseh5 <- GSVA:::compute.gene.cdf(zz, Gaussk=FALSE, kernel=FALSE, sparse=FALSE)
+    res_C_denseh5_to_denseh5 <- GSVA:::.processMatrixRows(zz, GSVA:::compute.gene.cdf, Gaussk=FALSE, kernel=FALSE, sparse=FALSE, verbose=FALSE, sinkout=TRUE)
     checkEqualsNumeric(res_R_dense, res_C_denseh5_to_denseh5)
     zzs <- as(zzs, "HDF5Array")
-    res_C_sparseh5_to_denseh5 <- GSVA:::compute.gene.cdf(zzs, Gaussk=FALSE, kernel=FALSE, sparse=FALSE)
+    res_C_sparseh5_to_denseh5 <- GSVA:::.processMatrixRows(zzs, GSVA:::compute.gene.cdf, Gaussk=FALSE, kernel=FALSE, sparse=FALSE, verbose=FALSE, sinkout=TRUE)
     checkEqualsNumeric(res_R_dense, res_C_sparseh5_to_denseh5)
-    res_C_sparseh5_to_sparseh5 <- GSVA:::compute.gene.cdf(zzs, Gaussk=FALSE, kernel=FALSE, sparse=TRUE)
+    res_C_sparseh5_to_sparseh5 <- GSVA:::.processMatrixRows(zzs, GSVA:::compute.gene.cdf, Gaussk=FALSE, kernel=FALSE, sparse=TRUE, verbose=FALSE, sinkout=TRUE)
     checkEqualsNumeric(res_R_sparse_to_sparse, res_C_sparseh5_to_sparseh5)
 }
 
@@ -173,13 +175,15 @@ test_kcdfvals <- function() {
     checkEqualsNumeric(SparseArray(res_C_sparse_to_sparse), res_C_svt_to_svt)
 
     res_R_dense_to_dense <- kcdfegaussianvals_dense_to_dense(zz)
+    ## on-disk input is processed by blocks of rows, read into main memory, and
+    ## its output written on disk, see GSVA:::.ondisk_blocks()
     zz <- as(zz, "HDF5Array")
-    res_C_denseh5_to_denseh5 <- GSVA:::compute.gene.cdf(zz, Gaussk=TRUE, kernel=TRUE, sparse=FALSE)
+    res_C_denseh5_to_denseh5 <- GSVA:::.processMatrixRows(zz, GSVA:::compute.gene.cdf, Gaussk=TRUE, kernel=TRUE, sparse=FALSE, verbose=FALSE, sinkout=TRUE)
     checkEqualsNumeric(res_R_dense_to_dense, res_C_denseh5_to_denseh5, tolerance=0.0001)
     zzs <- as(zzs, "HDF5Array")
-    res_C_sparseh5_to_denseh5 <- GSVA:::compute.gene.cdf(zzs, Gaussk=TRUE, kernel=TRUE, sparse=FALSE)
+    res_C_sparseh5_to_denseh5 <- GSVA:::.processMatrixRows(zzs, GSVA:::compute.gene.cdf, Gaussk=TRUE, kernel=TRUE, sparse=FALSE, verbose=FALSE, sinkout=TRUE)
     checkEqualsNumeric(res_R_sparse_to_dense, res_C_sparseh5_to_denseh5, tolerance=0.00001)
-    res_C_sparseh5_to_sparseh5 <- GSVA:::compute.gene.cdf(zzs, Gaussk=TRUE, kernel=TRUE, sparse=TRUE)
+    res_C_sparseh5_to_sparseh5 <- GSVA:::.processMatrixRows(zzs, GSVA:::compute.gene.cdf, Gaussk=TRUE, kernel=TRUE, sparse=TRUE, verbose=FALSE, sinkout=TRUE)
     checkEqualsNumeric(res_R_sparse_to_sparse, res_C_sparseh5_to_sparseh5, tolerance=0.0001)
 }
 
