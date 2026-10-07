@@ -1082,7 +1082,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 
 #' @importFrom S4Arrays is_sparse
 #' @importFrom sparseMatrixStats rowRanges
-#' @importFrom DelayedArray blockApply setAutoBPPARAM rowRanges
+#' @importFrom DelayedArray rowRanges
 #' @importFrom cli cli_alert_warning cli_abort cli_alert_info
 #' @importFrom cli cli_progress_bar cli_progress_done
 #' @importFrom BiocParallel SerialParam bpnworkers bpprogressbar

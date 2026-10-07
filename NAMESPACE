@@ -99,7 +99,6 @@ importFrom(BiocParallel,
 )
 importFrom(DelayedArray,
   DelayedArray,
-  blockApply,
   chunkGrid,
   chunkdim,
   colAutoGrid,
@@ -109,8 +108,7 @@ importFrom(DelayedArray,
   read_block,
   rowAutoGrid,
   rowRanges,
-  seedApply,
-  setAutoBPPARAM
+  seedApply
 )
 importFrom(DelayedMatrixStats,rowSds)
 importFrom(GSEABase,
@@ -127,13 +125,11 @@ importFrom(GSEABase,
 )
 importFrom(HDF5Array,
   HDF5Array,
-  HDF5RealizationSink,
   getHDF5DumpChunkDim,
   getHDF5DumpCompressionLevel,
   getHDF5DumpDir,
   loadHDF5SummarizedExperiment,
-  saveHDF5SummarizedExperiment,
-  writeHDF5Array
+  saveHDF5SummarizedExperiment
 )
 importFrom(IRanges,
   CharacterList,
