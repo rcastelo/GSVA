@@ -348,8 +348,13 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
 }
 
 ## number of values of the chunks of the resizable datasets of the CSC layout,
-## see .h5_csc_create()
-.h5_csc_chunk <- 2^20
+## see .h5_csc_create(). reading a block of columns reads and decompresses
+## every chunk holding any of its nonzero values, so that chunks much larger
+## than the nonzero values of a block of columns, as in files with a block of
+## rows, e.g., the row normalization saved by the jobs of gsvaMap(), make
+## reading them by blocks of columns read many times their size, which on
+## the shared file systems of computer clusters makes reading the bottleneck
+.h5_csc_chunk <- 2^16
 
 ## create in the HDF5 file 'fname', creating it if it does not exist, the
 ## group 'group' holding a sparse
@@ -363,18 +368,18 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
 ## of the appending, see .h5_csc_append()
 #' @importFrom HDF5Array getHDF5DumpCompressionLevel
 #' @importFrom rhdf5 h5createFile h5createGroup h5createDataset H5Sunlimited
-.h5_csc_create <- function(fname, int, group="matrix") {
+.h5_csc_create <- function(fname, int, group="matrix", chunk=.h5_csc_chunk) {
     if (!file.exists(fname))
         h5createFile(fname)
     h5createGroup(fname, group)
     h5createDataset(fname, paste0(group, "/data"), 0, maxdims=H5Sunlimited(),
                     storage.mode=if (int) "integer" else "double",
-                    chunk=.h5_csc_chunk, level=getHDF5DumpCompressionLevel())
+                    chunk=chunk, level=getHDF5DumpCompressionLevel())
     h5createDataset(fname, paste0(group, "/indices"), 0,
                     maxdims=H5Sunlimited(), storage.mode="integer",
-                    chunk=.h5_csc_chunk, level=getHDF5DumpCompressionLevel())
+                    chunk=chunk, level=getHDF5DumpCompressionLevel())
     list(fname=fname, group=group, int=int, written=0, nnz=0, indptr=0,
-         x=if (int) integer(0) else double(0), i=integer(0))
+         chunk=chunk, x=if (int) integer(0) else double(0), i=integer(0))
 }
 
 ## write in the CSC layout the first 'n' nonzero values buffered in 'st', the
@@ -408,7 +413,7 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
     st$i <- c(st$i, res@i)
     st$indptr <- c(st$indptr, res@p[-1L] + st$nnz)
     st$nnz <- st$nnz + length(res@i)
-    .h5_csc_flush(st, floor(length(st$x) / .h5_csc_chunk) * .h5_csc_chunk)
+    .h5_csc_flush(st, floor(length(st$x) / st$chunk) * st$chunk)
 }
 
 ## write the nonzero values left in the buffer, the column pointers and the

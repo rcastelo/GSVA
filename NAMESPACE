@@ -94,6 +94,8 @@ importFrom(BiocParallel,
   bpnworkers,
   bpok,
   bpprogressbar,
+  bpstart,
+  bpstop,
   bpstopOnError,
   bptry
 )

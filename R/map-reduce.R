@@ -1000,17 +1000,27 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
 ## results are saved to the files in 'paths', the chunks of jobs that did not
 ## deliver a result, such as jobs killed by the workload manager, are
 ## recovered from those files
-#' @importFrom BiocParallel bplapply bpnworkers bptry
+#' @importFrom BiocParallel bplapply bpnworkers bptry bpisup bpstart bpstop
 .map_chunks <- function(X, BTPARAM, args, paths=NULL, outdir=NULL) {
     if (bpnworkers(BTPARAM) > 1) {
+        ## the back-end is started here, instead of by bplapply(), which
+        ## would remove its registry when stopping it after an error, so that
+        ## the errors of the jobs can be read from the registry
+        if (!bpisup(BTPARAM)) {
+            BTPARAM <- bpstart(BTPARAM)
+            on.exit(bpstop(BTPARAM), add=TRUE)
+        }
         res <- tryCatch(bptry(do.call("bplapply",
                                       args=c(list(X=X, FUN=MAP_FUN_WRAPPER,
                                                   BPPARAM=BTPARAM), args))),
                         error=identity)
         ## bptry() returns, instead of a list of results, a 'bperror' raised
-        ## for reasons other than failed chunks, such as a timeout
+        ## for reasons other than failed chunks, such as a timeout, or jobs
+        ## that ended without a result, such as those whose R process could
+        ## not start or was killed
         if (inherits(res, "condition"))
-            res <- .map_recover_from_disk(res, paths, outdir)
+            res <- .map_recover_from_disk(res, paths, outdir,
+                                          .map_job_errors(BTPARAM))
     } else ## mainly to be able to unit test this
         res <- lapply(X, function(x)
                           tryCatch(do.call("MAP_FUN_WRAPPER",
@@ -1020,16 +1030,55 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     res
 }
 
+## first error reported by the jobs run by the back-end 'BTPARAM', a
+## BatchtoolsParam object, taken from its registry: the first error message
+## of a job, or otherwise the last lines of the log of a job that did not
+## finish, e.g., because its R process could not start or was killed, which
+## end without an error message. NULL when no error can be found
+.map_job_errors <- function(BTPARAM) {
+    reg <- tryCatch(BTPARAM$registry, error=function(e) NULL)
+    if (is.null(reg) || !requireNamespace("batchtools", quietly=TRUE))
+        return(NULL)
+    clean <- function(x) substr(gsub("\\s+", " ", trimws(x)), 1L, 500L)
+
+    tryCatch({
+        msgs <- batchtools::getErrorMessages(reg=reg)
+        wh <- which(!is.na(msgs$message) & nzchar(msgs$message))
+        if (length(wh) > 0L)
+            return(sprintf("job %d: %s", msgs$job.id[wh[1L]],
+                           clean(msgs$message[wh[1L]])))
+        for (id in batchtools::findNotDone(reg=reg)$job.id) {
+            lines <- tryCatch(batchtools::getLog(id, reg=reg),
+                              error=function(e) character(0))
+            lines <- trimws(lines)
+            lines <- lines[nzchar(lines) & !grepl("^### \\[bt\\]", lines)]
+            if (length(lines) > 0L)
+                return(sprintf("log of job %d: %s", id,
+                               clean(paste(tail(lines, 3L),
+                                           collapse=" | "))))
+        }
+        NULL
+    }, error=function(e) NULL)
+}
+
 ## after the error 'err' raised by bplapply(), build the result of the chunks
-## whose output is saved in the files in 'paths', from those files
+## whose output is saved in the files in 'paths', from those files. 'joberr'
+## is the first error reported by the jobs, see .map_job_errors()
 #' @importFrom cli cli_abort
-.map_recover_from_disk <- function(err, paths, outdir) {
-    if (is.null(paths))
-        stop(err)
+.map_recover_from_disk <- function(err, paths, outdir, joberr=NULL) {
+    jobinfo <- NULL
+    if (!is.null(joberr))
+        jobinfo <- c("i"="The first error reported by the jobs was in the {joberr}")
+    if (is.null(paths)) {
+        if (is.null(joberr))
+            stop(err)
+        errmsg <- conditionMessage(err)
+        cli_abort(c("x"="{errmsg}", jobinfo), parent=err)
+    }
     done <- file.exists(paths)
     if (!any(done)) {
         errmsg <- conditionMessage(err)
-        cli_abort(c("x"="No chunk was completed: {errmsg}",
+        cli_abort(c("x"="No chunk was completed: {errmsg}", jobinfo,
                     "i"=paste("Once the problem is fixed, resubmit the",
                               "calculations by calling {.fn gsvaMap} again",
                               "with the same {.arg FUN} and {.arg inputData},",
@@ -1039,6 +1088,9 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     errmsg <- paste("The job of this chunk did not save any result, which",
                     "happens, for instance, when the workload manager kills",
                     "it. The error reported was:", conditionMessage(err))
+    if (!is.null(joberr))
+        errmsg <- paste0(errmsg, ". The first error reported by the jobs was ",
+                         "in the ", joberr)
     res <- lapply(seq_along(paths), function(i) {
         if (done[i])
             paths[i]

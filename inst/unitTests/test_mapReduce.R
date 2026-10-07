@@ -702,6 +702,27 @@ test_mapReduceRedo <- function() {
                           BTPARAM=newbtpar(), MAPREDO=wd)
         checkTrue(!any(GSVA:::.map_failed(redone)))
         checkEqualsNumeric(gsvaranks, gsvaReduce(redone, verbose=FALSE))
+
+        ## when no job delivers a result, e.g., because R cannot start in the
+        ## jobs, the error reports the first error found in their logs
+        suppressMessages(trace("MAP_FUN_WRAPPER", where=asNamespace("GSVA"),
+                               print=FALSE,
+                               tracer=quote({
+                                   cat("simulated job failure\n",
+                                       file=stderr())
+                                   tools::pskill(Sys.getpid(),
+                                                 tools::SIGKILL)
+                               })))
+        err <- tryCatch(gsvaMap(gsvaColRanks, gsvarnorm, output="HDF5",
+                                verbose=FALSE,
+                                BTPARAM=newbtpar(workers=2, memory="10G")),
+                        error=identity,
+                        finally=suppressMessages(untrace("MAP_FUN_WRAPPER",
+                                                 where=asNamespace("GSVA"))))
+        checkTrue(inherits(err, "error"))
+        ## the message is wrapped into several lines
+        checkTrue(grepl("simulated job failure",
+                        gsub("\\s+", " ", conditionMessage(err))))
     }
 }
 
