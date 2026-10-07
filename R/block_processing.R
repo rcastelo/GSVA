@@ -23,21 +23,37 @@
 ## enrichment scores, which are dense. the
 ## factors were measured on single-cell data and include a margin; the output
 ## of normalizing rows is double, and of ranking columns integer. instead of
-## 'X', whether its values are sparse or integer can be given directly
+## 'X', whether its values are sparse or integer can be given directly. the
+## optional factor 'assembly' gives the memory taken by the output in main
+## memory, relative to its size, while it is produced, see .fixed_mem(). the
+## row normalization with CLR ('clr=TRUE') reads its input once through blocks
+## of columns, see .rowStats(), and gives its output in one piece, which takes
+## twice its size when the input is a dgCMatrix object ('dgc=TRUE') converted
+## into an SVT_SparseMatrix object, see .rownorm_clr(); when the input is
+## stored on disk, its output is a delayed operation that takes no memory
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
-.step_mem_factors <- function(step=c("rownorm", "rowranges", "colranks",
+.step_mem_factors <- function(step=c("rownorm", "rowstats", "colranks",
                                      "scores", "average", "plage", "zscore",
                                      "ssgsea"), X=NULL, ngs=0,
                               sparse=is_sparse(X),
-                              int=(type(X) == "integer")) {
+                              int=(type(X) == "integer"), clr=FALSE,
+                              dgc=is(X, "dgCMatrix")) {
     step <- match.arg(step)
+    if (step == "rownorm" && clr)
+        return(list(workfactor=if (sparse) 2 else 3,
+                    outfactor=if (!int) 1 else if (sparse) 1.5 else 2,
+                    outextra=0, assembly=if (dgc) 2 else 1))
     switch(step,
            rownorm=list(workfactor=if (sparse) 6 else 4,
                         outfactor=if (!int) 1 else if (sparse) 1.5 else 2,
                         outextra=0),
-           rowranges=list(workfactor=2, outfactor=0,
-                          outextra=32), ## four doubles per row
+           ## the row statistics of each block of columns, four or five
+           ## doubles per row, are small and reduced at the end, see
+           ## .rowStats(); dense blocks take the mask of missing values and
+           ## the logarithm of their values
+           rowstats=list(workfactor=if (sparse) 2 else 3, outfactor=0,
+                         outextra=0),
            colranks=list(workfactor=if (sparse) 7 else 2,
                          outfactor=if (int) 1 else if (sparse) 0.7 else 0.5,
                          outextra=0),
@@ -57,12 +73,14 @@
 ## proportional to it is written to disk block by block. otherwise, the output
 ## is assembled from the blocks at the end, which takes twice its size, except
 ## when binding blocks of columns of sparse data, which reuses the memory of
-## the blocks. the output given by 'outextra' is always assembled in memory
+## the blocks, or as given by 'assembly'. the output given by 'outextra' is
+## always assembled in memory
 .fixed_mem <- function(nunits, unitbytes, whdim, sparse, inmemory, outfactor,
-                       outextra) {
+                       outextra, assembly=NULL) {
     fixed <- 2 * outextra * nunits
     if (inmemory) {
-        assembly <- if (whdim == 2L && sparse) 1 else 2
+        if (is.null(assembly))
+            assembly <- if (whdim == 2L && sparse) 1 else 2
         fixed <- fixed + nunits * unitbytes +
                  assembly * outfactor * unitbytes * nunits
     }
@@ -423,6 +441,8 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
 ## 'workfactor', 'outfactor' and 'outextra' give the memory that FUN takes to
 ## process the columns of 'X' within the maximum main memory 'maxmem', see
 ## .units_per_block()
+## the results of FUN on each block of columns are bound by columns or,
+## when 'combine' is a function of two results, reduced with it
 
 #' @importFrom BiocGenerics type
 #' @importFrom cli cli_abort
@@ -434,7 +454,7 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
                                minparrows=100, minparcols=100,
                                progressmsg="Progress", BPPARAM=NULL,
                                maxmem=Inf, workfactor=2, outfactor=1,
-                               outextra=0) {
+                               outextra=0, combine=NULL) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
@@ -499,6 +519,9 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
             }
         }
     }
+
+    if (is.function(combine))
+        return(Reduce(combine, res))
 
     mines <- maxes <- NULL
     if (!is.null(attr(res[[1]], "min"))) { ## min and max enrichment scores stored by ssGSEA

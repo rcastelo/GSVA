@@ -968,7 +968,8 @@ gsvaRowNorm <- function(param,
     last <- checkedfl$last
 
     maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
-    mf <- .step_mem_factors("rownorm", dataMatrix)
+    mf <- .step_mem_factors("rownorm", dataMatrix,
+                            clr=(.get_rowNorm(param) == "clr"))
     ondisk <- .check_ondisk(param, first=first, last=last, whdim=1,
                             recompute_nzcount=FALSE, maxmem=maxmem,
                             verbose=verbose, mf=mf)
@@ -984,14 +985,23 @@ gsvaRowNorm <- function(param,
                                        verbose)
 
     rem <- 0
+    rowstats <- NULL
     if (.get_filterRows(param)) { ## check on positive values for CLR?
+        ## the CLR row normalization uses the sums of logarithms calculated
+        ## while filtering rows, in the same pass through the input
+        clr <- .get_rowNorm(param) == "clr"
         filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
                                  rowNorm=.get_rowNorm(param),
                                  removeConstant=TRUE,
                                  removeNzConstant=TRUE,
                                  errorOnTooFewRows=errorOnTooFewRows,
                                  verbose=verbose,
-                                 BPPARAM=BPPARAM, maxmem=maxmem)
+                                 BPPARAM=BPPARAM, maxmem=maxmem,
+                                 logsums=clr)
+        if (clr) {
+            rowstats <- filtDataMatrix$rowstats
+            filtDataMatrix <- filtDataMatrix$expr
+        }
         rem <- nrow(dataMatrix) - nrow(filtDataMatrix)
         ## release the input data not filtered, which may be in main memory,
         ## to leave that memory available to the normalization of the rows
@@ -1015,7 +1025,8 @@ gsvaRowNorm <- function(param,
                                        na_use=.get_NAuse(param),
                                        verbose=verbose,
                                        BPPARAM=BPPARAM,
-                                       maxmem=maxmem)
+                                       maxmem=maxmem,
+                                       rowstats=rowstats)
     } else if (verbose)
         cli_alert_warning("Skipping row normalization (rowNorm='none')")
 
@@ -1492,119 +1503,78 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
 ## or using the less computationally intensive centered log ratio (CLR)
 ## transformation.
 
-## functions .rownorm_clr_dense() and .rownorm_clr_sparse() calculate CLR values
-## for each row of the input expression data, which is assumed to be columnwise
-## within-sample and between-sample normalized into positive values x_{ij} in
-## logarithmic scale. because the input values are already log-normalized
-## quantities, then the resulting row-centered values x_{ij}' are multiple of
-## the genes log-normalized values, i.e., they are a kind of a CLR
-## transformation of a CLR-like quantity already, with the aim of attempting to
-## make expression profiles more comparable across rows/genes. the difference
-## between the two functions is that the first one is for dense matrices, and
-## uses all values in its calculations, while the second one is for sparse
-## matrices, and uses only the nonzero values in its calculations, i.e., zeros
-## remain intact.
-.rownorm_clr_dense <- function(expr, any_na, na_use) {
-    gene.clr <- log(expr) ## undefined for zero or negative values !!
-    m <- rowMeans(gene.clr, na.rm=any_na && na_use == "na.rm")
-    gene.clr <- exp(gene.clr - m)
-    gene.clr
-}
-
-#' @importFrom SparseArray SparseArray NaArray is_nonna
-#' @importFrom MatrixGenerics rowSums
-.rownorm_clr_sparse <- function(expr, sparse, any_na, na_use) {
-    stopifnot(is(expr, "dgCMatrix") || is(expr, "SVT_SparseMatrix")) ## QC
-
-    if (!sparse) {              ## sparse matrix to dense conversion
-        expr <- as.matrix(expr) ## this may explode memory consumption
-        return(.rownorm_clr_dense(expr, any_na, na_use))
-    }
-        
-    gene.clr <- expr ## assume expr contains log-normalized x_{ij} values
-    if (is(expr, "dgCMatrix")) ## convert 'expr' to a SparseArray object
-        gene.clr <- SparseArray(expr)
-
-    ## build an NaArray object from 'gene.clr'
-    naa <- NaArray(dim=dim(gene.clr), type=type(gene.clr),
-                   dimnames=dimnames(gene.clr))
-    naa@NaSVT <- gene.clr@SVT ## assuming there are no NA values in 'expr'
-    naa <- log(naa) ## take log of nonzero values, NA values remain NA
-    ## because SparseArray::rowMeans() is still not implemented we first
-    ## sum through the nonzero values and then divide by their number
-    rs <- rowSums(naa, na.rm=TRUE)
-    nna <- is_nonna(naa)
-    rnna <- rowSums(nna)
-    m <- rs / rnna
-    ## naa stores x'_i = exp(log(x_i) - mean(log(x_i))) for nonzero values
-    naa <- exp(naa - m)
-    gene.clr@SVT <- naa@NaSVT ## copy back the new nonzero CLR values in
-                              ## the SparseArray placeholder 'gene.clr'
-    gene.clr
-}
-
-#' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom S4Arrays is_sparse DummyArrayGrid
-#' @importFrom DelayedArray seed gridReduce close
-.rownorm_clr_h5 <- function(X, grid=NULL, sparse, any_na, na_use) {
-  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-  sink <- HDF5RealizationSink(dim(X), as.sparse=is_sparse(X) && sparse)
-  if (is.null(grid))
-      grid <- DummyArrayGrid(dim(X))
-
-  rownorm_clr_byBlock_dense <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- .rownorm_clr_dense(block, any_na, na_use)
-    write_block(sink, grid, block)
-  }
-  rownorm_clr_byBlock_sparse <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- .rownorm_clr_sparse(block, sparse, any_na, na_use)
-    write_block(sink, grid, block)
-  }
-  f <- rownorm_clr_byBlock_dense
-  if (is_sparse(X) && sparse)
-      f <- rownorm_clr_byBlock_sparse
-  sink <- gridReduce(f, grid, sink)
-  close(sink)
-  res <- as(sink, "DelayedArray")
-  res
-}
+## function .rownorm_clr() calculates CLR values for each row of the input
+## expression data, which is assumed to be columnwise within-sample and
+## between-sample normalized into positive values x_{ij} in logarithmic scale.
+## because the input values are already log-normalized quantities, then the
+## resulting row-centered values x_{ij}' are multiple of the genes
+## log-normalized values, i.e., they are a kind of a CLR transformation of a
+## CLR-like quantity already, with the aim of attempting to make expression
+## profiles more comparable across rows/genes. on dense input, it uses all
+## values in its calculations, while on sparse input, and 'sparse=TRUE', it
+## uses only the nonzero values, i.e., zeros remain intact. because
+## x_{ij}' = exp(log(x_{ij}) - mean_j(log(x_{ij}))) = x_{ij} / g_i, where g_i
+## is the geometric mean of the i-th row, the CLR values are obtained by
+## scaling each row with the sums of logarithms in 'rowstats', calculated
+## through blocks of columns by .rowStats(). on input stored on disk, this
+## scaling is a delayed operation, which needs no access to the rows of the
+## input, and which is realized when the values are read by blocks of columns
 
 #' @importFrom S4Arrays is_sparse
-#' @importFrom DelayedArray seed
+#' @importFrom SparseArray SparseArray
 #' @importFrom cli cli_abort
-compute.gene.clr <- function(expr, sparse=FALSE, any_na=FALSE,
-                             na_use=c("everything", "all.obs", "na.rm"),
-                             grid=NULL, verbose=TRUE, BPPARAM=NULL) {
-
+.rownorm_clr <- function(expr, rowstats, sparse=FALSE, any_na=FALSE,
+                         na_use=c("everything", "all.obs", "na.rm")) {
     na_use <- match.arg(na_use)
-    n.genes <- nrow(expr)
 
     if (any_na && na_use == "all.obs") {
         msg <- paste("missing values present in the input expression data and",
                      "'use=\"all.obs\".")
         cli_abort(c("x"=msg))
     }
-    
-    gene.clr <- NA
-    if (is(expr, "dgCMatrix") || is(expr, "SVT_SparseMatrix"))
-        gene.clr <- .rownorm_clr_sparse(expr, sparse, any_na, na_use)
-    else if (is(expr, "DelayedMatrix"))
-        gene.clr <- .rownorm_clr_h5(expr, grid=grid, sparse=sparse,
-                                    any_na=any_na, na_use=na_use)
-    else if (is.matrix(expr)) {
-        gene.clr <- .rownorm_clr_dense(expr, any_na, na_use)
-    } else {
+
+    sparseinput <- colnames(rowstats)[1] == "nzmin"
+    sparseclr <- sparseinput && sparse
+    lsum <- rowstats[, "lsum"]
+    n <- rowstats[, "n"]
+    nna <- rowstats[, "nna"]
+    if (sparseinput && !sparse) { ## zeros enter the calculations, log(0)=-Inf
+        zeros <- ncol(expr) - n - nna
+        lsum[zeros > 0] <- -Inf + lsum[zeros > 0]
+        n <- n + zeros
+    }
+    m <- lsum / n
+    ## missing values are ignored in sparse input, as zeros are
+    if (!sparseclr && !(any_na && na_use == "na.rm"))
+        m[nna > 0] <- NA
+    g <- exp(m) ## geometric mean of each row
+
+    if (sparseclr) {
+        g[n == 0] <- 1 ## rows without nonzero values remain zero
+        if (anyNA(g)) {
+            msg <- paste("Cannot apply row normalization method 'clr' to",
+                         "expression data with nonzero nonpositive values")
+            cli_abort(c("x"=msg))
+        }
+    }
+
+    if (is(expr, "DelayedMatrix")) ## delayed and sparse when 'expr' is sparse
+        return(expr / g)           ## and 'sparse=TRUE'
+
+    if (is(expr, "dgCMatrix") || is(expr, "SVT_SparseMatrix")) {
+        if (!sparse)             ## sparse to dense conversion, which may
+            return(as.matrix(expr) / g) ## explode memory consumption
+        if (is(expr, "dgCMatrix"))
+            expr <- SparseArray(expr)
+        return(expr / g)         ## the result is an SVT_SparseMatrix object
+    }
+
+    if (!is.matrix(expr)) {
         msg <- "Input container class {class(expr)} cannot be handled yet."
         cli_abort(c("x"=msg))
     }
 
-    if (ncol(expr) > 10000) ## free up ASAP memory we need not anymore and was
-        out <- gc()         ## allocated during CLR calculations on a big expr
-
-    return(gene.clr)	
+    expr / g
 }
 
 #' @importFrom S4Arrays is_sparse
@@ -1795,7 +1765,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
 #' @importFrom cli cli_alert_info cli_abort
 .compute_row_norm <- function(expr, rowNorm, kcdf, kcdf.min.ssize,
                               sparse, any_na, na_use, verbose,
-                              BPPARAM=NULL, maxmem=Inf) {
+                              BPPARAM=NULL, maxmem=Inf, rowstats=NULL) {
 
     if (verbose) {
         if (rowNorm =="ecdf") 
@@ -1821,12 +1791,15 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                                 minparcols=100, BPPARAM=BPPARAM, maxmem=maxmem,
                                 workfactor=mf$workfactor,
                                 outfactor=mf$outfactor, outextra=mf$outextra)
-    else if (rowNorm == "clr")
-        Z <- .processMatrixRows(expr, FUN=compute.gene.clr, sparse=sparse,
-                                any_na=any_na, na_use=na_use, verbose=verbose,
-                                minparrows=100, minparcols=100, BPPARAM=BPPARAM,
-                                maxmem=maxmem, workfactor=mf$workfactor,
-                                outfactor=mf$outfactor, outextra=mf$outextra)
+    else if (rowNorm == "clr") {
+        ## the statistics of the rows are calculated through blocks of
+        ## columns, unless they were already calculated while filtering rows
+        if (is.null(rowstats))
+            rowstats <- .rowStats(expr, logsums=TRUE, verbose=verbose,
+                                  BPPARAM=BPPARAM, maxmem=maxmem)
+        Z <- .rownorm_clr(expr, rowstats, sparse=sparse, any_na=any_na,
+                          na_use=na_use)
+    }
     else
         cli_abort(c("x"=paste(".compute_row_norm: 'rowNorm' should be one of",
                               "'ecdf' or 'clr'.")))

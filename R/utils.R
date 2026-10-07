@@ -923,7 +923,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     unitbytes <- if (inmemory) insize / nunits else denseunitbytes
     minunits <- min(nunits, max(1, floor(getAutoBlockSize() / denseunitbytes)))
     .fixed_mem(nunits, insize / nunits, whdim, sparse, inmemory,
-               mf$outfactor, mf$outextra) +
+               mf$outfactor, mf$outextra, mf$assembly) +
         mf$workfactor * minunits * unitbytes
 }
 
@@ -1124,12 +1124,15 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     ondisk <- .get_ondisk(param)
     ngs <- length(get_geneSets(param))
     insize <- .input_mem_size(param, get_assay(param), NA, NA, 1L)
+    clr <- .get_rowNorm(param) == "clr"
+    dgc <- is(X, "dgCMatrix")
     steps <- list(list(step="rownorm", whdim=1L, int=(type(X) == "integer")),
                   list(step="colranks", whdim=2L, int=FALSE),
                   list(step="scores", whdim=2L, int=TRUE))
     need <- 0
     for (st in steps) {
-        mf <- .step_mem_factors(st$step, ngs=ngs, sparse=sparse, int=st$int)
+        mf <- .step_mem_factors(st$step, ngs=ngs, sparse=sparse, int=st$int,
+                                clr=clr, dgc=dgc)
         eltbytes <- if (st$int) 4 else 8
         inmemory <- ondisk == "no"
         if (ondisk == "auto")

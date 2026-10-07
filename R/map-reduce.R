@@ -677,9 +677,11 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
     if (funname == "gsvaColScores")
         ngs <- tryCatch(length(get_geneSets(.pull_param(inputData))),
                         error=function(e) 0)
+    clr <- funname == "gsvaRowNorm" && is(inputData, "gsvaParam") &&
+           .get_rowNorm(inputData) == "clr"
     step <- c(gsvaRowNorm="rownorm", gsvaColRanks="colranks",
               gsvaColScores="scores")[[funname]]
-    mf <- .step_mem_factors(step, X, ngs=ngs)
+    mf <- .step_mem_factors(step, X, ngs=ngs, clr=clr)
     inmemory <- .step_data_mem(dims, whdim, insize, eltbytes, sparse, TRUE,
                                mf) <= .mem_fraction_R * maxmem
     need <- .step_mem_need(dims, insize, whdim, eltbytes, sparse, inmemory,
