@@ -177,7 +177,7 @@ test_load_sparse_by_blocks <- function() {
             x <- DelayedArray::DelayedArray(x)
         type(x) <- type
         insize <- as.numeric(object.size(as(x, "SVT_SparseMatrix")))
-        ## budget for blocks of 5 columns
+        ## budget for blocks of a few columns
         bytespercol <- 200 * if (type == "integer") 4 else 8
         maxmem <- insize + 2 * 2 * 5 * bytespercol
         res <- GSVA:::.load_sparse_by_blocks(x, maxmem=maxmem, insize=insize)

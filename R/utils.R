@@ -385,27 +385,39 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 
 ## load into main memory as an SVT_SparseMatrix object the sparse on-disk data
 ## in 'X', reading one block of columns at a time, because coercing 'X' as a
-## whole with as() takes 5 to 8 times the memory of the result. while a block
-## is read and converted, it takes up to about twice the memory of the same
-## block as a dense matrix, so that blocks have as many columns as possible
-## for that memory to fit in half of the maximum main memory 'maxmem' left by
-## the result, whose estimated size is 'insize', leaving the other half for
-## memory used outside R, e.g., by the HDF5 library. when 'maxmem' or 'insize'
-## are not known, blocks have the default size of the DelayedArray package
-#' @importFrom DelayedArray colAutoGrid read_block
+## whole with as() takes 5 to 8 times the memory of the result. reading a
+## block as sparse with the HDF5Array package takes about 160 bytes per
+## nonzero value while it lasts, as measured on single-cell data, and the
+## blocks of columns already read form the result, which takes their memory
+## when bound. blocks span the width of the chunks of 'X' on disk, when it has
+## them, because blocks splitting chunks make their reading slower, while
+## wider blocks do not make it faster: the smallest multiple of that width
+## not narrower than the default block of the DelayedArray package, which
+## they have otherwise. blocks are narrower when their memory does not
+## fit in the fraction .mem_fraction_R of the maximum main memory 'maxmem'
+## left by the result, whose estimated size is 'insize', when both are known
+#' @importFrom DelayedArray colAutoGrid read_block chunkdim
 #' @importFrom BiocGenerics type
 .load_sparse_by_blocks <- function(X, maxmem=Inf, insize=NA_real_) {
     if (ncol(X) == 0L)
         return(as(X, "SVT_SparseMatrix"))
 
-    grid <- colAutoGrid(X) ## default block size
+    ncolblock <- ncol(colAutoGrid(X)[[1L]]) ## default block size
+    cd <- chunkdim(X)
+    if (!is.null(cd) && cd[2] > 0) ## multiple of the width of the chunks
+        ncolblock <- cd[2] * ceiling(ncolblock / cd[2])
     if (!is.null(maxmem) && !is.null(insize) && is.finite(maxmem) &&
         !is.na(insize)) {
-        bytespercol <- as.numeric(nrow(X)) * if (type(X) == "integer") 4 else 8
-        ncolblock <- floor((maxmem - insize) / 2 / (2 * bytespercol))
-        ncolblock <- as.integer(max(1, min(ncol(X), ncolblock)))
-        grid <- colAutoGrid(X, ncol=ncolblock)
+        eltbytes <- if (type(X) == "integer") 4 else 8
+        nzpercol <- insize / (eltbytes + 4) / ncol(X)
+        avail <- .mem_fraction_R * maxmem - insize
+        ncolblock <- min(ncolblock, floor(avail / (160 * max(1, nzpercol))))
     }
+    ## the DelayedArray package does not support blocks with more than
+    ## .Machine$integer.max values
+    ncolblock <- min(ncolblock, floor(.Machine$integer.max / max(1, nrow(X))))
+    ncolblock <- as.integer(max(1, min(ncol(X), ncolblock)))
+    grid <- colAutoGrid(X, ncol=ncolblock)
     blocks <- lapply(seq_along(grid), function(i)
                          as(read_block(X, grid[[i]], as.sparse=TRUE),
                             "SVT_SparseMatrix"))
