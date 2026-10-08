@@ -1026,6 +1026,11 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
         nna <- rowSums(na)
         st <- cbind(rowRanges(X, na.rm=TRUE), ncol(X) - nna, nna)
         storage.mode(st) <- "double"
+        ## rows without non-missing values have no minimum and maximum,
+        ## as in sparse input, instead of the Inf and -Inf of rowRanges()
+        noval <- st[, 3] == 0
+        if (any(noval))
+            st[noval, 1:2] <- NA_real_
         if (logsums) { ## NaN from the logarithm of negative values remain
             lX <- log(X)
             if (any(nna > 0))
@@ -1083,7 +1088,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 #' @importFrom S4Arrays is_sparse
 #' @importFrom sparseMatrixStats rowRanges
 #' @importFrom DelayedArray rowRanges
-#' @importFrom cli cli_alert_warning cli_abort cli_alert_info
+#' @importFrom cli cli_alert_warning cli_abort cli_alert_info qty
 #' @importFrom cli cli_progress_bar cli_progress_done
 #' @importFrom BiocParallel SerialParam bpnworkers bpprogressbar
 .filterGenes <- function(expr, anyna=FALSE, rowNorm=NA, removeConstant=TRUE,
@@ -1110,6 +1115,19 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
     if (any(mask))
         constantRows[mask] <- TRUE
 
+    ## rows with only missing values, which have no minimum and maximum, are
+    ## discarded as constant rows, but reported separately
+    allNaRows <- rep(FALSE, nrow(expr))
+    if (ncol(expr) > 0)
+        allNaRows <- rowstats[, "nna"] == ncol(expr)
+    if (verbose && any(allNaRows)) {
+        n <- sum(allNaRows)
+        cli_alert_warning("{n} row{?s} with only missing values")
+        if (removeConstant)
+           cli_alert_warning(paste("{qty(n)}Row{?s} with only missing values",
+                                   "{?is/are} discarded"))
+    }
+
     constantNzRows <- rep(FALSE, nrow(expr))
     if (ncol(rowrngs) > 2) { ## sparse input
         constantNzRows <- (rowrngs[, 3] == rowrngs[, 4])
@@ -1118,21 +1136,23 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
             constantNzRows[mask] <- TRUE
     }
 
-    if (verbose && any(constantRows)) {
-        msg <- sprintf("%d rows with constant values throughout the columns",
-                       sum(constantRows))
-        cli_alert_warning(msg)
+    if (verbose && any(constantRows & !allNaRows)) {
+        n <- sum(constantRows & !allNaRows)
+        cli_alert_warning(paste("{n} row{?s} with constant values throughout",
+                                "the columns"))
         if (removeConstant)
-           cli_alert_warning("Rows with constant values are discarded")
+           cli_alert_warning(paste("{qty(n)}Row{?s} with constant values",
+                                   "{?is/are} discarded"))
     }
 
     nzmask <- constantNzRows & !constantRows
     if (verbose && any(nzmask)) {
-        msg <- paste("{sum(nzmask)} rows with constant nonzero values",
-                     "throughout the samples")
-        cli_alert_warning(msg)
+        n <- sum(nzmask)
+        cli_alert_warning(paste("{n} row{?s} with constant nonzero values",
+                                "throughout the samples"))
         if (removeNzConstant)
-           cli_alert_warning("Rows with constant nonzero values are discarded")
+           cli_alert_warning(paste("{qty(n)}Row{?s} with constant nonzero",
+                                   "values {?is/are} discarded"))
     }
 
     removemask <- rep(FALSE, nrow(expr))

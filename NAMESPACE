@@ -197,7 +197,8 @@ importFrom(cli,
   cli_progress_bar,
   cli_progress_done,
   cli_progress_update,
-  cli_warn
+  cli_warn,
+  qty
 )
 importFrom(graphics,
   abline,

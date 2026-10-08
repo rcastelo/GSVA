@@ -245,7 +245,7 @@
 #' @importFrom cli cli_alert_warning
 .report_parallel_errors <- function(res) {
     bpokmask <- .bp_ok(res)
-    msg <- paste("{sum(!bpokmask)} execution thread(s) gave an error,",
+    msg <- paste("{sum(!bpokmask)} execution thread{?s} gave an error,",
                  "reporting the first one.")
     cli_alert_warning(msg)
     msg <- attr(.bp_first_error(res), "traceback")
