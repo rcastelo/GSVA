@@ -78,7 +78,8 @@ importFrom(BiocGenerics,
   path,
   rbind,
   sort,
-  type
+  type,
+  updateObject
 )
 importFrom(BiocParallel,
   "bpprogressbar<-",

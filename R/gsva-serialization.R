@@ -442,7 +442,8 @@ loadHDF5GSVA <- function(file, assay="auto", verbose=TRUE) {
     file <- normalizePath(file)
     if (verbose)
         cli_alert_info("Reading the metadata of {.file {file}}")
-    gsvacontainer <- unserialize(as.raw(h5read(file, "gsva/shell")))
+    gsvacontainer <- .restore_gsva_shell(unserialize(as.raw(h5read(file,
+                                                       "gsva/shell"))), file)
     assayname <- as.character(h5read(file, "gsva/assayname"))
     layout <- as.character(h5read(file, "gsva/layout"))
 
@@ -460,6 +461,22 @@ loadHDF5GSVA <- function(file, assay="auto", verbose=TRUE) {
     assay <- .check_assay_ranks_rnorm(assayNames(gsvacontainer), assay)
 
     .se_to_gsva_output(gsvacontainer, assay)
+}
+
+## the container of GSVA output 'x', without its assay, restored from the file
+## 'file' by loadHDF5GSVA() or loadParquetGSVA(), updated to the current
+## definition of its class, which may have changed since it was saved, as
+## loadHDF5SummarizedExperiment() of the HDF5Array package does. its validity
+## is not checked, because it lacks its assay, which is added afterwards
+#' @importFrom BiocGenerics updateObject
+#' @importFrom cli cli_abort
+.restore_gsva_shell <- function(x, file) {
+    x <- updateObject(x, check=FALSE)
+    if (!is(x, "SummarizedExperiment"))
+        cli_abort(c("x"=paste("The file {.file {file}} does not contain a",
+                              "SummarizedExperiment object or derivative",
+                              "with GSVA output.")))
+    x
 }
 
 ## whether 'file' is an HDF5 file with GSVA output saved with saveHDF5GSVA()
@@ -620,7 +637,8 @@ loadParquetGSVA <- function(file, assay="auto", verbose=TRUE) {
                               "output saved with 'saveParquetGSVA()'.")))
     }
 
-    gsvacontainer <- .decode_r_object(md$gsva_shell)
+    gsvacontainer <- .restore_gsva_shell(.decode_r_object(md$gsva_shell),
+                                         .display_path(file))
     if (verbose) {
         cls <- class(gsvacontainer)[1]
         sze <- format(structure(nchar(md$gsva_shell, type="bytes"),
