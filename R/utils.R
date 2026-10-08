@@ -389,13 +389,20 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## block as sparse with the HDF5Array package takes about 160 bytes per
 ## nonzero value while it lasts, as measured on single-cell data, and the
 ## blocks of columns already read form the result, which takes their memory
-## when bound. blocks span the width of the chunks of 'X' on disk, when it has
-## them, because blocks splitting chunks make their reading slower, while
-## wider blocks do not make it faster: the smallest multiple of that width
-## not narrower than the default block of the DelayedArray package, which
-## they have otherwise. blocks are narrower when their memory does not
-## fit in the fraction .mem_fraction_R of the maximum main memory 'maxmem'
-## left by the result, whose estimated size is 'insize', when both are known
+## when bound. when 'X' is stored in chunks of several columns, as in dense
+## HDF5 datasets, blocks span the width of the chunks, because blocks
+## splitting chunks make their reading slower, while wider blocks do not make
+## it faster: the smallest multiple of that width not narrower than the
+## default block of the DelayedArray package. otherwise, as in the compressed
+## sparse column (CSC) layout of HDF5 files, e.g., those written by
+## saveHDF5GSVA(), where each column is a chunk, or when 'X' binds several
+## files, blocks are as wide as the memory allows, because each block reads
+## each file anew, which takes a long time on the shared file systems of
+## computer clusters, as measured with the row normalization saved by the
+## jobs of gsvaMap(); without knowing that memory, blocks have the default
+## size. blocks are narrower when their memory does not fit in the fraction
+## .mem_fraction_R of the maximum main memory 'maxmem' left by the result,
+## whose estimated size is 'insize', when both are known
 #' @importFrom DelayedArray colAutoGrid read_block chunkdim
 #' @importFrom BiocGenerics type
 .load_sparse_by_blocks <- function(X, maxmem=Inf, insize=NA_real_) {
@@ -403,11 +410,14 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         return(as(X, "SVT_SparseMatrix"))
 
     ncolblock <- ncol(colAutoGrid(X)[[1L]]) ## default block size
+    budget <- !is.null(maxmem) && !is.null(insize) && is.finite(maxmem) &&
+              !is.na(insize)
     cd <- chunkdim(X)
-    if (!is.null(cd) && cd[2] > 0) ## multiple of the width of the chunks
+    if (!is.null(cd) && cd[2] > 1) ## multiple of the width of the chunks
         ncolblock <- cd[2] * ceiling(ncolblock / cd[2])
-    if (!is.null(maxmem) && !is.null(insize) && is.finite(maxmem) &&
-        !is.na(insize)) {
+    else if (budget) ## as wide as the memory allows, see below
+        ncolblock <- ncol(X)
+    if (budget) {
         eltbytes <- if (type(X) == "integer") 4 else 8
         nzpercol <- insize / (eltbytes + 4) / ncol(X)
         avail <- .mem_fraction_R * maxmem - insize
