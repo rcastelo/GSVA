@@ -55,9 +55,13 @@
            ## matrices, about five times their size, as measured
            rowstats=list(workfactor=if (sparse) 2 else 5, outfactor=0,
                          outextra=0),
+           ## the ranks of a dgCMatrix object are double, as large as it,
+           ## and binding their blocks of columns takes twice their size,
+           ## see .cbind_blocks()
            colranks=list(workfactor=if (sparse) 7 else 2,
-                         outfactor=if (int) 1 else if (sparse) 0.7 else 0.5,
-                         outextra=0),
+                         outfactor=if (int || (sparse && dgc)) 1
+                                   else if (sparse) 0.7 else 0.5,
+                         outextra=0, assembly=if (sparse && dgc) 2 else NULL),
            scores=list(workfactor=2, outfactor=0, outextra=8 * ngs),
            ## the average method gives its scores directly, while PLAGE,
            ## z-score and ssGSEA give them from an intermediate matrix as large
@@ -66,11 +70,12 @@
            plage=, zscore=,
            ssgsea=list(workfactor=if (step == "ssgsea") 3 else 2, outfactor=1,
                        outextra=8 * ngs),
-           ## the scores of ssGSEA, from its ranks, which take about five
-           ## times the size of a block of integer ranks: the block read from
-           ## disk, its integer copy, and its ranks to the power of alpha,
-           ## as measured
-           ssgseascores=list(workfactor=5, outfactor=0, outextra=8 * ngs))
+           ## the scores of ssGSEA, from its ranks, which take from four to
+           ## six times the size of a block of integer ranks: the block read
+           ## from disk, its integer copy, its ranks to the power of alpha and
+           ## the temporary vectors of its columns, as measured on single-cell
+           ## data, the larger factors with smaller blocks
+           ssgseascores=list(workfactor=6, outfactor=0, outextra=8 * ngs))
 }
 
 ## memory that remains allocated while a matrix with 'nunits' rows (whdim=1)
@@ -80,16 +85,18 @@
 ## proportional to it is written to disk block by block. otherwise, the output
 ## is assembled from the blocks at the end, which takes twice its size, except
 ## when binding blocks of columns of sparse data, which reuses the memory of
-## the blocks, or as given by 'assembly'. the output given by 'outextra' is
-## always assembled in memory
+## the blocks, or as given by 'assembly'. the output proportional to the
+## matrix takes 'outunitbytes' per row or column, when its size differs from
+## the one of the input, such as dense output from sparse input. the output
+## given by 'outextra' is always assembled in memory
 .fixed_mem <- function(nunits, unitbytes, whdim, sparse, inmemory, outfactor,
-                       outextra, assembly=NULL) {
+                       outextra, assembly=NULL, outunitbytes=unitbytes) {
     fixed <- 2 * outextra * nunits
     if (inmemory) {
         if (is.null(assembly))
             assembly <- if (whdim == 2L && sparse) 1 else 2
         fixed <- fixed + nunits * unitbytes +
-                 assembly * outfactor * unitbytes * nunits
+                 assembly * outfactor * outunitbytes * nunits
     }
 
     fixed
@@ -105,7 +112,12 @@
 ## bytes each, see .worker_mem(), leave from 'maxmem', when they leave enough
 ## for the memory that remains allocated; 'workermem=0' when the workers do
 ## not share 'maxmem', such as the jobs of gsvaMap(). the size of a row or column of 'X' stored on disk is the one of its
-## dense form, which overestimates the size of sparse data. the blocks of all
+## dense form, which overestimates the size of sparse data. with 'dense=TRUE',
+## the calculations convert each block of a sparse 'X' in main memory into a
+## dense matrix, whose rows or columns take their working memory and output
+## by the size of their dense form, while 'X' itself takes its sparse size.
+## 'heldmem' bytes remain allocated by other objects, such as the input of
+## previous steps still in main memory, see .held_mem(). the blocks of all
 ## workers together are not smaller than the automatic block size of the
 ## DelayedArray package, see getAutoBlockSize(), because the overhead of
 ## processing many smaller blocks makes calculations too slow, so that a
@@ -118,16 +130,24 @@
 #' @importFrom S4Arrays is_sparse
 .units_per_block <- function(X, whdim, nworkers, maxmem, workfactor=2,
                              outfactor=1, outextra=0,
-                             workermem=.worker_mem()) {
+                             workermem=.worker_mem(), dense=FALSE,
+                             heldmem=.held_mem()) {
     nunits <- dim(X)[whdim]
     inmemory <- !is(X, "DelayedArray")
+    eltbytes <- if (type(X) == "integer") 4 else 8
+    denseunitbytes <- as.numeric(dim(X)[-whdim]) * eltbytes
     if (inmemory)
-        unitbytes <- as.numeric(object.size(X)) / max(1, nunits)
+        inunitbytes <- as.numeric(object.size(X)) / max(1, nunits)
     else
-        unitbytes <- as.numeric(dim(X)[-whdim]) *
-                     if (type(X) == "integer") 4 else 8
-    fixed <- .fixed_mem(nunits, unitbytes, whdim, is_sparse(X), inmemory,
-                        outfactor, outextra)
+        inunitbytes <- denseunitbytes
+    sparse <- is_sparse(X) && !dense
+    unitbytes <- if (dense) denseunitbytes else inunitbytes
+    ## binding blocks of columns of a dgCMatrix object takes twice the size
+    ## of the result, as measured, unlike binding SVT_SparseMatrix objects
+    assembly <- if (whdim == 2L && sparse && is(X, "dgCMatrix")) 2 else NULL
+    fixed <- .fixed_mem(nunits, inunitbytes, whdim, sparse, inmemory,
+                        outfactor, outextra, assembly,
+                        outunitbytes=unitbytes) + heldmem
     ## with more than one worker, their R processes take memory from 'maxmem',
     ## unless they leave no memory for the blocks, when 'maxmem' cannot be
     ## honored anyway, and smaller blocks would only make calculations slower
@@ -156,11 +176,13 @@
 #' @importFrom BiocGenerics type
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .rowgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
-                         outextra=0, workermem=.worker_mem()) {
+                         outextra=0, workermem=.worker_mem(), dense=FALSE,
+                         heldmem=.held_mem()) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
       nrowblock <- .units_per_block(X, 1L, nworkers, maxmem, workfactor,
-                                    outfactor, outextra, workermem)
+                                    outfactor, outextra, workermem,
+                                    dense=dense, heldmem=heldmem)
       grid <- rowAutoGrid(X, nrow=.align_to_chunks(nrowblock, X, 1L))
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
@@ -185,11 +207,13 @@
 #' @importFrom BiocGenerics type
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .colgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
-                         outextra=0, workermem=.worker_mem()) {
+                         outextra=0, workermem=.worker_mem(), dense=FALSE,
+                         heldmem=.held_mem()) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
       ncolblock <- .units_per_block(X, 2L, nworkers, maxmem, workfactor,
-                                    outfactor, outextra, workermem)
+                                    outfactor, outextra, workermem,
+                                    dense=dense, heldmem=heldmem)
       grid <- colAutoGrid(X, ncol=.align_to_chunks(ncolblock, X, 2L))
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
@@ -740,7 +764,8 @@ ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
 ## reporting progress using the 'cli' package when possible. the arguments
 ## 'workfactor', 'outfactor' and 'outextra' give the memory that FUN takes to
 ## process the rows of 'X' within the maximum main memory 'maxmem', see
-## .units_per_block()
+## .units_per_block(), as do 'dense', when FUN converts blocks of sparse 'X'
+## into dense matrices, and 'heldmem', the memory held by other objects
 ## with 'sinkout=TRUE', FUN processes each block in main memory and the
 ## output is written into on-disk data structures, see .ondisk_blocks()
 
@@ -755,7 +780,8 @@ ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
                                minparrows=100, minparcols=100,
                                progressmsg="Progress", BPPARAM=NULL,
                                maxmem=Inf, workfactor=2, outfactor=1,
-                               outextra=0, sinkout=FALSE) {
+                               outextra=0, dense=FALSE,
+                               heldmem=.held_mem(), sinkout=FALSE) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
@@ -765,7 +791,8 @@ ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
     }
     X <- .h5file_seeds_to_paths(X, BPPARAM, nworkers)
 
-    grid <- .rowgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra)
+    grid <- .rowgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra,
+                         dense=dense, heldmem=heldmem)
     rir <- .splitRowsInRanges(grid)
     if (length(rir) > 1 && verbose) {
         sze <- howbig(as.numeric(width(rir[[1]])), as.numeric(ncol(X)),
@@ -847,17 +874,37 @@ ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
     cir
 }
 
+## bind the blocks of columns in the list 'blocks'. dgCMatrix blocks are bound
+## by concatenating their slots, which allocates only the result, while
+## binding them with cbind() allocates intermediate matrices that take, as
+## measured, from two to four times the size of the result as the number of
+## blocks grows from 4 to 40
+.cbind_blocks <- function(blocks) {
+    if (length(blocks) < 2L ||
+        !all(vapply(blocks, is, logical(1), "dgCMatrix")))
+        return(do.call("cbind", blocks))
+
+    nzpercol <- unlist(lapply(blocks, function(b) diff(b@p)), use.names=FALSE)
+    colnms <- unlist(lapply(blocks, colnames), use.names=FALSE)
+    new("dgCMatrix",
+        Dim=c(nrow(blocks[[1L]]), length(nzpercol)),
+        Dimnames=list(rownames(blocks[[1L]]), colnms),
+        i=unlist(lapply(blocks, slot, "i"), use.names=FALSE),
+        x=unlist(lapply(blocks, slot, "x"), use.names=FALSE),
+        p=c(0L, cumsum(nzpercol)))
+}
+
 ## process the columns of a matrix with a given function FUN, opening parallelism
 ## through a BiocParallelParam object BPPARAM, when different from NULL, and
 ## reporting progress using the 'cli' package when possible. the arguments
 ## 'workfactor', 'outfactor' and 'outextra' give the memory that FUN takes to
 ## process the columns of 'X' within the maximum main memory 'maxmem', see
-## .units_per_block()
+## .units_per_block(), as do 'dense', when FUN converts blocks of sparse 'X'
+## into dense matrices, and 'heldmem', the memory held by other objects
 ## the results of FUN on each block of columns are bound by columns or,
 ## when 'combine' is a function of two results, reduced with it
 ## with 'sinkout=TRUE', FUN processes each block in main memory and the
 ## output is written into on-disk data structures, see .ondisk_blocks()
-
 #' @importFrom BiocGenerics type
 #' @importFrom cli cli_abort
 #' @importFrom BiocParallel bplapply bpnworkers "bpprogressbar<-" bptry
@@ -868,7 +915,8 @@ ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
                                minparrows=100, minparcols=100,
                                progressmsg="Progress", BPPARAM=NULL,
                                maxmem=Inf, workfactor=2, outfactor=1,
-                               outextra=0, combine=NULL,
+                               outextra=0, dense=FALSE,
+                               heldmem=.held_mem(), combine=NULL,
                                sinkout=FALSE) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
@@ -879,7 +927,8 @@ ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
     }
     X <- .h5file_seeds_to_paths(X, BPPARAM, nworkers)
 
-    grid <- .colgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra)
+    grid <- .colgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra,
+                         dense=dense, heldmem=heldmem)
     cir <- .splitColsInRanges(grid)
 
     if (length(cir) > 1 && verbose) {
@@ -954,7 +1003,7 @@ ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
         maxes <- max(vapply(X=res, FUN=function(x) attr(x, "max"), FUN.VALUE=numeric(1)))
     }
 
-    res <- do.call("cbind", res)
+    res <- .cbind_blocks(res)
 
     if (!is.null(mines)) { ## min and max enrichment scores stored by ssGSEA
         attr(res, "min") <- mines

@@ -184,11 +184,20 @@ setMethod("gsva", signature(param="gsvaParam"),
                                        errorOnTooFewRows=TRUE,
                                        BPPARAM=BPPARAM, maxmem=maxmem)
 
+              ## the input data in main memory remains allocated while the
+              ## next steps run, which their blocks cannot take
+              gsva_global$heldmem <- .input_held_mem(param)
+              on.exit(gsva_global$heldmem <- 0, add=TRUE)
+
               gsvaranks <- gsvaColRanks(rowNormExprData=gsvarnorm,
                                         verbose=verbose,
                                         dropExistingAssays=TRUE,
                                         BPPARAM=BPPARAM,
                                         maxmem=maxmem)
+              ## the row normalization is not needed by the calculation of
+              ## the scores, and its memory is released before it starts
+              rm(gsvarnorm)
+              invisible(gc())
 
               es <- gsvaColScores(rankExprData=gsvaranks, verbose=verbose,
                                   BPPARAM=BPPARAM, maxmem=maxmem)

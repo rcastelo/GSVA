@@ -467,11 +467,12 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
     na_use <- match.arg(na_use)
 
     ## the ranks, as large as the input, are stored on disk when it is, or
-    ## when they do not fit in main memory
+    ## when they do not fit in main memory; each block of sparse input is
+    ## converted into a dense matrix ('dense=TRUE')
     R <- .processMatrixCols(X, FUN=compute.col.ranks, ties.method="average",
                             drop.sparsity=TRUE, verbose=verbose, minparrows=100,
                             minparcols=100, progressmsg="Calculating ranks",
-                            BPPARAM=BPPARAM, maxmem=maxmem,
+                            BPPARAM=BPPARAM, maxmem=maxmem, dense=TRUE,
                             sinkout=(ondisk || is(X, "DelayedMatrix")))
     if (!is(R, "dgCMatrix")) ## dgCMatrix cannot be coerced to integer
       type(R) <- "integer"
@@ -491,6 +492,7 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
                                     workfactor=mf$workfactor,
                                     outfactor=mf$outfactor,
                                     outextra=mf$outextra,
+                                    heldmem=.held_mem() + .inmem_size(X),
                                     sinkout=(ondisk ||
                                              is(R, "DelayedMatrix")))
 
@@ -584,6 +586,12 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
     }
 
     es <- lapply(as.list(seq_len(n)), function(j) {
+        ## the temporary vectors of each column are released every 1000
+        ## columns, because otherwise R collects them only after the memory
+        ## allocated reaches a threshold, which grows with the memory used by
+        ## the input when it is in main memory, piling up hundreds of MB
+        if (j %% 1000L == 0L)
+            invisible(gc(full=FALSE))
         if (any_na && na_use == "na.rm") {
             geneRanking <- order(R[, j], decreasing=TRUE, na.last=NA)
             geneSetsRankIdx <- rankpos(geneRanking)

@@ -119,13 +119,25 @@ test_units_per_block <- function() {
     D <- DelayedArray(X)
     maxmem <- 50.5 * (2 + 1) * 1000 * 8
     checkIdentical(GSVA:::.units_per_block(D, 2L, 1, maxmem / frac), 50L)
-    ## binding blocks of columns of sparse data reuses their memory, so that
-    ## the output is assembled once, and not twice
-    S <- Matrix::rsparsematrix(1000, 500, density=0.1)
+    ## binding blocks of columns of SVT_SparseMatrix objects reuses their
+    ## memory, so that the output is assembled once, and not twice
+    S <- as(Matrix::rsparsematrix(1000, 500, density=0.1), "SVT_SparseMatrix")
     ssize <- as.numeric(object.size(S))
     scolbytes <- ssize / 500
     maxmem <- ssize + ssize + 50.5 * (2 + 1) * scolbytes
     checkIdentical(GSVA:::.units_per_block(S, 2L, 1, maxmem / frac), 50L)
+    ## while binding dgCMatrix objects takes twice the size of the output
+    S <- Matrix::rsparsematrix(1000, 500, density=0.1)
+    ssize <- as.numeric(object.size(S))
+    scolbytes <- ssize / 500
+    maxmem <- ssize + 2 * ssize + 50.5 * (2 + 1) * scolbytes
+    checkIdentical(GSVA:::.units_per_block(S, 2L, 1, maxmem / frac), 50L)
+    ## blocks of sparse data converted into dense matrices take the working
+    ## memory and output of their dense form, while the input keeps its size
+    dcolbytes <- 1000 * 8
+    maxmem <- ssize + 2 * dcolbytes * 500 + 50.5 * (2 + 1) * dcolbytes
+    checkIdentical(GSVA:::.units_per_block(S, 2L, 1, maxmem / frac,
+                                           dense=TRUE), 50L)
     ## blocks have at most .Machine$integer.max values, which large sparse
     ## data in main memory could otherwise exceed
     S <- Matrix::sparseMatrix(i=1, j=1, x=1, dims=c(60000, 50000))

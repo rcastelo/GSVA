@@ -282,11 +282,12 @@ plage <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
 
     ## the scaled rows, as large as the input, are delayed operations on it
     ## when it is stored on disk, and are stored on disk when it is in main
-    ## memory but they do not fit in it
+    ## memory but they do not fit in it; each block of sparse input gives
+    ## dense scaled rows ('dense=TRUE')
     Z <- .processMatrixRows(X, .scale_rows, verbose=verbose,
                             minparrows=100, minparcols=100,
                             progressmsg="Centering and scaling rows",
-                            BPPARAM=BPPARAM, maxmem=maxmem,
+                            BPPARAM=BPPARAM, maxmem=maxmem, dense=TRUE,
                             sinkout=(ondisk && !is(X, "DelayedMatrix")))
 
     es <- NULL

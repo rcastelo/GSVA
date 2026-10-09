@@ -402,7 +402,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## jobs of gsvaMap(); without knowing that memory, blocks have the default
 ## size. blocks are narrower when their memory does not fit in the fraction
 ## .mem_fraction_R of the maximum main memory 'maxmem' left by the result,
-## whose estimated size is 'insize', when both are known
+## whose estimated size is 'insize', when both are known, and by the memory
+## held by other objects, see .held_mem()
 #' @importFrom DelayedArray colAutoGrid read_block chunkdim
 #' @importFrom BiocGenerics type
 .load_sparse_by_blocks <- function(X, maxmem=Inf, insize=NA_real_) {
@@ -420,7 +421,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     if (budget) {
         eltbytes <- if (type(X) == "integer") 4 else 8
         nzpercol <- insize / (eltbytes + 4) / ncol(X)
-        avail <- .mem_fraction_R * maxmem - insize
+        avail <- .mem_fraction_R * maxmem - insize - .held_mem()
         ncolblock <- min(ncolblock, floor(avail / (160 * max(1, nzpercol))))
     }
     ## the DelayedArray package does not support blocks with more than
@@ -939,14 +940,14 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## factors of the step, see .step_mem_factors()
 #' @importFrom DelayedArray getAutoBlockSize
 .step_data_mem <- function(dims, whdim, insize, eltbytes, sparse, inmemory,
-                           mf) {
+                           mf, heldmem=.held_mem()) {
     nunits <- max(1, dims[whdim])
     denseunitbytes <- as.numeric(dims[-whdim]) * eltbytes
     unitbytes <- if (inmemory) insize / nunits else denseunitbytes
     minunits <- min(nunits, max(1, floor(getAutoBlockSize() / denseunitbytes)))
     .fixed_mem(nunits, insize / nunits, whdim, sparse, inmemory,
                mf$outfactor, mf$outextra, mf$assembly) +
-        mf$workfactor * minunits * unitbytes
+        mf$workfactor * minunits * unitbytes + heldmem
 }
 
 ## verifies that the 'ondisk' parameter is either 'auto', 'yes' or 'no' and, if
@@ -1028,6 +1029,35 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     0.2 * 1024^3
 }
 
+## memory in bytes that other objects keep allocated in the main R process
+## while a step processes its input in blocks, which the blocks cannot take,
+## see .units_per_block(); gsvaParam's gsva() sets it to the input data in
+## main memory while it runs the steps after the row normalization
+.held_mem <- function() {
+    as.numeric(gsva_global$heldmem)
+}
+
+## memory in bytes that the matrix 'X' takes in main memory, which is none
+## when it is stored on disk
+#' @importFrom utils object.size
+.inmem_size <- function(X) {
+    if (is(X, "DelayedArray"))
+        return(0)
+
+    as.numeric(object.size(X))
+}
+
+## memory in bytes that the input data of the parameter object 'param' takes
+## in main memory, including the assays not used by the calculations
+.input_held_mem <- function(param) {
+    x <- get_exprData(param)
+    if (is(x, "SummarizedExperiment"))
+        return(sum(vapply(assays(x, withDimnames=FALSE), .inmem_size,
+                          numeric(1))))
+
+    .inmem_size(unwrapData(x, get_assay(param)))
+}
+
 ## number of parallel workers of 'BPPARAM' that process a matrix with
 ## dimensions 'dims', which is 0 when its calculations are not parallelized,
 ## see .check_open_parallelism()
@@ -1056,14 +1086,14 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## Linux, while the many small objects of the packages loaded are copied, which
 ## .worker_mem() includes
 .step_mem_need <- function(dims, insize, whdim, eltbytes, sparse, inmemory,
-                           mf, nworkers) {
+                           mf, nworkers, heldmem=.held_mem()) {
     permem <- .worker_mem()
     if (!inmemory)
         permem <- permem + .disk_read_mem()
 
     (1 + nworkers) * permem +
-        .step_data_mem(dims, whdim, insize, eltbytes, sparse, inmemory, mf) /
-        .mem_fraction_R
+        .step_data_mem(dims, whdim, insize, eltbytes, sparse, inmemory, mf,
+                       heldmem) / .mem_fraction_R
 }
 
 ## warn, before the calculations of a step start, when the estimated memory
@@ -1151,6 +1181,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     steps <- list(list(step="rownorm", whdim=1L, int=(type(X) == "integer")),
                   list(step="colranks", whdim=2L, int=FALSE),
                   list(step="scores", whdim=2L, int=TRUE))
+    ## the input data in main memory remains allocated during the steps
+    ## after the row normalization, see gsva()
+    held <- 0
     need <- 0
     for (st in steps) {
         mf <- .step_mem_factors(st$step, ngs=ngs, sparse=sparse, int=st$int,
@@ -1159,11 +1192,13 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         inmemory <- ondisk == "no"
         if (ondisk == "auto")
             inmemory <- .step_data_mem(dims, st$whdim, insize, eltbytes,
-                                       sparse, TRUE, mf) <=
+                                       sparse, TRUE, mf, held) <=
                         .mem_fraction_R * maxmem
         need <- max(need, .step_mem_need(dims, insize, st$whdim, eltbytes,
-                                         sparse, inmemory, mf, nworkers))
+                                         sparse, inmemory, mf, nworkers,
+                                         held))
         insize <- insize * mf$outfactor ## size of the input of the next step
+        held <- .input_held_mem(param)
     }
 
     .check_mem_need(need, maxmem, nworkers)
