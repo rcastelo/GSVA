@@ -84,6 +84,7 @@ test_ondisk <- function() {
     es_noh5 <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE)
     ## the memory check would warn about such a small maximum memory
     oldcheckmem <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldcheckmem), add=TRUE)
     es_chunks <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=TRUE, maxmem="25K")
     options(oldcheckmem)
     ## with such a small maximum memory, steps may be done on disk, giving the
