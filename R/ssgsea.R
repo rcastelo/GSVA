@@ -561,10 +561,6 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
     if (verbose)
       idpb <- cli_progress_bar("Calculating ssGSEA scores", total=n)
 
-    Ra <- R
-    if (alpha != 1)
-        Ra <- R^alpha
-
     mines <- Inf
     maxes <- -Inf
 
@@ -592,19 +588,24 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
         ## the input when it is in main memory, piling up hundreds of MB
         if (j %% 1000L == 0L)
             invisible(gc(full=FALSE))
+        ## the ranks of the column to the power of alpha, as a one-column
+        ## matrix for the random walks, which is up to twice faster with
+        ## many gene sets than indexing those ranks of the whole block
+        r <- R[, j]
+        ra <- matrix(if (alpha != 1) r^alpha else r, ncol=1L)
         if (any_na && na_use == "na.rm") {
-            geneRanking <- order(R[, j], decreasing=TRUE, na.last=NA)
+            geneRanking <- order(r, decreasing=TRUE, na.last=NA)
             geneSetsRankIdx <- rankpos(geneRanking)
             es_sample <- vapply(X=geneSetsRankIdx, FUN=.fastRndWalkNArm,
                                 FUN.VALUE=numeric(1),
-                                geneRanking, j, Ra, any_na, na_use,
+                                geneRanking, 1L, ra, any_na, na_use,
                                 minSize, wna_env, USE.NAMES=FALSE)
         } else {
-            geneRanking <- order(R[, j], decreasing=TRUE)
+            geneRanking <- order(r, decreasing=TRUE)
             geneSetsRankIdx <- rankpos(geneRanking)
             es_sample <- vapply(X=geneSetsRankIdx, FUN=.fastRndWalk,
                                 FUN.VALUE=numeric(1),
-                                geneRanking, j, Ra)
+                                geneRanking, 1L, ra)
         }
         if (verbose)
             cli_progress_update(id=idpb)

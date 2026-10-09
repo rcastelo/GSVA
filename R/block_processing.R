@@ -72,9 +72,9 @@
                        outextra=8 * ngs),
            ## the scores of ssGSEA, from its ranks, which take from four to
            ## six times the size of a block of integer ranks: the block read
-           ## from disk, its integer copy, its ranks to the power of alpha and
-           ## the temporary vectors of its columns, as measured on single-cell
-           ## data, the larger factors with smaller blocks
+           ## from disk, its integer copy and the temporary vectors of its
+           ## columns, as measured on single-cell data, the larger factors
+           ## with smaller blocks
            ssgseascores=list(workfactor=6, outfactor=0, outextra=8 * ngs))
 }
 
