@@ -466,6 +466,8 @@ average <- function(X, geneSets, method="mean",
 
     es <- NULL
     if (ncol(X) >= length(geneSets) || is(X, "DelayedMatrix") || ondisk) {
+        ## the blocks of columns leave memory for their dense scores
+        mf <- .step_mem_factors("average", ngs=length(geneSets))
         es <- .processMatrixCols(X, .compute_average_scores, geneSets,
                                  method=method, any_na=any_na,
                                  na_use=na_use, minSize=minSize,
@@ -473,6 +475,8 @@ average <- function(X, geneSets, method="mean",
                                  minparrows=100, minparcols=100,
                                  progressmsg="Calculating average scores per gene set",
                                  BPPARAM=BPPARAM, maxmem=maxmem,
+                                 workfactor=mf$workfactor,
+                                 outfactor=mf$outfactor, outextra=mf$outextra,
                                  sinkout=(ondisk || is(X, "DelayedMatrix")))
     } else {
         if (is.null(BPPARAM) || bpnworkers(BPPARAM) == 1L) {

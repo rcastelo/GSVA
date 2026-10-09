@@ -35,7 +35,8 @@
 #' @importFrom S4Arrays is_sparse
 .step_mem_factors <- function(step=c("rownorm", "rowstats", "colranks",
                                      "scores", "average", "plage", "zscore",
-                                     "ssgsea", "ssgseascores"), X=NULL, ngs=0,
+                                     "ssgsea", "ssgseascores",
+                                     "zscorescores"), X=NULL, ngs=0,
                               sparse=is_sparse(X),
                               int=(type(X) == "integer"), clr=FALSE,
                               dgc=is(X, "dgCMatrix")) {
@@ -65,8 +66,11 @@
            scores=list(workfactor=2, outfactor=0, outextra=8 * ngs),
            ## the average method gives its scores directly, while PLAGE,
            ## z-score and ssGSEA give them from an intermediate matrix as large
-           ## as their input, of scaled rows or column ranks
-           average=list(workfactor=2, outfactor=0, outextra=8 * ngs),
+           ## as their input, of scaled rows or column ranks; the scores of
+           ## z-score, from its scaled rows, take as much memory as the ones
+           ## of the average method
+           average=, zscorescores=list(workfactor=2, outfactor=0,
+                                       outextra=8 * ngs),
            plage=, zscore=,
            ssgsea=list(workfactor=if (step == "ssgsea") 3 else 2, outfactor=1,
                        outextra=8 * ngs),
@@ -88,10 +92,12 @@
 ## the blocks, or as given by 'assembly'. the output proportional to the
 ## matrix takes 'outunitbytes' per row or column, when its size differs from
 ## the one of the input, such as dense output from sparse input. the output
-## given by 'outextra' is always assembled in memory
+## given by 'outextra' is assembled in memory, unless it is written to disk
+## block by block ('sinkout=TRUE')
 .fixed_mem <- function(nunits, unitbytes, whdim, sparse, inmemory, outfactor,
-                       outextra, assembly=NULL, outunitbytes=unitbytes) {
-    fixed <- 2 * outextra * nunits
+                       outextra, assembly=NULL, outunitbytes=unitbytes,
+                       sinkout=FALSE) {
+    fixed <- if (sinkout) 0 else 2 * outextra * nunits
     if (inmemory) {
         if (is.null(assembly))
             assembly <- if (whdim == 2L && sparse) 1 else 2
@@ -117,13 +123,14 @@
 ## dense matrix, whose rows or columns take their working memory and output
 ## by the size of their dense form, while 'X' itself takes its sparse size.
 ## 'heldmem' bytes remain allocated by other objects, such as the input of
-## previous steps still in main memory, see .held_mem(). the blocks of all
-## workers together are not smaller than the automatic block size of the
+## previous steps still in main memory, see .held_mem(). with 'sinkout=TRUE',
+## the output is written to disk block by block, see .fixed_mem(). the blocks of
+## all workers together are not smaller than the automatic block size of the
 ## DelayedArray package, see getAutoBlockSize(), because the overhead of
-## processing many smaller blocks makes calculations too slow, so that a
-## smaller 'maxmem' is not honored, and
-## they have at most as many rows or columns as needed to give one block to
-## each worker, and as the DelayedArray package supports
+## processing many smaller blocks makes calculations too slow, so that a smaller
+## 'maxmem' is not honored, and they have at most as many rows or columns as
+## needed to give one block to each worker, and as the DelayedArray package
+## supports
 #' @importFrom BiocGenerics type
 #' @importFrom utils object.size
 #' @importFrom DelayedArray getAutoBlockLength
@@ -131,7 +138,7 @@
 .units_per_block <- function(X, whdim, nworkers, maxmem, workfactor=2,
                              outfactor=1, outextra=0,
                              workermem=.worker_mem(), dense=FALSE,
-                             heldmem=.held_mem()) {
+                             heldmem=.held_mem(), sinkout=FALSE) {
     nunits <- dim(X)[whdim]
     inmemory <- !is(X, "DelayedArray")
     eltbytes <- if (type(X) == "integer") 4 else 8
@@ -147,7 +154,7 @@
     assembly <- if (whdim == 2L && sparse && is(X, "dgCMatrix")) 2 else NULL
     fixed <- .fixed_mem(nunits, inunitbytes, whdim, sparse, inmemory,
                         outfactor, outextra, assembly,
-                        outunitbytes=unitbytes) + heldmem
+                        outunitbytes=unitbytes, sinkout=sinkout) + heldmem
     ## with more than one worker, their R processes take memory from 'maxmem',
     ## unless they leave no memory for the blocks, when 'maxmem' cannot be
     ## honored anyway, and smaller blocks would only make calculations slower
@@ -177,12 +184,13 @@
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .rowgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
                          outextra=0, workermem=.worker_mem(), dense=FALSE,
-                         heldmem=.held_mem()) {
+                         heldmem=.held_mem(), sinkout=FALSE) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
       nrowblock <- .units_per_block(X, 1L, nworkers, maxmem, workfactor,
                                     outfactor, outextra, workermem,
-                                    dense=dense, heldmem=heldmem)
+                                    dense=dense, heldmem=heldmem,
+                                    sinkout=sinkout)
       grid <- rowAutoGrid(X, nrow=.align_to_chunks(nrowblock, X, 1L))
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
@@ -208,12 +216,13 @@
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .colgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
                          outextra=0, workermem=.worker_mem(), dense=FALSE,
-                         heldmem=.held_mem()) {
+                         heldmem=.held_mem(), sinkout=FALSE) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
       ncolblock <- .units_per_block(X, 2L, nworkers, maxmem, workfactor,
                                     outfactor, outextra, workermem,
-                                    dense=dense, heldmem=heldmem)
+                                    dense=dense, heldmem=heldmem,
+                                    sinkout=sinkout)
       grid <- colAutoGrid(X, ncol=.align_to_chunks(ncolblock, X, 2L))
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
@@ -792,7 +801,7 @@ ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
     X <- .h5file_seeds_to_paths(X, BPPARAM, nworkers)
 
     grid <- .rowgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra,
-                         dense=dense, heldmem=heldmem)
+                         dense=dense, heldmem=heldmem, sinkout=sinkout)
     rir <- .splitRowsInRanges(grid)
     if (length(rir) > 1 && verbose) {
         sze <- howbig(as.numeric(width(rir[[1]])), as.numeric(ncol(X)),
@@ -928,7 +937,7 @@ ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
     X <- .h5file_seeds_to_paths(X, BPPARAM, nworkers)
 
     grid <- .colgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra,
-                         dense=dense, heldmem=heldmem)
+                         dense=dense, heldmem=heldmem, sinkout=sinkout)
     cir <- .splitColsInRanges(grid)
 
     if (length(cir) > 1 && verbose) {

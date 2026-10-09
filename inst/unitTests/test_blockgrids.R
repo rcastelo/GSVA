@@ -108,6 +108,10 @@ test_units_per_block <- function() {
     ## an output of 8 bytes per gene set per column for 100 gene sets
     maxmem <- insize + 2 * 800 * 500 + 50.5 * (2 * colbytes + 800)
     checkIdentical(upb(1, maxmem, outfactor=0, outextra=800), 50L)
+    ## which is not assembled in memory when it is written to disk by blocks
+    maxmem <- insize + 50.5 * (2 * colbytes + 800)
+    checkIdentical(upb(1, maxmem, outfactor=0, outextra=800, sinkout=TRUE),
+                   50L)
     ## not smaller than the automatic block size, of 10 columns, for all the
     ## workers together
     checkIdentical(upb(1, insize), 10L)

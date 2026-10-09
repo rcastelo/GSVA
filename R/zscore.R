@@ -289,17 +289,16 @@ setMethod("anyNA", signature=c("zscoreParam"),
     idpb <- NULL
     if (verbose)
         idpb <- cli_progress_bar("Calculating Z-scores",
-                                 total=2*length(geneSetsIdx))
+                                 total=length(geneSetsIdx))
 
-    es <- t(vapply(lapply(geneSetsIdx,
-                          function(i) {
-                              if (verbose)
-                                  cli_progress_update(id=idpb)
-                              Z[i, , drop=FALSE]
-                          }),
-                   function(z) {
+    ## the rows of each gene set are summed as they are taken from the block,
+    ## instead of taking those of all gene sets first, which would take, with
+    ## many gene sets, many times the memory of the block
+    es <- t(vapply(geneSetsIdx,
+                   function(i) {
                        if (verbose)
                            cli_progress_update(id=idpb)
+                       z <- Z[i, , drop=FALSE]
                        colSums(z) / sqrt(nrow(z))
                    }, numeric(ncol(Z))))
 
@@ -340,11 +339,15 @@ zscore <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
 
     es <- NULL
     if (ncol(Z) >= length(geneSets) || is(Z, "DelayedMatrix") || ondisk) {
+        ## the blocks of columns leave memory for their dense scores
+        mf <- .step_mem_factors("zscorescores", ngs=length(geneSets))
         es <- .processMatrixCols(Z, .compute_z_scores, geneSets,
                                  verbose=verbose,
                                  minparrows=100, minparcols=100,
                                  progressmsg="Calculating Z-scores per gene set",
                                  BPPARAM=BPPARAM, maxmem=maxmem,
+                                 workfactor=mf$workfactor,
+                                 outfactor=mf$outfactor, outextra=mf$outextra,
                                  heldmem=.held_mem() + .inmem_size(X),
                                  sinkout=(ondisk || is(Z, "DelayedMatrix")))
     } else {
