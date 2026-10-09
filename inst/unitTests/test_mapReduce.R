@@ -615,7 +615,10 @@ test_mapReduceRedo <- function() {
     if (any(unevaluated)) {
         wmsg <- conditionMessage(mw$warning)
         checkTrue(grepl("stop.on.error=TRUE", wmsg, fixed=TRUE))
-        checkTrue(grepl("cannot be found", wmsg, fixed=TRUE))
+        ## the message is wrapped into lines at positions that depend on the
+        ## length of the path of the file not found, i.e., on the system
+        checkTrue(grepl("cannot be found", gsub("\\s+", " ", wmsg),
+                        fixed=TRUE))
     }
     redone <- gsvaMap(gsvaColScores, rankspaths, verbose=FALSE,
                       BTPARAM=bp, MAPREDO=mw$res)
