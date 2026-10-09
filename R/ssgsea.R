@@ -466,17 +466,20 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
                    maxmem=Inf) {
     na_use <- match.arg(na_use)
 
+    ## the ranks, as large as the input, are stored on disk when it is, or
+    ## when they do not fit in main memory
     R <- .processMatrixCols(X, FUN=compute.col.ranks, ties.method="average",
                             drop.sparsity=TRUE, verbose=verbose, minparrows=100,
                             minparcols=100, progressmsg="Calculating ranks",
-                            BPPARAM=BPPARAM, maxmem=Inf,
-                            sinkout=is(X, "DelayedMatrix"))
+                            BPPARAM=BPPARAM, maxmem=maxmem,
+                            sinkout=(ondisk || is(X, "DelayedMatrix")))
     if (!is(R, "dgCMatrix")) ## dgCMatrix cannot be coerced to integer
       type(R) <- "integer"
 
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
 
+    mf <- .step_mem_factors("ssgseascores", ngs=length(geneSetsIdx))
     ssgsea_es <- .processMatrixCols(R, FUN=.compute_ssgsea_scores,
                                     geneSetsIdx=geneSetsIdx, alpha=alpha,
                                     normalization=normalization, any_na=any_na,
@@ -485,6 +488,9 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
                                     minparrows=100, minparcols=100,
                                     progressmsg="Calculating scores",
                                     BPPARAM=BPPARAM, maxmem=maxmem,
+                                    workfactor=mf$workfactor,
+                                    outfactor=mf$outfactor,
+                                    outextra=mf$outextra,
                                     sinkout=(ondisk ||
                                              is(R, "DelayedMatrix")))
 
@@ -527,11 +533,9 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
 ## e.g., because they do not fit in main memory, R is a block of columns of
 ## the ranks and the scores are written on disk by .processMatrixCols(), see
 ## .ondisk_blocks(), which keeps the minimum and maximum scores of the blocks
-#' @importFrom IRanges IntegerList
 .compute_ssgsea_scores <- function(R, geneSetsIdx, alpha, normalization,
                                    any_na, na_use, minSize, wna_env,
                                    verbose) {
-    geneSetsIdx <- IntegerList(geneSetsIdx)
     es <- .compute_ssgsea_scores_block(R, geneSetsIdx, alpha,
                                        normalization, any_na, na_use,
                                        minSize, wna_env, verbose=verbose)
@@ -546,11 +550,10 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
     return(es)
 }
 
-## here geneSetsIdx should be an 'IntegerList' object
-#' @importFrom IRanges match
+## here geneSetsIdx is a list with the row indices of the genes of each gene
+## set, see .mapGeneSetsToFeatures()
 .compute_ssgsea_scores_block <- function(R, geneSetsIdx, alpha, normalization,
                                          any_na, na_use, minSize, wna_env, verbose) {
-    stopifnot(is(geneSetsIdx, "IntegerList")) ## QC
     n <- ncol(R)
     idpb <- NULL
     if (verbose)
@@ -563,17 +566,34 @@ ssgsea <- function(X, geneSetsIdx, alpha=0.25,
     mines <- Inf
     maxes <- -Inf
 
+    ## the positions of the genes of each gene set in the ranking of genes of
+    ## each column are taken from the inverse of that ranking and split by
+    ## gene set, which is faster and allocates much less memory than calling
+    ## match() on the gene sets as an 'IntegerList' object, because match()
+    ## then rebuilds its output with relist(), allocating hundreds of MB per
+    ## block on large data
+    gsetsidx <- unlist(geneSetsIdx, use.names=FALSE)
+    gsetsf <- factor(rep.int(seq_along(geneSetsIdx), lengths(geneSetsIdx)),
+                     levels=seq_along(geneSetsIdx))
+    rankpos <- function(geneRanking) {
+        pos <- rep(NA_integer_, nrow(R))
+        pos[geneRanking] <- seq_along(geneRanking)
+        res <- split(pos[gsetsidx], gsetsf)
+        names(res) <- names(geneSetsIdx)
+        res
+    }
+
     es <- lapply(as.list(seq_len(n)), function(j) {
         if (any_na && na_use == "na.rm") {
             geneRanking <- order(R[, j], decreasing=TRUE, na.last=NA)
-            geneSetsRankIdx <- match(geneSetsIdx, geneRanking)
+            geneSetsRankIdx <- rankpos(geneRanking)
             es_sample <- vapply(X=geneSetsRankIdx, FUN=.fastRndWalkNArm,
                                 FUN.VALUE=numeric(1),
                                 geneRanking, j, Ra, any_na, na_use,
                                 minSize, wna_env, USE.NAMES=FALSE)
         } else {
             geneRanking <- order(R[, j], decreasing=TRUE)
-            geneSetsRankIdx <- match(geneSetsIdx, geneRanking)
+            geneSetsRankIdx <- rankpos(geneRanking)
             es_sample <- vapply(X=geneSetsRankIdx, FUN=.fastRndWalk,
                                 FUN.VALUE=numeric(1),
                                 geneRanking, j, Ra)

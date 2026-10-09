@@ -35,7 +35,7 @@
 #' @importFrom S4Arrays is_sparse
 .step_mem_factors <- function(step=c("rownorm", "rowstats", "colranks",
                                      "scores", "average", "plage", "zscore",
-                                     "ssgsea"), X=NULL, ngs=0,
+                                     "ssgsea", "ssgseascores"), X=NULL, ngs=0,
                               sparse=is_sparse(X),
                               int=(type(X) == "integer"), clr=FALSE,
                               dgc=is(X, "dgCMatrix")) {
@@ -64,7 +64,13 @@
            ## as their input, of scaled rows or column ranks
            average=list(workfactor=2, outfactor=0, outextra=8 * ngs),
            plage=, zscore=,
-           ssgsea=list(workfactor=2, outfactor=1, outextra=8 * ngs))
+           ssgsea=list(workfactor=if (step == "ssgsea") 3 else 2, outfactor=1,
+                       outextra=8 * ngs),
+           ## the scores of ssGSEA, from its ranks, which take about five
+           ## times the size of a block of integer ranks: the block read from
+           ## disk, its integer copy, and its ranks to the power of alpha,
+           ## as measured
+           ssgseascores=list(workfactor=5, outfactor=0, outextra=8 * ngs))
 }
 
 ## memory that remains allocated while a matrix with 'nunits' rows (whdim=1)
