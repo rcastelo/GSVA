@@ -40,6 +40,8 @@ setMethod("gsva", signature(param="zscoreParam"),
               ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
                                       recompute_nzcount=FALSE, maxmem=maxmem,
                                       verbose=verbose, mf=mf, dense=TRUE)
+              .check_step_mem(filtDataMatrix, 2L, NA, NA, ondisk, mf, BPPARAM,
+                              maxmem, dense=TRUE)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "Z-score", first=NA,

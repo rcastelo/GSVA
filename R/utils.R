@@ -1136,11 +1136,14 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## 'BPPARAM' and the maximum main memory 'maxmem', see .check_mem_need(). It is
 ## skipped while gsva() runs the steps, because gsva() checks the memory
 ## required by all of them before starting, and with the option
-## 'GSVA.check_memory=FALSE'
+## 'GSVA.check_memory=FALSE'. 'dense=TRUE' indicates that the input data is
+## processed as a dense matrix, even when it is sparse, see .check_ondisk().
+## input data in main memory, which is not loaded from disk, remains
+## allocated when the calculations are done on disk
 #' @importFrom S4Arrays is_sparse
 #' @importFrom BiocGenerics type
 .check_step_mem <- function(X, whdim, first, last, ondisk, mf, BPPARAM,
-                            maxmem) {
+                            maxmem, dense=FALSE) {
     if (!gsva_global$check_memory || !getOption("GSVA.check_memory", TRUE))
         return(invisible(FALSE))
 
@@ -1152,8 +1155,12 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     if (is.null(insize)) ## e.g., data in Parquet files, processed from disk
         insize <- prod(as.numeric(dims)) * eltbytes
     nworkers <- .n_par_workers(BPPARAM, dims)
-    need <- .step_mem_need(dims, insize, whdim, eltbytes, is_sparse(X),
-                           !ondisk, mf, nworkers)
+    heldmem <- .held_mem()
+    if (ondisk)
+        heldmem <- heldmem + .inmem_size(X)
+    need <- .step_mem_need(dims, insize, whdim, eltbytes,
+                           is_sparse(X) && !dense, !ondisk, mf, nworkers,
+                           heldmem)
 
     .check_mem_need(need, maxmem, nworkers)
 }
