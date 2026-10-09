@@ -41,7 +41,7 @@
                               dgc=is(X, "dgCMatrix")) {
     step <- match.arg(step)
     if (step == "rownorm" && clr)
-        return(list(workfactor=if (sparse) 2 else 3,
+        return(list(workfactor=if (sparse) 2 else 5,
                     outfactor=if (!int) 1 else if (sparse) 1.5 else 2,
                     outextra=0, assembly=if (dgc) 2 else 1))
     switch(step,
@@ -50,9 +50,10 @@
                         outextra=0),
            ## the row statistics of each block of columns, four or five
            ## doubles per row, are small and reduced at the end, see
-           ## .rowStats(); dense blocks take the mask of missing values and
-           ## the logarithm of their values
-           rowstats=list(workfactor=if (sparse) 2 else 3, outfactor=0,
+           ## .rowStats(); dense blocks take a copy of the block, the mask of
+           ## missing values, the logarithm of their values and temporary
+           ## matrices, about five times their size, as measured
+           rowstats=list(workfactor=if (sparse) 2 else 5, outfactor=0,
                          outextra=0),
            colranks=list(workfactor=if (sparse) 7 else 2,
                          outfactor=if (int) 1 else if (sparse) 0.7 else 0.5,
@@ -504,6 +505,13 @@ ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
     sparse <- csc <- NULL
     mines <- maxes <- NULL
     for (rng in grp) {
+        ## the memory of the previous block, its copy taken from the input
+        ## and its output, is released before processing the next one,
+        ## because otherwise R collects it only after the memory allocated
+        ## reaches a threshold, which grows with the memory used by the
+        ## input when it is in main memory, piling up several blocks
+        res <- NULL
+        invisible(gc(full=FALSE))
         res <- FUN_WRAPPER(rng, verbose=verbose, idpbe=idpbe,
                            WRAPPED_FUN=IN_MEMORY_BLOCK_FUN, BLOCK_FUN=BLOCK_FUN,
                            ...)

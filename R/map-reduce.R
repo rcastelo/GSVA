@@ -467,7 +467,10 @@ gsvaReduce <- function(mapOutput, verbose=TRUE) {
                               "{.arg MAPREDO} set to {.arg mapOutput}.")))
     }
 
-    cls <- unique(lapply(mapOutput, class))
+    ## chunks may store their values in different ways, e.g., some in main
+    ## memory and others on disk, depending on the memory available to each
+    ## of them, see .harmonize_storage(), but must have the same container
+    cls <- unique(lapply(mapOutput, .container_class))
     if (length(cls) > 1)
         cli_abort(c("x"="All inputs must be of the same class."))
 
@@ -484,7 +487,7 @@ gsvaReduce <- function(mapOutput, verbose=TRUE) {
     nrmdata <- .pull_nonrestrict_metadata(mapOutput[[1]])
     rmdata <- .pull_restrict_metadata_list(mapOutput)
     ord <- .check_and_order_restrict_metadata(rmdata, totalInputDim)
-    mapOutput <- .strip_metadata(mapOutput)
+    mapOutput <- .harmonize_storage(.strip_metadata(mapOutput))
 
     if (is.null(rmdata[[1]]$whdim))
         cli_abort(c("x"=paste("The input list argument in 'mapOutput' must",
@@ -835,6 +838,41 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
                               "one of the inputs.")))
 
     return(rmdt)
+}
+
+## class of the container of a chunk of the output of gsvaMap(), where all
+## matrices, in main memory or on disk, dense or sparse, are matrix-like
+.container_class <- function(x) {
+    if (is.matrix(x) || is(x, "DelayedMatrix") || is(x, "SparseMatrix") ||
+        is(x, "dgCMatrix"))
+        return("matrix-like")
+    class(x)
+}
+
+## make the chunks of the output of gsvaMap() in the list 'xs' store their
+## values in the same class of matrix, so that they can be bound: when they
+## store them in different classes, e.g., because the memory available to
+## some chunks led to storing their output on disk, those not stored in a
+## DelayedArray object are wrapped in one. for SummarizedExperiment objects,
+## this is done for each of their assays
+#' @importFrom DelayedArray DelayedArray
+#' @importFrom SummarizedExperiment assayNames assay "assay<-"
+.harmonize_storage <- function(xs) {
+    harmonize <- function(ms) {
+        if (length(unique(lapply(ms, class))) <= 1L)
+            return(ms)
+        lapply(ms, function(m) if (is(m, "DelayedArray")) m else
+                                   DelayedArray(m))
+    }
+    if (!is(xs[[1L]], "SummarizedExperiment"))
+        return(harmonize(xs))
+
+    for (a in assayNames(xs[[1L]])) {
+        ms <- harmonize(lapply(xs, assay, a, withDimnames=FALSE))
+        for (i in seq_along(xs))
+            assay(xs[[i]], a, withDimnames=FALSE) <- ms[[i]]
+    }
+    xs
 }
 
 .strip_metadata <- function(inputargs) {

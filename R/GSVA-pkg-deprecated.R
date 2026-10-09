@@ -78,12 +78,16 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                                              na_use=.get_NAuse(param),
                                              verbose=verbose,
                                              BPPARAM=BPPARAM,
-                                             maxmem=maxmem)
+                                             maxmem=maxmem,
+                                             ondisk=ondisk)
 
               gsvarnks <- .compute_gsva_ranks(Z=gsvarnorm,
+                                              sparse=(.get_sparse(param) &&
+                                                      is_sparse(gsvarnorm)),
                                               verbose=verbose,
                                               BPPARAM=BPPARAM,
-                                              maxmem=maxmem)
+                                              maxmem=maxmem,
+                                              ondisk=ondisk)
 
               rownames(gsvarnks) <- rownames(filtDataMatrix)
               colnames(gsvarnks) <- colnames(filtDataMatrix)

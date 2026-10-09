@@ -32,4 +32,4 @@ BugReports: https://github.com/rcastelo/GSVA/issues
 Encoding: UTF-8
 biocViews: FunctionalGenomics, Microarray, RNASeq, Pathways, GeneSetEnrichment
 Roxygen: list(markdown = TRUE)
-Config/roxygen2/version: 8.1.0
+Config/roxygen2/version: 8.1.1

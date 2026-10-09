@@ -1026,7 +1026,8 @@ gsvaRowNorm <- function(param,
                                        verbose=verbose,
                                        BPPARAM=BPPARAM,
                                        maxmem=maxmem,
-                                       rowstats=rowstats)
+                                       rowstats=rowstats,
+                                       ondisk=ondisk)
     } else if (verbose)
         cli_alert_warning("Skipping row normalization (rowNorm='none')")
 
@@ -1127,7 +1128,7 @@ gsvaColRanks <- function(rowNormExprData,
 
     gsvarnks <- .compute_gsva_ranks(Z=dataMatrix, sparse=sparse,
                                     verbose=verbose, BPPARAM=BPPARAM,
-                                    maxmem=maxmem)
+                                    maxmem=maxmem, ondisk=ondisk)
 
     rownames(gsvarnks) <- rownames(dataMatrix)
     colnames(gsvarnks) <- colnames(dataMatrix)
@@ -1524,7 +1525,9 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
 #' @importFrom SparseArray SparseArray
 #' @importFrom cli cli_abort
 .rownorm_clr <- function(expr, rowstats, sparse=FALSE, any_na=FALSE,
-                         na_use=c("everything", "all.obs", "na.rm")) {
+                         na_use=c("everything", "all.obs", "na.rm"),
+                         ondisk=FALSE, verbose=FALSE, BPPARAM=NULL,
+                         maxmem=Inf) {
     na_use <- match.arg(na_use)
 
     if (any_na && na_use == "all.obs") {
@@ -1561,12 +1564,34 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
     if (is(expr, "DelayedMatrix")) ## delayed and sparse when 'expr' is sparse
         return(expr / g)           ## and 'sparse=TRUE'
 
+    ## input in main memory whose output does not fit in it is scaled by
+    ## blocks of columns, whose output is written on disk
+    if (ondisk) {
+        mf <- .step_mem_factors("rownorm", expr, clr=TRUE)
+        return(.processMatrixCols(expr, .clr_scale, gmeans=g, sparse=sparse,
+                                  verbose=verbose, BPPARAM=BPPARAM,
+                                  maxmem=maxmem, workfactor=mf$workfactor,
+                                  outfactor=mf$outfactor,
+                                  outextra=mf$outextra, sinkout=TRUE))
+    }
+
+    .clr_scale(expr, g, sparse)
+}
+
+## divide each row of 'expr', or of a block of its columns, in main memory, by
+## its geometric mean in 'gmeans', see .rownorm_clr(), keeping it sparse when
+## it is sparse and 'sparse=TRUE'. the name of the argument 'gmeans' is not
+## the start of the name of any argument of the functions processing blocks,
+## which pass it through '...', where R would partially match it otherwise
+#' @importFrom SparseArray SparseArray
+#' @importFrom cli cli_abort
+.clr_scale <- function(expr, gmeans, sparse=FALSE, verbose=FALSE) {
     if (is(expr, "dgCMatrix") || is(expr, "SVT_SparseMatrix")) {
         if (!sparse)             ## sparse to dense conversion, which may
-            return(as.matrix(expr) / g) ## explode memory consumption
+            return(as.matrix(expr) / gmeans) ## explode memory consumption
         if (is(expr, "dgCMatrix"))
             expr <- SparseArray(expr)
-        return(expr / g)         ## the result is an SVT_SparseMatrix object
+        return(expr / gmeans)    ## the result is an SVT_SparseMatrix object
     }
 
     if (!is.matrix(expr)) {
@@ -1574,7 +1599,7 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
         cli_abort(c("x"=msg))
     }
 
-    expr / g
+    expr / gmeans
 }
 
 ## row ECDF values of 'expr' in main memory; when the row normalization is
@@ -1737,7 +1762,8 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
 #' @importFrom cli cli_alert_info cli_abort
 .compute_row_norm <- function(expr, rowNorm, kcdf, kcdf.min.ssize,
                               sparse, any_na, na_use, verbose,
-                              BPPARAM=NULL, maxmem=Inf, rowstats=NULL) {
+                              BPPARAM=NULL, maxmem=Inf, rowstats=NULL,
+                              ondisk=FALSE) {
 
     if (verbose) {
         if (rowNorm =="ecdf") 
@@ -1763,7 +1789,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                                 minparcols=100, BPPARAM=BPPARAM, maxmem=maxmem,
                                 workfactor=mf$workfactor,
                                 outfactor=mf$outfactor, outextra=mf$outextra,
-                                sinkout=is(expr, "DelayedMatrix"))
+                                sinkout=(ondisk || is(expr, "DelayedMatrix")))
     else if (rowNorm == "clr") {
         ## the statistics of the rows are calculated through blocks of
         ## columns, unless they were already calculated while filtering rows
@@ -1771,7 +1797,8 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
             rowstats <- .rowStats(expr, logsums=TRUE, verbose=verbose,
                                   BPPARAM=BPPARAM, maxmem=maxmem)
         Z <- .rownorm_clr(expr, rowstats, sparse=sparse, any_na=any_na,
-                          na_use=na_use)
+                          na_use=na_use, ondisk=ondisk, verbose=verbose,
+                          BPPARAM=BPPARAM, maxmem=maxmem)
     }
     else
         cli_abort(c("x"=paste(".compute_row_norm: 'rowNorm' should be one of",
@@ -1811,7 +1838,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 
 #' @importFrom cli cli_alert_info
 #' @importFrom cli cli_progress_done cli_abort
-.compute_gsva_ranks <- function(Z, sparse, verbose, BPPARAM=NULL, maxmem=Inf) {
+.compute_gsva_ranks <- function(Z, sparse, verbose, BPPARAM=NULL, maxmem=Inf,
+                                ondisk=FALSE) {
     if (verbose) {
         if (sparse)
             cli_alert_info("Calculating sparse column ranks")
@@ -1828,7 +1856,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
                             BPPARAM=BPPARAM, maxmem=maxmem,
                             workfactor=mf$workfactor, outfactor=mf$outfactor,
                             outextra=mf$outextra,
-                            sinkout=is(Z, "DelayedMatrix"))
+                            sinkout=(ondisk || is(Z, "DelayedMatrix")))
 
     return(R)
 }

@@ -1036,7 +1036,12 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
             if (any(nna > 0))
                 lX[na] <- 0
             st <- cbind(st, rowSums(lX))
+            rm(lX)
         }
+        ## the memory of the temporary matrices of this block is released
+        ## before processing the next one, see ONDISK_GROUP_FUN()
+        rm(na)
+        invisible(gc(full=FALSE))
         colnames(st) <- c("min", "max", "n", "nna", "lsum")[seq_len(ncol(st))]
     } else {
         msg <- ".rowStats_block: input object class {class(X)} not handled yet."
