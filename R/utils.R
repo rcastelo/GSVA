@@ -937,16 +937,20 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## of a block of the default size of the DelayedArray package, shared by all
 ## the workers, see .units_per_block(), which take their size in main memory
 ## or, when read from disk, the one of their dense form. 'mf' gives the memory
-## factors of the step, see .step_mem_factors()
+## factors of the step, see .step_mem_factors(). with 'densify=TRUE', the
+## calculations give a dense output from a sparse input, e.g., the classical
+## algorithm of GSVA on sparse data, and the output and the working memory of
+## the blocks take the size of the dense form, while the input keeps its size
 #' @importFrom DelayedArray getAutoBlockSize
 .step_data_mem <- function(dims, whdim, insize, eltbytes, sparse, inmemory,
-                           mf, heldmem=.held_mem()) {
+                           mf, heldmem=.held_mem(), densify=FALSE) {
     nunits <- max(1, dims[whdim])
     denseunitbytes <- as.numeric(dims[-whdim]) * eltbytes
-    unitbytes <- if (inmemory) insize / nunits else denseunitbytes
+    unitbytes <- if (inmemory && !densify) insize / nunits else denseunitbytes
     minunits <- min(nunits, max(1, floor(getAutoBlockSize() / denseunitbytes)))
-    .fixed_mem(nunits, insize / nunits, whdim, sparse, inmemory,
-               mf$outfactor, mf$outextra, mf$assembly) +
+    .fixed_mem(nunits, insize / nunits, whdim, sparse && !densify, inmemory,
+               mf$outfactor, mf$outextra, mf$assembly,
+               outunitbytes=if (densify) denseunitbytes else insize / nunits) +
         mf$workfactor * minunits * unitbytes + heldmem
 }
 
@@ -970,7 +974,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 .check_ondisk <- function(param, assay=get_assay(param), first, last, whdim,
                           recompute_nzcount=FALSE, maxmem, verbose,
                           mf=list(workfactor=2, outfactor=1, outextra=0),
-                          dense=FALSE) {
+                          dense=FALSE, densify=FALSE) {
     ondisk <- .get_ondisk(param)
     if (ondisk != "auto" && ondisk != "yes" && ondisk != "no")
         cli_abort(c("x"="'ondisk' should be either 'auto', 'yes' or 'no'"))
@@ -984,7 +988,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             dims[whdim] <- last - first + 1
         need <- .step_data_mem(dims, whdim, insize,
                                if (type(X) == "integer") 4 else 8,
-                               is_sparse(X) && !dense, TRUE, mf)
+                               is_sparse(X) && !dense, TRUE, mf,
+                               densify=densify)
         ondisk <- "no"
         if (need > .mem_fraction_R * maxmem) {
             ondisk <- "yes"
@@ -1086,14 +1091,14 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## Linux, while the many small objects of the packages loaded are copied, which
 ## .worker_mem() includes
 .step_mem_need <- function(dims, insize, whdim, eltbytes, sparse, inmemory,
-                           mf, nworkers, heldmem=.held_mem()) {
+                           mf, nworkers, heldmem=.held_mem(), densify=FALSE) {
     permem <- .worker_mem()
     if (!inmemory)
         permem <- permem + .disk_read_mem()
 
     (1 + nworkers) * permem +
         .step_data_mem(dims, whdim, insize, eltbytes, sparse, inmemory, mf,
-                       heldmem) / .mem_fraction_R
+                       heldmem, densify) / .mem_fraction_R
 }
 
 ## warn, before the calculations of a step start, when the estimated memory
@@ -1137,13 +1142,14 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## skipped while gsva() runs the steps, because gsva() checks the memory
 ## required by all of them before starting, and with the option
 ## 'GSVA.check_memory=FALSE'. 'dense=TRUE' indicates that the input data is
-## processed as a dense matrix, even when it is sparse, see .check_ondisk().
+## processed as a dense matrix, even when it is sparse, and 'densify=TRUE' that
+## a sparse input gives a dense output, see .check_ondisk().
 ## input data in main memory, which is not loaded from disk, remains
 ## allocated when the calculations are done on disk
 #' @importFrom S4Arrays is_sparse
 #' @importFrom BiocGenerics type
 .check_step_mem <- function(X, whdim, first, last, ondisk, mf, BPPARAM,
-                            maxmem, dense=FALSE) {
+                            maxmem, dense=FALSE, densify=FALSE) {
     if (!gsva_global$check_memory || !getOption("GSVA.check_memory", TRUE))
         return(invisible(FALSE))
 
@@ -1160,7 +1166,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         heldmem <- heldmem + .inmem_size(X)
     need <- .step_mem_need(dims, insize, whdim, eltbytes,
                            is_sparse(X) && !dense, !ondisk, mf, nworkers,
-                           heldmem)
+                           heldmem, densify)
 
     .check_mem_need(need, maxmem, nworkers)
 }
@@ -1185,6 +1191,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     insize <- .input_mem_size(param, get_assay(param), NA, NA, 1L)
     clr <- .get_rowNorm(param) == "clr"
     dgc <- is(X, "dgCMatrix")
+    ## the classical algorithm on sparse input normalizes rows into a dense
+    ## matrix, which is the input of the next steps
+    densify <- sparse && !.get_sparse(param) && .get_rowNorm(param) != "none"
     steps <- list(list(step="rownorm", whdim=1L, int=(type(X) == "integer")),
                   list(step="colranks", whdim=2L, int=FALSE),
                   list(step="scores", whdim=2L, int=TRUE))
@@ -1193,18 +1202,26 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     held <- 0
     need <- 0
     for (st in steps) {
-        mf <- .step_mem_factors(st$step, ngs=ngs, sparse=sparse, int=st$int,
-                                clr=clr, dgc=dgc)
+        mf <- .step_mem_factors(st$step, ngs=ngs, sparse=sparse && !densify,
+                                int=st$int, clr=clr, dgc=dgc)
+        if (densify && clr) ## dense CLR, see gsvaRowNorm()
+            mf$assembly <- 2
         eltbytes <- if (st$int) 4 else 8
         inmemory <- ondisk == "no"
         if (ondisk == "auto")
             inmemory <- .step_data_mem(dims, st$whdim, insize, eltbytes,
-                                       sparse, TRUE, mf, held) <=
-                        .mem_fraction_R * maxmem
+                                       sparse, TRUE, mf, held,
+                                       densify) <= .mem_fraction_R * maxmem
         need <- max(need, .step_mem_need(dims, insize, st$whdim, eltbytes,
                                          sparse, inmemory, mf, nworkers,
-                                         held))
-        insize <- insize * mf$outfactor ## size of the input of the next step
+                                         held, densify))
+        ## size of the input of the next step
+        if (densify)
+            insize <- prod(as.numeric(dims)) * 8
+        else
+            insize <- insize * mf$outfactor
+        if (densify)
+            sparse <- densify <- FALSE
         held <- .input_held_mem(param)
     }
 

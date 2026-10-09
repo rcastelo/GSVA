@@ -977,12 +977,21 @@ gsvaRowNorm <- function(param,
     last <- checkedfl$last
 
     maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+    ## the classical algorithm on sparse input gives a dense output
+    densify <- is_sparse(dataMatrix) && !.get_sparse(param) &&
+               .get_rowNorm(param) != "none"
     mf <- .step_mem_factors("rownorm", dataMatrix,
+                            sparse=is_sparse(dataMatrix) && !densify,
                             clr=(.get_rowNorm(param) == "clr"))
+    ## CLR converts the whole sparse input into a dense matrix and divides it,
+    ## which takes twice the size of the dense output, see .clr_scale()
+    if (densify && .get_rowNorm(param) == "clr")
+        mf$assembly <- 2
     ondisk <- .check_ondisk(param, first=first, last=last, whdim=1,
                             recompute_nzcount=FALSE, maxmem=maxmem,
-                            verbose=verbose, mf=mf)
-    .check_step_mem(dataMatrix, 1L, first, last, ondisk, mf, BPPARAM, maxmem)
+                            verbose=verbose, mf=mf, densify=densify)
+    .check_step_mem(dataMatrix, 1L, first, last, ondisk, mf, BPPARAM, maxmem,
+                    densify=densify)
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=1,
@@ -1576,12 +1585,16 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
     ## input in main memory whose output does not fit in it is scaled by
     ## blocks of columns, whose output is written on disk
     if (ondisk) {
-        mf <- .step_mem_factors("rownorm", expr, clr=TRUE)
+        ## the classical algorithm on sparse input gives dense blocks
+        densify <- is_sparse(expr) && !sparse
+        mf <- .step_mem_factors("rownorm", expr,
+                                sparse=is_sparse(expr) && sparse, clr=TRUE)
         return(.processMatrixCols(expr, .clr_scale, gmeans=g, sparse=sparse,
                                   verbose=verbose, BPPARAM=BPPARAM,
                                   maxmem=maxmem, workfactor=mf$workfactor,
                                   outfactor=mf$outfactor,
-                                  outextra=mf$outextra, sinkout=TRUE))
+                                  outextra=mf$outextra, dense=densify,
+                                  sinkout=TRUE))
     }
 
     .clr_scale(expr, g, sparse)
@@ -1789,7 +1802,9 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
     kernel <- kcdfparam$kernel
     Gaussk <- kcdfparam$Gaussk
 
-    mf <- .step_mem_factors("rownorm", expr)
+    ## the classical algorithm on sparse input gives dense blocks and output
+    densify <- is_sparse(expr) && !sparse
+    mf <- .step_mem_factors("rownorm", expr, sparse=is_sparse(expr) && sparse)
     Z <- NULL
     if (rowNorm == "ecdf")
         Z <- .processMatrixRows(expr, FUN=compute.gene.cdf, Gaussk=Gaussk,
@@ -1798,6 +1813,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                                 minparcols=100, BPPARAM=BPPARAM, maxmem=maxmem,
                                 workfactor=mf$workfactor,
                                 outfactor=mf$outfactor, outextra=mf$outextra,
+                                dense=densify,
                                 sinkout=(ondisk || is(expr, "DelayedMatrix")))
     else if (rowNorm == "clr") {
         ## the statistics of the rows are calculated through blocks of
