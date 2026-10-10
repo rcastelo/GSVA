@@ -39,8 +39,14 @@ setMethod("gsva", signature(param="plageParam"),
               ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
                                       recompute_nzcount=FALSE, maxmem=maxmem,
                                       verbose=verbose, mf=mf, dense=TRUE)
+              ## the memory required also includes the products of the
+              ## expression values of the genes of each gene set, see plage()
+              gm <- .plage_gram_mem(filtMappedGeneSets, maxmem,
+                                    if (is.null(BPPARAM)) 1L
+                                    else bpnworkers(BPPARAM))
+              .check_plage_gram_mem(filtMappedGeneSets, gm)
               .check_step_mem(filtDataMatrix, 2L, NA, NA, ondisk, mf, BPPARAM,
-                              maxmem, dense=TRUE)
+                              maxmem, dense=TRUE, extramem=gm$mem)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "PLAGE", first=NA,
@@ -334,6 +340,43 @@ setMethod("anyNA", signature=c("plageParam"),
     es
 }
 
+## leading eigenvector u and eigenvalue d^2 of the product Z_gs Z_gs^T of
+## the rows of a gene set, 'gram'. eigen() calculates all the eigenvectors,
+## which takes a time cubic in the number of genes of the gene set, e.g., about
+## two minutes for 4000 genes with the reference BLAS library of R, while only
+## the leading one is needed. above 'maxeigen' genes, the leading eigenvector
+## is calculated by power iteration, whose iterations take a time quadratic
+## in the number of genes, from the sum of the columns of 'gram', which does
+## not use random numbers, until the eigenvector changes less than 'tol'.
+## power iteration converges at a rate given by the ratio between the second
+## and the first eigenvalues, and when it does not converge in 'maxiter'
+## iterations, e.g., when both eigenvalues are very close, eigen() is used
+.plage_leading_eigen <- function(gram, maxeigen=1000, tol=1e-12,
+                                 maxiter=1000) {
+    if (nrow(gram) <= maxeigen) {
+        e <- eigen(gram, symmetric=TRUE)
+        return(list(vector=e$vectors[, 1L], value=e$values[1L]))
+    }
+
+    x <- rowSums(gram)
+    if (all(x == 0))
+        x <- rep(1, nrow(gram))
+    x <- x / sqrt(sum(x^2))
+    for (i in seq_len(maxiter)) {
+        y <- drop(gram %*% x)
+        ny <- sqrt(sum(y^2))
+        if (ny == 0) ## the gene set has no variability
+            break
+        y <- y / ny
+        if (sqrt(sum((y - x)^2)) < tol)
+            return(list(vector=y, value=drop(crossprod(y, gram %*% y))))
+        x <- y
+    }
+
+    e <- eigen(gram, symmetric=TRUE)
+    list(vector=e$vectors[, 1L], value=e$values[1L])
+}
+
 ## groups of gene sets whose products Z_gs Z_gs^T, of 'bytes' bytes each, take
 ## together at most 'maxbytes' bytes, keeping each gene set in a group
 .plage_groups <- function(bytes, maxbytes) {
@@ -350,6 +393,58 @@ setMethod("anyNA", signature=c("plageParam"),
     }
 
     grp
+}
+
+## memory taken by the products Z_gs Z_gs^T of the gene sets 'geneSets' in
+## plage(), with 'nworkers' workers and a maximum main memory 'maxmem'. the
+## products are accumulated over the blocks of columns of the scaled rows, by
+## each worker and in the main process; with many large gene sets, these
+## products would not fit in main memory, and the gene sets are processed in
+## groups, see .plage_groups(), whose products take at most a quarter of the
+## memory available, 'maxgram', each group in a pass through the scaled rows.
+## a gene set whose product alone takes more than 'maxgram' bytes forms a group
+## by itself, which this bound cannot limit, and is reported as 'oversized'.
+## 'mem' is the memory taken by the products of the largest group in all the
+## processes
+.plage_gram_mem <- function(geneSets, maxmem, nworkers) {
+    grambytes <- 8 * as.numeric(lengths(geneSets))^2
+    maxgram <- .mem_fraction_R * maxmem / 4 / (nworkers + 1)
+    grp <- .plage_groups(grambytes, maxgram)
+    mem <- if (length(grp) == 0) 0 else
+               (nworkers + 1) * max(tapply(grambytes, grp, sum))
+
+    list(grambytes=grambytes, maxgram=maxgram, grp=grp, mem=mem,
+         oversized=which(grambytes > maxgram))
+}
+
+## warn, before the calculations of PLAGE start, when the products Z_gs Z_gs^T
+## of some gene sets, see .plage_gram_mem(), take each more memory than the
+## groups of gene sets can take, 'gm$maxgram', because the memory of these
+## products cannot be bounded, unless the option 'GSVA.check_memory=FALSE' is
+## set
+#' @importFrom cli cli_warn
+#' @importFrom memuse mu
+.check_plage_gram_mem <- function(geneSets, gm) {
+    if (length(gm$oversized) == 0 || !getOption("GSVA.check_memory", TRUE))
+        return(invisible(FALSE))
+
+    nms <- names(geneSets)[gm$oversized]
+    if (is.null(nms))
+        nms <- as.character(gm$oversized)
+    if (length(nms) > 5)
+        nms <- c(nms[1:5], "...")
+    n <- length(gm$oversized)
+    largest <- as.character(mu(max(gm$grambytes[gm$oversized])))
+    maxgramtxt <- as.character(mu(gm$maxgram))
+    cli_warn(c("!"=paste("{n} gene set{?s} ({.val {nms}}) {?is/are} too",
+                         "large for PLAGE to bound {?its/their} memory: the",
+                         "products of the expression values of {?its/their}",
+                         "genes take up to {largest} in each R process, more",
+                         "than the {maxgramtxt} available to them."),
+               "i"=paste("Consider a smaller {.arg maxSize} in",
+                         "{.fn plageParam}, or a larger {.arg maxmem}.")))
+
+    invisible(TRUE)
 }
 
 #' @importFrom cli cli_alert_info
@@ -376,15 +471,11 @@ plage <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
     delayedextra <- if (is(X, "DelayedMatrix")) 2 else 0
     nworkers <- if (is.null(BPPARAM)) 1L else bpnworkers(BPPARAM)
 
-    ## the products Z_gs Z_gs^T of the gene sets are accumulated over the
-    ## blocks of columns of the scaled rows, by each worker and in the main
-    ## process; with many large gene sets, these products would not fit in
-    ## main memory, and the gene sets are processed in groups whose products
-    ## take at most a quarter of the memory available, each group in a pass
-    ## through the scaled rows
-    grambytes <- 8 * as.numeric(lengths(geneSets))^2
-    maxgram <- .mem_fraction_R * maxmem / 4 / (nworkers + 1)
-    grp <- .plage_groups(grambytes, maxgram)
+    ## the products Z_gs Z_gs^T of the gene sets are accumulated in groups of
+    ## gene sets, see .plage_gram_mem()
+    gm <- .plage_gram_mem(geneSets, maxmem, nworkers)
+    grambytes <- gm$grambytes
+    grp <- gm$grp
     mf <- .step_mem_factors("plagegram")
     w <- vector("list", length(geneSets))
     for (g in unique(grp)) {
@@ -402,11 +493,11 @@ plage <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
                                             (nworkers + 1) * sum(grambytes[idx]),
                                     combine=function(a, b) Map(`+`, a, b))
         w[idx] <- lapply(grams, function(gram) {
-                             e <- eigen(gram, symmetric=TRUE)
-                             u <- e$vectors[, 1L]
+                             e <- .plage_leading_eigen(gram)
+                             u <- e$vector
                              if (sum(u) < 0) ## see above for the sign of v
                                  u <- -u
-                             u / sqrt(e$values[1L])
+                             u / sqrt(e$value)
                          })
     }
 
