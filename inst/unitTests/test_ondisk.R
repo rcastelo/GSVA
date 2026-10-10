@@ -256,7 +256,8 @@ test_memory_check <- function() {
     checkTrue(GSVA:::gsva_global$check_memory)
     checkIdentical(memwarnings(gsvaRowNorm(gsvapar, verbose=FALSE,
                                            maxmem="100M")), 1L)
-    options(GSVA.check_memory=FALSE)
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldcheckmem), add=TRUE)
     checkIdentical(memwarnings(gsva(gsvapar, verbose=FALSE, maxmem="100M")),
                    0L)
 }
