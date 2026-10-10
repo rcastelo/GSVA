@@ -318,9 +318,13 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     if (!is.list(X)) {
         if (is.null(mapinfo)) {
             ## each job has its own memory 'maxmem', not shared with the
-            ## other jobs
-            grid <- gridsizefun(unwrapData(get_exprData(inputData), assay),
-                                nworkers, maxmem, workermem=0)
+            ## other jobs, and its chunk takes the memory of the selected
+            ## step, see .map_step_factors()
+            Xd <- unwrapData(get_exprData(inputData), assay)
+            mf <- .map_step_factors(funname, inputData, Xd)
+            grid <- gridsizefun(Xd, nworkers, maxmem, mf$workfactor,
+                                mf$outfactor, mf$outextra, workermem=0,
+                                dense=mf$densify, sharedmem=FALSE)
             X <- splitinrangesfun(grid)
             chunks <- data.frame(first=vapply(X, start, integer(1)),
                                  last=vapply(X, end, integer(1)))
@@ -622,6 +626,32 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
     invisible(TRUE)
 }
 
+## memory factors of the step 'funname' of gsvaMap() on the input data
+## 'inputData', whose matrix 'X' is processed, see .step_mem_factors(), and
+## whether the step gives a dense output from a sparse input ('densify'), as
+## the classical algorithm of GSVA normalizing rows of sparse data does, see
+## gsvaRowNorm(); the same factors size the chunks of the jobs and check
+## their memory, see .check_map_mem()
+#' @importFrom S4Arrays is_sparse
+.map_step_factors <- function(funname, inputData, X) {
+    step <- c(gsvaRowNorm="rownorm", gsvaColRanks="colranks",
+              gsvaColScores="scores")[[funname]]
+    ngs <- 0
+    if (funname == "gsvaColScores")
+        ngs <- tryCatch(length(get_geneSets(.pull_param(inputData))),
+                        error=function(e) 0)
+    rownorm <- funname == "gsvaRowNorm" && is(inputData, "gsvaParam")
+    clr <- rownorm && .get_rowNorm(inputData) == "clr"
+    densify <- rownorm && is_sparse(X) && !.get_sparse(inputData) &&
+               .get_rowNorm(inputData) != "none"
+    mf <- .step_mem_factors(step, X, ngs=ngs, sparse=is_sparse(X) && !densify,
+                            clr=clr)
+    if (densify && clr) ## dense CLR, see gsvaRowNorm()
+        mf$assembly <- 2
+
+    c(mf, densify=densify)
+}
+
 ## check, before gsvaMap() submits any job, the memory required by the step
 ## 'funname' in each job, on the input data 'inputData', of which each job
 ## processes a chunk of at most 'chunkwidth' rows (whdim=1) or columns
@@ -676,19 +706,12 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
         density <- min(1, nzc / prod(as.numeric(dim(X))))
         insize <- density * prod(as.numeric(dims)) * (eltbytes + 4)
     }
-    ngs <- 0
-    if (funname == "gsvaColScores")
-        ngs <- tryCatch(length(get_geneSets(.pull_param(inputData))),
-                        error=function(e) 0)
-    clr <- funname == "gsvaRowNorm" && is(inputData, "gsvaParam") &&
-           .get_rowNorm(inputData) == "clr"
-    step <- c(gsvaRowNorm="rownorm", gsvaColRanks="colranks",
-              gsvaColScores="scores")[[funname]]
-    mf <- .step_mem_factors(step, X, ngs=ngs, clr=clr)
+    mf <- .map_step_factors(funname, inputData, X)
     inmemory <- .step_data_mem(dims, whdim, insize, eltbytes, sparse, TRUE,
-                               mf) <= .mem_fraction_R * maxmem
+                               mf, densify=mf$densify) <=
+                .mem_fraction_R * maxmem
     need <- .step_mem_need(dims, insize, whdim, eltbytes, sparse, inmemory,
-                           mf, nworkers)
+                           mf, nworkers, densify=mf$densify)
 
     .check_mem_need(need, maxmem, nworkers, hint=hint)
 }

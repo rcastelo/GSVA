@@ -123,8 +123,10 @@
 ## from the fraction .mem_fraction_R, available to the allocations of R, of
 ## the memory that the R processes of more than one worker, of 'workermem'
 ## bytes each, see .worker_mem(), leave from 'maxmem', when they leave enough
-## for the memory that remains allocated; 'workermem=0' when the workers do
-## not share 'maxmem', such as the jobs of gsvaMap(). the size of a row or column of 'X' stored on disk is the one of its
+## for the memory that remains allocated; 'workermem=0' and 'sharedmem=FALSE'
+## when the workers do not share 'maxmem' but have each their own, such as the
+## jobs of gsvaMap(), whose blocks can then take each the whole of 'maxmem'.
+## the size of a row or column of 'X' stored on disk is the one of its
 ## dense form, which overestimates the size of sparse data. with 'dense=TRUE',
 ## the calculations convert each block of a sparse 'X' in main memory into a
 ## dense matrix, whose rows or columns take their working memory and output
@@ -145,7 +147,8 @@
 .units_per_block <- function(X, whdim, nworkers, maxmem, workfactor=2,
                              outfactor=1, outextra=0,
                              workermem=.worker_mem(), dense=FALSE,
-                             heldmem=.held_mem(), sinkout=FALSE) {
+                             heldmem=.held_mem(), sinkout=FALSE,
+                             sharedmem=TRUE) {
     nunits <- dim(X)[whdim]
     inmemory <- !is(X, "DelayedArray")
     eltbytes <- if (type(X) == "integer") 4 else 8
@@ -168,11 +171,14 @@
     if (nworkers > 1 &&
         .mem_fraction_R * (maxmem - nworkers * workermem) > fixed)
         maxmem <- maxmem - nworkers * workermem
-    avail <- (.mem_fraction_R * maxmem - fixed) / nworkers
+    ## workers with their own memory each, such as the jobs of gsvaMap(),
+    ## take each a block within the whole of it
+    nsharing <- if (sharedmem) nworkers else 1
+    avail <- (.mem_fraction_R * maxmem - fixed) / nsharing
     nperblock <- floor(avail / ((workfactor + outfactor) * unitbytes +
                                 outextra))
     otherdim <- max(1, as.numeric(dim(X)[-whdim]))
-    nperblock <- max(nperblock, floor(getAutoBlockLength(type(X)) / nworkers /
+    nperblock <- max(nperblock, floor(getAutoBlockLength(type(X)) / nsharing /
                                       otherdim))
     ## the DelayedArray package does not support blocks with more than
     ## .Machine$integer.max values
@@ -191,13 +197,13 @@
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .rowgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
                          outextra=0, workermem=.worker_mem(), dense=FALSE,
-                         heldmem=.held_mem(), sinkout=FALSE) {
+                         heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
       nrowblock <- .units_per_block(X, 1L, nworkers, maxmem, workfactor,
                                     outfactor, outextra, workermem,
                                     dense=dense, heldmem=heldmem,
-                                    sinkout=sinkout)
+                                    sinkout=sinkout, sharedmem=sharedmem)
       grid <- rowAutoGrid(X, nrow=.align_to_chunks(nrowblock, X, 1L))
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
@@ -223,13 +229,13 @@
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .colgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
                          outextra=0, workermem=.worker_mem(), dense=FALSE,
-                         heldmem=.held_mem(), sinkout=FALSE) {
+                         heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
       ncolblock <- .units_per_block(X, 2L, nworkers, maxmem, workfactor,
                                     outfactor, outextra, workermem,
                                     dense=dense, heldmem=heldmem,
-                                    sinkout=sinkout)
+                                    sinkout=sinkout, sharedmem=sharedmem)
       grid <- colAutoGrid(X, ncol=.align_to_chunks(ncolblock, X, 2L))
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
