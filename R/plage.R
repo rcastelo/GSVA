@@ -262,7 +262,7 @@ setMethod("anyNA", signature=c("plageParam"),
 ## ------ internal functions ------
 
 rightsingularsvdvectorgset <- function(gSetIdx, Z) {
-  s <- svd(Z[gSetIdx, ])
+  s <- svd(Z[gSetIdx, , drop=FALSE])
   s$v[, 1]
 }
 
