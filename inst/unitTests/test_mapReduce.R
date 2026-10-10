@@ -13,6 +13,10 @@ fastRegistryargs <- function(...) {
 test_mapReduce <- function() {
 
     message("Running unit tests for map reduce")
+    ## small maximum memory budgets force processing by blocks, and the
+    ## memory check, which would warn about them, is skipped
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldcheckmem), add=TRUE)
 
     oldopt <- options(BIOCPARALLEL_BATCHTOOLS_REMOVE_REGISTRY_WAIT=0)
     on.exit(options(oldopt), add=TRUE)
@@ -189,6 +193,10 @@ test_mapReduceParquet <- function() {
     }
 
     message("Running unit tests for map reduce with Parquet files")
+    ## small maximum memory budgets force processing by blocks, and the
+    ## memory check, which would warn about them, is skipped
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldcheckmem), add=TRUE)
 
     suppressPackageStartupMessages({
         library(DelayedArray)
@@ -278,6 +286,10 @@ test_mapReduceParquet <- function() {
 test_mapReduceScoresOutput <- function() {
 
     message("Running unit tests for map reduce saving GSVA scores")
+    ## small maximum memory budgets force processing by blocks, and the
+    ## memory check, which would warn about them, is skipped
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldcheckmem), add=TRUE)
 
     suppressPackageStartupMessages({
         library(DelayedArray)
@@ -340,6 +352,10 @@ test_mapReduceScoresOutput <- function() {
 test_mapReduceRedo <- function() {
 
     message("Running unit tests for map reduce resubmitting failed chunks")
+    ## small maximum memory budgets force processing by blocks, and the
+    ## memory check, which would warn about them, is skipped
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldcheckmem), add=TRUE)
 
     oldopt <- options(BIOCPARALLEL_BATCHTOOLS_REMOVE_REGISTRY_WAIT=0)
     on.exit(options(oldopt), add=TRUE)
@@ -599,7 +615,10 @@ test_mapReduceRedo <- function() {
     if (any(unevaluated)) {
         wmsg <- conditionMessage(mw$warning)
         checkTrue(grepl("stop.on.error=TRUE", wmsg, fixed=TRUE))
-        checkTrue(grepl("cannot be found", wmsg, fixed=TRUE))
+        ## the message is wrapped into lines at positions that depend on the
+        ## length of the path of the file not found, i.e., on the system
+        checkTrue(grepl("cannot be found", gsub("\\s+", " ", wmsg),
+                        fixed=TRUE))
     }
     redone <- gsvaMap(gsvaColScores, rankspaths, verbose=FALSE,
                       BTPARAM=bp, MAPREDO=mw$res)
@@ -624,20 +643,13 @@ test_mapReduceRedo <- function() {
     ## another job, such as one left running by a call to gsvaMap() whose R
     ## session ended, saves the same chunk while this job is saving it,
     ## simulated by creating the result of that other job when this job has
-    ## saved its own under a temporary name. An HDF5 directory saved by the
-    ## other job is kept, while a Parquet file saved by the other job is
-    ## replaced, and the temporary output of this job is not left on disk
+    ## saved its own under a temporary name. The file saved by the other job
+    ## is replaced, and the temporary output of this job is not left on disk
     node <- gsub(".", "\\.", Sys.info()[["nodename"]], fixed=TRUE)
     final <- function(tmpname)
         sub(paste0("\\.", node, "\\.[0-9a-f]+\\.partial$"), "", tmpname)
     formats <- list(list(output="HDF5", fun="saveHDF5GSVA",
-                         other=quote({
-                             fname <- final(dir)
-                             dir.create(fname)
-                             file.copy(list.files(dir, full.names=TRUE),
-                                       fname, recursive=TRUE)
-                             file.create(file.path(fname, "otherjob"))
-                         })))
+                         other=quote(writeLines("otherjob", final(file)))))
     if (requireNamespace("arrow", quietly=TRUE))
         formats <- c(formats,
                      list(list(output="Parquet", fun="saveParquetGSVA",
@@ -663,8 +675,6 @@ test_mapReduceRedo <- function() {
         checkTrue(!any(GSVA:::.map_failed(mapout)))
         checkIdentical(ncalls$n, length(mapout))
         checkTrue(!any(grepl("partial$", list.files(wd))))
-        if (fmt$output == "HDF5")
-            checkTrue(all(file.exists(file.path(unlist(mapout), "otherjob"))))
         checkEqualsNumeric(gsvaranks, gsvaReduce(mapout, verbose=FALSE))
     }
 
@@ -695,6 +705,27 @@ test_mapReduceRedo <- function() {
                           BTPARAM=newbtpar(), MAPREDO=wd)
         checkTrue(!any(GSVA:::.map_failed(redone)))
         checkEqualsNumeric(gsvaranks, gsvaReduce(redone, verbose=FALSE))
+
+        ## when no job delivers a result, e.g., because R cannot start in the
+        ## jobs, the error reports the first error found in their logs
+        suppressMessages(trace("MAP_FUN_WRAPPER", where=asNamespace("GSVA"),
+                               print=FALSE,
+                               tracer=quote({
+                                   cat("simulated job failure\n",
+                                       file=stderr())
+                                   tools::pskill(Sys.getpid(),
+                                                 tools::SIGKILL)
+                               })))
+        err <- tryCatch(gsvaMap(gsvaColRanks, gsvarnorm, output="HDF5",
+                                verbose=FALSE,
+                                BTPARAM=newbtpar(workers=2, memory="10G")),
+                        error=identity,
+                        finally=suppressMessages(untrace("MAP_FUN_WRAPPER",
+                                                 where=asNamespace("GSVA"))))
+        checkTrue(inherits(err, "error"))
+        ## the message is wrapped into several lines
+        checkTrue(grepl("simulated job failure",
+                        gsub("\\s+", " ", conditionMessage(err))))
     }
 }
 
@@ -745,4 +776,62 @@ test_batchtoolsConf <- function() {
     checkIdentical(env$default.resources, list(walltime=60))
     checkIdentical(env$sleep, 1)
     checkTrue(!exists(".userconf", envir=env, inherits=FALSE))
+}
+
+test_mapReduceMemCheck <- function() {
+
+    message("Running unit tests for the memory check of map-reduce jobs")
+
+    suppressPackageStartupMessages(library(BiocParallel))
+
+    gb <- 1024^3
+
+    ## the R process of each job uses 'ncpus' parallel workers only with more
+    ## than one CPU core and a chunk large enough to parallelize its
+    ## calculations, which is assumed when the size of the chunk is unknown
+    checkIdentical(GSVA:::.map_job_workers(1), 0L)
+    checkIdentical(GSVA:::.map_job_workers(4), 4L)
+    checkIdentical(GSVA:::.map_job_workers(4, c(50, 1000)), 0L)
+    checkIdentical(GSVA:::.map_job_workers(4, c(1000, 1000)), 4L)
+
+    ## the parameters of jobs warn when the R process of each job and its
+    ## workers do not fit in the memory of the job, unless the check is
+    ## disabled
+    w <- tryCatch(GSVA:::.check_job_mem(16, 10 * gb), warning=function(w) w)
+    checkTrue(is(w, "warning") && grepl("ncpus_per_task", conditionMessage(w)))
+    checkTrue(!GSVA:::.check_job_mem(2, 10 * gb))
+    oldopt <- options(GSVA.check_memory=FALSE)
+    checkTrue(!GSVA:::.check_job_mem(16, 10 * gb))
+    options(oldopt)
+
+    set.seed(123)
+    y <- matrix(rnorm(200 * 150), nrow=200, ncol=150,
+                dimnames=list(paste0("g", 1:200), paste0("s", 1:150)))
+    gsets <- list(gs1=paste0("g", 1:20), gs2=paste0("g", 21:60))
+    gsvapar <- gsvaParam(y, gsets, verbose=FALSE)
+
+    ## gsvaMap() stops before submitting any job, or writing any file, when
+    ## the R process of each job and its workers do not fit in its memory
+    wd <- tempfile("gsvamapwd")
+    dir.create(wd)
+    on.exit(unlink(wd, recursive=TRUE), add=TRUE)
+    btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=4, memory="2G"),
+                             registryargs=batchtoolsRegistryargs(work.dir=wd))
+    err <- tryCatch(gsvaMap(gsvaRowNorm, gsvapar, output="HDF5",
+                            verbose=FALSE, BTPARAM=btpar),
+                    error=conditionMessage)
+    checkTrue(is.character(err) && grepl("ncpus_per_task", err, fixed=TRUE))
+    checkIdentical(length(list.files(wd)), 0L)
+
+    ## and otherwise it warns when the memory estimated for the step on the
+    ## largest chunk exceeds the memory of each job
+    oldopt <- options(GSVA.workermem=0)
+    on.exit(options(oldopt), add=TRUE)
+    w <- tryCatch(GSVA:::.check_map_mem("gsvaRowNorm", gsvapar,
+                                        get_assay(gsvapar), 1L, 200, 1,
+                                        100 * 1024),
+                  warning=function(w) w)
+    checkTrue(is(w, "warning") && grepl("ncpus_per_task", conditionMessage(w)))
+    checkTrue(!GSVA:::.check_map_mem("gsvaRowNorm", gsvapar,
+                                     get_assay(gsvapar), 1L, 200, 1, 1 * gb))
 }

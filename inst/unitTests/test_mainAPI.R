@@ -17,14 +17,17 @@ test_mainAPI <- function() {
     checkException(g <- gsvaRowNorm(gsvaParam(exprData=xf, geneSets=gs),
                                     verbose=FALSE, maxmem=c(1, 2)))
 
+    ## the memory check would warn about such a small maximum memory
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
     g <- gsvaRowNorm(gsvaParam(xf, gs), verbose=FALSE, maxmem="1M")
+    options(oldcheckmem)
 
     ## check discarding rows with constant values
     library(cli)
     xf2 <- rbind(rep(1, 30), xf)
     gsvapar <- gsvaParam(xf2, gs)
     out <- cli_fmt(g1 <- gsva(gsvapar, verbose=TRUE))
-    checkTrue(grepl("1 rows with constant values throughout the columns", out[3]))
+    checkTrue(grepl("1 row with constant values throughout the columns", out[3]))
 
     g1 <- gsva(gsvaParam(exprData=xf, geneSets=gs), verbose=FALSE)
     checkIdentical(class(xf), class(g1))
@@ -115,4 +118,21 @@ test_mainAPI <- function() {
     checkEquals(colnames(xf), colnames(a2))
     checkTrue((min(a2) >= -1 && (max(a2) <= 1)))
     checkTrue(!any(is.na(a2)))
+}
+
+test_gsva_flags_on_error <- function() {
+
+    message("Running unit tests for the flags of gsva() on errors")
+
+    ## gsva() hides the start and end messages of its steps while it runs,
+    ## and shows them again afterwards, also when it gives an error
+    set.seed(123)
+    y <- matrix(rnorm(20 * 30), nrow=20, ncol=30,
+                dimnames=list(paste0("g", 1:20), paste0("s", 1:30)))
+    gsets <- list(gs1=paste0("g", 1:5), gs2=paste0("g", 6:12))
+    checkException(suppressMessages(gsva(gsvaParam(y, gsets, verbose=FALSE),
+                                         verbose=TRUE, BPPARAM="no BPPARAM")),
+                   silent=TRUE)
+    checkTrue(GSVA:::gsva_global$show_start_and_end_messages)
+    checkTrue(GSVA:::gsva_global$check_memory)
 }

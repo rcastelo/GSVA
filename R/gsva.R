@@ -33,10 +33,21 @@
 #' of main memory used across all threads of execution to that given quantity.
 #' By default `maxmem="auto"`, indicating that the maximum memory will be the
 #' 90% of the total main memory, as calculated by
-#' [`Sys.meminfo()`][memuse::Sys.meminfo]. To avoid setting any bound on the
-#' maximum memory, use `maxmem=Inf`. Note that the amount of main memory used
-#' in an R session or script may depend on other commands and packages used in
-#' that same session or script.
+#' [`Sys.meminfo()`][memuse::Sys.meminfo] or, when it is smaller, of the
+#' memory limit of the job or container where R runs, such as a job of the
+#' SLURM workload manager. To avoid setting any bound on the maximum memory,
+#' use `maxmem=Inf`. Note that the amount of main memory used in an R session
+#' or script may depend on other commands and packages used in that same
+#' session or script. In particular, each R process running GSVA, the main one
+#' and each of its parallel workers in `BPPARAM`, takes about 0.8 GB by itself
+#' for loading GSVA and the packages it depends on, including forked workers,
+#' such as those of a [`MulticoreParam`][BiocParallel::MulticoreParam-class]
+#' object, which end up taking most of that memory as their own while they
+#' run. Before starting its calculations, GSVA gives a warning when the memory
+#' it estimates they require exceeds `maxmem`, suggesting to use fewer
+#' parallel workers or a larger `maxmem`. The memory taken by each R process
+#' can be set with the option `GSVA.workermem`, in bytes, and this check can be
+#' disabled with `options(GSVA.check_memory=FALSE)`.
 #'
 #' @return A gene-set by sample matrix of GSVA enrichment scores stored in a
 #' container object of the same type as the input expression data container,
@@ -151,29 +162,48 @@ setMethod("gsva", signature(param="gsvaParam"),
               if (verbose) {
                   pkgversion <- packageDescription("GSVA")[["Version"]]
                   cli_alert_info("GSVA version {pkgversion}")
+                  ## the steps do not show their own start and end messages,
+                  ## which are shown again after gsva() ends, also on errors
                   gsva_global$show_start_and_end_messages <- FALSE
+                  on.exit(gsva_global$show_start_and_end_messages <- TRUE,
+                          add=TRUE)
               }
 
               .check_bpparam(BPPARAM)
+
+              ## the memory required by the three steps is checked before
+              ## running them, and not again by each of them
+              .check_gsva_mem(param, BPPARAM,
+                              .check_maxmem(param, maxmem=maxmem,
+                                            verbose=FALSE))
+              gsva_global$check_memory <- FALSE
+              on.exit(gsva_global$check_memory <- TRUE, add=TRUE)
 
               gsvarnorm <- gsvaRowNorm(param=param, verbose=verbose,
                                        dropExistingAssays=TRUE,
                                        errorOnTooFewRows=TRUE,
                                        BPPARAM=BPPARAM, maxmem=maxmem)
 
+              ## the input data in main memory remains allocated while the
+              ## next steps run, which their blocks cannot take
+              gsva_global$heldmem <- .input_held_mem(param)
+              on.exit(gsva_global$heldmem <- 0, add=TRUE)
+
               gsvaranks <- gsvaColRanks(rowNormExprData=gsvarnorm,
                                         verbose=verbose,
                                         dropExistingAssays=TRUE,
                                         BPPARAM=BPPARAM,
                                         maxmem=maxmem)
+              ## the row normalization is not needed by the calculation of
+              ## the scores, and its memory is released before it starts
+              rm(gsvarnorm)
+              invisible(gc())
 
               es <- gsvaColScores(rankExprData=gsvaranks, verbose=verbose,
                                   BPPARAM=BPPARAM, maxmem=maxmem)
 
-              if (verbose) {
+              if (verbose)
                   cli_alert_success("Calculations finished")
-                  gsva_global$show_start_and_end_messages <- TRUE
-              }
               
               return(es)
           })
@@ -839,10 +869,21 @@ setMethod("details",
 #' of main memory used across all threads of execution to that given quantity.
 #' By default `maxmem="auto"`, indicating that the maximum memory will be the
 #' 90% of the total main memory, as calculated by
-#' [`Sys.meminfo()`][memuse::Sys.meminfo]. To avoid setting any bound on the
-#' maximum memory, use `maxmem=Inf`. Note that the amount of main memory used
-#' in an R session or script may depend on other commands and packages used in
-#' that same session or script.
+#' [`Sys.meminfo()`][memuse::Sys.meminfo] or, when it is smaller, of the
+#' memory limit of the job or container where R runs, such as a job of the
+#' SLURM workload manager. To avoid setting any bound on the maximum memory,
+#' use `maxmem=Inf`. Note that the amount of main memory used in an R session
+#' or script may depend on other commands and packages used in that same
+#' session or script. In particular, each R process running GSVA, the main one
+#' and each of its parallel workers in `BPPARAM`, takes about 0.8 GB by itself
+#' for loading GSVA and the packages it depends on, including forked workers,
+#' such as those of a [`MulticoreParam`][BiocParallel::MulticoreParam-class]
+#' object, which end up taking most of that memory as their own while they
+#' run. Before starting its calculations, GSVA gives a warning when the memory
+#' it estimates they require exceeds `maxmem`, suggesting to use fewer
+#' parallel workers or a larger `maxmem`. The memory taken by each R process
+#' can be set with the option `GSVA.workermem`, in bytes, and this check can be
+#' disabled with `options(GSVA.check_memory=FALSE)`.
 #'
 #' @seealso [`gsvaParam-class`], [`gsva`], [`gsvaEnrichment`],
 #' [`BiocParallelParam`][BiocParallel::BiocParallelParam-class],
@@ -936,9 +977,21 @@ gsvaRowNorm <- function(param,
     last <- checkedfl$last
 
     maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+    ## the classical algorithm on sparse input gives a dense output
+    densify <- is_sparse(dataMatrix) && !.get_sparse(param) &&
+               .get_rowNorm(param) != "none"
+    mf <- .step_mem_factors("rownorm", dataMatrix,
+                            sparse=is_sparse(dataMatrix) && !densify,
+                            clr=(.get_rowNorm(param) == "clr"))
+    ## CLR converts the whole sparse input into a dense matrix and divides it,
+    ## which takes twice the size of the dense output, see .clr_scale()
+    if (densify && .get_rowNorm(param) == "clr")
+        mf$assembly <- 2
     ondisk <- .check_ondisk(param, first=first, last=last, whdim=1,
                             recompute_nzcount=FALSE, maxmem=maxmem,
-                            verbose=verbose)
+                            verbose=verbose, mf=mf, densify=densify)
+    .check_step_mem(dataMatrix, 1L, first, last, ondisk, mf, BPPARAM, maxmem,
+                    densify=densify)
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=1,
@@ -950,15 +1003,27 @@ gsvaRowNorm <- function(param,
                                        verbose)
 
     rem <- 0
+    rowstats <- NULL
     if (.get_filterRows(param)) { ## check on positive values for CLR?
+        ## the CLR row normalization uses the sums of logarithms calculated
+        ## while filtering rows, in the same pass through the input
+        clr <- .get_rowNorm(param) == "clr"
         filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
                                  rowNorm=.get_rowNorm(param),
                                  removeConstant=TRUE,
                                  removeNzConstant=TRUE,
                                  errorOnTooFewRows=errorOnTooFewRows,
                                  verbose=verbose,
-                                 BPPARAM=BPPARAM, maxmem=maxmem)
+                                 BPPARAM=BPPARAM, maxmem=maxmem,
+                                 logsums=clr)
+        if (clr) {
+            rowstats <- filtDataMatrix$rowstats
+            filtDataMatrix <- filtDataMatrix$expr
+        }
         rem <- nrow(dataMatrix) - nrow(filtDataMatrix)
+        ## release the input data not filtered, which may be in main memory,
+        ## to leave that memory available to the normalization of the rows
+        rm(dataMatrix)
     } else if (verbose)
         cli_alert_warning(paste("Skipping filtering of constant rows",
                                 "(filterRows=FALSE)"))
@@ -978,7 +1043,9 @@ gsvaRowNorm <- function(param,
                                        na_use=.get_NAuse(param),
                                        verbose=verbose,
                                        BPPARAM=BPPARAM,
-                                       maxmem=maxmem)
+                                       maxmem=maxmem,
+                                       rowstats=rowstats,
+                                       ondisk=ondisk)
     } else if (verbose)
         cli_alert_warning("Skipping row normalization (rowNorm='none')")
 
@@ -999,10 +1066,9 @@ gsvaRowNorm <- function(param,
 
 #' @param rowNormExprData A row-normalized expression data set obtained with
 #' [`gsvaRowNorm`]. It can be either a single character string with the path
-#' to a directory containing the row-normalized data stored with
-#' [`saveHDF5GSVA`], the path to a file containing that data stored with
+#' to a file containing the row-normalized data stored with [`saveHDF5GSVA`] or
 #' [`saveParquetGSVA`], an `s3://` or `gs://` URI, or an `http://` or
-#' `https://` URL to such a file, or an
+#' `https://` URL to a file stored with [`saveParquetGSVA`], or an
 #' object of one of the classes supported by [`GsvaExprData-class`].
 #' For a list of these classes, see `class ? GsvaExprData`.
 #'
@@ -1064,10 +1130,12 @@ gsvaColRanks <- function(rowNormExprData,
 
     maxmem <- .check_maxmem(param, assay="gsvarnorm", maxmem=maxmem,
                             verbose=verbose)
+    mf <- .step_mem_factors("colranks", dataMatrix)
     ondisk <- .check_ondisk(param, assay="gsvarnorm",
                             first=first, last=last, whdim=2,
                             recompute_nzcount=FALSE, maxmem=maxmem,
-                            verbose=verbose)
+                            verbose=verbose, mf=mf)
+    .check_step_mem(dataMatrix, 2L, first, last, ondisk, mf, BPPARAM, maxmem)
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=2,
@@ -1078,7 +1146,7 @@ gsvaColRanks <- function(rowNormExprData,
 
     gsvarnks <- .compute_gsva_ranks(Z=dataMatrix, sparse=sparse,
                                     verbose=verbose, BPPARAM=BPPARAM,
-                                    maxmem=maxmem)
+                                    maxmem=maxmem, ondisk=ondisk)
 
     rownames(gsvarnks) <- rownames(dataMatrix)
     colnames(gsvarnks) <- colnames(dataMatrix)
@@ -1097,10 +1165,9 @@ gsvaColRanks <- function(rowNormExprData,
 
 #' @param rankExprData A column-rank expression data set obtained with
 #' [`gsvaColRanks`]. It can be either a single character string with the path
-#' to a directory containing the column-rank data stored with
-#' [`saveHDF5GSVA`], the path to a file containing that data stored with
+#' to a file containing the column-rank data stored with [`saveHDF5GSVA`] or
 #' [`saveParquetGSVA`], an `s3://` or `gs://` URI, or an `http://` or
-#' `https://` URL to such a file, or an
+#' `https://` URL to a file stored with [`saveParquetGSVA`], or an
 #' object of one of the classes supported by [`GsvaExprData-class`].
 #' For a list of these classes, see `class ? GsvaExprData`.
 #'
@@ -1189,6 +1256,8 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
 
     maxmem <- .check_maxmem(param, assay="gsvaranks", maxmem=maxmem,
                             verbose=verbose)
+    mf <- .step_mem_factors("scores", filtDataMatrix,
+                            ngs=length(filtMappedGeneSets))
     ## ranks stored in Parquet format are processed from disk by blocks of
     ## columns, even if they fit in main memory, unless 'ondisk="no"'
     if (.get_ondisk(param) == "auto" && .is_parquet_backed(filtDataMatrix)) {
@@ -1200,7 +1269,9 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
         ondisk <- .check_ondisk(param, assay="gsvaranks",
                                 first=first, last=last, whdim=2,
                                 recompute_nzcount=recompute_nzcount,
-                                maxmem=maxmem, verbose=verbose)
+                                maxmem=maxmem, verbose=verbose, mf=mf)
+    .check_step_mem(filtDataMatrix, 2L, first, last, ondisk, mf, BPPARAM,
+                    maxmem)
 
     filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix, "GSVA",
                                                     first, last, whdim=2,
@@ -1210,9 +1281,6 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                        minparrows=100, minparcols=100,
                                        verbose)
 
-    ondisk <- .check_es_memory_requirements(filtDataMatrix,
-                                            filtMappedGeneSets,
-                                            ondisk, maxmem)
     if (verbose) {
         n <- length(filtMappedGeneSets)
         cli_alert_info("Calculating GSVA scores for {n} gene sets")
@@ -1227,12 +1295,14 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                   sparse=sparse, any_na=anyNA(param),
                                   na_use=.get_NAuse(param),
                                   minSize=get_minSize(param),
-                                  ondisk=ondisk, verbose=verbose,
+                                  verbose=verbose,
                                   minparrows=100, minparcols=100,
-                                  BPPARAM=BPPARAM,
-                                  maxmem=ceiling(maxmem/100)) ## use
-                                  ## of memory increases here about
-                                  ## 10-fold over block size memory
+                                  BPPARAM=BPPARAM, maxmem=maxmem,
+                                  workfactor=mf$workfactor,
+                                  outfactor=mf$outfactor,
+                                  outextra=mf$outextra,
+                                  sinkout=(ondisk ||
+                                           is(filtDataMatrix, "DelayedMatrix")))
 
     rownames(gsva_es) <- names(filtMappedGeneSets)
     colnames(gsva_es) <- colnames(filtDataMatrix)
@@ -1452,128 +1522,116 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
 ## or using the less computationally intensive centered log ratio (CLR)
 ## transformation.
 
-## functions .rownorm_clr_dense() and .rownorm_clr_sparse() calculate CLR values
-## for each row of the input expression data, which is assumed to be columnwise
-## within-sample and between-sample normalized into positive values x_{ij} in
-## logarithmic scale. because the input values are already log-normalized
-## quantities, then the resulting row-centered values x_{ij}' are multiple of
-## the genes log-normalized values, i.e., they are a kind of a CLR
-## transformation of a CLR-like quantity already, with the aim of attempting to
-## make expression profiles more comparable across rows/genes. the difference
-## between the two functions is that the first one is for dense matrices, and
-## uses all values in its calculations, while the second one is for sparse
-## matrices, and uses only the nonzero values in its calculations, i.e., zeros
-## remain intact.
-.rownorm_clr_dense <- function(expr, any_na, na_use) {
-    gene.clr <- log(expr) ## undefined for zero or negative values !!
-    m <- rowMeans(gene.clr, na.rm=any_na && na_use == "na.rm")
-    gene.clr <- exp(gene.clr - m)
-    gene.clr
-}
-
-#' @importFrom SparseArray SparseArray NaArray is_nonna
-#' @importFrom MatrixGenerics rowSums
-.rownorm_clr_sparse <- function(expr, sparse, any_na, na_use) {
-    stopifnot(is(expr, "dgCMatrix") || is(expr, "SVT_SparseMatrix")) ## QC
-
-    if (!sparse) {              ## sparse matrix to dense conversion
-        expr <- as.matrix(expr) ## this may explode memory consumption
-        return(.rownorm_clr_dense(expr, any_na, na_use))
-    }
-        
-    gene.clr <- expr ## assume expr contains log-normalized x_{ij} values
-    if (is(expr, "dgCMatrix")) ## convert 'expr' to a SparseArray object
-        gene.clr <- SparseArray(expr)
-
-    ## build an NaArray object from 'gene.clr'
-    naa <- NaArray(dim=dim(gene.clr), type=type(gene.clr),
-                   dimnames=dimnames(gene.clr))
-    naa@NaSVT <- gene.clr@SVT ## assuming there are no NA values in 'expr'
-    naa <- log(naa) ## take log of nonzero values, NA values remain NA
-    ## because SparseArray::rowMeans() is still not implemented we first
-    ## sum through the nonzero values and then divide by their number
-    rs <- rowSums(naa, na.rm=TRUE)
-    nna <- is_nonna(naa)
-    rnna <- rowSums(nna)
-    m <- rs / rnna
-    ## naa stores x'_i = exp(log(x_i) - mean(log(x_i))) for nonzero values
-    naa <- exp(naa - m)
-    gene.clr@SVT <- naa@NaSVT ## copy back the new nonzero CLR values in
-                              ## the SparseArray placeholder 'gene.clr'
-    gene.clr
-}
-
-#' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom S4Arrays is_sparse DummyArrayGrid
-#' @importFrom DelayedArray seed gridReduce close
-.rownorm_clr_h5 <- function(X, grid=NULL, sparse, any_na, na_use) {
-  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-  sink <- HDF5RealizationSink(dim(X), as.sparse=is_sparse(X) && sparse)
-  if (is.null(grid))
-      grid <- DummyArrayGrid(dim(X))
-
-  rownorm_clr_byBlock_dense <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- .rownorm_clr_dense(block, any_na, na_use)
-    write_block(sink, grid, block)
-  }
-  rownorm_clr_byBlock_sparse <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- .rownorm_clr_sparse(block, sparse, any_na, na_use)
-    write_block(sink, grid, block)
-  }
-  f <- rownorm_clr_byBlock_dense
-  if (is_sparse(X) && sparse)
-      f <- rownorm_clr_byBlock_sparse
-  sink <- gridReduce(f, grid, sink)
-  close(sink)
-  res <- as(sink, "DelayedArray")
-  res
-}
+## function .rownorm_clr() calculates CLR values for each row of the input
+## expression data, which is assumed to be columnwise within-sample and
+## between-sample normalized into positive values x_{ij} in logarithmic scale.
+## because the input values are already log-normalized quantities, then the
+## resulting row-centered values x_{ij}' are multiple of the genes
+## log-normalized values, i.e., they are a kind of a CLR transformation of a
+## CLR-like quantity already, with the aim of attempting to make expression
+## profiles more comparable across rows/genes. on dense input, it uses all
+## values in its calculations, while on sparse input, and 'sparse=TRUE', it
+## uses only the nonzero values, i.e., zeros remain intact. because
+## x_{ij}' = exp(log(x_{ij}) - mean_j(log(x_{ij}))) = x_{ij} / g_i, where g_i
+## is the geometric mean of the i-th row, the CLR values are obtained by
+## scaling each row with the sums of logarithms in 'rowstats', calculated
+## through blocks of columns by .rowStats(). on input stored on disk, this
+## scaling is a delayed operation, which needs no access to the rows of the
+## input, and which is realized when the values are read by blocks of columns
 
 #' @importFrom S4Arrays is_sparse
-#' @importFrom DelayedArray seed
+#' @importFrom SparseArray SparseArray
 #' @importFrom cli cli_abort
-compute.gene.clr <- function(expr, sparse=FALSE, any_na=FALSE,
-                             na_use=c("everything", "all.obs", "na.rm"),
-                             grid=NULL, verbose=TRUE, BPPARAM=NULL) {
-
+.rownorm_clr <- function(expr, rowstats, sparse=FALSE, any_na=FALSE,
+                         na_use=c("everything", "all.obs", "na.rm"),
+                         ondisk=FALSE, verbose=FALSE, BPPARAM=NULL,
+                         maxmem=Inf) {
     na_use <- match.arg(na_use)
-    n.genes <- nrow(expr)
 
     if (any_na && na_use == "all.obs") {
         msg <- paste("missing values present in the input expression data and",
                      "'use=\"all.obs\".")
         cli_abort(c("x"=msg))
     }
-    
-    gene.clr <- NA
-    if (is(expr, "dgCMatrix") || is(expr, "SVT_SparseMatrix"))
-        gene.clr <- .rownorm_clr_sparse(expr, sparse, any_na, na_use)
-    else if (is(expr, "DelayedMatrix"))
-        gene.clr <- .rownorm_clr_h5(expr, grid=grid, sparse=sparse,
-                                    any_na=any_na, na_use=na_use)
-    else if (is.matrix(expr)) {
-        gene.clr <- .rownorm_clr_dense(expr, any_na, na_use)
-    } else {
+
+    sparseinput <- colnames(rowstats)[1] == "nzmin"
+    sparseclr <- sparseinput && sparse
+    lsum <- rowstats[, "lsum"]
+    n <- rowstats[, "n"]
+    nna <- rowstats[, "nna"]
+    if (sparseinput && !sparse) { ## zeros enter the calculations, log(0)=-Inf
+        zeros <- ncol(expr) - n - nna
+        lsum[zeros > 0] <- -Inf + lsum[zeros > 0]
+        n <- n + zeros
+    }
+    m <- lsum / n
+    ## missing values are ignored in sparse input, as zeros are
+    if (!sparseclr && !(any_na && na_use == "na.rm"))
+        m[nna > 0] <- NA
+    g <- exp(m) ## geometric mean of each row
+
+    if (sparseclr) {
+        g[n == 0] <- 1 ## rows without nonzero values remain zero
+        if (anyNA(g)) {
+            msg <- paste("Cannot apply row normalization method 'clr' to",
+                         "expression data with nonzero nonpositive values")
+            cli_abort(c("x"=msg))
+        }
+    }
+
+    if (is(expr, "DelayedMatrix")) ## delayed and sparse when 'expr' is sparse
+        return(expr / g)           ## and 'sparse=TRUE'
+
+    ## input in main memory whose output does not fit in it is scaled by
+    ## blocks of columns, whose output is written on disk
+    if (ondisk) {
+        ## the classical algorithm on sparse input gives dense blocks
+        densify <- is_sparse(expr) && !sparse
+        mf <- .step_mem_factors("rownorm", expr,
+                                sparse=is_sparse(expr) && sparse, clr=TRUE)
+        return(.processMatrixCols(expr, .clr_scale, gmeans=g, sparse=sparse,
+                                  verbose=verbose, BPPARAM=BPPARAM,
+                                  maxmem=maxmem, workfactor=mf$workfactor,
+                                  outfactor=mf$outfactor,
+                                  outextra=mf$outextra, dense=densify,
+                                  sinkout=TRUE))
+    }
+
+    .clr_scale(expr, g, sparse)
+}
+
+## divide each row of 'expr', or of a block of its columns, in main memory, by
+## its geometric mean in 'gmeans', see .rownorm_clr(), keeping it sparse when
+## it is sparse and 'sparse=TRUE'. the name of the argument 'gmeans' is not
+## the start of the name of any argument of the functions processing blocks,
+## which pass it through '...', where R would partially match it otherwise
+#' @importFrom SparseArray SparseArray
+#' @importFrom cli cli_abort
+.clr_scale <- function(expr, gmeans, sparse=FALSE, verbose=FALSE) {
+    if (is(expr, "dgCMatrix") || is(expr, "SVT_SparseMatrix")) {
+        if (!sparse)             ## sparse to dense conversion, which may
+            return(as.matrix(expr) / gmeans) ## explode memory consumption
+        if (is(expr, "dgCMatrix"))
+            expr <- SparseArray(expr)
+        return(expr / gmeans)    ## the result is an SVT_SparseMatrix object
+    }
+
+    if (!is.matrix(expr)) {
         msg <- "Input container class {class(expr)} cannot be handled yet."
         cli_abort(c("x"=msg))
     }
 
-    if (ncol(expr) > 10000) ## free up ASAP memory we need not anymore and was
-        out <- gc()         ## allocated during CLR calculations on a big expr
-
-    return(gene.clr)	
+    expr / gmeans
 }
 
-#' @importFrom S4Arrays is_sparse
-#' @importFrom DelayedArray seed
+## row ECDF values of 'expr' in main memory; when the row normalization is
+## stored on disk, 'expr' is a block of rows and the output is written on
+## disk by .processMatrixRows(), see .ondisk_blocks()
 #' @importFrom cli cli_abort
 compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                              sparse=FALSE, any_na=FALSE,
                              na_use=c("everything", "all.obs", "na.rm"),
-                             grid=NULL, verbose=TRUE, BPPARAM=NULL) {
+                             verbose=TRUE, BPPARAM=NULL) {
 
     na_use <- match.arg(na_use)
     n.test.samples <- ncol(expr)
@@ -1598,23 +1656,6 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                 gene.cdf <- .kcdfvals_svt_to_svt(expr, Gaussk, verbose)
             else
                 gene.cdf <- .kcdfvals_svt_to_dense(expr, Gaussk, verbose)
-        } else if (is(expr, "DelayedMatrix")) {
-            if (sparse)
-                gene.cdf <- .kcdfvals_sparseh5_to_sparseh5(expr, Gaussk=Gaussk,
-                                                           grid=grid,
-                                                           verbose)
-            else {
-                if (is_sparse(expr)) ## input HDF5 may be sparse or not
-                    gene.cdf <- .kcdfvals_sparseh5_to_denseh5(expr,
-                                                              Gaussk=Gaussk,
-                                                              grid=grid,
-                                                              verbose)
-                else
-                    gene.cdf <- .kcdfvals_denseh5_to_denseh5(expr,
-                                                             Gaussk=Gaussk,
-                                                             grid=grid,
-                                                             verbose)
-            }
         } else if (is.matrix(expr)) {
             A <- .Call("matrix_density_R",
                        as.double(t(expr)),
@@ -1644,18 +1685,6 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                 gene.cdf <- .ecdfvals_svt_to_svt(expr, verbose)
             else
                 gene.cdf <- .ecdfvals_svt_to_dense(expr, verbose)
-        } else if (is(expr, "DelayedMatrix")) {
-            if (sparse)
-                gene.cdf <- .ecdfvals_sparseh5_to_sparseh5(expr, grid=grid,
-                                                           verbose=verbose)
-            else {
-                if (is_sparse(expr)) ## input HDF5 may be sparse or not
-                    gene.cdf <- .ecdfvals_sparseh5_to_denseh5(expr, grid=grid,
-                                                              verbose)
-                else
-                    gene.cdf <- .ecdfvals_denseh5_to_denseh5(expr, grid=grid,
-                                                             verbose)
-            }
         } else if (is.matrix(expr)) {
             if (any_na)
                 gene.cdf <- .ecdfvals_dense_to_dense_nas(expr, verbose)
@@ -1755,7 +1784,8 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
 #' @importFrom cli cli_alert_info cli_abort
 .compute_row_norm <- function(expr, rowNorm, kcdf, kcdf.min.ssize,
                               sparse, any_na, na_use, verbose,
-                              BPPARAM=NULL, maxmem=Inf) {
+                              BPPARAM=NULL, maxmem=Inf, rowstats=NULL,
+                              ondisk=FALSE) {
 
     if (verbose) {
         if (rowNorm =="ecdf") 
@@ -1772,17 +1802,29 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
     kernel <- kcdfparam$kernel
     Gaussk <- kcdfparam$Gaussk
 
+    ## the classical algorithm on sparse input gives dense blocks and output
+    densify <- is_sparse(expr) && !sparse
+    mf <- .step_mem_factors("rownorm", expr, sparse=is_sparse(expr) && sparse)
     Z <- NULL
     if (rowNorm == "ecdf")
         Z <- .processMatrixRows(expr, FUN=compute.gene.cdf, Gaussk=Gaussk,
                                 kernel=kernel, sparse=sparse, any_na=any_na,
                                 na_use=na_use, verbose=verbose, minparrows=100,
-                                minparcols=100, BPPARAM=BPPARAM, maxmem=maxmem)
-    else if (rowNorm == "clr")
-        Z <- .processMatrixRows(expr, FUN=compute.gene.clr, sparse=sparse,
-                                any_na=any_na, na_use=na_use, verbose=verbose,
-                                minparrows=100, minparcols=100, BPPARAM=BPPARAM,
-                                maxmem=maxmem)
+                                minparcols=100, BPPARAM=BPPARAM, maxmem=maxmem,
+                                workfactor=mf$workfactor,
+                                outfactor=mf$outfactor, outextra=mf$outextra,
+                                dense=densify,
+                                sinkout=(ondisk || is(expr, "DelayedMatrix")))
+    else if (rowNorm == "clr") {
+        ## the statistics of the rows are calculated through blocks of
+        ## columns, unless they were already calculated while filtering rows
+        if (is.null(rowstats))
+            rowstats <- .rowStats(expr, logsums=TRUE, verbose=verbose,
+                                  BPPARAM=BPPARAM, maxmem=maxmem)
+        Z <- .rownorm_clr(expr, rowstats, sparse=sparse, any_na=any_na,
+                          na_use=na_use, ondisk=ondisk, verbose=verbose,
+                          BPPARAM=BPPARAM, maxmem=maxmem)
+    }
     else
         cli_abort(c("x"=paste(".compute_row_norm: 'rowNorm' should be one of",
                               "'ecdf' or 'clr'.")))
@@ -1802,15 +1844,13 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
                               verbose=TRUE) {
     R <- NULL
 
-    if (drop.sparsity && !is(Z, "DelayedMatrix"))
+    if (drop.sparsity)
         Z <- as.matrix(Z)
 
     if (is(Z, "dgCMatrix")) { ## assumes expression values are positive
         R <- .sparseColumnApplyAndReplace(Z, rank, ties.method=ties.method)
     } else if (is(Z, "SVT_SparseMatrix")) {
         R <- .colRanks_SVT_SparseMatrix(Z, ties.method=ties.method)
-    } else if (is(Z, "DelayedMatrix")) {
-        R <- .colRanksHDF5(Z, ties.method=ties.method, drop.sparsity=drop.sparsity)
     } else {
         R <- colRanks(Z, ties.method=ties.method, preserveShape=TRUE)
     }
@@ -1823,7 +1863,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 
 #' @importFrom cli cli_alert_info
 #' @importFrom cli cli_progress_done cli_abort
-.compute_gsva_ranks <- function(Z, sparse, verbose, BPPARAM=NULL, maxmem=Inf) {
+.compute_gsva_ranks <- function(Z, sparse, verbose, BPPARAM=NULL, maxmem=Inf,
+                                ondisk=FALSE) {
     if (verbose) {
         if (sparse)
             cli_alert_info("Calculating sparse column ranks")
@@ -1833,10 +1874,14 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
  
     ## here 'ties.method="last"' allows one to obtain the result
     ## from 'order()' based on ranks
+    mf <- .step_mem_factors("colranks", Z)
     R <- .processMatrixCols(Z, FUN=compute.col.ranks, ties.method="last",
                             drop.sparsity=FALSE, verbose=verbose,
                             minparrows=100, minparcols=100,
-                            BPPARAM=BPPARAM, maxmem=maxmem)
+                            BPPARAM=BPPARAM, maxmem=maxmem,
+                            workfactor=mf$workfactor, outfactor=mf$outfactor,
+                            outextra=mf$outextra,
+                            sinkout=(ondisk || is(Z, "DelayedMatrix")))
 
     return(R)
 }
@@ -1978,7 +2023,6 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     walkStat
 }
 
-## convert ranks into decreasing order statistics and symmetric rank statistics
 ## check that the ranks 'r' of a column are either zero, for zero values in
 ## sparse data, or between 1 and the number of nonzero nonmissing values,
 ## which is required to convert them into decreasing order statistics; this
@@ -1997,6 +2041,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     invisible(TRUE)
 }
 
+## convert ranks into decreasing order statistics and symmetric rank statistics
 .ranks2stats <- function(r, sparse) {
     .check_rank_bounds(r)
     mask <- r == 0
@@ -2063,63 +2108,23 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 
 
 ## this function computes the GSVA scores for all gene sets in geneSetsIdx for
-## a given rank matrix R, taking care that if 'ondisk=TRUE' because, e.g., the
-## resulting matrix of GSVA scores does not fit in main memory, the scores are
-## written into an on-disk data structure (HDF5) instead of being returned in
-## main memory.
-#' @importFrom cli cli_alert_info cli_alert_warning
-#' @importFrom S4Arrays is_sparse refdim DummyArrayGrid read_block write_block
-#' @importFrom DelayedArray close
+## a given rank matrix R in main memory. when the scores are stored on disk,
+## e.g., because they do not fit in main memory, R is a block of columns of
+## the ranks and the scores are written on disk by .processMatrixCols(), see
+## .ondisk_blocks()
+#' @importFrom cli cli_alert_warning
+#' @importFrom S4Arrays is_sparse
 .compute_gsva_scores <- function(R, geneSetsIdx, tau, maxDiff, absRanking,
-                                 sparse, any_na, na_use, minSize, ondisk,
-                                 verbose) {
-    p <- nrow(R)
-    n <- ncol(R)
-    es <- NULL
+                                 sparse, any_na, na_use, minSize, verbose) {
     if (sparse && !is_sparse(R))
         sparse <- FALSE
-    ## use the type rather than reading a value, which in an on-disk 'R'
-    ## would read at least a whole chunk of it
     intrnks <- type(R) == "integer"
 
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
-    es <- NULL
-    if (is(R, "DelayedMatrix") || ondisk) {
-        sink <- HDF5RealizationSink(c(length(geneSetsIdx), ncol(R)),
-                                    as.sparse=FALSE) ## GSVA scores are dense
-        grid <- DummyArrayGrid(dim(R))
-        grid_es <- DummyArrayGrid(dim(sink))
-
-        if (length(grid) != length(grid_es) ||
-            refdim(grid)[2] != refdim(grid_es)[2] ||
-            dim(grid)[2] != dim(grid_es)[2]) {
-            msg <- paste("Grid column blocks for ranks should match grid",
-                         "column blocks for enrichment scores")
-            cli_abort(c("x"=msg))
-        }
-
-        ## avp - ArrayViewport for reaching the (possibly sparse) rank matrix
-        ## avp_es - ArrayViewport for writing the enrichment dense scores matrix
-        colScores_byBlock <- function(avp, avp_es, sink) {
-            block <- read_block(R, avp)
-            block <- .gsva_score_genesets(block, geneSetsIdx, intrnks, sparse,
-                                          maxDiff, absRanking, tau, any_na,
-                                          na_use, minSize, wna_env, verbose)
-            write_block(sink, avp_es, block)
-        }
-
-        nblock <- length(grid)
-        for (bid in seq_len(nblock))
-            sink <- colScores_byBlock(grid[[bid]], grid_es[[bid]], sink)
-        close(sink)
-        es <- as(sink, "DelayedArray")
-
-    } else {
-        es <- .gsva_score_genesets(R, geneSetsIdx, intrnks, sparse, maxDiff,
-                                   absRanking, tau, any_na, na_use, minSize,
-                                   wna_env, verbose)
-    }
+    es <- .gsva_score_genesets(R, geneSetsIdx, intrnks, sparse, maxDiff,
+                               absRanking, tau, any_na, na_use, minSize,
+                               wna_env, verbose)
 
     if (any_na && na_use == "na.rm")
         if (get("w", envir=wna_env)) {
@@ -2332,69 +2337,6 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
   .Call("ecdfvals_svt_to_svt_R", X, verbose)
 }
 
-#' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom DelayedArray seed gridReduce close
-.ecdfvals_sparseh5_to_sparseh5 <- function(X, grid=NULL, verbose=FALSE) {
-  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-  sink <- HDF5RealizationSink(dim(X), as.sparse=TRUE)
-  if (is.null(grid))
-      grid <- DummyArrayGrid(dim(X))
-
-  rowEcdf_byBlock <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- .ecdfvals_svt_to_svt(block, verbose=verbose)
-    write_block(sink, grid, block)
-  }
-  sink <- gridReduce(rowEcdf_byBlock, grid, sink)
-  close(sink)
-  res <- as(sink, "DelayedArray")
-  res
-}
-
-#' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom DelayedArray seed gridReduce close
-.ecdfvals_sparseh5_to_denseh5 <- function(X, grid=NULL, verbose) {
-  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-  sink <- HDF5RealizationSink(dim(X), as.sparse=FALSE)
-  if (is.null(grid))
-      grid <- DummyArrayGrid(dim(X))
-
-  rowEcdf_byBlock <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- .ecdfvals_svt_to_dense(block, verbose=verbose)
-    write_block(sink, grid, block)
-  }
-  sink <- gridReduce(rowEcdf_byBlock, grid, sink)
-  close(sink)
-  res <- as(sink, "DelayedArray")
-  res
-}
-
-#' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom DelayedArray seed rowAutoGrid blockReduce close
-.ecdfvals_denseh5_to_denseh5 <- function(X, grid=NULL, verbose) {
-  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-  sink <- HDF5RealizationSink(dim(X), as.sparse=FALSE)
-  if (is.null(grid))
-      grid <- DummyArrayGrid(dim(X))
-
-  rowEcdf_byBlock <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- .ecdfvals_dense_to_dense(block, verbose=verbose)
-    write_block(sink, grid, block)
-  }
-  sink <- gridReduce(rowEcdf_byBlock, grid, sink)
-  close(sink)
-  res <- as(sink, "DelayedArray")
-  res
-}
-
 .ecdfvals_sparse_to_sparse <- function(X, verbose) {
   stopifnot(is(X, "CsparseMatrix")) ## QC
   Xrsp <- as(X, "RsparseMatrix")
@@ -2451,77 +2393,6 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
   .Call("kcdfvals_sparse_to_dense_R", X, Xrsp, Gaussk, verbose)
 }
 
-#' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom DelayedArray seed rowAutoGrid blockReduce close
-.kcdfvals_sparseh5_to_sparseh5 <- function(X, Gaussk, grid=NULL, verbose) {
-  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-  sink <- HDF5RealizationSink(dim(X), as.sparse=TRUE)
-  if (is.null(grid))
-      grid <- DummyArrayGrid(dim(X))
-
-  rowKcdf_byBlock <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- .kcdfvals_svt_to_svt(block, Gaussk=Gaussk, verbose=verbose)
-    write_block(sink, grid, block)
-  }
-  sink <- gridReduce(rowKcdf_byBlock, grid, sink)
-  close(sink)
-  res <- as(sink, "DelayedArray")
-  res
-}
-
-#' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom DelayedArray seed rowAutoGrid blockReduce close
-.kcdfvals_sparseh5_to_denseh5 <- function(X, Gaussk, grid=NULL, verbose) {
-  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-  sink <- HDF5RealizationSink(dim(X), as.sparse=FALSE)
-  if (is.null(grid))
-      grid <- DummyArrayGrid(dim(X))
-
-  rowKcdf_byBlock <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- .kcdfvals_svt_to_dense(block, Gaussk=Gaussk, verbose=verbose)
-    write_block(sink, grid, block)
-  }
-  sink <- gridReduce(rowKcdf_byBlock, grid, sink)
-  close(sink)
-  res <- as(sink, "DelayedArray")
-  res
-}
-
-#' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom HDF5Array HDF5RealizationSink
-#' @importFrom DelayedArray seed rowAutoGrid blockReduce close
-.kcdfvals_denseh5_to_denseh5 <- function(X, Gaussk, grid=NULL, verbose) {
-  stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-  sink <- HDF5RealizationSink(dim(X), as.sparse=FALSE)
-  if (is.null(grid))
-      grid <- DummyArrayGrid(dim(X))
-
-  rowKcdf_byBlock <- function(grid, sink) {
-    block <- read_block(X, grid)
-    block <- t(matrix(.Call("matrix_density_R",
-                            as.double(t(X)),
-                            as.double(t(X)),
-                            ncol(X),
-                            ncol(X),
-                            nrow(X),
-                            as.integer(Gaussk),
-                            FALSE, 1L,
-                            verbose), ncol(X), nrow(X)))
-    write_block(sink, grid, block)
-  }
-  sink <- gridReduce(rowKcdf_byBlock, grid, sink)
-  close(sink)
-  res <- as(sink, "DelayedArray")
-  res
-}
-
 #' @importFrom cli cli_abort
 .gsva_score_genesets <- function(R, geneSetsIdx, intrnks, sparse, maxDiff,
                                  absRanking, tau, any_na, na_use, minSize,
@@ -2571,41 +2442,4 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
         R@type <- "integer" ## rank() w/ ties.method="last" returns integer
 
     R
-}
-
-## calculate ranks using an HDF5 backend
-
-#' @importFrom BiocGenerics "type<-"
-#' @importFrom S4Arrays DummyArrayGrid
-#' @importFrom MatrixGenerics colRanks
-#' @importFrom BiocParallel SerialParam
-#' @importFrom DelayedArray close
-.colRanksHDF5 <- function(X, grid=NULL, ties.method="last",
-                          drop.sparsity=FALSE) {
-    stopifnot(is(X, "DelayedMatrix") || is(X, "HDF5Matrix")) ## QC
-
-    sink <- HDF5RealizationSink(dim(X), H5type="H5T_STD_I32LE", ## integer ranks
-                                as.sparse=is_sparse(X) && !drop.sparsity)
-    if (is.null(grid))
-        grid <- DummyArrayGrid(dim(X))
-
-    colRanks_byBlock <- function(grid, sink) {
-        block <- read_block(X, grid)
-        if (is(block, "SVT_SparseMatrix") && drop.sparsity)
-            block <- as.matrix(block)
-        if (is(block, "SVT_SparseMatrix")) {
-            block <- .colRanks_SVT_SparseMatrix(block, ties.method=ties.method)
-        } else {
-            block <- colRanks(block, ties.method=ties.method,
-                              preserveShape=TRUE)
-            if (ties.method == "last")
-                type(block) <- "integer"
-        }
-        write_block(sink, grid, block)
-    }
-
-    sink <- gridReduce(colRanks_byBlock, grid, sink)
-    close(sink)
-    res <- as(sink, "DelayedArray")
-    res
 }

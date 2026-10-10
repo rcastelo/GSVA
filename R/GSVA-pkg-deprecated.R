@@ -70,6 +70,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 
               kcdfminssize <- .get_kcdfNoneMinSampleSize(param)
               gsvarnorm <- .compute_row_norm(expr=filtDataMatrix,
+                                             rowNorm=.get_rowNorm(param),
                                              kcdf=.get_kcdf(param),
                                              kcdf.min.ssize=kcdfminssize,
                                              sparse=.get_sparse(param),
@@ -77,12 +78,16 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                                              na_use=.get_NAuse(param),
                                              verbose=verbose,
                                              BPPARAM=BPPARAM,
-                                             maxmem=maxmem)
+                                             maxmem=maxmem,
+                                             ondisk=ondisk)
 
               gsvarnks <- .compute_gsva_ranks(Z=gsvarnorm,
+                                              sparse=(.get_sparse(param) &&
+                                                      is_sparse(gsvarnorm)),
                                               verbose=verbose,
                                               BPPARAM=BPPARAM,
-                                              maxmem=maxmem)
+                                              maxmem=maxmem,
+                                              ondisk=ondisk)
 
               rownames(gsvarnks) <- rownames(filtDataMatrix)
               colnames(gsvarnks) <- colnames(filtDataMatrix)
@@ -94,7 +99,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                           exprData=rnkscontainer, geneSets=get_geneSets(param),
                           assay="gsvaranks", annotation=get_annotation(param),
                           minSize=get_minSize(param), maxSize=get_maxSize(param),
-                          kcdf=.get_kcdf(param),
+                          rowNorm=.get_rowNorm(param), kcdf=.get_kcdf(param),
                           kcdfNoneMinSampleSize=.get_kcdfNoneMinSampleSize(param),
                           tau=.get_tau(param), maxDiff=.get_maxDiff(param),
                           absRanking=.get_absRanking(param),
@@ -159,9 +164,11 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
               }
 
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+              mf <- .step_mem_factors("scores", filtDataMatrix,
+                                      ngs=length(filtMappedGeneSets))
               ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
                                       recompute_nzcount=FALSE, maxmem=maxmem,
-                                      verbose=verbose)
+                                      verbose=verbose, mf=mf)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "GSVA", first=NA,
@@ -172,9 +179,6 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                                                  minparrows=100, minparcols=100,
                                                  verbose)
 
-              ondisk <- .check_es_memory_requirements(filtDataMatrix,
-                                                      filtMappedGeneSets,
-                                                      ondisk, maxmem)
               if (verbose) {
                   n <- length(filtMappedGeneSets)
                   cli_alert_info("Calculating GSVA scores for {n} gene sets")
@@ -189,12 +193,15 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                                             sparse=sparse, any_na=anyNA(param),
                                             na_use=.get_NAuse(param),
                                             minSize=get_minSize(param),
-                                            ondisk=ondisk, verbose=verbose,
+                                            verbose=verbose,
                                             minparrows=100, minparcols=100,
-                                            BPPARAM=BPPARAM,
-                                            maxmem=ceiling(maxmem/100)) ## use
-                                            ## of memory increases here about
-                                            ## 10-fold over block size memory
+                                            BPPARAM=BPPARAM, maxmem=maxmem,
+                                            workfactor=mf$workfactor,
+                                            outfactor=mf$outfactor,
+                                            outextra=mf$outextra,
+                                            sinkout=(ondisk ||
+                                                     is(filtDataMatrix,
+                                                        "DelayedMatrix")))
 
               rownames(gsva_es) <- names(filtMappedGeneSets)
               colnames(gsva_es) <- colnames(filtDataMatrix)
@@ -230,6 +237,7 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
 #' Otherwise, the returned object will be a
 #' [`DelayedMatrix`][DelayedArray::DelayedMatrix] object.
 #'
+#' @importFrom HDF5Array saveHDF5SummarizedExperiment
 #' @name saveHDF5GSVAranks
 #' @rdname GSVA-pkg-deprecated
 #'
@@ -239,7 +247,12 @@ saveHDF5GSVAranks <- function(rankExprData, dir, ...) {
                 msg=paste("The 'saveHDF5GSVAranks()' function is deprecated.",
                           "Please use 'saveHDF5GSVA()' instead."))
 
-    saveHDF5GSVA(rankExprData, dir, assay="gsvaranks", ...)
+    ## saves the ranks in the directory format of the HDF5Array package, as
+    ## before saveHDF5GSVA() saved GSVA output to a single HDF5 file
+    se <- .gsva_output_to_se(rankExprData, "gsvaranks")$se
+    saveHDF5SummarizedExperiment(se, dir, ...)
+
+    invisible(dir)
 }
 
 #' @description The `loadHDF5GSVAranks()` function is deprecated. Please use
@@ -254,6 +267,8 @@ saveHDF5GSVAranks <- function(rankExprData, dir, ...) {
 #' and [`loadHDF5SummarizedExperiment`][HDF5Array::loadHDF5SummarizedExperiment],
 #' respectively.
 #'
+#' @importFrom HDF5Array loadHDF5SummarizedExperiment
+#' @importFrom SummarizedExperiment assayNames
 #' @name loadHDF5GSVAranks
 #' @rdname GSVA-pkg-deprecated
 #'
@@ -264,7 +279,11 @@ loadHDF5GSVAranks <- function(dir, ...) {
                 msg=paste("The 'loadHDF5GSVAranks()' function is deprecated.",
                           "Please use 'loadHDF5GSVA()' instead."))
 
-    rankscontainer <- loadHDF5GSVA(dir, assay="gsvaranks", ...)
+    ## loads ranks saved in the directory format of the HDF5Array package, by
+    ## saveHDF5GSVAranks() or by saveHDF5GSVA() in previous versions of GSVA
+    rankscontainer <- loadHDF5SummarizedExperiment(dir, ...)
+    assay <- .check_assay_ranks_rnorm(assayNames(rankscontainer), "gsvaranks")
+    rankscontainer <- .se_to_gsva_output(rankscontainer, assay)
 
     return(rankscontainer)
 }

@@ -78,7 +78,8 @@ importFrom(BiocGenerics,
   path,
   rbind,
   sort,
-  type
+  type,
+  updateObject
 )
 importFrom(BiocParallel,
   "bpprogressbar<-",
@@ -89,30 +90,29 @@ importFrom(BiocParallel,
   SnowParam,
   batchtoolsRegistryargs,
   bpisup,
+  bpiterate,
   bplapply,
   bpnworkers,
   bpok,
   bpprogressbar,
+  bpstart,
+  bpstop,
   bpstopOnError,
   bptry
 )
 importFrom(DelayedArray,
   DelayedArray,
-  blockApply,
-  blockReduce,
   chunkGrid,
   chunkdim,
-  close,
   colAutoGrid,
   defaultAutoGrid,
   getAutoBlockLength,
   getAutoBlockSize,
-  gridReduce,
+  modify_seeds,
+  read_block,
   rowAutoGrid,
   rowRanges,
-  seed,
-  seedApply,
-  setAutoBPPARAM
+  seedApply
 )
 importFrom(DelayedMatrixStats,rowSds)
 importFrom(GSEABase,
@@ -128,15 +128,18 @@ importFrom(GSEABase,
   mapIdentifiers
 )
 importFrom(HDF5Array,
-  HDF5RealizationSink,
+  H5SparseMatrix,
+  HDF5Array,
+  getHDF5DumpChunkDim,
+  getHDF5DumpChunkLength,
+  getHDF5DumpCompressionLevel,
+  getHDF5DumpDir,
   loadHDF5SummarizedExperiment,
-  saveHDF5SummarizedExperiment,
-  writeHDF5Array
+  saveHDF5SummarizedExperiment
 )
 importFrom(IRanges,
   CharacterList,
   IRanges,
-  IntegerList,
   end,
   match,
   ranges,
@@ -157,9 +160,7 @@ importFrom(S4Arrays,
   DummyArrayGrid,
   extract_array,
   is_sparse,
-  read_block,
-  refdim,
-  write_block
+  read_block
 )
 importFrom(S4Vectors,
   "metadata<-",
@@ -173,10 +174,8 @@ importFrom(SingleCellExperiment,
   reducedDims
 )
 importFrom(SparseArray,
-  NaArray,
   SparseArray,
   extract_sparse_array,
-  is_nonna,
   nzcount,
   rowMeans,
   rowSds
@@ -197,7 +196,8 @@ importFrom(cli,
   cli_progress_bar,
   cli_progress_done,
   cli_progress_update,
-  cli_warn
+  cli_warn,
+  qty
 )
 importFrom(graphics,
   abline,
@@ -208,7 +208,8 @@ importFrom(graphics,
 )
 importFrom(memuse,
   Sys.meminfo,
-  howbig
+  howbig,
+  mu
 )
 importFrom(methods,
   callNextMethod,
@@ -216,6 +217,17 @@ importFrom(methods,
   is,
   isClass,
   new
+)
+importFrom(rhdf5,
+  H5Fis_hdf5,
+  H5Sunlimited,
+  h5createDataset,
+  h5createFile,
+  h5createGroup,
+  h5ls,
+  h5read,
+  h5set_extent,
+  h5write
 )
 importFrom(sparseMatrixStats,
   colRanks,
@@ -239,6 +251,7 @@ importFrom(utils,
   globalVariables,
   head,
   installed.packages,
+  object.size,
   packageDescription,
   packageVersion,
   tail

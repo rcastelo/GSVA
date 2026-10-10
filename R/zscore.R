@@ -33,9 +33,15 @@ setMethod("gsva", signature(param="zscoreParam"),
               filtMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+              ## the input data is loaded in main memory as a dense matrix,
+              ## and the memory required includes the enrichment scores
+              mf <- .step_mem_factors("zscore", sparse=FALSE, int=FALSE,
+                                      ngs=length(filtMappedGeneSets))
               ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
                                       recompute_nzcount=FALSE, maxmem=maxmem,
-                                      verbose=verbose)
+                                      verbose=verbose, mf=mf, dense=TRUE)
+              .check_step_mem(filtDataMatrix, 2L, NA, NA, ondisk, mf, BPPARAM,
+                              maxmem, dense=TRUE)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "Z-score", first=NA,
@@ -46,9 +52,6 @@ setMethod("gsva", signature(param="zscoreParam"),
                                                  minparrows=100, minparcols=100,
                                                  verbose)
 
-              ondisk <- .check_es_memory_requirements(filtDataMatrix,
-                                                      filtMappedGeneSets,
-                                                      ondisk, maxmem)
               if (verbose) {
                   n <- length(filtMappedGeneSets)
                   cli_alert_info("Calculating Z-scores for {n} gene sets")
@@ -288,17 +291,16 @@ setMethod("anyNA", signature=c("zscoreParam"),
     idpb <- NULL
     if (verbose)
         idpb <- cli_progress_bar("Calculating Z-scores",
-                                 total=2*length(geneSetsIdx))
+                                 total=length(geneSetsIdx))
 
-    es <- t(vapply(lapply(geneSetsIdx,
-                          function(i) {
-                              if (verbose)
-                                  cli_progress_update(id=idpb)
-                              Z[i, , drop=FALSE]
-                          }),
-                   function(z) {
+    ## the rows of each gene set are summed as they are taken from the block,
+    ## instead of taking those of all gene sets first, which would take, with
+    ## many gene sets, many times the memory of the block
+    es <- t(vapply(geneSetsIdx,
+                   function(i) {
                        if (verbose)
                            cli_progress_update(id=idpb)
+                       z <- Z[i, , drop=FALSE]
                        colSums(z) / sqrt(nrow(z))
                    }, numeric(ncol(Z))))
 
@@ -309,45 +311,12 @@ setMethod("anyNA", signature=c("zscoreParam"),
 }
 
 ## this function computes enrichment scores as combined z-scores for all gene
-## sets in geneSetsIdx for a given rank matrix R, taking care that if
-## 'ondisk=TRUE' because, e.g., the resulting matrix of z-scores does not
-## fit in main memory, the scores are written into an on-disk data structure
-## (HDF5) instead of being returned in main memory.
-#' @importFrom S4Arrays DummyArrayGrid
-.compute_z_scores <- function(Z, geneSetsIdx, ondisk, verbose) {
-    p <- nrow(Z)
-    n <- ncol(Z)
-    es <- NULL
-
-    if (is(Z, "DelayedMatrix") || ondisk) {
-        sink <- HDF5RealizationSink(c(length(geneSetsIdx), ncol(Z)),
-                                    as.sparse=FALSE) ## enrichment scores are dense
-        grid <- DummyArrayGrid(dim(Z))
-        grid_es <- DummyArrayGrid(dim(sink))
-
-        if (length(grid) != length(grid_es) ||
-            refdim(grid)[2] != refdim(grid_es)[2] ||
-            dim(grid)[2] != dim(grid_es)[2]) {
-            msg <- paste("Grid column blocks for ranks should match grid column",
-                         "blocks for enrichment scores")
-            cli_abort(c("x"=msg))
-        }
-
-        ## avp - ArrayViewport for reaching the (possibly sparse) expr. matrix
-        ## avp_es - ArrayViewport for writing the enrichment dense scores matrix
-        colScores_byBlock <- function(avp, avp_es, sink) {
-            block <- read_block(Z, avp)
-            block <- .compute_z_scores_block(block, geneSetsIdx, verbose)
-            write_block(sink, avp_es, block)
-        }
-
-        nblock <- length(grid)
-        for (bid in seq_len(nblock))
-            sink <- colScores_byBlock(grid[[bid]], grid_es[[bid]], sink)
-        close(sink)
-        es <- as(sink, "DelayedArray")
-    } else
-        es <- .compute_z_scores_block(Z, geneSetsIdx, verbose)
+## sets in geneSetsIdx for a given matrix Z in main memory. when the scores
+## are stored on disk, e.g., because they do not fit in main memory, Z is a
+## block of columns and the scores are written on disk by .processMatrixCols(),
+## see .ondisk_blocks()
+.compute_z_scores <- function(Z, geneSetsIdx, verbose) {
+    es <- .compute_z_scores_block(Z, geneSetsIdx, verbose)
 
     return(es)
 }
@@ -360,18 +329,33 @@ setMethod("anyNA", signature=c("zscoreParam"),
 zscore <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
                    BPPARAM=NULL, maxmem=Inf) {
 
+    ## the scaled rows, as large as the input, are delayed operations on it
+    ## when it is stored on disk, and are stored on disk when it is in main
+    ## memory but they do not fit in it; each block of sparse input gives
+    ## dense scaled rows ('dense=TRUE')
     Z <- .processMatrixRows(X, .scale_rows, verbose=verbose,
                             minparrows=100, minparcols=100,
                             progressmsg="Centering and scaling rows",
-                            BPPARAM=BPPARAM, maxmem=maxmem)
+                            BPPARAM=BPPARAM, maxmem=maxmem, dense=TRUE,
+                            sinkout=(ondisk && !is(X, "DelayedMatrix")))
 
     es <- NULL
     if (ncol(Z) >= length(geneSets) || is(Z, "DelayedMatrix") || ondisk) {
+        ## the blocks of columns leave memory for their dense scores; when the
+        ## input is stored on disk, the scaled rows are delayed operations on
+        ## it, and realizing each of their blocks of columns takes about three
+        ## times the size of its dense form, see plage()
+        mf <- .step_mem_factors("zscorescores", ngs=length(geneSets))
+        delayedextra <- if (is(X, "DelayedMatrix")) 2 else 0
         es <- .processMatrixCols(Z, .compute_z_scores, geneSets,
-                                 ondisk=ondisk, verbose=verbose,
+                                 verbose=verbose,
                                  minparrows=100, minparcols=100,
                                  progressmsg="Calculating Z-scores per gene set",
-                                 BPPARAM=BPPARAM, maxmem=maxmem)
+                                 BPPARAM=BPPARAM, maxmem=maxmem,
+                                 workfactor=mf$workfactor + delayedextra,
+                                 outfactor=mf$outfactor, outextra=mf$outextra,
+                                 heldmem=.held_mem() + .inmem_size(X),
+                                 sinkout=(ondisk || is(Z, "DelayedMatrix")))
     } else {
         if (is.null(BPPARAM) || bpnworkers(BPPARAM) == 1L) {
             env <- NULL

@@ -4,8 +4,8 @@
 #' to save and load the output from GSVA to/from disk. The `saveHDF5GSVA()`
 #' function takes the output of [`gsvaRowNorm`], [`gsvaColRanks`] or
 #' [`gsvaColScores`] as input, and saves the output from these methods with the
-#' relevant metadata to a specified directory. The `loadHDF5GSVA()` function
-#' reads the saved data from the specified directory and returns an object with
+#' relevant metadata to a single file in HDF5 format. The `loadHDF5GSVA()`
+#' function reads the saved data from that file and returns an object with
 #' the corresponding GSVA row-normalized or rank expression values, or GSVA
 #' scores, and their corresponding metadata.
 #'
@@ -20,7 +20,22 @@
 #' [duckdb](https://cran.r-project.org/package=duckdb) and
 #' [DBI](https://cran.r-project.org/package=DBI).
 #'
-#' @details `saveParquetGSVA()` stores sparse input, such as a
+#' @details `saveHDF5GSVA()` stores the GSVA output values in a single HDF5
+#' file, keeping only the non-zero values of sparse data, such as sparse GSVA
+#' ranks, in the compressed sparse column layout used by 10x Genomics, which
+#' takes less space and is read faster by blocks of columns, as
+#' [`gsvaColRanks`] and [`gsvaColScores`] do, than storing all values. Dense
+#' data is stored in a dense HDF5 dataset whose chunks span all its rows. The
+#' rest of the object storing the GSVA output, such as its row and column
+#' names and data, and its GSVA metadata, is stored in the same file. The file
+#' does not store its own location, so it can be moved or copied. The object
+#' returned by `loadHDF5GSVA()` holds its values in a
+#' [`DelayedMatrix`][DelayedArray::DelayedMatrix] object that reads them from
+#' the file only when needed. GSVA output loaded with `loadHDF5GSVA()` can be
+#' saved in other formats of the HDF5Array package, e.g., with
+#' [`saveHDF5SummarizedExperiment`][HDF5Array::saveHDF5SummarizedExperiment].
+#'
+#' `saveParquetGSVA()` stores sparse input, such as a
 #' [`dgCMatrix`][Matrix::dgCMatrix-class] or an
 #' [`SVT_SparseMatrix`][SparseArray::SVT_SparseMatrix-class] object, keeping
 #' only its non-zero values, and stores GSVA ranks as integer values. The
@@ -65,21 +80,19 @@
 #' certificates from trustworthy sources, including the root certificates
 #' needed by every HTTPS server accessed in the same R session.
 #'
-#' Loading GSVA output in Apache Parquet format restores R objects stored in the
-#' file, as [`readRDS`][base::readRDS] does, and therefore, as with files read
-#' with `readRDS()`, files should only be loaded from trusted sources.
+#' Loading GSVA output in HDF5 or Apache Parquet format restores R objects
+#' stored in the file, as [`readRDS`][base::readRDS] does, and therefore, as
+#' with files read with `readRDS()`, files should only be loaded from trusted
+#' sources.
 #'
 #' @param gsvaExprData An object obtained with [`gsvaRowNorm`],
 #' [`gsvaColRanks`] or [`gsvaColScores`]. Must be one of the classes supported by
 #' [`GsvaExprData-class`].  For a list of these classes, see its help page
 #' using `help(GsvaExprData)`.
 #'
-#' @param dir The path to the directory where to save or load the GSVA output
-#' data.
-#'
-#' @param file The path to the file where to save the GSVA output data in
-#' Apache Parquet format or, for loading it, either that path, an `s3://` or
-#' `gs://` URI, or an `http://` or `https://` URL.
+#' @param file The path to the file where to save the GSVA output data in HDF5
+#' or Apache Parquet format or, for loading it, that path or, in Apache Parquet
+#' format, also an `s3://` or `gs://` URI, or an `http://` or `https://` URL.
 #'
 #' @param colsPerRowGroup Either `"auto"` (default), or the number of matrix
 #' columns stored in each row group of the Apache Parquet file, which is the
@@ -92,10 +105,11 @@
 #' @param replace Logical vector of length 1. When `TRUE`, an existing file in
 #' `file` is replaced. By default, `replace=FALSE`.
 #'
-#' @param verbose Logical vector of length 1. In `saveParquetGSVA()`, when
-#' `TRUE`, a progress bar is shown while writing the file, and by default
-#' `verbose=FALSE`. In `loadParquetGSVA()`, when `TRUE` (default), messages
-#' inform about the steps of loading the file.
+#' @param verbose Logical vector of length 1. In `saveHDF5GSVA()` and
+#' `saveParquetGSVA()`, when `TRUE`, a progress bar is shown while writing the
+#' file, and by default `verbose=FALSE`. In `loadHDF5GSVA()` and
+#' `loadParquetGSVA()`, when `TRUE` (default), messages inform about the steps
+#' of loading the file.
 #'
 #' @param assay A single character string specifying the assay that contains
 #' the GSVA output to be saved or loaded. By default, `assay="auto"`, which in
@@ -106,15 +120,8 @@
 #' derivatives, then the assay to be saved will be determined by the `assay`
 #' attribute of the `gsvaExprData` object.
 #'
-#' @param ... Only for `saveHDF5GSVA()` and `loadHDF5GSVA()`, additional
-#' arguments to be passed to the underlying HDF5 saving/loading functions
-#' [`saveHDF5SummarizedExperiment`][HDF5Array::saveHDF5SummarizedExperiment]
-#' and [`loadHDF5SummarizedExperiment`][HDF5Array::loadHDF5SummarizedExperiment],
-#' respectively.
-#'
-#' @return For `saveHDF5GSVA()` the path to the directory where the data has
-#' been saved is returned invisibly, and for `saveParquetGSVA()` the path to
-#' the file. For `loadHDF5GSVA()` and `loadParquetGSVA()`, an object is returned
+#' @return For `saveHDF5GSVA()` and `saveParquetGSVA()`, the path to the file
+#' where the data has been saved is returned invisibly. For `loadHDF5GSVA()` and `loadParquetGSVA()`, an object is returned
 #' containing the corresponding loaded GSVA row-normalized or rank expression
 #' values, and their corresponding metadata. If the saved GSVA output was
 #' originally stored in a
@@ -156,15 +163,15 @@
 #' es <- gsvaColScores(gsvacolranks)
 #'
 #' ## save the GSVA row-normalized expression values to disk
-#' rnormdir <- tempfile()
-#' saveHDF5GSVA(gsvarownorm, rnormdir)
+#' rnormfile <- tempfile(fileext=".h5")
+#' saveHDF5GSVA(gsvarownorm, rnormfile)
 #'
 #' ## save the GSVA rank values to disk
-#' ranksdir <- tempfile()
-#' saveHDF5GSVA(gsvacolranks, ranksdir)
+#' ranksfile <- tempfile(fileext=".h5")
+#' saveHDF5GSVA(gsvacolranks, ranksfile)
 #'
-#' ## load the GSVA row-normalized values from disk               
-#' loaded_gsvarownorm <- loadHDF5GSVA(rnormdir)
+#' ## load the GSVA row-normalized values from disk
+#' loaded_gsvarownorm <- loadHDF5GSVA(rnormfile)
 #'
 #' ## check that the loaded row-normalized values provide the
 #' ## same ranks as the ones calculated from the original values
@@ -173,7 +180,7 @@
 #' identical(gsvacolranks, gsvacolranks_from_loaded_gsvarownorm)
 #'
 #' ## load the GSVA ranks from disk
-#' loaded_gsvacolranks <- loadHDF5GSVA(ranksdir)
+#' loaded_gsvacolranks <- loadHDF5GSVA(ranksfile)
 #'
 #' ## check that the loaded ranks provide the
 #' ## same scores as the original ranks
@@ -190,20 +197,129 @@
 #' }
 #'
 #' @importFrom cli cli_abort
-#' @importFrom HDF5Array saveHDF5SummarizedExperiment
+#' @importFrom BiocGenerics type
 #' @importFrom S4Vectors metadata "metadata<-"
-#' @importFrom SummarizedExperiment SummarizedExperiment assayNames "assay<-"
+#' @importFrom SummarizedExperiment SummarizedExperiment assay assayNames
+#' @importFrom SummarizedExperiment "assay<-"
 #'
 #' @rdname gsva-serialization
 #'
 #' @export
-saveHDF5GSVA <- function(gsvaExprData, dir, assay="auto", ...) {
-    se <- .gsva_output_to_se(gsvaExprData, assay)$se
+saveHDF5GSVA <- function(gsvaExprData, file, assay="auto", replace=FALSE,
+                         verbose=FALSE) {
+    if (!.isCharLength1(file))
+        cli_abort(c("x"="'file' must be a single character string."))
+    if (!is.logical(replace) || length(replace) != 1L || is.na(replace))
+        cli_abort(c("x"="'replace' must be either TRUE or FALSE."))
+    if (dir.exists(file))
+        cli_abort(c("x"="{.file {file}} is a directory."))
+    if (file.exists(file) && !replace)
+        cli_abort(c("x"=paste("The file {.file {file}} already exists; use",
+                              "'replace=TRUE' to replace it.")))
+    if (!dir.exists(dirname(file)))
+        cli_abort(c("x"=paste("The directory {.file {dirname(file)}} does not",
+                              "exist.")))
 
-    saveHDF5SummarizedExperiment(se, dir, ...)
+    cnt <- .gsva_output_to_se(gsvaExprData, assay)
+    X <- assay(cnt$se, cnt$assay, withDimnames=FALSE)
 
-    invisible(dir)
+    ## GSVA ranks are integer values, even when they are stored as doubles,
+    ## such as in a 'dgCMatrix' object
+    type <- if (cnt$assay == "gsvaranks") "integer" else type(X)
+    if (!type %in% c("integer", "double"))
+        cli_abort(c("x"=paste("Values of type {.val {type}} cannot be stored",
+                              "in the HDF5 file.")))
+
+    ## the rest of the container, including dimnames and GSVA metadata
+    shell <- cnt$se
+    assay(shell, cnt$assay) <- NULL
+
+    ## the file is written with a temporary name and renamed when complete,
+    ## so that an interrupted saving does not leave an incomplete file
+    tmpname <- .unique_tmpname(file)
+    on.exit(unlink(tmpname), add=TRUE)
+    .write_gsva_h5(X, tmpname, cnt$assay, type == "integer", shell, verbose)
+    if (file.exists(file))
+        unlink(file)
+    if (!file.rename(tmpname, file))
+        cli_abort(c("x"="Cannot write the file {.file {file}}."))
+
+    invisible(file)
 }
+
+## write the GSVA output 'X', of the assay named 'assayname', integer or not
+## ('int'), with the rest of its container 'shell', into the new HDF5 file
+## 'fname', see the details of saveHDF5GSVA(): the serialized 'shell' in the
+## dataset "/gsva/shell", the name of the assay in "/gsva/assayname", and
+## its values in "/gsva/assay", in CSC layout when they are sparse, or
+## otherwise in a dense dataset whose chunks span its rows. its values are
+## written by blocks of columns, read from 'X' in main memory or on disk
+#' @importFrom rhdf5 h5createFile h5createGroup h5createDataset h5write
+#' @importFrom S4Arrays is_sparse
+#' @importFrom DelayedArray getAutoBlockLength
+#' @importFrom HDF5Array getHDF5DumpChunkLength getHDF5DumpCompressionLevel
+#' @importFrom IRanges IRanges
+#' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
+.write_gsva_h5 <- function(X, fname, assayname, int, shell, verbose) {
+    h5createFile(fname)
+    h5createGroup(fname, "gsva")
+    r <- serialize(shell, connection=NULL)
+    h5createDataset(fname, "gsva/shell", length(r), storage.mode="raw",
+                    chunk=max(1L, min(length(r), 2^20)),
+                    level=getHDF5DumpCompressionLevel())
+    h5write(r, fname, "gsva/shell")
+    rm(r)
+    sparse <- is_sparse(X)
+    h5write(assayname, fname, "gsva/assayname")
+    h5write(if (sparse) "csc" else "dense", fname, "gsva/layout")
+
+    nr <- nrow(X)
+    nc <- ncol(X)
+    ## blocks of columns of the default block size, which, for dense values,
+    ## are a multiple of the width of the chunks, so that each block fills
+    ## whole chunks
+    chunkcols <- max(1, floor(getHDF5DumpChunkLength() / max(1, nr)))
+    width <- max(1, floor(getAutoBlockLength(if (int) "integer" else "double") /
+                          max(1, nr)))
+    if (!sparse) {
+        width <- max(chunkcols, chunkcols * floor(width / chunkcols))
+        .h5_part_create(fname, c(nr, nc), int, c(nr, chunkcols),
+                        name="gsva/assay")
+    } else
+        st <- .h5_csc_create(fname, int, group="gsva/assay")
+
+    idpb <- NULL
+    if (verbose)
+        idpb <- cli_progress_bar("Writing the HDF5 file", total=nc)
+    for (first in seq(1, max(1, nc), by=width)) {
+        if (nc == 0)
+            break
+        last <- min(nc, first + width - 1)
+        block <- if (is(X, "DelayedArray"))
+                     .read_block_range(X, 2L, IRanges(first, last))
+                 else
+                     X[, first:last, drop=FALSE]
+        if (sparse)
+            st <- .h5_csc_append(st, block)
+        else {
+            block <- as.matrix(block)
+            attributes(block) <- list(dim=dim(block))
+            if (int)
+                storage.mode(block) <- "integer"
+            h5write(block, fname, "gsva/assay", start=c(1, first),
+                    count=dim(block))
+        }
+        if (verbose)
+            cli_progress_update(id=idpb, inc=last - first + 1)
+    }
+    if (sparse)
+        .h5_csc_close(st, c(nr, nc))
+    if (verbose)
+        cli_progress_done(id=idpb)
+
+    invisible(fname)
+}
+
 
 
 ## put the GSVA output in 'gsvaExprData' into a 'SummarizedExperiment' object
@@ -302,20 +418,76 @@ saveHDF5GSVA <- function(gsvaExprData, dir, assay="auto", ...) {
 }
 
 
-#' @importFrom cli cli_abort
-#' @importFrom HDF5Array loadHDF5SummarizedExperiment
-#' @importFrom SummarizedExperiment SummarizedExperiment assayNames
+#' @importFrom cli cli_abort cli_alert_info
+#' @importFrom rhdf5 H5Fis_hdf5 h5ls h5read
+#' @importFrom HDF5Array HDF5Array H5SparseMatrix
+#' @importFrom DelayedArray DelayedArray
+#' @importFrom SummarizedExperiment assayNames "assay<-"
 #'
 #' @rdname gsva-serialization
 #'
 #' @export
-loadHDF5GSVA <- function(dir, assay="auto", ...) {
+loadHDF5GSVA <- function(file, assay="auto", verbose=TRUE) {
+    if (!.isCharLength1(file))
+        cli_abort(c("x"="'file' must be a single character string."))
+    if (dir.exists(file))
+        cli_abort(c("x"=paste("{.file {file}} is a directory, not a file",
+                              "with GSVA output saved with 'saveHDF5GSVA()'.")))
+    if (!file.exists(file))
+        cli_abort(c("x"="The file {.file {file}} does not exist."))
+    if (!.is_gsva_h5_file(file))
+        cli_abort(c("x"=paste("The file {.file {file}} does not contain GSVA",
+                              "output saved with 'saveHDF5GSVA()'.")))
 
-    gsvacontainer <- loadHDF5SummarizedExperiment(dir, ...)
+    file <- normalizePath(file)
+    if (verbose)
+        cli_alert_info("Reading the metadata of {.file {file}}")
+    gsvacontainer <- .restore_gsva_shell(unserialize(as.raw(h5read(file,
+                                                       "gsva/shell"))), file)
+    assayname <- as.character(h5read(file, "gsva/assayname"))
+    layout <- as.character(h5read(file, "gsva/layout"))
+
+    X <- if (layout == "csc") H5SparseMatrix(file, "gsva/assay") else
+         HDF5Array(file, "gsva/assay")
+    X <- DelayedArray(X)
+    if (verbose) {
+        cls <- class(gsvacontainer)[1]
+        cli_alert_info(paste("Restored a {cls} object with {nrow(X)} rows",
+                             "and {ncol(X)} columns"))
+    }
+    dimnames(X) <- dimnames(gsvacontainer)
+    assay(gsvacontainer, assayname) <- X
 
     assay <- .check_assay_ranks_rnorm(assayNames(gsvacontainer), assay)
 
     .se_to_gsva_output(gsvacontainer, assay)
+}
+
+## the container of GSVA output 'x', without its assay, restored from the file
+## 'file' by loadHDF5GSVA() or loadParquetGSVA(), updated to the current
+## definition of its class, which may have changed since it was saved, as
+## loadHDF5SummarizedExperiment() of the HDF5Array package does. its validity
+## is not checked, because it lacks its assay, which is added afterwards
+#' @importFrom BiocGenerics updateObject
+#' @importFrom cli cli_abort
+.restore_gsva_shell <- function(x, file) {
+    x <- updateObject(x, check=FALSE)
+    if (!is(x, "SummarizedExperiment"))
+        cli_abort(c("x"=paste("The file {.file {file}} does not contain a",
+                              "SummarizedExperiment object or derivative",
+                              "with GSVA output.")))
+    x
+}
+
+## whether 'file' is an HDF5 file with GSVA output saved with saveHDF5GSVA()
+#' @importFrom rhdf5 H5Fis_hdf5 h5ls
+.is_gsva_h5_file <- function(file) {
+    if (!isTRUE(suppressWarnings(H5Fis_hdf5(file))))
+        return(FALSE)
+    content <- tryCatch(h5ls(file, recursive=2L), error=function(e) NULL)
+    !is.null(content) &&
+        all(c("shell", "assayname", "layout", "assay") %in%
+            content$name[content$group == "/gsva"])
 }
 
 
@@ -465,7 +637,8 @@ loadParquetGSVA <- function(file, assay="auto", verbose=TRUE) {
                               "output saved with 'saveParquetGSVA()'.")))
     }
 
-    gsvacontainer <- .decode_r_object(md$gsva_shell)
+    gsvacontainer <- .restore_gsva_shell(.decode_r_object(md$gsva_shell),
+                                         .display_path(file))
     if (verbose) {
         cls <- class(gsvacontainer)[1]
         sze <- format(structure(nchar(md$gsva_shell, type="bytes"),
@@ -485,9 +658,9 @@ loadParquetGSVA <- function(file, assay="auto", verbose=TRUE) {
 
 ## load GSVA output given as a path in the arguments 'rowNormExprData' of
 ## gsvaColRanks() or 'rankExprData' of gsvaColScores(), named in 'argname',
-## which can be either a directory with GSVA output saved with saveHDF5GSVA(),
-## or a file, an 's3://' or 'gs://' URI, or an 'http://' or 'https://' URL
-## with GSVA output saved with saveParquetGSVA(); 'assay' is the name of the
+## which can be either a file with GSVA output saved with saveHDF5GSVA(), or
+## a file, an 's3://' or 'gs://' URI, or an 'http://' or 'https://' URL with
+## GSVA output saved with saveParquetGSVA(); 'assay' is the name of the
 ## GSVA assay to load
 #' @importFrom cli cli_abort cli_alert_info
 .load_gsva_path <- function(path, assay, argname, verbose) {
@@ -496,24 +669,21 @@ loadParquetGSVA <- function(file, assay="auto", verbose=TRUE) {
 
     if (.is_uri(path))
         parquet <- TRUE
-    else if (dir.exists(path))
-        parquet <- FALSE
-    else if (file.exists(path)) {
-        if (!.is_parquet_file(path))
-            cli_abort(c("x"=paste("{.file {path}} is neither a directory with",
-                                  "GSVA output saved with 'saveHDF5GSVA()',",
-                                  "nor a file with GSVA output saved with",
-                                  "'saveParquetGSVA()'.")))
-        parquet <- TRUE
+    else if (file.exists(path) && !dir.exists(path)) {
+        if (.is_gsva_h5_file(path))
+            parquet <- FALSE
+        else if (.is_parquet_file(path))
+            parquet <- TRUE
+        else
+            cli_abort(c("x"=paste("{.file {path}} is neither a file with GSVA",
+                                  "output saved with 'saveHDF5GSVA()', nor",
+                                  "with 'saveParquetGSVA()'.")))
     } else
         cli_abort(c("x"="{path} cannot be found in the filesystem"))
 
-    ## loadParquetGSVA() gives its own messages
+    ## both loading functions give their own messages
     if (parquet)
         loadParquetGSVA(path, assay=assay, verbose=verbose)
-    else {
-        if (verbose)
-            cli_alert_info("Loading {basename(path)} from disk")
-        loadHDF5GSVA(path, assay=assay)
-    }
+    else
+        loadHDF5GSVA(path, assay=assay, verbose=verbose)
 }

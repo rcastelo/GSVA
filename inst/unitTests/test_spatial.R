@@ -1,6 +1,10 @@
 test_spatial <- function() {
 
     message("Running unit tests for spatial input")
+    ## small maximum memory budgets force processing by blocks, and the
+    ## memory check, which would warn about them, is skipped
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldcheckmem), add=TRUE)
 
     suppressPackageStartupMessages({
         library(Matrix)

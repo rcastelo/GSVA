@@ -89,6 +89,15 @@ class does not add any slots to the common slots inherited from
 \code{PLAGE} takes a number of parameters shared with all methods
 implemented by package GSVA but does not take any method-specific parameters.
 These parameters are described in detail below.
+
+The \code{PLAGE} score of a gene set is the first right singular vector of the
+standardized expression values of its genes, whose sign is arbitrary
+(Bro et al., 2008). GSVA orients it so that the scores correlate positively
+with the mean standardized expression of the genes in the gene set, in the
+same way as module eigengenes are aligned with the average expression of
+their module in the WGCNA package (Langfelder and Horvath, 2008). As a
+result, higher \code{PLAGE} scores tend to correspond to higher expression of
+the gene set, and the sign of the scores is the same across runs.
 }
 \examples{
 suppressPackageStartupMessages({
@@ -112,6 +121,16 @@ Tomfohr, J. et al. Pathway level analysis of gene expression
 using singular value decomposition.
 \emph{BMC Bioinformatics}, 6:225, 2005.
 \doi{10.1186/1471-2105-6-225}
+
+Bro, R., Acar, E. and Kolda, T.G. Resolving the sign ambiguity
+in the singular value decomposition.
+\emph{Journal of Chemometrics}, 22:135-140, 2008.
+\doi{10.1002/cem.1122}
+
+Langfelder, P. and Horvath, S. WGCNA: an R package for weighted
+correlation network analysis.
+\emph{BMC Bioinformatics}, 9:559, 2008.
+\doi{10.1186/1471-2105-9-559}
 }
 \seealso{
 \code{\link[=GsvaExprData-class]{GsvaExprData}},

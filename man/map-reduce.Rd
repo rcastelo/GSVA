@@ -119,13 +119,24 @@ valid partition name for the Slurm cluster.}
 for the GSVA calculations. Default: 600 seconds (10 minutes).}
 
 \item{nodes}{In \code{gsvaBatchtoolsSlurmParam()}, number of independent compute
-nodes to distribute the GSVA calculations (tasks) across. Default: 1.}
+nodes to distribute the GSVA calculations (tasks) across. Default: 2.}
 
 \item{ncpus_per_task}{In \code{gsvaBatchtoolsSlurmParam()}, number of CPU cores
-to use for each independent task executed within a compute node. Default: 1.}
+to use for each independent task executed within a compute node. Default: 2.}
 
 \item{mem}{In \code{gsvaBatchtoolsSlurmParam()}, amount of memory to allocate for
-each independent task executed within a compute node. Default: "10G".}
+each independent task executed within a compute node, which GSVA uses as its
+maximum main memory, see the \code{maxmem} argument of \code{\link[=gsva]{gsva()}}. Each
+task runs one R process and, with more than one CPU core per task, as many
+parallel workers, and each of these R processes takes about 0.8 GB by
+itself for loading GSVA and the packages it depends on, so that \code{mem}
+should be at least \code{(1 + ncpus_per_task)} times 0.8 GB, plus the memory
+needed by the calculations on each chunk of data. \code{gsvaBatchtoolsSlurmParam()}
+gives a warning when \code{mem} is smaller than the former, while \code{gsvaMap()},
+before submitting any job, gives an error in that case, because such jobs
+would be killed by the workload manager, and a warning when \code{mem} is smaller
+than the memory it estimates that the calculations on each chunk of data
+require. Default: "10G".}
 }
 \value{
 The \code{gsvaMap()} function returns either a list of objects with the
@@ -164,9 +175,9 @@ R session calling \code{gsvaMap()} was launched. The user must ensure that this
 path is reachable by all compute nodes in the HPC environment, and must
 manually delete its contents after the GSVA calculations are finished.
 Each job saves its results under a temporary name ending in \code{.partial},
-which it renames once they are complete, so files or directories with that
-ending left in that path belong to jobs that did not finish, and can be
-deleted once no job of those calculations is running.
+which it renames once they are complete, so files with that ending left in
+that path belong to jobs that did not finish, and can be deleted once no job
+of those calculations is running.
 }
 \examples{
 
