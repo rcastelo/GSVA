@@ -36,7 +36,8 @@
 .step_mem_factors <- function(step=c("rownorm", "rowstats", "colranks",
                                      "scores", "average", "plage", "zscore",
                                      "ssgsea", "ssgseascores",
-                                     "zscorescores"), X=NULL, ngs=0,
+                                     "zscorescores", "plagegram",
+                                     "plagescores"), X=NULL, ngs=0,
                               sparse=is_sparse(X),
                               int=(type(X) == "integer"), clr=FALSE,
                               dgc=is(X, "dgCMatrix")) {
@@ -68,9 +69,15 @@
            ## z-score and ssGSEA give them from an intermediate matrix as large
            ## as their input, of scaled rows or column ranks; the scores of
            ## z-score, from its scaled rows, take as much memory as the ones
-           ## of the average method
-           average=, zscorescores=list(workfactor=2, outfactor=0,
-                                       outextra=8 * ngs),
+           ## of the average method, as the ones of PLAGE, from its scaled
+           ## rows and the singular vectors of the gene sets, see plage()
+           average=, zscorescores=, plagescores=list(workfactor=2,
+                                                     outfactor=0,
+                                                     outextra=8 * ngs),
+           ## the products of the rows of each gene set in each block of
+           ## columns of the scaled rows of PLAGE, whose memory is given
+           ## separately, see plage()
+           plagegram=list(workfactor=2, outfactor=0, outextra=0),
            plage=, zscore=,
            ssgsea=list(workfactor=if (step == "ssgsea") 3 else 2, outfactor=1,
                        outextra=8 * ngs),
