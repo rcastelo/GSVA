@@ -341,14 +341,18 @@ zscore <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
 
     es <- NULL
     if (ncol(Z) >= length(geneSets) || is(Z, "DelayedMatrix") || ondisk) {
-        ## the blocks of columns leave memory for their dense scores
+        ## the blocks of columns leave memory for their dense scores; when the
+        ## input is stored on disk, the scaled rows are delayed operations on
+        ## it, and realizing each of their blocks of columns takes about three
+        ## times the size of its dense form, see plage()
         mf <- .step_mem_factors("zscorescores", ngs=length(geneSets))
+        delayedextra <- if (is(X, "DelayedMatrix")) 2 else 0
         es <- .processMatrixCols(Z, .compute_z_scores, geneSets,
                                  verbose=verbose,
                                  minparrows=100, minparcols=100,
                                  progressmsg="Calculating Z-scores per gene set",
                                  BPPARAM=BPPARAM, maxmem=maxmem,
-                                 workfactor=mf$workfactor,
+                                 workfactor=mf$workfactor + delayedextra,
                                  outfactor=mf$outfactor, outextra=mf$outextra,
                                  heldmem=.held_mem() + .inmem_size(X),
                                  sinkout=(ondisk || is(Z, "DelayedMatrix")))
