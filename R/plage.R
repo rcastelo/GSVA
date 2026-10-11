@@ -400,8 +400,9 @@ setMethod("anyNA", signature=c("plageParam"),
 
 ## memory taken by the products Z_gs Z_gs^T of the gene sets 'geneSets' in
 ## plage(), with 'nworkers' workers and a maximum main memory 'maxmem'. the
-## products are accumulated over the blocks of columns of the scaled rows, by
-## each worker and in the main process; with many large gene sets, these
+## products are accumulated over the blocks of columns of the scaled rows,
+## holding at most two copies of them per worker, their reduction and the
+## products of the block in process, see .processMatrixCols(); with many large gene sets, these
 ## products would not fit in main memory, and the gene sets are processed in
 ## groups, see .plage_groups(), whose products take at most a quarter of the
 ## memory available, 'maxgram', each group in a pass through the scaled rows.
@@ -411,10 +412,10 @@ setMethod("anyNA", signature=c("plageParam"),
 ## processes
 .plage_gram_mem <- function(geneSets, maxmem, nworkers) {
     grambytes <- 8 * as.numeric(lengths(geneSets))^2
-    maxgram <- .mem_fraction_R * maxmem / 4 / (nworkers + 1)
+    maxgram <- .mem_fraction_R * maxmem / 4 / (2 * nworkers)
     grp <- .plage_groups(grambytes, maxgram)
     mem <- if (length(grp) == 0) 0 else
-               (nworkers + 1) * max(tapply(grambytes, grp, sum))
+               2 * nworkers * max(tapply(grambytes, grp, sum))
 
     list(grambytes=grambytes, maxgram=maxgram, grp=grp, mem=mem,
          oversized=which(grambytes > maxgram))
@@ -493,7 +494,7 @@ plage <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
                                     outfactor=mf$outfactor,
                                     outextra=mf$outextra,
                                     heldmem=heldmem +
-                                            (nworkers + 1) * sum(grambytes[idx]),
+                                            2 * nworkers * sum(grambytes[idx]),
                                     combine=function(a, b) Map(`+`, a, b))
         w[idx] <- lapply(grams, function(gram) {
                              e <- .plage_leading_eigen(gram)

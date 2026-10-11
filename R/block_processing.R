@@ -607,6 +607,23 @@ ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
 
 ## split the list of consecutive ranges 'rngs' into at most 'ngroups' groups
 ## of consecutive ranges with about the same number of ranges
+## result of 'WRAPPED_FUN' on the blocks with the ranges in the group 'grp',
+## see .group_ranges(), taken from the matrix by 'FUN_WRAPPER', and reduced
+## with 'combine' as they are calculated, so that a worker holds at most the
+## reduction and the result of one block, see .processMatrixCols(). the names
+## of the arguments in '...' must not match partially these arguments
+COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
+    acc <- NULL
+    for (rng in grp) {
+        res <- FUN_WRAPPER(rng, verbose=FALSE, idpbe=NULL,
+                           WRAPPED_FUN=WRAPPED_FUN, ...)
+        acc <- if (is.null(acc)) res else combine(acc, res)
+        res <- NULL
+    }
+
+    acc
+}
+
 .group_ranges <- function(rngs, ngroups) {
     ngroups <- max(1L, min(length(rngs), ngroups))
     unname(split(rngs, ceiling(seq_along(rngs) * ngroups / length(rngs))))
@@ -924,13 +941,22 @@ ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
 ## .units_per_block(), as do 'dense', when FUN converts blocks of sparse 'X'
 ## into dense matrices, and 'heldmem', the memory held by other objects
 ## the results of FUN on each block of columns are bound by columns or,
-## when 'combine' is a function of two results, reduced with it
+## when 'combine' is a function of two results, reduced with it as they
+## arrive, instead of holding the results of all the blocks: after each block
+## in serial execution and, with parallel workers, by each worker over a group
+## of consecutive blocks, see COMBINE_GROUP_FUN(), in a single call to the
+## parallel back-end, or, when socket workers receive each block from this
+## process, see .bp_blocks(), after each round of as many blocks as workers.
+## main memory then holds at most two results per worker, the reduction and
+## the result of the block in process
 ## with 'sinkout=TRUE', FUN processes each block in main memory and the
 ## output is written into on-disk data structures, see .ondisk_blocks()
 #' @importFrom BiocGenerics type
-#' @importFrom cli cli_abort
+#' @importFrom cli cli_abort cli_progress_bar cli_progress_update
+#' @importFrom cli cli_progress_done
 #' @importFrom BiocParallel bplapply bpnworkers "bpprogressbar<-" bptry
 #' @importFrom BiocParallel bpok bpstopOnError "bpstopOnError<-"
+#' @importFrom BiocParallel bpisup bpstart bpstop
 #' @importClassesFrom IRanges IRanges
 #' @importFrom IRanges start end width
 .processMatrixCols <- function(X, FUN, ..., verbose=TRUE,
@@ -981,14 +1007,8 @@ ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
                               progressmsg=progressmsg, BPPARAM=BPPARAM))
         
     totalncols <- ncol(X)
-    res <- NULL
-    if (is.null(BPPARAM) || nworkers <= 1L) { ## serial execution in chunks
-        env <- new.env(parent=globalenv())
-        assign("idpb", cli_progress_bar(progressmsg, total=totalncols), envir=env)
-        res <- lapply(cir, FUN=FUN_WRAPPER, verbose=verbose,
-                      idpbe=env, WRAPPED_FUN=FUN, ...)
-        cli_progress_done(get("idpb", envir=env))
-    } else {                                  ## parallel execution in chunks
+    serial <- is.null(BPPARAM) || nworkers <= 1L
+    if (!serial) {
         ## 'BPPARAM' is a reference class object, so the following changes
         ## reach the object of the caller, which is restored on exit
         oldprogressbar <- bpprogressbar(BPPARAM)
@@ -997,27 +1017,86 @@ ONDISK_GROUP_FUN <- function(grp, FUN_WRAPPER, BLOCK_FUN, whdim, dumpdir,
             bpprogressbar(BPPARAM) <- oldprogressbar
             bpstopOnError(BPPARAM) <- oldstoponerror
         }, add=TRUE)
-        if (verbose)
-            bpprogressbar(BPPARAM) <- TRUE    ## reporting progress wo/ cli
+        ## reporting progress wo/ cli, except when reducing by rounds
+        bpprogressbar(BPPARAM) <- verbose && !is.function(combine)
         bpstopOnError(BPPARAM) <- FALSE
-        res <- bptry(.bp_blocks(X, 2L, cir, FUN, FUN_WRAPPER, ...,
-                                BPPARAM=BPPARAM))
+    }
+
+    ## parallel execution of 'run', given the result of a previous execution
+    ## whose failed elements are executed again, which it executes again once
+    ## when some of them fail
+    run_retrying <- function(run) {
+        res <- bptry(run(list()))
         bpokmask <- .bp_ok(res)
         if (any(!bpokmask)) {
             .report_parallel_errors(res)
             cli_alert_warning("Trying to execute again the failing thread(s)")
-            res <- bptry(.bp_blocks(X, 2L, cir, FUN, FUN_WRAPPER, ...,
-                                    BPREDO=res, BPPARAM=BPPARAM))
+            res <- bptry(run(res))
             bpokmask <- .bp_ok(res)
             if (any(!bpokmask)) {
                 .report_parallel_errors(res)
                 cli_abort(c("x"="Cancelling execution"))
             }
         }
+        res
+    }
+    run_blocks <- function(rngs)
+        run_retrying(function(BPREDO)
+                         .bp_blocks(X, 2L, rngs, FUN, FUN_WRAPPER, ...,
+                                    BPREDO=BPREDO, BPPARAM=BPPARAM))
+
+    if (is.function(combine)) { ## reduced as they arrive, see above
+        env <- new.env(parent=globalenv())
+        assign("idpb", cli_progress_bar(progressmsg, total=totalncols),
+               envir=env)
+        widths <- function(rngs) sum(vapply(rngs, width, integer(1)))
+        acc <- NULL
+        add <- function(res)
+            for (r in res)
+                acc <<- if (is.null(acc)) r else combine(acc, r)
+        if (serial) {
+            for (rng in cir)
+                add(list(FUN_WRAPPER(rng, verbose=verbose, idpbe=env,
+                                     WRAPPED_FUN=FUN, ...)))
+        } else if (is(X, "DelayedArray") || is(BPPARAM, "MulticoreParam")) {
+            grps <- .group_ranges(cir, nworkers)
+            add(run_retrying(function(BPREDO)
+                    .gsva_bplapply(grps, FUN=COMBINE_GROUP_FUN,
+                                   FUN_WRAPPER=FUN_WRAPPER, WRAPPED_FUN=FUN,
+                                   combine=combine, ..., BPREDO=BPREDO,
+                                   BPPARAM=BPPARAM)))
+            if (verbose)
+                cli_progress_update(id=get("idpb", envir=env),
+                                    inc=widths(cir))
+        } else {
+            ## the socket workers run all the rounds, instead of being
+            ## started anew for each of them
+            if (!bpisup(BPPARAM)) {
+                bpstart(BPPARAM)
+                on.exit(bpstop(BPPARAM), add=TRUE)
+            }
+            rounds <- split(seq_along(cir), ceiling(seq_along(cir) / nworkers))
+            for (ids in rounds) {
+                add(run_blocks(cir[ids]))
+                if (verbose)
+                    cli_progress_update(id=get("idpb", envir=env),
+                                        inc=widths(cir[ids]))
+            }
+        }
+        cli_progress_done(get("idpb", envir=env))
+
+        return(acc)
     }
 
-    if (is.function(combine))
-        return(Reduce(combine, res))
+    res <- NULL
+    if (serial) { ## serial execution in chunks
+        env <- new.env(parent=globalenv())
+        assign("idpb", cli_progress_bar(progressmsg, total=totalncols), envir=env)
+        res <- lapply(cir, FUN=FUN_WRAPPER, verbose=verbose,
+                      idpbe=env, WRAPPED_FUN=FUN, ...)
+        cli_progress_done(get("idpb", envir=env))
+    } else ## parallel execution in chunks
+        res <- run_blocks(cir)
 
     mines <- maxes <- NULL
     if (!is.null(attr(res[[1]], "min"))) { ## min and max enrichment scores stored by ssGSEA
