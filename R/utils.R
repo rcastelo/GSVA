@@ -1052,15 +1052,72 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     as.numeric(object.size(X))
 }
 
-## memory in bytes that the input data of the parameter object 'param' takes
-## in main memory, including the assays not used by the calculations
-.input_held_mem <- function(param) {
-    x <- get_exprData(param)
+## memory in bytes that the container 'x' of expression data takes in main
+## memory: the one of all its assays, when it is a SummarizedExperiment
+## object, including those not used by the calculations, or otherwise the one
+## of its matrix of the assay 'assay'
+#' @importFrom SummarizedExperiment assays
+.container_held_mem <- function(x, assay) {
     if (is(x, "SummarizedExperiment"))
         return(sum(vapply(assays(x, withDimnames=FALSE), .inmem_size,
                           numeric(1))))
 
-    .inmem_size(unwrapData(x, get_assay(param)))
+    .inmem_size(unwrapData(x, assay))
+}
+
+## memory in bytes that the input data of the parameter object 'param' takes
+## in main memory, including the assays not used by the calculations
+.input_held_mem <- function(param) {
+    .container_held_mem(get_exprData(param), get_assay(param))
+}
+
+## memory in bytes held, besides the memory of the step itself, while a step
+## processes the input matrix 'X', restricted to dimensions 'dims' along
+## 'whdim', from a container whose assays take 'container' bytes in main
+## memory, see .container_held_mem(): its assays other than 'X' and, when 'X'
+## is in main memory, the whole of 'X' when only part of it is processed, and
+## the part processed, which the step copies, when its output is written to
+## disk ('ondisk=TRUE'), because otherwise the memory of the step includes it,
+## see .step_data_mem(). when 'X' is stored on disk, the step loads in main
+## memory only the part processed and only when its output is not written to
+## disk, which the memory of the step includes
+.step_held_input <- function(X, dims, whdim, ondisk,
+                             container=.inmem_size(X)) {
+    held <- max(0, container - .inmem_size(X))
+    if (is(X, "DelayedArray"))
+        return(held)
+
+    frac <- as.numeric(dims[whdim]) / max(1, dim(X)[whdim])
+    if (frac < 1)
+        held <- held + .inmem_size(X)
+    if (ondisk)
+        held <- held + frac * .inmem_size(X)
+
+    held
+}
+
+## add the memory held by the input data while a step processes its matrix
+## 'X', along its rows (whdim=1) or columns (whdim=2), restricted to those
+## from 'first' to 'last', when given, see .step_held_input(), to the memory
+## held by other objects, see .held_mem(), which the blocks of the
+## calculations cannot take, while the calling function runs, restoring it
+## when that function exits; 'container' is the memory that the assays of the
+## input data take in main memory, see .container_held_mem(). the part of
+## 'X' processed is not included, because the blocks of the calculations
+## include it when it is in main memory, see .units_per_block()
+.hold_input_mem <- function(X, whdim, first, last, container,
+                            envir=parent.frame()) {
+    dims <- dim(X)
+    if (!is.na(first) || !is.na(last))
+        dims[whdim] <- (if (is.na(last)) dims[whdim] else last) -
+                       (if (is.na(first)) 1 else first) + 1
+    old <- gsva_global$heldmem
+    gsva_global$heldmem <- old + .step_held_input(X, dims, whdim, FALSE,
+                                                   container)
+    do.call(on.exit, list(substitute(gsva_global$heldmem <- old, list(old=old)),
+                          add=TRUE), envir=envir)
+
+    invisible(old)
 }
 
 ## number of parallel workers of 'BPPARAM' that process a matrix with
@@ -1146,13 +1203,16 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## a sparse input gives a dense output, see .check_ondisk(). 'extramem' bytes
 ## are taken by the calculations besides those of the blocks, such as the
 ## products of the genes of each gene set in PLAGE, see .plage_gram_mem().
+## the memory of the container of 'X', 'container', see .container_held_mem(),
+## and of 'X' itself remains allocated as given by .step_held_input(),
+## independently of whether the output is written to disk
 ## input data in main memory, which is not loaded from disk, remains
 ## allocated when the calculations are done on disk
 #' @importFrom S4Arrays is_sparse
 #' @importFrom BiocGenerics type
 .check_step_mem <- function(X, whdim, first, last, ondisk, mf, BPPARAM,
                             maxmem, dense=FALSE, densify=FALSE,
-                            extramem=0) {
+                            extramem=0, container=.inmem_size(X)) {
     if (!gsva_global$check_memory || !getOption("GSVA.check_memory", TRUE))
         return(invisible(FALSE))
 
@@ -1164,9 +1224,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     if (is.null(insize)) ## e.g., data in Parquet files, processed from disk
         insize <- prod(as.numeric(dims)) * eltbytes
     nworkers <- .n_par_workers(BPPARAM, dims)
-    heldmem <- .held_mem() + extramem
-    if (ondisk)
-        heldmem <- heldmem + .inmem_size(X)
+    heldmem <- .held_mem() + extramem +
+               .step_held_input(X, dims, whdim, ondisk, container)
     need <- .step_mem_need(dims, insize, whdim, eltbytes,
                            is_sparse(X) && !dense, !ondisk, mf, nworkers,
                            heldmem, densify)
@@ -1200,9 +1259,17 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     steps <- list(list(step="rownorm", whdim=1L, int=(type(X) == "integer")),
                   list(step="colranks", whdim=2L, int=FALSE),
                   list(step="scores", whdim=2L, int=TRUE))
-    ## the input data in main memory remains allocated during the steps
-    ## after the row normalization, see gsva()
-    held <- 0
+    ## the assays of the input data in main memory remain allocated during all
+    ## the steps, see gsva(), the other assays during the row normalization,
+    ## whose input is the assay used; the input of each step is in main
+    ## memory when it is the assay used and this is in main memory, or when
+    ## it is the output of the previous step and this was not written to
+    ## disk, and it remains allocated when the step writes its own output to
+    ## disk, see .step_held_input()
+    container <- .input_held_mem(param)
+    rownormnone <- .get_rowNorm(param) == "none"
+    held <- max(0, container - .inmem_size(X))
+    inres <- !is(X, "DelayedArray")
     need <- 0
     for (st in steps) {
         mf <- .step_mem_factors(st$step, ngs=ngs, sparse=sparse && !densify,
@@ -1215,17 +1282,24 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             inmemory <- .step_data_mem(dims, st$whdim, insize, eltbytes,
                                        sparse, TRUE, mf, held,
                                        densify) <= .mem_fraction_R * maxmem
+        stepheld <- held + if (inres && !inmemory) insize else 0
         need <- max(need, .step_mem_need(dims, insize, st$whdim, eltbytes,
                                          sparse, inmemory, mf, nworkers,
-                                         held, densify))
-        ## size of the input of the next step
-        if (densify)
-            insize <- prod(as.numeric(dims)) * 8
-        else
-            insize <- insize * mf$outfactor
+                                         stepheld, densify))
+        ## the input of the next step and its size: without row
+        ## normalization, it is the assay used, held by the input data
+        if (st$step == "rownorm" && rownormnone) {
+            held <- max(0, container - .inmem_size(X))
+        } else {
+            inres <- inmemory
+            held <- container
+            if (densify)
+                insize <- prod(as.numeric(dims)) * 8
+            else
+                insize <- insize * mf$outfactor
+        }
         if (densify)
             sparse <- densify <- FALSE
-        held <- .input_held_mem(param)
     }
 
     .check_mem_need(need, maxmem, nworkers)

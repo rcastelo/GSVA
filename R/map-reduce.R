@@ -707,11 +707,17 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
         insize <- density * prod(as.numeric(dims)) * (eltbytes + 4)
     }
     mf <- .map_step_factors(funname, inputData, X)
+    ## each job receives the whole input data, whose assays in main memory
+    ## remain allocated while it processes its chunk, see .step_held_input()
+    container <- if (is(inputData, "gsvaParam")) .input_held_mem(inputData)
+                 else .container_held_mem(inputData, assay)
+    held <- .step_held_input(X, dims, whdim, FALSE, container)
     inmemory <- .step_data_mem(dims, whdim, insize, eltbytes, sparse, TRUE,
-                               mf, densify=mf$densify) <=
+                               mf, held, densify=mf$densify) <=
                 .mem_fraction_R * maxmem
+    held <- .step_held_input(X, dims, whdim, !inmemory, container)
     need <- .step_mem_need(dims, insize, whdim, eltbytes, sparse, inmemory,
-                           mf, nworkers, densify=mf$densify)
+                           mf, nworkers, held, densify=mf$densify)
 
     .check_mem_need(need, maxmem, nworkers, hint=hint)
 }

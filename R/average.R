@@ -39,8 +39,10 @@ setMethod("gsva", signature(param="avgParam"),
               ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
                                       recompute_nzcount=FALSE, maxmem=maxmem,
                                       verbose=verbose, mf=mf)
+              container <- .input_held_mem(param)
               .check_step_mem(filtDataMatrix, 2L, NA, NA, ondisk, mf, BPPARAM,
-                              maxmem)
+                              maxmem, container=container)
+              .hold_input_mem(filtDataMatrix, 2L, NA, NA, container)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "average", first=NA,

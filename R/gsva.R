@@ -43,8 +43,13 @@
 #' for loading GSVA and the packages it depends on, including forked workers,
 #' such as those of a [`MulticoreParam`][BiocParallel::MulticoreParam-class]
 #' object, which end up taking most of that memory as their own while they
-#' run. Before starting its calculations, GSVA gives a warning when the memory
-#' it estimates they require exceeds `maxmem`, suggesting to use fewer
+#' run. The memory that GSVA estimates includes the expression data given to
+#' it, with all the assays of a `SummarizedExperiment` object held in main
+#' memory, but not other objects of the R session, such as other large
+#' matrices or data sets, which reduce the memory actually available to GSVA;
+#' when such objects are present, consider setting `maxmem` to the memory that
+#' they leave. Before starting its calculations, GSVA gives a warning when the
+#' memory it estimates they require exceeds `maxmem`, suggesting to use fewer
 #' parallel workers or a larger `maxmem`. The memory taken by each R process
 #' can be set with the option `GSVA.workermem`, in bytes, and this check can be
 #' disabled with `options(GSVA.check_memory=FALSE)`.
@@ -879,8 +884,13 @@ setMethod("details",
 #' for loading GSVA and the packages it depends on, including forked workers,
 #' such as those of a [`MulticoreParam`][BiocParallel::MulticoreParam-class]
 #' object, which end up taking most of that memory as their own while they
-#' run. Before starting its calculations, GSVA gives a warning when the memory
-#' it estimates they require exceeds `maxmem`, suggesting to use fewer
+#' run. The memory that GSVA estimates includes the expression data given to
+#' it, with all the assays of a `SummarizedExperiment` object held in main
+#' memory, but not other objects of the R session, such as other large
+#' matrices or data sets, which reduce the memory actually available to GSVA;
+#' when such objects are present, consider setting `maxmem` to the memory that
+#' they leave. Before starting its calculations, GSVA gives a warning when the
+#' memory it estimates they require exceeds `maxmem`, suggesting to use fewer
 #' parallel workers or a larger `maxmem`. The memory taken by each R process
 #' can be set with the option `GSVA.workermem`, in bytes, and this check can be
 #' disabled with `options(GSVA.check_memory=FALSE)`.
@@ -990,8 +1000,10 @@ gsvaRowNorm <- function(param,
     ondisk <- .check_ondisk(param, first=first, last=last, whdim=1,
                             recompute_nzcount=FALSE, maxmem=maxmem,
                             verbose=verbose, mf=mf, densify=densify)
+    container <- .input_held_mem(param)
     .check_step_mem(dataMatrix, 1L, first, last, ondisk, mf, BPPARAM, maxmem,
-                    densify=densify)
+                    densify=densify, container=container)
+    .hold_input_mem(dataMatrix, 1L, first, last, container)
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=1,
@@ -1135,7 +1147,10 @@ gsvaColRanks <- function(rowNormExprData,
                             first=first, last=last, whdim=2,
                             recompute_nzcount=FALSE, maxmem=maxmem,
                             verbose=verbose, mf=mf)
-    .check_step_mem(dataMatrix, 2L, first, last, ondisk, mf, BPPARAM, maxmem)
+    container <- .input_held_mem(param)
+    .check_step_mem(dataMatrix, 2L, first, last, ondisk, mf, BPPARAM, maxmem,
+                    container=container)
+    .hold_input_mem(dataMatrix, 2L, first, last, container)
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=2,
@@ -1270,8 +1285,10 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                 first=first, last=last, whdim=2,
                                 recompute_nzcount=recompute_nzcount,
                                 maxmem=maxmem, verbose=verbose, mf=mf)
+    container <- .input_held_mem(param)
     .check_step_mem(filtDataMatrix, 2L, first, last, ondisk, mf, BPPARAM,
-                    maxmem)
+                    maxmem, container=container)
+    .hold_input_mem(filtDataMatrix, 2L, first, last, container)
 
     filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix, "GSVA",
                                                     first, last, whdim=2,

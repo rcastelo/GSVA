@@ -89,8 +89,13 @@ and each of its parallel workers in \code{BPPARAM}, takes about 0.8 GB by itself
 for loading GSVA and the packages it depends on, including forked workers,
 such as those of a \code{\link[BiocParallel:MulticoreParam-class]{MulticoreParam}}
 object, which end up taking most of that memory as their own while they
-run. Before starting its calculations, GSVA gives a warning when the memory
-it estimates they require exceeds \code{maxmem}, suggesting to use fewer
+run. The memory that GSVA estimates includes the expression data given to
+it, with all the assays of a \code{SummarizedExperiment} object held in main
+memory, but not other objects of the R session, such as other large
+matrices or data sets, which reduce the memory actually available to GSVA;
+when such objects are present, consider setting \code{maxmem} to the memory that
+they leave. Before starting its calculations, GSVA gives a warning when the
+memory it estimates they require exceeds \code{maxmem}, suggesting to use fewer
 parallel workers or a larger \code{maxmem}. The memory taken by each R process
 can be set with the option \code{GSVA.workermem}, in bytes, and this check can be
 disabled with \code{options(GSVA.check_memory=FALSE)}.}
