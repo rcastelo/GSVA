@@ -235,14 +235,19 @@ saveHDF5GSVA <- function(gsvaExprData, file, assay="auto", replace=FALSE,
     assay(shell, cnt$assay) <- NULL
 
     ## the file is written with a temporary name and renamed when complete,
-    ## so that an interrupted saving does not leave an incomplete file
+    ## so that an interrupted saving does not leave an incomplete file, and
+    ## an existing file is kept until the new one takes its place, see
+    ## .replace_file()
     tmpname <- .unique_tmpname(file)
     on.exit(unlink(tmpname), add=TRUE)
     .write_gsva_h5(X, tmpname, cnt$assay, type == "integer", shell, verbose)
-    if (file.exists(file))
-        unlink(file)
-    if (!file.rename(tmpname, file))
+    if (!.replace_file(tmpname, file)) {
+        if (file.exists(file))
+            cli_abort(c("x"="Cannot replace the file {.file {file}}.",
+                        "i"=paste("The file may be open in another program",
+                                  "or R session.")))
         cli_abort(c("x"="Cannot write the file {.file {file}}."))
+    }
 
     invisible(file)
 }
