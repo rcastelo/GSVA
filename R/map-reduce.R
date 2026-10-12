@@ -20,9 +20,9 @@
 #' path is reachable by all compute nodes in the HPC environment, and must
 #' manually delete its contents after the GSVA calculations are finished.
 #' Each job saves its results under a temporary name ending in `.partial`,
-#' which it renames once they are complete, so files or directories with that
-#' ending left in that path belong to jobs that did not finish, and can be
-#' deleted once no job of those calculations is running.
+#' which it renames once they are complete, so files with that ending left in
+#' that path belong to jobs that did not finish, and can be deleted once no job
+#' of those calculations is running.
 #'
 #' @param FUN In `gsvaMap()`, function to map to the data in the `inputData`
 #' argument.
@@ -100,17 +100,72 @@
 #' to use for the GSVA calculations. No default value, the user must provide a
 #' valid partition name for the Slurm cluster.
 #'
-#' @param walltime In `gsvaBatchtoolsSlurmParam()`, maximum wall time in seconds
-#' for the GSVA calculations. Default: 600 seconds (10 minutes).
+#' @param walltime In `gsvaBatchtoolsSlurmParam()`, either `NULL` or the
+#' maximum wall time of each job sent to Slurm, after which Slurm ends it,
+#' given as in the `--time` option of the Slurm command `sbatch`: either a
+#' number of minutes, or a character string with one of the formats
+#' `"minutes"`, `"minutes:seconds"`, `"hours:minutes:seconds"`,
+#' `"days-hours"`, `"days-hours:minutes"` and `"days-hours:minutes:seconds"`,
+#' e.g., `"90"` or `"1:30:00"` for one hour and a half, or `"2-0"` for two
+#' days, which Slurm rounds up to minutes, or `"UNLIMITED"`, for the maximum
+#' time limit of the partition. `gsvaMap()` splits the input data into
+#' chunks, whose number depends on its size and on the memory of each job,
+#' see `mem`, and distributes them among `nodes` jobs, each of which processes
+#' its chunks one after another, so that `walltime` should be long enough for
+#' about the number of chunks divided by `nodes`; with `arrayjobs=TRUE`, it is
+#' instead the maximum wall time of each chunk. When `NULL`, no time limit is
+#' requested, and the jobs take the default time limit of the partition,
+#' which its maximum time limit bounds; e.g., the Slurm command
+#' `scontrol show partition` shows both of them in the fields `DefaultTime`
+#' and `MaxTime`. Chunks of jobs ended by Slurm can be resubmitted with the
+#' `MAPREDO` argument of `gsvaMap()`. Default: `NULL`.
 #'
 #' @param nodes In `gsvaBatchtoolsSlurmParam()`, number of independent compute
-#' nodes to distribute the GSVA calculations (tasks) across. Default: 1.
+#' nodes to distribute the GSVA calculations (tasks) across, which is the
+#' maximum number of jobs running at the same time. Default: 2.
 #'
 #' @param ncpus_per_task In `gsvaBatchtoolsSlurmParam()`, number of CPU cores
-#' to use for each independent task executed within a compute node. Default: 1.
+#' to use for each independent task executed within a compute node. Default: 2.
 #'
 #' @param mem In `gsvaBatchtoolsSlurmParam()`, amount of memory to allocate for
-#' each independent task executed within a compute node. Default: "10G".
+#' each independent task executed within a compute node, which GSVA uses as its
+#' maximum main memory, see the `maxmem` argument of [`gsva()`][gsva]. Each
+#' task runs one R process and, with more than one CPU core per task, as many
+#' parallel workers, and each of these R processes takes about 0.8 GB by
+#' itself for loading GSVA and the packages it depends on, so that `mem`
+#' should be at least `(1 + ncpus_per_task)` times 0.8 GB, plus the memory
+#' needed by the calculations on each chunk of data. `gsvaBatchtoolsSlurmParam()`
+#' gives a warning when `mem` is smaller than the former, while `gsvaMap()`,
+#' before submitting any job, gives an error in that case, because such jobs
+#' would be killed by the workload manager, and a warning when `mem` is smaller
+#' than the memory it estimates that the calculations on each chunk of data
+#' require. Default: "10G".
+#'
+#' @param arrayjobs In `gsvaBatchtoolsSlurmParam()`, logical vector of length
+#' 1. When `TRUE`, each of the `nodes` jobs is sent to Slurm as an array job,
+#' whose tasks process one chunk each, one after another, instead of as a
+#' single job processing all its chunks, so that `walltime` applies to each
+#' chunk, the scheduler may start the shorter tasks sooner, and a task ended by
+#' Slurm, e.g., for exceeding its memory or time limit, does not prevent the
+#' next tasks from processing their chunks. At most `nodes` tasks run at the
+#' same time. Default: `FALSE`.
+#'
+#' @param template In `gsvaBatchtoolsSlurmParam()`, path to the template of
+#' the Slurm job scripts, see [batchtools::makeClusterFunctionsSlurm()].
+#' By default, the template provided by GSVA, which requests `mem` for the
+#' whole job (`--mem`), instead of the default template of batchtools for
+#' Slurm, which requests that amount for each CPU core (`--mem-per-cpu`),
+#' i.e., `ncpus_per_task` times the memory that GSVA uses in each job. A
+#' different template, e.g., one that loads modules or sets an account
+#' required by the cluster, should also request the memory given in the
+#' `memory` element of the resources for the whole job, and to support the
+#' arguments `walltime` and `arrayjobs`, the time limit in the `walltime`
+#' element only when it is given, which is either a number of seconds, as in
+#' the templates of batchtools, or the character string `"UNLIMITED"`, and in
+#' array jobs, at most as many tasks at
+#' the same time as given in the `array.throttle` element, see the template
+#' provided by GSVA. Default:
+#' `system.file("templates", "slurm-gsva.tmpl", package="GSVA")`.
 #'
 #' @param BTPARAM In `gsvaMap()`, an object of class
 #' [`BatchtoolsParam`][BiocParallel::BatchtoolsParam-class] specifying
@@ -122,7 +177,13 @@
 #' object themselves with appropriate arguments or, if an SLURM HPC environment
 #' is available, they may use the wrapper function `gsvaBatchtoolsSlurmParam()`,
 #' which is provided to create a `BatchtoolsParam` object with some sensible
-#' defaults for running GSVA calculations on a SLURM cluster.
+#' defaults for running GSVA calculations on a SLURM cluster. GSVA uses the
+#' `memory` element of the resources of `BTPARAM` as the maximum main memory
+#' of each job, shared by its R process and its parallel workers, while the
+#' template of the job scripts determines how much memory the workload manager
+#' allocates to the job; e.g., the default template of batchtools for Slurm
+#' allocates that amount for each CPU core, see the `template` argument of
+#' `gsvaBatchtoolsSlurmParam()`.
 #'
 #' @return The `gsvaMap()` function returns either a list of objects with the
 #' results of the GSVA calculations for each compute node, or a list of file paths
@@ -268,6 +329,14 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     funargs <- list()
     assay <- NA_character_
 
+    ## each job receives the whole input data, from which the assays not
+    ## used by the step are dropped, see .keep_used_assay()
+    if (!is.list(inputData))
+        inputData <- .keep_used_assay(inputData,
+                         if (identical(FUN, gsvaRowNorm)) get_assay(inputData)
+                         else if (identical(FUN, gsvaColRanks)) "gsvarnorm"
+                         else "gsvaranks")
+
     if (identical(FUN, gsvaRowNorm)) {
 
         funargs <- c(funargs, list(param=inputData,
@@ -306,8 +375,18 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     chunks <- NULL
     if (!is.list(X)) {
         if (is.null(mapinfo)) {
-            grid <- gridsizefun(unwrapData(get_exprData(inputData), assay),
-                                nworkers, maxmem)
+            ## each job has its own memory 'maxmem', not shared with the
+            ## other jobs, and its chunk takes the memory of the selected
+            ## step, see .map_step_factors(), besides the memory of the rest
+            ## of the input data that each job receives, see .check_map_mem()
+            Xd <- unwrapData(get_exprData(inputData), assay)
+            mf <- .map_step_factors(funname, inputData, Xd)
+            container <- .map_container_mem(inputData, assay)
+            grid <- gridsizefun(Xd, nworkers, maxmem, mf$workfactor,
+                                mf$outfactor, mf$outextra, workermem=0,
+                                dense=mf$densify,
+                                heldmem=max(0, container - .inmem_size(Xd)),
+                                sharedmem=FALSE)
             X <- splitinrangesfun(grid)
             chunks <- data.frame(first=vapply(X, start, integer(1)),
                                  last=vapply(X, end, integer(1)))
@@ -327,6 +406,14 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         cli_abort(c("x"=paste("{.arg MAPREDO} was not produced by",
                               "{.fn gsvaMap} with FUN={funname} on the",
                               "same {.arg inputData}.")))
+
+    ## before submitting any job, or writing its manifest, check the memory
+    ## that each job requires
+    chunkwidth <- if (is.null(chunks)) NA_real_ else
+                      max(chunks$last - chunks$first + 1)
+    .check_map_mem(funname, inputData, assay,
+                   whdim=if (funname == "gsvaRowNorm") 1L else 2L,
+                   chunkwidth=chunkwidth, ncpus=ncpus, maxmem=maxmem)
 
     ## results saved to disk get file names that depend only on the input
     ## and the chunk boundaries, and a manifest that allows MAPREDO to find
@@ -357,7 +444,7 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         if (output == "object")
             idx <- which(.map_failed(MAPREDO))
         else { ## the results on disk tell which chunks are missing
-            done <- file.exists(paths)
+            done <- .valid_map_results(paths)
             res[done] <- as.list(paths[done])
             idx <- which(!done)
         }
@@ -446,7 +533,10 @@ gsvaReduce <- function(mapOutput, verbose=TRUE) {
                               "{.arg MAPREDO} set to {.arg mapOutput}.")))
     }
 
-    cls <- unique(lapply(mapOutput, class))
+    ## chunks may store their values in different ways, e.g., some in main
+    ## memory and others on disk, depending on the memory available to each
+    ## of them, see .harmonize_storage(), but must have the same container
+    cls <- unique(lapply(mapOutput, .container_class))
     if (length(cls) > 1)
         cli_abort(c("x"="All inputs must be of the same class."))
 
@@ -463,7 +553,7 @@ gsvaReduce <- function(mapOutput, verbose=TRUE) {
     nrmdata <- .pull_nonrestrict_metadata(mapOutput[[1]])
     rmdata <- .pull_restrict_metadata_list(mapOutput)
     ord <- .check_and_order_restrict_metadata(rmdata, totalInputDim)
-    mapOutput <- .strip_metadata(mapOutput)
+    mapOutput <- .harmonize_storage(.strip_metadata(mapOutput))
 
     if (is.null(rmdata[[1]]$whdim))
         cli_abort(c("x"=paste("The input list argument in 'mapOutput' must",
@@ -488,8 +578,12 @@ gsvaReduce <- function(mapOutput, verbose=TRUE) {
 #' @importFrom cli cli_alert_warning cli_abort
 #' @rdname map-reduce
 #' @export gsvaBatchtoolsSlurmParam
-gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
-                                     nodes=2, ncpus_per_task=2, mem="10G") { # nocov start
+gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
+                                     walltime=NULL, nodes=2, ncpus_per_task=2,
+                                     mem="10G", arrayjobs=FALSE,
+                                     template=system.file("templates",
+                                                          "slurm-gsva.tmpl",
+                                                          package="GSVA")) { # nocov start
 
     if (dir.exists(dir))
         cli_alert_warning("The directory {dir} already exists.")
@@ -501,6 +595,17 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
     if (missing(partition) || is.null(partition) || !is.character(partition))
         cli_abort(c("x"=paste("You must provide a valid partition name",
                               "for the Slurm cluster.")))
+
+    walltime <- .slurm_walltime(walltime)
+
+    if (!is.logical(arrayjobs) || length(arrayjobs) != 1 || is.na(arrayjobs))
+        cli_abort(c("x"="'arrayjobs' must be either TRUE or FALSE."))
+
+    if (!.isCharLength1(template) || !file.exists(template))
+        cli_abort(c("x"=paste("'template' must be the path to an existing",
+                              "template file of Slurm job scripts.")))
+
+    .check_job_mem(ncpus_per_task, .memtext2bytes(mem))
 
     ## automatically created HDF5 datasets should be stored in a filesystem
     ## path that is reachable by all compute nodes, instead of the default
@@ -519,13 +624,18 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
                                            source="gsvainit.R",
                                            conf.file=.write_batchtools_conf(dir))
 
+    resources <- list(ncpus=ncpus_per_task, partition=partition, memory=mem)
+    if (!is.null(walltime))
+        resources$walltime <- walltime
+    ## each of the 'nodes' jobs of BiocParallel is an array job whose tasks
+    ## run one at a time, so that at most 'nodes' tasks run at the same time
+    if (arrayjobs)
+        resources <- c(resources, list(chunks.as.arrayjobs=TRUE,
+                                       array.throttle=1L))
+
     BTPARAM <- BatchtoolsParam(workers=nodes, cluster="slurm",
-                               jobname="gsva",
-                               resources=list(ncpus=ncpus_per_task,
-                                              partition=partition,
-                                              walltime=walltime,
-                                              memory=mem),
-                               registryargs=registryargs,
+                               jobname="gsva", resources=resources,
+                               registryargs=registryargs, template=template,
                                stop.on.error=FALSE, log=TRUE, logdir=dir)
     return(BTPARAM)
 } # nocov end
@@ -557,6 +667,221 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
     conffile
 }
 
+## time limit of the jobs sent to Slurm given in the 'walltime' argument of
+## gsvaBatchtoolsSlurmParam(), as in the '--time' option of 'sbatch': NULL,
+## for no time limit, a number of minutes, or a character string with one of
+## the formats "M", "M:S", "H:M:S", "D-H", "D-H:M" and "D-H:M:S", whose fields
+## are not bounded, as in Slurm, or "UNLIMITED" (or "INFINITE"). returns NULL,
+## the number of seconds, as given to the templates of batchtools, or
+## "UNLIMITED". the number of minutes, rounded up, must fit in an integer,
+## because the template of GSVA writes it as such
+#' @importFrom cli cli_abort
+.slurm_walltime <- function(walltime) {
+    if (is.null(walltime))
+        return(NULL)
+
+    fmts <- paste("a number of minutes, or a character string with one of",
+                  "the formats \"M\", \"M:S\", \"H:M:S\", \"D-H\",",
+                  "\"D-H:M\" and \"D-H:M:S\", or \"UNLIMITED\"")
+    secs <- NA_real_
+    if (is.numeric(walltime) && length(walltime) == 1 &&
+        is.finite(walltime) && walltime == round(walltime))
+        secs <- walltime * 60
+    else if (is.character(walltime) && length(walltime) == 1 &&
+             !is.na(walltime)) {
+        w <- trimws(walltime)
+        if (toupper(w) %in% c("UNLIMITED", "INFINITE"))
+            return("UNLIMITED")
+        m <- regmatches(w, regexec(paste0("^(?:([0-9]+)-)?([0-9]+)",
+                                          "(?::([0-9]+))?(?::([0-9]+))?$"),
+                                   w, perl=TRUE))[[1]]
+        if (length(m) > 0) {
+            f <- as.numeric(m[-1]) ## days, then up to three fields
+            f[is.na(f)] <- 0
+            nf <- sum(nzchar(m[3:5]))
+            if (nzchar(m[2])) ## days-hours[:minutes[:seconds]]
+                secs <- sum(f * c(86400, 3600, 60, 1))
+            else ## minutes[:seconds] or hours:minutes:seconds
+                secs <- sum(f[2:(1 + nf)] *
+                            list(60, c(60, 1), c(3600, 60, 1))[[nf]])
+        }
+    }
+    maxmins <- .Machine$integer.max
+    if (is.na(secs) || secs < 1 || ceiling(secs / 60) > maxmins)
+        cli_abort(c("x"=paste0("'walltime' must be either NULL, ", fmts,
+                               ", as in the --time option of sbatch, with ",
+                               "a time limit of at least one second and at ",
+                               "most {maxmins} minutes.")))
+
+    secs
+}
+
+## number of parallel workers of the R process of each job of gsvaMap() using
+## 'ncpus' CPU cores, see MAP_FUN_WRAPPER(), on a chunk with dimensions 'dims',
+## see .n_par_workers(); when 'dims' is not given, such as with a list input,
+## calculations are assumed to be parallelized
+.map_job_workers <- function(ncpus, dims=NULL) {
+    if (ncpus <= 1 || (!is.null(dims) && (dims[1] <= 100 || dims[2] <= 100)))
+        return(0L)
+
+    as.integer(ncpus)
+}
+
+## warn, when creating the parameters of jobs with 'ncpus' CPU cores and 'mem'
+## bytes of memory each, that the R process of a job and its parallel workers
+## may not fit in 'mem', see .worker_mem(), unless the option
+## 'GSVA.check_memory=FALSE' is set
+#' @importFrom cli cli_warn
+#' @importFrom memuse mu
+.check_job_mem <- function(ncpus, mem) {
+    if (!getOption("GSVA.check_memory", TRUE))
+        return(invisible(FALSE))
+
+    nworkers <- .map_job_workers(ncpus)
+    need <- (1 + nworkers) * .worker_mem()
+    if (need <= mem)
+        return(invisible(FALSE))
+
+    needtxt <- as.character(mu(need))
+    memtxt <- as.character(mu(mem))
+    cli_warn(c("!"=paste("Each job may run GSVA in one R process with",
+                         "{nworkers} parallel worker{?s}, which take about",
+                         "{needtxt} by themselves, more than the {memtxt} of",
+                         "memory of each job."),
+               "i"=paste("Consider using fewer CPU cores per job",
+                         "({.arg ncpus_per_task}), or more memory per job",
+                         "({.arg mem}).")))
+
+    invisible(TRUE)
+}
+
+## the input data 'x' of gsvaMap(), a parameter object or a container of
+## expression data, keeping only the assay 'assay' used by the step when the
+## container is a SummarizedExperiment object, as the steps do in their
+## output with 'dropExistingAssays=TRUE', so that the jobs do not receive
+## the other assays. this modifies a copy of the container, without changing
+## the input data of the caller, and its matrices are shared, not copied. an
+## ExpressionSet object, whose assay data may be stored in an environment, is
+## kept as is, and the memory of its other assays is counted, see
+## .map_container_mem()
+#' @importMethodsFrom SummarizedExperiment assays "assays<-" assayNames
+.keep_used_assay <- function(x, assay) {
+    if (is(x, "GsvaMethodParam")) {
+        x@exprData <- .keep_used_assay(x@exprData, assay)
+        return(x)
+    }
+    if (is(x, "SummarizedExperiment") && assay %in% assayNames(x) &&
+        length(assayNames(x)) > 1)
+        assays(x, withDimnames=FALSE) <- assays(x, withDimnames=FALSE)[assay]
+
+    x
+}
+
+## memory in bytes that the input data 'x' of gsvaMap(), a parameter object
+## or a container of expression data, takes in main memory in each job, see
+## .container_held_mem()
+.map_container_mem <- function(x, assay) {
+    if (is(x, "GsvaMethodParam"))
+        return(.input_held_mem(x))
+
+    .container_held_mem(x, assay)
+}
+
+## memory factors of the step 'funname' of gsvaMap() on the input data
+## 'inputData', whose matrix 'X' is processed, see .step_mem_factors(), and
+## whether the step gives a dense output from a sparse input ('densify'), as
+## the classical algorithm of GSVA normalizing rows of sparse data does, see
+## gsvaRowNorm(); the same factors size the chunks of the jobs and check
+## their memory, see .check_map_mem()
+#' @importFrom S4Arrays is_sparse
+.map_step_factors <- function(funname, inputData, X) {
+    step <- c(gsvaRowNorm="rownorm", gsvaColRanks="colranks",
+              gsvaColScores="scores")[[funname]]
+    ngs <- 0
+    if (funname == "gsvaColScores")
+        ngs <- tryCatch(length(get_geneSets(.pull_param(inputData))),
+                        error=function(e) 0)
+    rownorm <- funname == "gsvaRowNorm" && is(inputData, "gsvaParam")
+    clr <- rownorm && .get_rowNorm(inputData) == "clr"
+    densify <- rownorm && is_sparse(X) && !.get_sparse(inputData) &&
+               .get_rowNorm(inputData) != "none"
+    mf <- .step_mem_factors(step, X, ngs=ngs, sparse=is_sparse(X) && !densify,
+                            clr=clr)
+    if (densify && clr) ## dense CLR, see gsvaRowNorm()
+        mf$assembly <- 2
+
+    c(mf, densify=densify)
+}
+
+## check, before gsvaMap() submits any job, the memory required by the step
+## 'funname' in each job, on the input data 'inputData', of which each job
+## processes a chunk of at most 'chunkwidth' rows (whdim=1) or columns
+## (whdim=2), using 'ncpus' CPU cores and 'maxmem' bytes of memory. it gives an
+## error when the R process of each job and its parallel workers do not fit in
+## 'maxmem', because such jobs would be killed by the workload manager, and
+## otherwise it warns when the memory estimated for the step exceeds 'maxmem',
+## see .step_mem_need(). for a list input, whose chunks are not loaded to
+## know their size, only the former is checked. it is skipped with the option
+## 'GSVA.check_memory=FALSE'
+#' @importFrom cli cli_abort
+#' @importFrom memuse mu
+#' @importFrom BiocGenerics type
+#' @importFrom S4Arrays is_sparse
+.check_map_mem <- function(funname, inputData, assay, whdim, chunkwidth, ncpus,
+                           maxmem) {
+    if (!getOption("GSVA.check_memory", TRUE) || !is.finite(maxmem))
+        return(invisible(FALSE))
+
+    hint <- paste("Consider using fewer CPU cores per job, or more memory per",
+                  "job, e.g., with the arguments {.arg ncpus_per_task} and",
+                  "{.arg mem} of {.fn gsvaBatchtoolsSlurmParam}.")
+    X <- dims <- NULL
+    if (!is.list(inputData)) {
+        X <- unwrapData(get_exprData(inputData), assay)
+        dims <- dim(X)
+        dims[whdim] <- chunkwidth
+    }
+    nworkers <- .map_job_workers(ncpus, dims)
+    baseline <- (1 + nworkers) * .worker_mem()
+    if (baseline > maxmem) {
+        bltxt <- as.character(mu(baseline))
+        mmtxt <- as.character(mu(maxmem))
+        cli_abort(c("x"=paste("Each job would run GSVA in one R process with",
+                              "{nworkers} parallel worker{?s}, which take",
+                              "about {bltxt} by themselves, more than the",
+                              "{mmtxt} of memory of each job."),
+                    "i"=hint))
+    }
+    if (is.null(X))
+        return(invisible(FALSE))
+
+    ## memory of the step on the largest chunk, of size 'insize' in memory
+    sparse <- is_sparse(X)
+    eltbytes <- if (type(X) == "integer") 4 else 8
+    insize <- prod(as.numeric(dims)) * eltbytes
+    if (sparse) {
+        nzc <- if (is(X, "DelayedArray"))
+                   .estimate_nzcount(get_exprData(inputData), assay, FALSE)
+               else
+                   as.numeric(nzcount(X))
+        density <- min(1, nzc / prod(as.numeric(dim(X))))
+        insize <- density * prod(as.numeric(dims)) * (eltbytes + 4)
+    }
+    mf <- .map_step_factors(funname, inputData, X)
+    ## each job receives the whole input data, whose assays in main memory
+    ## remain allocated while it processes its chunk, see .step_held_input()
+    container <- .map_container_mem(inputData, assay)
+    held <- .step_held_input(X, dims, whdim, FALSE, container)
+    inmemory <- .step_data_mem(dims, whdim, insize, eltbytes, sparse, TRUE,
+                               mf, held, densify=mf$densify) <=
+                .mem_fraction_R * maxmem
+    held <- .step_held_input(X, dims, whdim, !inmemory, container)
+    need <- .step_mem_need(dims, insize, whdim, eltbytes, sparse, inmemory,
+                           mf, nworkers, held, densify=mf$densify)
+
+    .check_mem_need(need, maxmem, nworkers, hint=hint)
+}
+
 #' @importFrom BiocParallel SerialParam MulticoreParam SnowParam
 #' @importFrom IRanges IRanges start end
 MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
@@ -565,8 +890,9 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         fname <- X$fname
         X <- X$chunk
         ## completed by another job, such as one left running by a call to
-        ## gsvaMap() whose R session ended
-        if (file.exists(fname))
+        ## gsvaMap() whose R session ended; a file that is not a result is
+        ## replaced by the one of this job
+        if (.valid_map_result(fname, output))
             return(fname)
     }
     rng <- X
@@ -624,23 +950,43 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         ## job killed while saving does not leave a result that looks complete.
         ## the temporary name is unique to this job, because a job left
         ## running by a call to gsvaMap() whose R session ended may be saving
-        ## the same chunk. renaming fails when another job has already saved
-        ## an HDF5 directory with this chunk, in which case only the output of
-        ## this job is discarded, while a Parquet file of another job is
-        ## replaced by the identical one of this job
+        ## the same chunk, whose file, if already saved, is replaced by the
+        ## identical one of this job. when it cannot be replaced, e.g., on
+        ## Windows while it is open, it is kept only if it is a result
         tmpname <- .unique_tmpname(fname)
         if (output == "HDF5")
             saveHDF5GSVA(res, tmpname)
         else
             saveParquetGSVA(res, tmpname)
-        if (!suppressWarnings(file.rename(tmpname, fname))) {
-            unlink(tmpname, recursive=TRUE)
-            if (!file.exists(fname))
-                cli_abort(c("x"="cannot save results to {fname}."))
+        if (!.replace_file(tmpname, fname)) {
+            unlink(tmpname)
+            if (!.valid_map_result(fname, output))
+                cli_abort(c("x"="cannot save results to {.file {fname}}."))
         }
         res <- fname
     }
     return(res)
+}
+
+## whether the file 'fname' is a result of gsvaMap() saved in the format
+## 'output', "HDF5" or "Parquet", given by default by the extension of its
+## name, see .map_file_names(), which only checks the format of the file,
+## because results are only written to their final name once complete
+.valid_map_result <- function(fname,
+                              output=if (grepl("\\.parquet$", fname))
+                                         "Parquet" else "HDF5") {
+    if (!file.exists(fname) || dir.exists(fname))
+        return(FALSE)
+    if (output == "HDF5")
+        return(.is_gsva_h5_file(fname))
+
+    .is_parquet_file(fname)
+}
+
+## whether each of the files in 'paths' is a result of gsvaMap(), see
+## .valid_map_result()
+.valid_map_results <- function(paths) {
+    vapply(paths, .valid_map_result, logical(1), USE.NAMES=FALSE)
 }
 
 #' @importFrom S4Vectors metadata
@@ -704,6 +1050,41 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
                               "one of the inputs.")))
 
     return(rmdt)
+}
+
+## class of the container of a chunk of the output of gsvaMap(), where all
+## matrices, in main memory or on disk, dense or sparse, are matrix-like
+.container_class <- function(x) {
+    if (is.matrix(x) || is(x, "DelayedMatrix") || is(x, "SparseMatrix") ||
+        is(x, "dgCMatrix"))
+        return("matrix-like")
+    class(x)
+}
+
+## make the chunks of the output of gsvaMap() in the list 'xs' store their
+## values in the same class of matrix, so that they can be bound: when they
+## store them in different classes, e.g., because the memory available to
+## some chunks led to storing their output on disk, those not stored in a
+## DelayedArray object are wrapped in one. for SummarizedExperiment objects,
+## this is done for each of their assays
+#' @importFrom DelayedArray DelayedArray
+#' @importFrom SummarizedExperiment assayNames assay "assay<-"
+.harmonize_storage <- function(xs) {
+    harmonize <- function(ms) {
+        if (length(unique(lapply(ms, class))) <= 1L)
+            return(ms)
+        lapply(ms, function(m) if (is(m, "DelayedArray")) m else
+                                   DelayedArray(m))
+    }
+    if (!is(xs[[1L]], "SummarizedExperiment"))
+        return(harmonize(xs))
+
+    for (a in assayNames(xs[[1L]])) {
+        ms <- harmonize(lapply(xs, assay, a, withDimnames=FALSE))
+        for (i in seq_along(xs))
+            assay(xs[[i]], a, withDimnames=FALSE) <- ms[[i]]
+    }
+    xs
 }
 
 .strip_metadata <- function(inputargs) {
@@ -869,17 +1250,27 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
 ## results are saved to the files in 'paths', the chunks of jobs that did not
 ## deliver a result, such as jobs killed by the workload manager, are
 ## recovered from those files
-#' @importFrom BiocParallel bplapply bpnworkers bptry
+#' @importFrom BiocParallel bplapply bpnworkers bptry bpisup bpstart bpstop
 .map_chunks <- function(X, BTPARAM, args, paths=NULL, outdir=NULL) {
     if (bpnworkers(BTPARAM) > 1) {
+        ## the back-end is started here, instead of by bplapply(), which
+        ## would remove its registry when stopping it after an error, so that
+        ## the errors of the jobs can be read from the registry
+        if (!bpisup(BTPARAM)) {
+            BTPARAM <- bpstart(BTPARAM)
+            on.exit(bpstop(BTPARAM), add=TRUE)
+        }
         res <- tryCatch(bptry(do.call("bplapply",
                                       args=c(list(X=X, FUN=MAP_FUN_WRAPPER,
                                                   BPPARAM=BTPARAM), args))),
                         error=identity)
         ## bptry() returns, instead of a list of results, a 'bperror' raised
-        ## for reasons other than failed chunks, such as a timeout
+        ## for reasons other than failed chunks, such as a timeout, or jobs
+        ## that ended without a result, such as those whose R process could
+        ## not start or was killed
         if (inherits(res, "condition"))
-            res <- .map_recover_from_disk(res, paths, outdir)
+            res <- .map_recover_from_disk(res, paths, outdir,
+                                          .map_job_errors(BTPARAM))
     } else ## mainly to be able to unit test this
         res <- lapply(X, function(x)
                           tryCatch(do.call("MAP_FUN_WRAPPER",
@@ -889,16 +1280,55 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     res
 }
 
+## first error reported by the jobs run by the back-end 'BTPARAM', a
+## BatchtoolsParam object, taken from its registry: the first error message
+## of a job, or otherwise the last lines of the log of a job that did not
+## finish, e.g., because its R process could not start or was killed, which
+## end without an error message. NULL when no error can be found
+.map_job_errors <- function(BTPARAM) {
+    reg <- tryCatch(BTPARAM$registry, error=function(e) NULL)
+    if (is.null(reg) || !requireNamespace("batchtools", quietly=TRUE))
+        return(NULL)
+    clean <- function(x) substr(gsub("\\s+", " ", trimws(x)), 1L, 500L)
+
+    tryCatch({
+        msgs <- batchtools::getErrorMessages(reg=reg)
+        wh <- which(!is.na(msgs$message) & nzchar(msgs$message))
+        if (length(wh) > 0L)
+            return(sprintf("job %d: %s", msgs$job.id[wh[1L]],
+                           clean(msgs$message[wh[1L]])))
+        for (id in batchtools::findNotDone(reg=reg)$job.id) {
+            lines <- tryCatch(batchtools::getLog(id, reg=reg),
+                              error=function(e) character(0))
+            lines <- trimws(lines)
+            lines <- lines[nzchar(lines) & !grepl("^### \\[bt\\]", lines)]
+            if (length(lines) > 0L)
+                return(sprintf("log of job %d: %s", id,
+                               clean(paste(tail(lines, 3L),
+                                           collapse=" | "))))
+        }
+        NULL
+    }, error=function(e) NULL)
+}
+
 ## after the error 'err' raised by bplapply(), build the result of the chunks
-## whose output is saved in the files in 'paths', from those files
+## whose output is saved in the files in 'paths', from those files. 'joberr'
+## is the first error reported by the jobs, see .map_job_errors()
 #' @importFrom cli cli_abort
-.map_recover_from_disk <- function(err, paths, outdir) {
-    if (is.null(paths))
-        stop(err)
-    done <- file.exists(paths)
+.map_recover_from_disk <- function(err, paths, outdir, joberr=NULL) {
+    jobinfo <- NULL
+    if (!is.null(joberr))
+        jobinfo <- c("i"="The first error reported by the jobs was in the {joberr}")
+    if (is.null(paths)) {
+        if (is.null(joberr))
+            stop(err)
+        errmsg <- conditionMessage(err)
+        cli_abort(c("x"="{errmsg}", jobinfo), parent=err)
+    }
+    done <- .valid_map_results(paths)
     if (!any(done)) {
         errmsg <- conditionMessage(err)
-        cli_abort(c("x"="No chunk was completed: {errmsg}",
+        cli_abort(c("x"="No chunk was completed: {errmsg}", jobinfo,
                     "i"=paste("Once the problem is fixed, resubmit the",
                               "calculations by calling {.fn gsvaMap} again",
                               "with the same {.arg FUN} and {.arg inputData},",
@@ -908,6 +1338,9 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     errmsg <- paste("The job of this chunk did not save any result, which",
                     "happens, for instance, when the workload manager kills",
                     "it. The error reported was:", conditionMessage(err))
+    if (!is.null(joberr))
+        errmsg <- paste0(errmsg, ". The first error reported by the jobs was ",
+                         "in the ", joberr)
     res <- lapply(seq_along(paths), function(i) {
         if (done[i])
             paths[i]
@@ -956,8 +1389,7 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         files <- sprintf("%s_%d_%d", runid, chunks$first, chunks$last)
     else
         files <- sprintf("%s_chunk%d", runid, seq_len(nchunks))
-    if (output == "Parquet")
-        files <- paste0(files, ".parquet")
+    files <- paste0(files, if (output == "Parquet") ".parquet" else ".h5")
 
     files
 }

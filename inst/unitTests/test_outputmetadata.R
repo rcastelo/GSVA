@@ -101,6 +101,10 @@ test_outputmetadata <- function() {
 test_outputmetadatamapreduce <- function() {
 
     message("Running unit tests for metadata in GSVA map-reduce output")
+    ## small maximum memory budgets force processing by blocks, and the
+    ## memory check, which would warn about them, is skipped
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldcheckmem), add=TRUE)
 
     suppressPackageStartupMessages({
         library(DelayedArray)

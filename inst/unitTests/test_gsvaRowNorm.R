@@ -76,4 +76,25 @@ test_gsvaRowNorm <- function() {
 
     ## check that the geometric mean of the normalized rows is 1
     checkEqualsNumeric(gsvarownorm_gmean, rep(1, p))
+
+    ## the direct ECDF ('kcdf="none"') on dense integer values, e.g., counts,
+    ## with and without missing values, gives the same values as on doubles
+    set.seed(123)
+    yi <- matrix(rpois(n*p, 5), nrow=p, ncol=n, dimnames=dimnames(y))
+    yd <- yi
+    storage.mode(yd) <- "double"
+    for (use in c("everything", "na.rm")) {
+        if (use == "na.rm") {
+            yi[sample(length(yi), 10)] <- NA
+            yd[is.na(yi)] <- NA
+        }
+        gsvarownorm_int <- suppressWarnings(
+            gsvaRowNorm(gsvaParam(yi, gsets, rowNorm="ecdf", kcdf="none",
+                                  use=use), verbose=FALSE))
+        gsvarownorm_dbl <- suppressWarnings(
+            gsvaRowNorm(gsvaParam(yd, gsets, rowNorm="ecdf", kcdf="none",
+                                  use=use), verbose=FALSE))
+        checkEqualsNumeric(as.vector(gsvarownorm_int),
+                           as.vector(gsvarownorm_dbl))
+    }
 }

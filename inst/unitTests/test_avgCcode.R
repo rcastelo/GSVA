@@ -201,3 +201,38 @@ test_avgCcode <- function() {
     ## both approaches to calculate AVG scores must give the same result
     checkEqualsNumeric(sco_R, sco_C)
 }
+
+test_avgInputTypes <- function() {
+
+    message("Running unit tests for AVG with integer and sparse input data")
+
+    suppressPackageStartupMessages({
+        library(Matrix)
+        library(SparseArray)
+        library(HDF5Array)
+    })
+
+    set.seed(123)
+    m <- matrix(rpois(200 * 150, 1), nrow=200, ncol=150,
+                dimnames=list(paste0("g", 1:200), paste0("s", 1:150)))
+    gsets <- list(gs1=paste0("g", 1:20), gs2=paste0("g", 21:60))
+    ref <- rbind(colMeans(m[1:20, ]), colMeans(m[21:60, ]))
+    h5 <- writeHDF5Array(as(m, "SVT_SparseMatrix"), as.sparse=TRUE)
+
+    ## integer and double values, in dense and sparse matrices, in main memory
+    ## and on disk, give the same average scores, without warning that sparse
+    ## data is converted into a dense matrix
+    inputs <- list(m * 1.0, m, as(m * 1.0, "dgCMatrix"),
+                   as(m, "SVT_SparseMatrix"), as(m * 1.0, "SVT_SparseMatrix"),
+                   h5)
+    for (x in inputs) {
+        es <- withCallingHandlers(gsva(avgParam(x, gsets), verbose=FALSE),
+                                  warning=function(w) stop(conditionMessage(w)))
+        checkEqualsNumeric(ref, as.matrix(es))
+    }
+
+    ## sparse data on disk is loaded in main memory as sparse
+    checkTrue(is(GSVA:::.check_sparse_load_input_expr(h5, "average", NA, NA, 2,
+                                                      FALSE, FALSE),
+                 "SVT_SparseMatrix"))
+}

@@ -17,6 +17,5 @@
 #' @importFrom SingleCellExperiment SingleCellExperiment
 #' @importFrom SpatialExperiment SpatialExperiment
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid defaultAutoGrid
-#' @importFrom HDF5Array HDF5RealizationSink writeHDF5Array
 #' @importFrom cli cli_abort cli_alert_info cli_alert_warning cli_alert_success
 NULL

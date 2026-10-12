@@ -1002,62 +1002,104 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 ##  values of genes: genes that are constant in their non-zero values will have
 ##  an SD of 0 and therefore scaling them will result in division by 0.
 
-.rowNzRanges_dgCMatrix <- function(X, verbose=FALSE) {
-    res <- .Call("row_rngs_nzrngs_RsparseMatrix_R", as(X, "RsparseMatrix"),
-                 verbose=verbose)
-    res
-}
+## statistics of the rows of a block of columns 'X', which can be accumulated
+## across blocks of columns with .combine_rowstats(). when 'X' is sparse, they
+## are the minimum and maximum nonzero value ('nzmin', 'nzmax'), the number of
+## nonzero non-missing values ('n'), the number of missing values ('nna') and,
+## if 'logsums=TRUE', the sum of the logarithm of the nonzero non-missing
+## values ('lsum'). when 'X' is dense, they are the same but on all values,
+## where the minimum and maximum are 'min' and 'max'
 
-## these were only here for testing purposes
-## .rowNzRanges_SVT_SparseMatrix_byrow <- function(X, verbose=FALSE) {
-##     res <- .Call("row_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
-##     res
-## }
-## 
-## .rowNzRanges_SVT_SparseMatrix_transpose_C <- function(X, verbose=FALSE) {
-##     res <- .Call("col_rngs_nzrngs_SVT_SparseMatrix_R", t(X), verbose=verbose)
-##     res
-## }
+#' @importFrom S4Arrays is_sparse DummyArrayGrid read_block
+#' @importFrom MatrixGenerics rowSums
+#' @importFrom cli cli_abort
+.rowStats_block <- function(X, logsums=FALSE, verbose=FALSE) {
+    if (is(X, "DelayedArray")) ## input HDF5 may be sparse or not
+        X <- read_block(X, DummyArrayGrid(dim(X))[[1L]])
 
-## after discussions at https://github.com/Bioconductor/SparseArray/issues/22
-
-.rowNzRanges_SVT_SparseMatrix <- function(X, verbose=FALSE) {
-    res <- .Call("rowbycols_rngs_nzrngs_SVT_SparseMatrix_R", X, verbose=verbose)
-    res
-}
-
-#' @importFrom S4Arrays DummyArrayGrid read_block
-.rowNzRanges <- function(X, anyna=FALSE, verbose=FALSE) {
-    res <- NULL
-    if (is.matrix(X))
-        res <- rowRanges(X, na.rm=TRUE)
-    else if (is(X, "dgCMatrix"))
-        res <- .rowNzRanges_dgCMatrix(X, verbose=verbose)
-    else if (is(X, "SVT_SparseMatrix"))
-        res <- .rowNzRanges_SVT_SparseMatrix(X, verbose=verbose)
-    else if (is(X, "DelayedArray")) {
-        grid <- DummyArrayGrid(dim(X))
-        block <- read_block(X, grid[[1L]])
-        if (is_sparse(block)) ## input HDF5 may be sparse or not
-            res <- .rowNzRanges_SVT_SparseMatrix(block, verbose=verbose)
-        else
-            res <- rowRanges(X)
+    if (is(X, "SVT_SparseMatrix") || is(X, "dgCMatrix")) {
+        st <- .Call("rowbycols_stats_sparse_R", X,
+                    is(X, "SVT_SparseMatrix"), logsums)
+        colnames(st) <- c("nzmin", "nzmax", "n", "nna", "lsum")[seq_len(ncol(st))]
+    } else if (is.matrix(X)) {
+        na <- is.na(X)
+        nna <- rowSums(na)
+        st <- cbind(rowRanges(X, na.rm=TRUE), ncol(X) - nna, nna)
+        storage.mode(st) <- "double"
+        ## rows without non-missing values have no minimum and maximum,
+        ## as in sparse input, instead of the Inf and -Inf of rowRanges()
+        noval <- st[, 3] == 0
+        if (any(noval))
+            st[noval, 1:2] <- NA_real_
+        if (logsums) { ## NaN from the logarithm of negative values remain
+            lX <- log(X)
+            if (any(nna > 0))
+                lX[na] <- 0
+            st <- cbind(st, rowSums(lX))
+            rm(lX)
+        }
+        ## the memory of the temporary matrices of this block is released
+        ## before processing the next one, see ONDISK_GROUP_FUN()
+        rm(na)
+        invisible(gc(full=FALSE))
+        colnames(st) <- c("min", "max", "n", "nna", "lsum")[seq_len(ncol(st))]
     } else {
-        msg <- ".rowNzRanges: input object class {class(X)} not handled yet."
+        msg <- ".rowStats_block: input object class {class(X)} not handled yet."
         cli_abort(c("x"=msg))
     }
-    res
+    st
 }
+
+.combine_rowstats <- function(x, y) {
+    x[, 1] <- pmin(x[, 1], y[, 1], na.rm=TRUE)
+    x[, 2] <- pmax(x[, 2], y[, 2], na.rm=TRUE)
+    x[, -(1:2)] <- x[, -(1:2)] + y[, -(1:2)]
+    x
+}
+
+## statistics of the rows of 'X', see .rowStats_block(), calculated through
+## blocks of columns, which fits the column-wise layout of HDF5 files storing
+## single-cell and spatial transcriptomics data
+.rowStats <- function(X, logsums=FALSE, verbose=FALSE, BPPARAM=NULL,
+                      maxmem=Inf) {
+    mf <- .step_mem_factors("rowstats", X)
+    .processMatrixCols(X, .rowStats_block, logsums=logsums, verbose=verbose,
+                       BPPARAM=BPPARAM, maxmem=maxmem,
+                       workfactor=mf$workfactor, outfactor=mf$outfactor,
+                       outextra=mf$outextra, combine=.combine_rowstats)
+}
+
+## matrix with as many rows as 'X' and 2 columns if 'X' is dense, and 4
+## columns if it is sparse, where the first two columns correspond to the
+## minimum and maximum values of each row, while the third and fourth columns,
+## if they exist, they correspond to the minimum and maximum nonzero values of
+## each row, which will be NAs if there are no nonzero values. missing values
+## are ignored. 'st' are the statistics of the rows of 'X' from .rowStats()
+.rowStats_ranges <- function(st, ncolX) {
+    if (colnames(st)[1] == "min") ## dense input
+        return(unname(st[, 1:2, drop=FALSE]))
+
+    rmin <- st[, "nzmin"]
+    rmax <- st[, "nzmax"]
+    zeros <- (ncolX - st[, "n"] - st[, "nna"]) > 0
+    rmin[zeros] <- pmin(0, rmin[zeros], na.rm=TRUE)
+    rmax[zeros] <- pmax(0, rmax[zeros], na.rm=TRUE)
+    unname(cbind(rmin, rmax, st[, "nzmin"], st[, "nzmax"]))
+}
+
+## when 'logsums=TRUE', it returns a list with the filtered 'expr' and the
+## statistics of its rows from .rowStats(), including the sums of logarithms
 
 #' @importFrom S4Arrays is_sparse
 #' @importFrom sparseMatrixStats rowRanges
-#' @importFrom DelayedArray blockApply setAutoBPPARAM rowRanges
-#' @importFrom cli cli_alert_warning cli_abort cli_alert_info
+#' @importFrom DelayedArray rowRanges
+#' @importFrom cli cli_alert_warning cli_abort cli_alert_info qty
 #' @importFrom cli cli_progress_bar cli_progress_done
 #' @importFrom BiocParallel SerialParam bpnworkers bpprogressbar
 .filterGenes <- function(expr, anyna=FALSE, rowNorm=NA, removeConstant=TRUE,
                          removeNzConstant=TRUE, errorOnTooFewRows=TRUE,
-			 verbose=TRUE, BPPARAM=NULL, maxmem=Inf) {
+			 verbose=TRUE, BPPARAM=NULL, maxmem=Inf,
+                         logsums=FALSE) {
     rowrngs <- NULL
 
     if (verbose) {
@@ -1067,19 +1109,29 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
             cli_alert_info("Searching for rows with constant (nonzero) values")
     }
 
-    ## returns a matrix with as many rows as 'expr' and 2 columns if 'expr'
-    ## is dense, and 4 columns if it is sparse, where the first two columns
-    ## correspond to the minimum and maximum values of each row, while the
-    ## third and fourth columns, if they exist, they correspond to the
-    ## minimum and maximum nonzero values of each row, which will be NAs if
-    ## there are no nonzero values.
-    rowrngs <- .processMatrixRows(expr, .rowNzRanges, anyna=anyna,
-                                  verbose=verbose, BPPARAM=BPPARAM, maxmem=maxmem)
+    ## the statistics of the rows are calculated through blocks of columns,
+    ## see .rowStats_ranges() for the ranges of values in 'rowrngs'
+    rowstats <- .rowStats(expr, logsums=logsums, verbose=verbose,
+                          BPPARAM=BPPARAM, maxmem=maxmem)
+    rowrngs <- .rowStats_ranges(rowstats, ncol(expr))
 
     constantRows <- (rowrngs[, 1] == rowrngs[, 2])
     mask <- is.na(constantRows)
     if (any(mask))
         constantRows[mask] <- TRUE
+
+    ## rows with only missing values, which have no minimum and maximum, are
+    ## discarded as constant rows, but reported separately
+    allNaRows <- rep(FALSE, nrow(expr))
+    if (ncol(expr) > 0)
+        allNaRows <- rowstats[, "nna"] == ncol(expr)
+    if (verbose && any(allNaRows)) {
+        n <- sum(allNaRows)
+        cli_alert_warning("{n} row{?s} with only missing values")
+        if (removeConstant)
+           cli_alert_warning(paste("{qty(n)}Row{?s} with only missing values",
+                                   "{?is/are} discarded"))
+    }
 
     constantNzRows <- rep(FALSE, nrow(expr))
     if (ncol(rowrngs) > 2) { ## sparse input
@@ -1089,21 +1141,23 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
             constantNzRows[mask] <- TRUE
     }
 
-    if (verbose && any(constantRows)) {
-        msg <- sprintf("%d rows with constant values throughout the columns",
-                       sum(constantRows))
-        cli_alert_warning(msg)
+    if (verbose && any(constantRows & !allNaRows)) {
+        n <- sum(constantRows & !allNaRows)
+        cli_alert_warning(paste("{n} row{?s} with constant values throughout",
+                                "the columns"))
         if (removeConstant)
-           cli_alert_warning("Rows with constant values are discarded")
+           cli_alert_warning(paste("{qty(n)}Row{?s} with constant values",
+                                   "{?is/are} discarded"))
     }
 
     nzmask <- constantNzRows & !constantRows
     if (verbose && any(nzmask)) {
-        msg <- paste("{sum(nzmask)} rows with constant nonzero values",
-                     "throughout the samples")
-        cli_alert_warning(msg)
+        n <- sum(nzmask)
+        cli_alert_warning(paste("{n} row{?s} with constant nonzero values",
+                                "throughout the samples"))
         if (removeNzConstant)
-           cli_alert_warning("Rows with constant nonzero values are discarded")
+           cli_alert_warning(paste("{qty(n)}Row{?s} with constant nonzero",
+                                   "values {?is/are} discarded"))
     }
 
     removemask <- rep(FALSE, nrow(expr))
@@ -1141,6 +1195,9 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 
     if (any(removemask))
         expr <- expr[!removemask, , drop=FALSE]
+
+    if (logsums)
+        return(list(expr=expr, rowstats=rowstats[!removemask, , drop=FALSE]))
 
     return(expr)
 }

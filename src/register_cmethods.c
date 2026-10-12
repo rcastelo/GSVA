@@ -53,18 +53,7 @@ SEXP
 fetch_row_nzvals_R(SEXP svtR, SEXP iR, SEXP whimin1R);
 
 SEXP
-row_rngs_nzrngs_RsparseMatrix_R(SEXP XRspR, SEXP verboseR);
-
-/*
-SEXP
-row_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR);
-
-SEXP
-col_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR);
-*/
-
-SEXP
-rowbycols_rngs_nzrngs_SVT_SparseMatrix_R(SEXP XsvtR, SEXP verboseR);
+rowbycols_stats_sparse_R(SEXP XR, SEXP svtR, SEXP logsumsR);
 
 /* registration of C-entry points */
 
@@ -83,8 +72,7 @@ static R_CallMethodDef callMethods[] = {
   {"gsva_score_genesets_R", (DL_FUNC) &gsva_score_genesets_R, 11},
   {"avg_score_genesets_R", (DL_FUNC) &avg_score_genesets_R, 6},
   {"fetch_row_nzvals_R", (DL_FUNC) &fetch_row_nzvals_R, 3},
-  {"row_rngs_nzrngs_RsparseMatrix_R", (DL_FUNC) &row_rngs_nzrngs_RsparseMatrix_R, 2},
-  {"rowbycols_rngs_nzrngs_SVT_SparseMatrix_R", (DL_FUNC) &rowbycols_rngs_nzrngs_SVT_SparseMatrix_R, 2},
+  {"rowbycols_stats_sparse_R", (DL_FUNC) &rowbycols_stats_sparse_R, 3},
   {NULL, NULL, 0}
 };
 

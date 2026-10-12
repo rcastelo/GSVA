@@ -32,9 +32,24 @@ setMethod("gsva", signature(param="plageParam"),
               filtMappedGeneSets <- famGaGS[["filteredMappedGeneSets"]]
 
               maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
+              ## the input data is loaded in main memory as a dense matrix,
+              ## and the memory required includes the enrichment scores
+              mf <- .step_mem_factors("plage", sparse=FALSE, int=FALSE,
+                                      ngs=length(filtMappedGeneSets))
               ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
                                       recompute_nzcount=FALSE, maxmem=maxmem,
-                                      verbose=verbose)
+                                      verbose=verbose, mf=mf, dense=TRUE)
+              ## the memory required also includes the products of the
+              ## expression values of the genes of each gene set, see plage()
+              gm <- .plage_gram_mem(filtMappedGeneSets, maxmem,
+                                    if (is.null(BPPARAM)) 1L
+                                    else bpnworkers(BPPARAM))
+              .check_plage_gram_mem(filtMappedGeneSets, gm)
+              container <- .input_held_mem(param)
+              .check_step_mem(filtDataMatrix, 2L, NA, NA, ondisk, mf, BPPARAM,
+                              maxmem, dense=TRUE, extramem=gm$mem,
+                              container=container)
+              .hold_input_mem(filtDataMatrix, 2L, NA, NA, container)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "PLAGE", first=NA,
@@ -45,9 +60,6 @@ setMethod("gsva", signature(param="plageParam"),
                                                  minparrows=100, minparcols=100,
                                                  verbose)
 
-              ondisk <- .check_es_memory_requirements(filtDataMatrix,
-                                                      filtMappedGeneSets,
-                                                      ondisk, maxmem)
 
               if (verbose) {
                   n <- length(filtMappedGeneSets)
@@ -82,6 +94,15 @@ setMethod("gsva", signature(param="plageParam"),
 #' @details `PLAGE` takes a number of parameters shared with all methods
 #' implemented by package GSVA but does not take any method-specific parameters.
 #' These parameters are described in detail below.
+#'
+#' The `PLAGE` score of a gene set is the first right singular vector of the
+#' standardized expression values of its genes, whose sign is arbitrary
+#' (Bro et al., 2008). GSVA orients it so that the scores correlate positively
+#' with the mean standardized expression of the genes in the gene set, in the
+#' same way as module eigengenes are aligned with the average expression of
+#' their module in the WGCNA package (Langfelder and Horvath, 2008). As a
+#' result, higher `PLAGE` scores tend to correspond to higher expression of
+#' the gene set, and the sign of the scores is the same across runs.
 #'
 #' @param exprData The expression data set.  Must be one of the classes
 #' supported by [`GsvaExprData-class`].  For a list of these classes, see its
@@ -135,6 +156,16 @@ setMethod("gsva", signature(param="plageParam"),
 #' using singular value decomposition.
 #' *BMC Bioinformatics*, 6:225, 2005.
 #' \doi{10.1186/1471-2105-6-225}
+#'
+#' @references Bro, R., Acar, E. and Kolda, T.G. Resolving the sign ambiguity
+#' in the singular value decomposition.
+#' *Journal of Chemometrics*, 22:135-140, 2008.
+#' \doi{10.1002/cem.1122}
+#'
+#' @references Langfelder, P. and Horvath, S. WGCNA: an R package for weighted
+#' correlation network analysis.
+#' *BMC Bioinformatics*, 9:559, 2008.
+#' \doi{10.1186/1471-2105-9-559}
 #'
 #' @examples
 #' suppressPackageStartupMessages({
@@ -268,58 +299,241 @@ setMethod("anyNA", signature=c("plageParam"),
 
 ## ------ internal functions ------
 
-rightsingularsvdvectorgset <- function(gSetIdx, Z) {
-  s <- svd(Z[gSetIdx, ])
-  s$v[, 1]
+## the PLAGE score of a gene set in each column is the first right singular
+## vector v of the scaled rows Z_gs of the gene set, Z_gs = U D V^T, which is
+## calculated by blocks of columns, without taking the whole rows of the gene
+## set: Z_gs Z_gs^T = U D^2 U^T, a small matrix of as many rows and columns as
+## genes in the gene set, is the sum of the products of the blocks of columns
+## of Z_gs, and v = Z_gs^T u / d, for the leading eigenvector u of that matrix
+## and the square root d of its leading eigenvalue, is given by the blocks of
+## columns of Z_gs. the sign of a singular vector is arbitrary, and v is
+## oriented to correlate positively with the mean of the scaled rows of the
+## gene set, (1 / k) 1^T Z_gs v = (d / k) sum(u), i.e., to have sum(u) >= 0,
+## as the alignment of module eigengenes with their average expression in the
+## WGCNA package
+
+## products Z_gs Z_gs^T of the rows of each gene set, with the indices given by
+## 'geneSetsIdx', in a block of columns 'Z' of the scaled rows
+#' @importFrom S4Arrays DummyArrayGrid read_block
+.plage_gram_block <- function(Z, geneSetsIdx, verbose=FALSE) {
+    if (is(Z, "DelayedArray"))
+        Z <- read_block(Z, DummyArrayGrid(dim(Z))[[1L]])
+    Z <- as.matrix(Z)
+
+    lapply(geneSetsIdx, function(i) tcrossprod(Z[i, , drop=FALSE]))
+}
+
+## PLAGE scores of each gene set, with the indices given by 'geneSetsIdx', in
+## a block of columns 'Z' of the scaled rows, from the weights 'rowweights' of
+## the rows of each gene set, u / d; the name of this argument, passed through
+## '...' to .ondisk_blocks(), must not match partially its argument 'whdim'
+#' @importFrom S4Arrays DummyArrayGrid read_block
+.plage_scores_block <- function(Z, geneSetsIdx, rowweights, verbose=FALSE) {
+    if (is(Z, "DelayedArray"))
+        Z <- read_block(Z, DummyArrayGrid(dim(Z))[[1L]])
+    Z <- as.matrix(Z)
+
+    es <- vapply(seq_along(geneSetsIdx), function(g)
+                     drop(crossprod(Z[geneSetsIdx[[g]], , drop=FALSE],
+                                    rowweights[[g]])),
+                 numeric(ncol(Z)))
+    es <- t(matrix(es, ncol=length(geneSetsIdx)))
+    dimnames(es) <- list(names(geneSetsIdx), colnames(Z))
+
+    es
+}
+
+## leading eigenvector u and eigenvalue d^2 of the product Z_gs Z_gs^T of
+## the rows of a gene set, 'gram'. eigen() calculates all the eigenvectors,
+## which takes a time cubic in the number of genes of the gene set, e.g., about
+## two minutes for 4000 genes with the reference BLAS library of R, while only
+## the leading one is needed. above 'maxeigen' genes, the leading eigenvector
+## is calculated by power iteration, whose iterations take a time quadratic
+## in the number of genes, from the sum of the columns of 'gram', which does
+## not use random numbers, until the eigenvector changes less than 'tol'.
+## power iteration converges at a rate given by the ratio between the second
+## and the first eigenvalues, and when it does not converge in 'maxiter'
+## iterations, e.g., when both eigenvalues are very close, eigen() is used.
+## power iteration may also converge to a smaller eigenvalue, when the sum of
+## the columns has no component along the leading eigenvector, e.g., when
+## its values sum to zero. the eigenvalue d^2 found is the largest one if,
+## and only if, d^2 (1 + 'certtol') I - Z_gs Z_gs^T is positive definite,
+## which its Cholesky decomposition verifies in a fraction of the time of
+## eigen(), e.g., about one sixth, and otherwise eigen() is used
+.plage_leading_eigen <- function(gram, maxeigen=1000, tol=1e-12,
+                                 maxiter=1000, certtol=1e-8) {
+    if (nrow(gram) <= maxeigen) {
+        e <- eigen(gram, symmetric=TRUE)
+        return(list(vector=e$vectors[, 1L], value=e$values[1L]))
+    }
+
+    x <- rowSums(gram)
+    if (all(x == 0))
+        x <- rep(1, nrow(gram))
+    x <- x / sqrt(sum(x^2))
+    for (i in seq_len(maxiter)) {
+        y <- drop(gram %*% x)
+        ny <- sqrt(sum(y^2))
+        if (ny == 0) ## the gene set has no variability
+            break
+        y <- y / ny
+        if (sqrt(sum((y - x)^2)) < tol) {
+            value <- drop(crossprod(y, gram %*% y))
+            cert <- tryCatch(chol(diag(value * (1 + certtol), nrow(gram)) -
+                                  gram),
+                             error=function(e) NULL)
+            if (!is.null(cert))
+                return(list(vector=y, value=value))
+            break ## not the leading eigenvalue
+        }
+        x <- y
+    }
+
+    e <- eigen(gram, symmetric=TRUE)
+    list(vector=e$vectors[, 1L], value=e$values[1L])
+}
+
+## groups of gene sets whose products Z_gs Z_gs^T, of 'bytes' bytes each, take
+## together at most 'maxbytes' bytes, keeping each gene set in a group
+.plage_groups <- function(bytes, maxbytes) {
+    grp <- integer(length(bytes))
+    g <- 1L
+    acc <- 0
+    for (i in seq_along(bytes)) {
+        if (acc > 0 && acc + bytes[i] > maxbytes) {
+            g <- g + 1L
+            acc <- 0
+        }
+        grp[i] <- g
+        acc <- acc + bytes[i]
+    }
+
+    grp
+}
+
+## memory taken by the products Z_gs Z_gs^T of the gene sets 'geneSets' in
+## plage(), with 'nworkers' workers and a maximum main memory 'maxmem'. the
+## products are accumulated over the blocks of columns of the scaled rows,
+## holding at most two copies of them per worker, their reduction and the
+## products of the block in process, see .processMatrixCols(); with many large gene sets, these
+## products would not fit in main memory, and the gene sets are processed in
+## groups, see .plage_groups(), whose products take at most a quarter of the
+## memory available, 'maxgram', each group in a pass through the scaled rows.
+## a gene set whose product alone takes more than 'maxgram' bytes forms a group
+## by itself, which this bound cannot limit, and is reported as 'oversized'.
+## 'mem' is the memory taken by the products of the largest group in all the
+## processes
+.plage_gram_mem <- function(geneSets, maxmem, nworkers) {
+    grambytes <- 8 * as.numeric(lengths(geneSets))^2
+    maxgram <- .mem_fraction_R * maxmem / 4 / (2 * nworkers)
+    grp <- .plage_groups(grambytes, maxgram)
+    mem <- if (length(grp) == 0) 0 else
+               2 * nworkers * max(tapply(grambytes, grp, sum))
+
+    list(grambytes=grambytes, maxgram=maxgram, grp=grp, mem=mem,
+         oversized=which(grambytes > maxgram))
+}
+
+## warn, before the calculations of PLAGE start, when the products Z_gs Z_gs^T
+## of some gene sets, see .plage_gram_mem(), take each more memory than the
+## groups of gene sets can take, 'gm$maxgram', because the memory of these
+## products cannot be bounded, unless the option 'GSVA.check_memory=FALSE' is
+## set
+#' @importFrom cli cli_warn
+#' @importFrom memuse mu
+.check_plage_gram_mem <- function(geneSets, gm) {
+    if (length(gm$oversized) == 0 || !getOption("GSVA.check_memory", TRUE))
+        return(invisible(FALSE))
+
+    nms <- names(geneSets)[gm$oversized]
+    if (is.null(nms))
+        nms <- as.character(gm$oversized)
+    if (length(nms) > 5)
+        nms <- c(nms[1:5], "...")
+    n <- length(gm$oversized)
+    largest <- as.character(mu(max(gm$grambytes[gm$oversized])))
+    maxgramtxt <- as.character(mu(gm$maxgram))
+    cli_warn(c("!"=paste("{n} gene set{?s} ({.val {nms}}) {?is/are} too",
+                         "large for PLAGE to bound {?its/their} memory: the",
+                         "products of the expression values of {?its/their}",
+                         "genes take up to {largest} in each R process, more",
+                         "than the {maxgramtxt} available to them."),
+               "i"=paste("Consider a smaller {.arg maxSize} in",
+                         "{.fn plageParam}, or a larger {.arg maxmem}.")))
+
+    invisible(TRUE)
 }
 
 #' @importFrom cli cli_alert_info
-#' @importFrom cli cli_progress_bar cli_progress_update cli_progress_done
-#' @importFrom BiocParallel bpnworkers bpprogressbar bplapply
+#' @importFrom BiocParallel bpnworkers
 plage <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
                   BPPARAM=NULL, maxmem=Inf) {
 
+    ## the scaled rows, as large as the input, are delayed operations on it
+    ## when it is stored on disk, and are stored on disk when it is in main
+    ## memory but they do not fit in it; each block of sparse input gives
+    ## dense scaled rows ('dense=TRUE')
     Z <- .processMatrixRows(X, .scale_rows, verbose=verbose,
                             minparrows=100, minparcols=100,
                             progressmsg="Centering and scaling rows",
-                            BPPARAM=BPPARAM, maxmem=maxmem)
+                            BPPARAM=BPPARAM, maxmem=maxmem, dense=TRUE,
+                            sinkout=(ondisk && !is(X, "DelayedMatrix")))
 
-    es <- NULL
-    if (is.null(BPPARAM) || bpnworkers(BPPARAM) == 1) {
-        env <- NULL
-        if (verbose) {
-            env <- new.env(parent=globalenv())
-            msg <- "Calculating PLAGE scores per gene set"
-            assign("idpb", cli_progress_bar(msg, total=length(geneSets)),
-                   envir=env)
-        }
-        es <- lapply(geneSets, function(gSetIdx, verbose, idpbe) {
-                         if (verbose)
-                             cli_progress_update(id=get("idpb", envir=idpbe))
-                         rightsingularsvdvectorgset(gSetIdx, Z)
-                     }, verbose=verbose, idpbe=env)
-        if (verbose)
-            cli_progress_done(get("idpb", envir=env))
-    } else {
-        if (verbose) {
-            ## 'BPPARAM' is a reference class object, so this change
-            ## reaches the object of the caller, which is restored on exit
-            oldprogressbar <- bpprogressbar(BPPARAM)
-            on.exit(bpprogressbar(BPPARAM) <- oldprogressbar, add=TRUE)
-            bpprogressbar(BPPARAM) <- TRUE ## reporting progress wo/ cli
-        }
+    ## the input in main memory remains allocated while the scaled rows are
+    ## processed
+    heldmem <- .held_mem() + .inmem_size(X)
+    ## when the input is stored on disk, the scaled rows are delayed operations
+    ## on it, and realizing each of their blocks of columns takes about three
+    ## times the size of its dense form, as measured on single-cell data
+    delayedextra <- if (is(X, "DelayedMatrix")) 2 else 0
+    nworkers <- if (is.null(BPPARAM)) 1L else bpnworkers(BPPARAM)
 
-        es <- .gsva_bplapply(geneSets, rightsingularsvdvectorgset, Z,
-                             BPPARAM=BPPARAM)
+    ## the products Z_gs Z_gs^T of the gene sets are accumulated in groups of
+    ## gene sets, see .plage_gram_mem()
+    gm <- .plage_gram_mem(geneSets, maxmem, nworkers)
+    grambytes <- gm$grambytes
+    grp <- gm$grp
+    mf <- .step_mem_factors("plagegram")
+    w <- vector("list", length(geneSets))
+    for (g in unique(grp)) {
+        idx <- which(grp == g)
+        grams <- .processMatrixCols(Z, .plage_gram_block,
+                                    geneSetsIdx=geneSets[idx],
+                                    verbose=verbose, minparrows=100,
+                                    minparcols=100,
+                                    progressmsg="Calculating PLAGE singular vectors",
+                                    BPPARAM=BPPARAM, maxmem=maxmem,
+                                    workfactor=mf$workfactor + delayedextra,
+                                    outfactor=mf$outfactor,
+                                    outextra=mf$outextra,
+                                    heldmem=heldmem +
+                                            2 * nworkers * sum(grambytes[idx]),
+                                    combine=function(a, b) Map(`+`, a, b))
+        w[idx] <- lapply(grams, function(gram) {
+                             e <- .plage_leading_eigen(gram)
+                             u <- e$vector
+                             if (sum(u) < 0) ## see above for the sign of v
+                                 u <- -u
+                             u / sqrt(e$value)
+                         })
+        ## the products of this group are released before accumulating those
+        ## of the next one, whose memory budget does not include them
+        rm(grams)
     }
-        
-    es <- do.call(rbind, es)
-        
-    if (length(geneSets) == 1)
-        es <- matrix(es, nrow=1)
-        
+
+    mf <- .step_mem_factors("plagescores", ngs=length(geneSets))
+    es <- .processMatrixCols(Z, .plage_scores_block, geneSetsIdx=geneSets,
+                             rowweights=w, verbose=verbose, minparrows=100,
+                             minparcols=100,
+                             progressmsg="Calculating PLAGE scores",
+                             BPPARAM=BPPARAM, maxmem=maxmem,
+                             workfactor=mf$workfactor + delayedextra,
+                             outfactor=mf$outfactor, outextra=mf$outextra,
+                             heldmem=heldmem,
+                             sinkout=(ondisk || is(Z, "DelayedMatrix")))
+
     rownames(es) <- names(geneSets)
     colnames(es) <- colnames(X)
-    
+
     es
 }
