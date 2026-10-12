@@ -124,8 +124,14 @@ to use for the GSVA calculations. No default value, the user must provide a
 valid partition name for the Slurm cluster.}
 
 \item{walltime}{In \code{gsvaBatchtoolsSlurmParam()}, either \code{NULL} or the
-maximum wall time in seconds, rounded up to minutes, of each job sent to
-Slurm, after which Slurm ends it. \code{gsvaMap()} splits the input data into
+maximum wall time of each job sent to Slurm, after which Slurm ends it,
+given as in the \code{--time} option of the Slurm command \code{sbatch}: either a
+number of minutes, or a character string with one of the formats
+\code{"minutes"}, \code{"minutes:seconds"}, \code{"hours:minutes:seconds"},
+\code{"days-hours"}, \code{"days-hours:minutes"} and \code{"days-hours:minutes:seconds"},
+e.g., \code{"90"} or \code{"1:30:00"} for one hour and a half, or \code{"2-0"} for two
+days, which Slurm rounds up to minutes, or \code{"UNLIMITED"}, for the maximum
+time limit of the partition. \code{gsvaMap()} splits the input data into
 chunks, whose number depends on its size and on the memory of each job,
 see \code{mem}, and distributes them among \code{nodes} jobs, each of which processes
 its chunks one after another, so that \code{walltime} should be long enough for
@@ -179,7 +185,9 @@ different template, e.g., one that loads modules or sets an account
 required by the cluster, should also request the memory given in the
 \code{memory} element of the resources for the whole job, and to support the
 arguments \code{walltime} and \code{arrayjobs}, the time limit in the \code{walltime}
-element only when it is given, and in array jobs, at most as many tasks at
+element only when it is given, which is either a number of seconds, as in
+the templates of batchtools, or the character string \code{"UNLIMITED"}, and in
+array jobs, at most as many tasks at
 the same time as given in the \code{array.throttle} element, see the template
 provided by GSVA. Default:
 \code{system.file("templates", "slurm-gsva.tmpl", package="GSVA")}.}

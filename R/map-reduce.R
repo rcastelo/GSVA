@@ -101,8 +101,14 @@
 #' valid partition name for the Slurm cluster.
 #'
 #' @param walltime In `gsvaBatchtoolsSlurmParam()`, either `NULL` or the
-#' maximum wall time in seconds, rounded up to minutes, of each job sent to
-#' Slurm, after which Slurm ends it. `gsvaMap()` splits the input data into
+#' maximum wall time of each job sent to Slurm, after which Slurm ends it,
+#' given as in the `--time` option of the Slurm command `sbatch`: either a
+#' number of minutes, or a character string with one of the formats
+#' `"minutes"`, `"minutes:seconds"`, `"hours:minutes:seconds"`,
+#' `"days-hours"`, `"days-hours:minutes"` and `"days-hours:minutes:seconds"`,
+#' e.g., `"90"` or `"1:30:00"` for one hour and a half, or `"2-0"` for two
+#' days, which Slurm rounds up to minutes, or `"UNLIMITED"`, for the maximum
+#' time limit of the partition. `gsvaMap()` splits the input data into
 #' chunks, whose number depends on its size and on the memory of each job,
 #' see `mem`, and distributes them among `nodes` jobs, each of which processes
 #' its chunks one after another, so that `walltime` should be long enough for
@@ -154,7 +160,9 @@
 #' required by the cluster, should also request the memory given in the
 #' `memory` element of the resources for the whole job, and to support the
 #' arguments `walltime` and `arrayjobs`, the time limit in the `walltime`
-#' element only when it is given, and in array jobs, at most as many tasks at
+#' element only when it is given, which is either a number of seconds, as in
+#' the templates of batchtools, or the character string `"UNLIMITED"`, and in
+#' array jobs, at most as many tasks at
 #' the same time as given in the `array.throttle` element, see the template
 #' provided by GSVA. Default:
 #' `system.file("templates", "slurm-gsva.tmpl", package="GSVA")`.
@@ -588,11 +596,7 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
         cli_abort(c("x"=paste("You must provide a valid partition name",
                               "for the Slurm cluster.")))
 
-    if (!is.null(walltime) &&
-        (!is.numeric(walltime) || length(walltime) != 1 || is.na(walltime) ||
-         walltime <= 0))
-        cli_abort(c("x"=paste("'walltime' must be either NULL or a positive",
-                              "number of seconds.")))
+    walltime <- .slurm_walltime(walltime)
 
     if (!is.logical(arrayjobs) || length(arrayjobs) != 1 || is.na(arrayjobs))
         cli_abort(c("x"="'arrayjobs' must be either TRUE or FALSE."))
@@ -661,6 +665,55 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
                conffile)
 
     conffile
+}
+
+## time limit of the jobs sent to Slurm given in the 'walltime' argument of
+## gsvaBatchtoolsSlurmParam(), as in the '--time' option of 'sbatch': NULL,
+## for no time limit, a number of minutes, or a character string with one of
+## the formats "M", "M:S", "H:M:S", "D-H", "D-H:M" and "D-H:M:S", whose fields
+## are not bounded, as in Slurm, or "UNLIMITED" (or "INFINITE"). returns NULL,
+## the number of seconds, as given to the templates of batchtools, or
+## "UNLIMITED". the number of minutes, rounded up, must fit in an integer,
+## because the template of GSVA writes it as such
+#' @importFrom cli cli_abort
+.slurm_walltime <- function(walltime) {
+    if (is.null(walltime))
+        return(NULL)
+
+    fmts <- paste("a number of minutes, or a character string with one of",
+                  "the formats \"M\", \"M:S\", \"H:M:S\", \"D-H\",",
+                  "\"D-H:M\" and \"D-H:M:S\", or \"UNLIMITED\"")
+    secs <- NA_real_
+    if (is.numeric(walltime) && length(walltime) == 1 &&
+        is.finite(walltime) && walltime == round(walltime))
+        secs <- walltime * 60
+    else if (is.character(walltime) && length(walltime) == 1 &&
+             !is.na(walltime)) {
+        w <- trimws(walltime)
+        if (toupper(w) %in% c("UNLIMITED", "INFINITE"))
+            return("UNLIMITED")
+        m <- regmatches(w, regexec(paste0("^(?:([0-9]+)-)?([0-9]+)",
+                                          "(?::([0-9]+))?(?::([0-9]+))?$"),
+                                   w, perl=TRUE))[[1]]
+        if (length(m) > 0) {
+            f <- as.numeric(m[-1]) ## days, then up to three fields
+            f[is.na(f)] <- 0
+            nf <- sum(nzchar(m[3:5]))
+            if (nzchar(m[2])) ## days-hours[:minutes[:seconds]]
+                secs <- sum(f * c(86400, 3600, 60, 1))
+            else ## minutes[:seconds] or hours:minutes:seconds
+                secs <- sum(f[2:(1 + nf)] *
+                            list(60, c(60, 1), c(3600, 60, 1))[[nf]])
+        }
+    }
+    maxmins <- .Machine$integer.max
+    if (is.na(secs) || secs < 1 || ceiling(secs / 60) > maxmins)
+        cli_abort(c("x"=paste0("'walltime' must be either NULL, ", fmts,
+                               ", as in the --time option of sbatch, with ",
+                               "a time limit of at least one second and at ",
+                               "most {maxmins} minutes.")))
+
+    secs
 }
 
 ## number of parallel workers of the R process of each job of gsvaMap() using

@@ -11,9 +11,10 @@
 ## ncpus [integer(1)]:        Number of required cpus per task,
 ##                            to parallelize with multicore within each task.
 ## walltime [integer(1)]:     Walltime for this job, or for each task of an
-##                            array job, in seconds, rounded up to minutes.
-##                            Optional: when not given, the job takes the
-##                            default time limit of the partition.
+##                            array job, in seconds, rounded up to minutes, or
+##                            "UNLIMITED", for the maximum time limit of the
+##                            partition. Optional: when not given, the job
+##                            takes the default time limit of the partition.
 ## memory   [character(1)]:   Memory for the whole job, e.g., "10G".
 ## partition [character(1)]:  Slurm partition to which the job is sent.
 ## array.throttle [integer(1)]: Maximum number of tasks of an array job
@@ -28,7 +29,7 @@ log.file = fs::path_expand(log.file)
 #SBATCH --job-name=<%= job.name %>
 #SBATCH --output=<%= log.file %>
 #SBATCH --error=<%= log.file %>
-<%= if (!is.null(resources$walltime)) sprintf("#SBATCH --time=%i", as.integer(ceiling(resources$walltime / 60))) %>
+<%= if (is.character(resources$walltime)) sprintf("#SBATCH --time=%s", resources$walltime) else if (!is.null(resources$walltime)) sprintf("#SBATCH --time=%i", as.integer(ceiling(resources$walltime / 60))) %>
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=<%= resources$ncpus %>
 #SBATCH --mem=<%= resources$memory %>

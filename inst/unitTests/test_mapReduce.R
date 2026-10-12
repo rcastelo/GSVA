@@ -780,6 +780,33 @@ test_batchtoolsConf <- function() {
     checkTrue(!exists(".userconf", envir=env, inherits=FALSE))
 }
 
+test_slurmWalltime <- function() {
+
+    message("Running unit tests for the time limit of Slurm jobs")
+
+    ## time limits as in the --time option of sbatch, given in seconds to the
+    ## job template, where a number is a number of minutes
+    sw <- GSVA:::.slurm_walltime
+    checkTrue(is.null(sw(NULL)))
+    checkEqualsNumeric(sw(90), 90 * 60)
+    checkEqualsNumeric(sw("90"), 90 * 60)
+    checkEqualsNumeric(sw("90:30"), 90 * 60 + 30)
+    checkEqualsNumeric(sw(" 1:30:00 "), 90 * 60)
+    checkEqualsNumeric(sw("2-0"), 2 * 86400)
+    checkEqualsNumeric(sw("2-12"), 2 * 86400 + 12 * 3600)
+    checkEqualsNumeric(sw("2-12:30"), 2 * 86400 + 12 * 3600 + 30 * 60)
+    checkEqualsNumeric(sw("2-12:30:15"), 2 * 86400 + 12 * 3600 + 30 * 60 + 15)
+    checkEqualsNumeric(sw("0:01"), 1)
+    checkIdentical(sw("UNLIMITED"), "UNLIMITED")
+    checkIdentical(sw("infinite"), "UNLIMITED")
+    for (w in list(Inf, NA, NaN, 0, -5, 1.5, c(1, 2), TRUE, NA_character_,
+                   "", "0", "0:00", "1:2:3:4", "1-", "-1", "1-2-3", "1h",
+                   "1.5", "abc", .Machine$integer.max + 1))
+        checkTrue(grepl("'walltime' must be",
+                        tryCatch(sw(w), error=conditionMessage),
+                        fixed=TRUE))
+}
+
 test_mapReduceMemCheck <- function() {
 
     message("Running unit tests for the memory check of map-reduce jobs")
