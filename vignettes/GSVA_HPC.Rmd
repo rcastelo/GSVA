@@ -120,7 +120,29 @@ is smaller than the former, while the function `gsvaMap()`, before submitting an
 job, gives an error in that case, because such jobs would be killed by the workload
 manager, and a warning when it estimates that the calculations on each chunk of the
 input data require more memory than requested, suggesting in both cases to use
-fewer CPU cores per job or to request more memory.
+fewer CPU cores per job or to request more memory. The job scripts are written
+from a template provided by GSVA, which requests this memory for the whole job;
+clusters that require their own template, e.g., to load modules or to set an
+account, can give it in the `template` argument of `gsvaBatchtoolsSlurmParam()`,
+and it should also request the memory for the whole job (`--mem`) instead of
+for each CPU core (`--mem-per-cpu`).
+
+The function `gsvaMap()` splits the input data into chunks, whose number depends
+on the size of the input data and on the memory requested for each job, and
+distributes them among the `nodes` jobs, each of which processes its chunks one
+after another. By default, `gsvaBatchtoolsSlurmParam()` does not request any time
+limit for the jobs, which then take the default time limit of the partition,
+bounded by its maximum time limit; the SLURM command `scontrol show partition`
+shows both of them in the fields `DefaultTime` and `MaxTime`. A time limit in
+seconds can be requested with the `walltime` argument, which should be long
+enough for each job to process about the number of chunks divided by `nodes`.
+With the argument `arrayjobs=TRUE`, each job is sent instead as an array job,
+whose tasks process one chunk each, one after another, so that the time limit
+in `walltime` applies to each chunk, the scheduler may start the shorter tasks
+sooner, and a task ended by SLURM, e.g., for exceeding its memory or time
+limit, does not prevent the next tasks from processing their chunks. In both
+cases, at most `nodes` jobs or tasks run at the same time, and the chunks of
+those ended by SLURM can be resubmitted as described below.
 
 The next step is to run the function `gsvaMap()`, which will submit the jobs to the
 SLURM workload manager, and return a list object, where each of its elements will be

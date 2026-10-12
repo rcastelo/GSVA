@@ -1,0 +1,47 @@
+#!/bin/bash
+
+## Slurm job template used by GSVA::gsvaBatchtoolsSlurmParam(), based on the
+## template 'slurm-simple.tmpl' of the batchtools package, which requests
+## memory per CPU core (--mem-per-cpu), while this one requests it per job
+## (--mem), because GSVA uses it as the maximum main memory of each job,
+## shared by its R process and its parallel workers.
+##
+## Job Resource Interface Definition
+##
+## ncpus [integer(1)]:        Number of required cpus per task,
+##                            to parallelize with multicore within each task.
+## walltime [integer(1)]:     Walltime for this job, or for each task of an
+##                            array job, in seconds, rounded up to minutes.
+##                            Optional: when not given, the job takes the
+##                            default time limit of the partition.
+## memory   [character(1)]:   Memory for the whole job, e.g., "10G".
+## partition [character(1)]:  Slurm partition to which the job is sent.
+## array.throttle [integer(1)]: Maximum number of tasks of an array job
+##                            running at the same time. Optional.
+
+<%
+# relative paths are not handled well by Slurm
+log.file = fs::path_expand(log.file)
+-%>
+
+
+#SBATCH --job-name=<%= job.name %>
+#SBATCH --output=<%= log.file %>
+#SBATCH --error=<%= log.file %>
+<%= if (!is.null(resources$walltime)) sprintf("#SBATCH --time=%i", as.integer(ceiling(resources$walltime / 60))) %>
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=<%= resources$ncpus %>
+#SBATCH --mem=<%= resources$memory %>
+<%= if (!is.null(resources$partition)) sprintf(paste0("#SBATCH --partition='", resources$partition, "'")) %>
+<%= if (array.jobs) sprintf("#SBATCH --array=1-%i%s", nrow(jobs), if (!is.null(resources$array.throttle)) sprintf("%%%i", as.integer(resources$array.throttle)) else "") else "" %>
+
+## Export the value of the DEBUGME environment variable to the job
+export DEBUGME=<%= Sys.getenv("DEBUGME") %>
+
+<%= sprintf("export OMP_NUM_THREADS=%i", resources$omp.threads) -%>
+<%= sprintf("export OPENBLAS_NUM_THREADS=%i", resources$blas.threads) -%>
+<%= sprintf("export MKL_NUM_THREADS=%i", resources$blas.threads) -%>
+
+## Run R:
+## we merge R output with stdout from SLURM, which gets then logged via --output option
+Rscript -e 'batchtools::doJobCollection("<%= uri %>")'

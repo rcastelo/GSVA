@@ -20,10 +20,12 @@ gsvaReduce(mapOutput, verbose = TRUE)
 gsvaBatchtoolsSlurmParam(
   dir = "GSVAOUTPUT",
   partition,
-  walltime = 600,
+  walltime = NULL,
   nodes = 2,
   ncpus_per_task = 2,
-  mem = "10G"
+  mem = "10G",
+  arrayjobs = FALSE,
+  template = system.file("templates", "slurm-gsva.tmpl", package = "GSVA")
 )
 }
 \arguments{
@@ -73,7 +75,13 @@ environment. For that purpose, users should either create a \code{BatchtoolsPara
 object themselves with appropriate arguments or, if an SLURM HPC environment
 is available, they may use the wrapper function \code{gsvaBatchtoolsSlurmParam()},
 which is provided to create a \code{BatchtoolsParam} object with some sensible
-defaults for running GSVA calculations on a SLURM cluster.}
+defaults for running GSVA calculations on a SLURM cluster. GSVA uses the
+\code{memory} element of the resources of \code{BTPARAM} as the maximum main memory
+of each job, shared by its R process and its parallel workers, while the
+template of the job scripts determines how much memory the workload manager
+allocates to the job; e.g., the default template of batchtools for Slurm
+allocates that amount for each CPU core, see the \code{template} argument of
+\code{gsvaBatchtoolsSlurmParam()}.}
 
 \item{MAPREDO}{In \code{gsvaMap()}, the output of a previous call to \code{gsvaMap()}
 with the same \code{FUN} and \code{inputData} arguments, in which some of the chunks
@@ -115,11 +123,23 @@ including the interval between checks, take precedence. Default:
 to use for the GSVA calculations. No default value, the user must provide a
 valid partition name for the Slurm cluster.}
 
-\item{walltime}{In \code{gsvaBatchtoolsSlurmParam()}, maximum wall time in seconds
-for the GSVA calculations. Default: 600 seconds (10 minutes).}
+\item{walltime}{In \code{gsvaBatchtoolsSlurmParam()}, either \code{NULL} or the
+maximum wall time in seconds, rounded up to minutes, of each job sent to
+Slurm, after which Slurm ends it. \code{gsvaMap()} splits the input data into
+chunks, whose number depends on its size and on the memory of each job,
+see \code{mem}, and distributes them among \code{nodes} jobs, each of which processes
+its chunks one after another, so that \code{walltime} should be long enough for
+about the number of chunks divided by \code{nodes}; with \code{arrayjobs=TRUE}, it is
+instead the maximum wall time of each chunk. When \code{NULL}, no time limit is
+requested, and the jobs take the default time limit of the partition,
+which its maximum time limit bounds; e.g., the Slurm command
+\verb{scontrol show partition} shows both of them in the fields \code{DefaultTime}
+and \code{MaxTime}. Chunks of jobs ended by Slurm can be resubmitted with the
+\code{MAPREDO} argument of \code{gsvaMap()}. Default: \code{NULL}.}
 
 \item{nodes}{In \code{gsvaBatchtoolsSlurmParam()}, number of independent compute
-nodes to distribute the GSVA calculations (tasks) across. Default: 2.}
+nodes to distribute the GSVA calculations (tasks) across, which is the
+maximum number of jobs running at the same time. Default: 2.}
 
 \item{ncpus_per_task}{In \code{gsvaBatchtoolsSlurmParam()}, number of CPU cores
 to use for each independent task executed within a compute node. Default: 2.}
@@ -137,6 +157,32 @@ before submitting any job, gives an error in that case, because such jobs
 would be killed by the workload manager, and a warning when \code{mem} is smaller
 than the memory it estimates that the calculations on each chunk of data
 require. Default: "10G".}
+
+\item{arrayjobs}{In \code{gsvaBatchtoolsSlurmParam()}, logical vector of length
+\enumerate{
+\item When \code{TRUE}, each of the \code{nodes} jobs is sent to Slurm as an array job,
+whose tasks process one chunk each, one after another, instead of as a
+single job processing all its chunks, so that \code{walltime} applies to each
+chunk, the scheduler may start the shorter tasks sooner, and a task ended by
+Slurm, e.g., for exceeding its memory or time limit, does not prevent the
+next tasks from processing their chunks. At most \code{nodes} tasks run at the
+same time. Default: \code{FALSE}.
+}}
+
+\item{template}{In \code{gsvaBatchtoolsSlurmParam()}, path to the template of
+the Slurm job scripts, see \code{\link[batchtools:makeClusterFunctionsSlurm]{batchtools::makeClusterFunctionsSlurm()}}.
+By default, the template provided by GSVA, which requests \code{mem} for the
+whole job (\code{--mem}), instead of the default template of batchtools for
+Slurm, which requests that amount for each CPU core (\code{--mem-per-cpu}),
+i.e., \code{ncpus_per_task} times the memory that GSVA uses in each job. A
+different template, e.g., one that loads modules or sets an account
+required by the cluster, should also request the memory given in the
+\code{memory} element of the resources for the whole job, and to support the
+arguments \code{walltime} and \code{arrayjobs}, the time limit in the \code{walltime}
+element only when it is given, and in array jobs, at most as many tasks at
+the same time as given in the \code{array.throttle} element, see the template
+provided by GSVA. Default:
+\code{system.file("templates", "slurm-gsva.tmpl", package="GSVA")}.}
 }
 \value{
 The \code{gsvaMap()} function returns either a list of objects with the

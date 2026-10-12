@@ -100,11 +100,23 @@
 #' to use for the GSVA calculations. No default value, the user must provide a
 #' valid partition name for the Slurm cluster.
 #'
-#' @param walltime In `gsvaBatchtoolsSlurmParam()`, maximum wall time in seconds
-#' for the GSVA calculations. Default: 600 seconds (10 minutes).
+#' @param walltime In `gsvaBatchtoolsSlurmParam()`, either `NULL` or the
+#' maximum wall time in seconds, rounded up to minutes, of each job sent to
+#' Slurm, after which Slurm ends it. `gsvaMap()` splits the input data into
+#' chunks, whose number depends on its size and on the memory of each job,
+#' see `mem`, and distributes them among `nodes` jobs, each of which processes
+#' its chunks one after another, so that `walltime` should be long enough for
+#' about the number of chunks divided by `nodes`; with `arrayjobs=TRUE`, it is
+#' instead the maximum wall time of each chunk. When `NULL`, no time limit is
+#' requested, and the jobs take the default time limit of the partition,
+#' which its maximum time limit bounds; e.g., the Slurm command
+#' `scontrol show partition` shows both of them in the fields `DefaultTime`
+#' and `MaxTime`. Chunks of jobs ended by Slurm can be resubmitted with the
+#' `MAPREDO` argument of `gsvaMap()`. Default: `NULL`.
 #'
 #' @param nodes In `gsvaBatchtoolsSlurmParam()`, number of independent compute
-#' nodes to distribute the GSVA calculations (tasks) across. Default: 2.
+#' nodes to distribute the GSVA calculations (tasks) across, which is the
+#' maximum number of jobs running at the same time. Default: 2.
 #'
 #' @param ncpus_per_task In `gsvaBatchtoolsSlurmParam()`, number of CPU cores
 #' to use for each independent task executed within a compute node. Default: 2.
@@ -123,6 +135,30 @@
 #' than the memory it estimates that the calculations on each chunk of data
 #' require. Default: "10G".
 #'
+#' @param arrayjobs In `gsvaBatchtoolsSlurmParam()`, logical vector of length
+#' 1. When `TRUE`, each of the `nodes` jobs is sent to Slurm as an array job,
+#' whose tasks process one chunk each, one after another, instead of as a
+#' single job processing all its chunks, so that `walltime` applies to each
+#' chunk, the scheduler may start the shorter tasks sooner, and a task ended by
+#' Slurm, e.g., for exceeding its memory or time limit, does not prevent the
+#' next tasks from processing their chunks. At most `nodes` tasks run at the
+#' same time. Default: `FALSE`.
+#'
+#' @param template In `gsvaBatchtoolsSlurmParam()`, path to the template of
+#' the Slurm job scripts, see [batchtools::makeClusterFunctionsSlurm()].
+#' By default, the template provided by GSVA, which requests `mem` for the
+#' whole job (`--mem`), instead of the default template of batchtools for
+#' Slurm, which requests that amount for each CPU core (`--mem-per-cpu`),
+#' i.e., `ncpus_per_task` times the memory that GSVA uses in each job. A
+#' different template, e.g., one that loads modules or sets an account
+#' required by the cluster, should also request the memory given in the
+#' `memory` element of the resources for the whole job, and to support the
+#' arguments `walltime` and `arrayjobs`, the time limit in the `walltime`
+#' element only when it is given, and in array jobs, at most as many tasks at
+#' the same time as given in the `array.throttle` element, see the template
+#' provided by GSVA. Default:
+#' `system.file("templates", "slurm-gsva.tmpl", package="GSVA")`.
+#'
 #' @param BTPARAM In `gsvaMap()`, an object of class
 #' [`BatchtoolsParam`][BiocParallel::BatchtoolsParam-class] specifying
 #' parameters for parallel execution in an HPC environment. By default, it is
@@ -133,7 +169,13 @@
 #' object themselves with appropriate arguments or, if an SLURM HPC environment
 #' is available, they may use the wrapper function `gsvaBatchtoolsSlurmParam()`,
 #' which is provided to create a `BatchtoolsParam` object with some sensible
-#' defaults for running GSVA calculations on a SLURM cluster.
+#' defaults for running GSVA calculations on a SLURM cluster. GSVA uses the
+#' `memory` element of the resources of `BTPARAM` as the maximum main memory
+#' of each job, shared by its R process and its parallel workers, while the
+#' template of the job scripts determines how much memory the workload manager
+#' allocates to the job; e.g., the default template of batchtools for Slurm
+#' allocates that amount for each CPU core, see the `template` argument of
+#' `gsvaBatchtoolsSlurmParam()`.
 #'
 #' @return The `gsvaMap()` function returns either a list of objects with the
 #' results of the GSVA calculations for each compute node, or a list of file paths
@@ -528,8 +570,12 @@ gsvaReduce <- function(mapOutput, verbose=TRUE) {
 #' @importFrom cli cli_alert_warning cli_abort
 #' @rdname map-reduce
 #' @export gsvaBatchtoolsSlurmParam
-gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
-                                     nodes=2, ncpus_per_task=2, mem="10G") { # nocov start
+gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
+                                     walltime=NULL, nodes=2, ncpus_per_task=2,
+                                     mem="10G", arrayjobs=FALSE,
+                                     template=system.file("templates",
+                                                          "slurm-gsva.tmpl",
+                                                          package="GSVA")) { # nocov start
 
     if (dir.exists(dir))
         cli_alert_warning("The directory {dir} already exists.")
@@ -541,6 +587,19 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
     if (missing(partition) || is.null(partition) || !is.character(partition))
         cli_abort(c("x"=paste("You must provide a valid partition name",
                               "for the Slurm cluster.")))
+
+    if (!is.null(walltime) &&
+        (!is.numeric(walltime) || length(walltime) != 1 || is.na(walltime) ||
+         walltime <= 0))
+        cli_abort(c("x"=paste("'walltime' must be either NULL or a positive",
+                              "number of seconds.")))
+
+    if (!is.logical(arrayjobs) || length(arrayjobs) != 1 || is.na(arrayjobs))
+        cli_abort(c("x"="'arrayjobs' must be either TRUE or FALSE."))
+
+    if (!.isCharLength1(template) || !file.exists(template))
+        cli_abort(c("x"=paste("'template' must be the path to an existing",
+                              "template file of Slurm job scripts.")))
 
     .check_job_mem(ncpus_per_task, .memtext2bytes(mem))
 
@@ -561,13 +620,18 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
                                            source="gsvainit.R",
                                            conf.file=.write_batchtools_conf(dir))
 
+    resources <- list(ncpus=ncpus_per_task, partition=partition, memory=mem)
+    if (!is.null(walltime))
+        resources$walltime <- walltime
+    ## each of the 'nodes' jobs of BiocParallel is an array job whose tasks
+    ## run one at a time, so that at most 'nodes' tasks run at the same time
+    if (arrayjobs)
+        resources <- c(resources, list(chunks.as.arrayjobs=TRUE,
+                                       array.throttle=1L))
+
     BTPARAM <- BatchtoolsParam(workers=nodes, cluster="slurm",
-                               jobname="gsva",
-                               resources=list(ncpus=ncpus_per_task,
-                                              partition=partition,
-                                              walltime=walltime,
-                                              memory=mem),
-                               registryargs=registryargs,
+                               jobname="gsva", resources=resources,
+                               registryargs=registryargs, template=template,
                                stop.on.error=FALSE, log=TRUE, logdir=dir)
     return(BTPARAM)
 } # nocov end
