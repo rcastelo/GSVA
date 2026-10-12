@@ -28,69 +28,39 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                                     "Please use 'gsvaRowNorm()' and",
                                     "'gsvaColRanks()'."))
 
-              if (verbose && gsva_global$show_start_and_end_messages) {
+              showmsg <- verbose && gsva_global$show_start_and_end_messages
+              if (showmsg) {
                   pkgversion <- packageDescription("GSVA")[["Version"]]
                   cli_alert_info("GSVA version {pkgversion}")
               }
+              ## the steps do not show their own start and end messages
+              oldmsg <- gsva_global$show_start_and_end_messages
+              gsva_global$show_start_and_end_messages <- FALSE
+              on.exit(gsva_global$show_start_and_end_messages <- oldmsg,
+                      add=TRUE)
 
               .check_bpparam(BPPARAM)
 
-              exprData <- get_exprData(param)
-              dataMatrix <- unwrapData(exprData, get_assay(param))
-              maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
-              ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
-                                      recompute_nzcount=FALSE, maxmem=maxmem,
-                                      verbose=verbose)
+              ## the ranks are calculated as gsva() does, with the row
+              ## normalization and the column ranks steps, which decide where
+              ## to process their data and check their memory requirements
+              gsvarnorm <- gsvaRowNorm(param=param, verbose=verbose,
+                                       dropExistingAssays=TRUE,
+                                       errorOnTooFewRows=TRUE,
+                                       BPPARAM=BPPARAM, maxmem=maxmem)
 
-              dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
-                                                          first=NA, last=NA,
-                                                          whdim=2, ondisk,
-                                                          verbose)
+              ## the input data in main memory remains allocated while the
+              ## column ranks are calculated, which their blocks cannot take
+              oldheld <- gsva_global$heldmem
+              gsva_global$heldmem <- oldheld + .input_held_mem(param)
+              on.exit(gsva_global$heldmem <- oldheld, add=TRUE)
 
-              filtDataMatrix <- dataMatrix
-              BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
-                                                 minparrows=100, minparcols=100,
-                                                 verbose)
-
-              if (.get_filterRows(param))
-                  filtDataMatrix <- .filterGenes(dataMatrix, anyNA(param),
-                                                 rowNorm=.get_rowNorm(param),
-                                                 removeConstant=TRUE,
-                                                 removeNzConstant=TRUE,
-                                                 errorOnTooFewRows=TRUE,
-                                                 verbose=verbose,
-                                                 BPPARAM=BPPARAM, maxmem=maxmem)
-              else if (verbose) {
-                  msg <- "Skipping filtering of constant rows (filterRows=FALSE)"
-                  cli_alert_warning(msg)
-              }
-              
-              if (verbose)
-                  cli_alert_info(sprintf("Calculating GSVA ranks"))
-
-              kcdfminssize <- .get_kcdfNoneMinSampleSize(param)
-              gsvarnorm <- .compute_row_norm(expr=filtDataMatrix,
-                                             rowNorm=.get_rowNorm(param),
-                                             kcdf=.get_kcdf(param),
-                                             kcdf.min.ssize=kcdfminssize,
-                                             sparse=.get_sparse(param),
-                                             any_na=anyNA(param),
-                                             na_use=.get_NAuse(param),
-                                             verbose=verbose,
-                                             BPPARAM=BPPARAM,
-                                             maxmem=maxmem,
-                                             ondisk=ondisk)
-
-              gsvarnks <- .compute_gsva_ranks(Z=gsvarnorm,
-                                              sparse=(.get_sparse(param) &&
-                                                      is_sparse(gsvarnorm)),
-                                              verbose=verbose,
-                                              BPPARAM=BPPARAM,
-                                              maxmem=maxmem,
-                                              ondisk=ondisk)
-
-              rownames(gsvarnks) <- rownames(filtDataMatrix)
-              colnames(gsvarnks) <- colnames(filtDataMatrix)
+              gsvaranks <- gsvaColRanks(rowNormExprData=gsvarnorm,
+                                        verbose=verbose,
+                                        dropExistingAssays=TRUE,
+                                        BPPARAM=BPPARAM, maxmem=maxmem)
+              rm(gsvarnorm)
+              gsvarnks <- unwrapData(gsvaranks, "gsvaranks")
 
               rnkscontainer <- wrapData(get_exprData(param), gsvarnks, param,
                                         "gsvaranks", first=NA, last=NA, rem=NA,
@@ -108,7 +78,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                           use=.get_NAuse(param), filterRows=.get_filterRows(param),
                           nzcount=nzcount(param), ondisk=.get_ondisk(param))
 
-              if (verbose && gsva_global$show_start_and_end_messages)
+              if (showmsg)
                   cli_alert_success("Calculations finished")
 
               return(rval)
@@ -124,8 +94,6 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 #' @name gsvaScores
 #' @rdname GSVA-pkg-deprecated
 #'
-#' @importFrom S4Arrays is_sparse
-#' @importFrom cli cli_alert_info cli_alert_success
 #' @exportMethod gsvaScores
 setMethod("gsvaScores", signature(param="gsvaRanksParam"),
           function(param, verbose=TRUE,
@@ -137,86 +105,30 @@ setMethod("gsvaScores", signature(param="gsvaRanksParam"),
                           msg=paste("The 'gsvaScores()' method is deprecated.",
                                     "Please use 'gsvaColScores()'."))
 
-              if (verbose && gsva_global$show_start_and_end_messages) {
-                  pkgversion <- packageDescription("GSVA")[["Version"]]
-                  cli_alert_info("GSVA version {pkgversion}")
-              }
-
-              .check_bpparam(BPPARAM)
-
-              ## assuming rows in the rank data have been already filtered
-              exprData <- get_exprData(param)
-              filtDataMatrix <- unwrapData(exprData, get_assay(param))
-
-              filtMappedGeneSets <- .filterAndMapGeneSets(param=param,
-                                           filteredDataMatrix=filtDataMatrix,
-                                           verbose=verbose)
-
-              sparse <- .get_sparse(param)
-              if (sparse && !is_sparse(filtDataMatrix))
-                  sparse <- FALSE
-
-              if (verbose) {
-                if (sparse)
-                    cli_alert_info("GSVA sparse algorithm")
-                  else
-                    cli_alert_info("GSVA dense (classical) algorithm")
-              }
-
-              maxmem <- .check_maxmem(param, maxmem=maxmem, verbose=verbose)
-              mf <- .step_mem_factors("scores", filtDataMatrix,
-                                      ngs=length(filtMappedGeneSets))
-              ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
-                                      recompute_nzcount=FALSE, maxmem=maxmem,
-                                      verbose=verbose, mf=mf)
-
-              filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
-                                                              "GSVA", first=NA,
-                                                              last=NA, whdim=2,
-                                                              ondisk, verbose)
-
-              BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
-                                                 minparrows=100, minparcols=100,
-                                                 verbose)
-
-              if (verbose) {
-                  n <- length(filtMappedGeneSets)
-                  cli_alert_info("Calculating GSVA scores for {n} gene sets")
-              }
-
-              gsva_es <- .processMatrixCols(filtDataMatrix,
-                                            FUN=.compute_gsva_scores,
-                                            geneSetsIdx=filtMappedGeneSets,
-                                            tau=.get_tau(param),
-                                            maxDiff=.get_maxDiff(param),
-                                            absRanking=.get_absRanking(param),
-                                            sparse=sparse, any_na=anyNA(param),
-                                            na_use=.get_NAuse(param),
-                                            minSize=get_minSize(param),
-                                            verbose=verbose,
-                                            minparrows=100, minparcols=100,
-                                            BPPARAM=BPPARAM, maxmem=maxmem,
-                                            workfactor=mf$workfactor,
-                                            outfactor=mf$outfactor,
-                                            outextra=mf$outextra,
-                                            sinkout=(ondisk ||
-                                                     is(filtDataMatrix,
-                                                        "DelayedMatrix")))
-
-              rownames(gsva_es) <- names(filtMappedGeneSets)
-              colnames(gsva_es) <- colnames(filtDataMatrix)
-
-              gs <- .geneSetsIndices2Names(indices=filtMappedGeneSets,
-                                           names=rownames(filtDataMatrix))
-              rval <- wrapData(get_exprData(param), gsva_es, param, "es",
-                               first=NA, last=NA, rem=NA, whdim=2,
-                               dropAssays=FALSE, gs)
-
-              if (verbose && gsva_global$show_start_and_end_messages)
-                  cli_alert_success("Calculations finished")
-
-              return(rval)
+              ## the scores are calculated by gsvaColScores() on the ranks,
+              ## with the gene sets and the other parameters of 'param'
+              gsvaColScores(rankExprData=.ranks_param_data(param),
+                            verbose=verbose, BPPARAM=BPPARAM, maxmem=maxmem)
           })
+
+## column ranks of the parameter object 'param' given by gsvaRanks(), with its
+## metadata set to the parameters of 'param', which may have changed after
+## gsvaRanks() gave it, e.g., its gene sets, keeping the assay of the input
+## data from which the ranks were calculated
+#' @importFrom S4Vectors metadata metadata<-
+.ranks_param_data <- function(param) {
+    x <- get_exprData(param)
+    p <- .gsvaParam_as_list(param)
+    if (is(x, "SummarizedExperiment")) {
+        p$assay <- metadata(x)$gsvaParam$assay
+        metadata(x)$gsvaParam <- p
+    } else {
+        p$assay <- attr(x, "gsvaParam")$assay
+        attr(x, "gsvaParam") <- p
+    }
+
+    x
+}
 
 #' @description The `saveHDF5GSVAranks()` function is deprecated. Please use
 #' `saveHDF5GSVA()` instead.
