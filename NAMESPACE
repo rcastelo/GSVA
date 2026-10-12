@@ -185,8 +185,7 @@ importFrom(SummarizedExperiment,
   "assay<-",
   SummarizedExperiment,
   assay,
-  assayNames,
-  assays
+  assayNames
 )
 importFrom(cli,
   cli_abort,
