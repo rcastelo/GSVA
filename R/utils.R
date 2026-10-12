@@ -958,7 +958,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## 'auto', checks whether the calculations fit in the maximum available main
 ## memory with the input data in it, and sets 'ondisk' to 'yes' or 'no'
 ## accordingly. the calculations fit when the memory taken by their data, see
-## .step_data_mem(), fits in the fraction .mem_fraction_R of 'maxmem'
+## .step_data_mem(), together with the rest of the input data in main memory,
+## see .step_held_input(), fits in the fraction .mem_fraction_R of 'maxmem'
 ## available to the allocations of R, where 'mf' gives the memory factors of
 ## the step, see .step_mem_factors(), and 'dense=TRUE' indicates that the input
 ## data is loaded in main memory as a dense matrix, even when it is sparse. If
@@ -986,10 +987,15 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         dims <- dim(X)
         if (!is.na(first) || !is.na(last))
             dims[whdim] <- last - first + 1
+        ## the rest of the input data in main memory remains allocated while
+        ## the step runs, see .step_held_input()
+        heldmem <- .held_mem() +
+                   .step_held_input(X, dims, whdim, FALSE,
+                                    .input_held_mem(param))
         need <- .step_data_mem(dims, whdim, insize,
                                if (type(X) == "integer") 4 else 8,
                                is_sparse(X) && !dense, TRUE, mf,
-                               densify=densify)
+                               heldmem=heldmem, densify=densify)
         ondisk <- "no"
         if (need > .mem_fraction_R * maxmem) {
             ondisk <- "yes"
