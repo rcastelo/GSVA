@@ -189,6 +189,44 @@ test_load_sparse_by_blocks <- function() {
         checkIdentical(GSVA:::.load_sparse_by_blocks(x),
                        as(x, "SVT_SparseMatrix"))
     }
+
+    ## in the compressed sparse column layout, the number of nonzero values of
+    ## each column is known without reading them, also through the delayed
+    ## operations that restrict, bind or name columns, and the full columns
+    ## bound those of a subset of rows; e.g., with the columns of many nonzero
+    ## values stored next to each other
+    m <- cbind(rsparsematrix(300, 80, density=0.02),
+               rsparsematrix(300, 20, density=0.9))
+    dimnames(m) <- list(paste0("g", 1:300), paste0("s", 1:100))
+    h5 <- tempfile(fileext=".h5")
+    on.exit(unlink(h5), add=TRUE)
+    x <- writeTENxMatrix(m, h5, group="m")
+    nz <- diff(m@p)
+    checkEqualsNumeric(GSVA:::.col_nzcounts(x), nz)
+    checkEqualsNumeric(GSVA:::.col_nzcounts(x[, 71:100]), nz[71:100])
+    checkEqualsNumeric(GSVA:::.col_nzcounts(cbind(x[, 1:10], x[, 91:100])),
+                       nz[c(1:10, 91:100)])
+    checkEqualsNumeric(GSVA:::.col_nzcounts(x[1:100, ]), nz)
+    checkTrue(is.null(GSVA:::.col_nzcounts(log1p(abs(x)))))
+    ## blocks take the columns that fit in the memory available, or a single
+    ## column when it does not fit by itself, and give the same object
+    bytes <- 160 * pmax(1, nz)
+    avail <- 5 * max(bytes)
+    grid <- GSVA:::.nzcount_col_grid(x, bytes, avail, maxcols=100L)
+    widths <- vapply(seq_along(grid), function(i) ncol(grid[[i]]),
+                     integer(1))
+    checkIdentical(sum(widths), 100L)
+    ends <- cumsum(widths)
+    blockbytes <- diff(c(0, cumsum(bytes)[ends]))
+    checkTrue(all(blockbytes <= avail | widths == 1L))
+    checkTrue(max(widths) > 5 * min(widths)) ## narrower where dense
+    grid <- GSVA:::.nzcount_col_grid(x, bytes, avail=0, maxcols=100L)
+    checkIdentical(length(grid), 100L)
+    insize <- as.numeric(object.size(as(x, "SVT_SparseMatrix")))
+    maxmem <- (insize + avail) / GSVA:::.mem_fraction_R
+    checkIdentical(GSVA:::.load_sparse_by_blocks(x, maxmem=maxmem,
+                                                 insize=insize),
+                   as(x, "SVT_SparseMatrix"))
 }
 
 test_memory_check <- function() {

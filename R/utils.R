@@ -403,8 +403,14 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## size. blocks are narrower when their memory does not fit in the fraction
 ## .mem_fraction_R of the maximum main memory 'maxmem' left by the result,
 ## whose estimated size is 'insize', when both are known, and by the memory
-## held by other objects, see .held_mem()
-#' @importFrom DelayedArray colAutoGrid read_block chunkdim
+## held by other objects, see .held_mem(). the number of nonzero values of
+## each column, when the layout of 'X' gives it without reading its values,
+## see .col_nzcounts(), sets the width of each block to the columns that fit
+## in that memory, because columns with many more nonzero values than the
+## average, e.g., of cells with deeper sequencing, may be stored next to each
+## other, and the average number of nonzero values per column, estimated
+## from 'insize', otherwise
+#' @importFrom DelayedArray colAutoGrid read_block chunkdim ArbitraryArrayGrid
 #' @importFrom BiocGenerics type
 .load_sparse_by_blocks <- function(X, maxmem=Inf, insize=NA_real_) {
     if (ncol(X) == 0L)
@@ -414,21 +420,32 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     budget <- !is.null(maxmem) && !is.null(insize) && is.finite(maxmem) &&
               !is.na(insize)
     cd <- chunkdim(X)
-    if (!is.null(cd) && cd[2] > 1) ## multiple of the width of the chunks
+    multicol <- !is.null(cd) && cd[2] > 1
+    if (multicol) ## multiple of the width of the chunks
         ncolblock <- cd[2] * ceiling(ncolblock / cd[2])
     else if (budget) ## as wide as the memory allows, see below
         ncolblock <- ncol(X)
-    if (budget) {
-        eltbytes <- if (type(X) == "integer") 4 else 8
-        nzpercol <- insize / (eltbytes + 4) / ncol(X)
-        avail <- .mem_fraction_R * maxmem - insize - .held_mem()
-        ncolblock <- min(ncolblock, floor(avail / (160 * max(1, nzpercol))))
-    }
     ## the DelayedArray package does not support blocks with more than
     ## .Machine$integer.max values
-    ncolblock <- min(ncolblock, floor(.Machine$integer.max / max(1, nrow(X))))
-    ncolblock <- as.integer(max(1, min(ncol(X), ncolblock)))
-    grid <- colAutoGrid(X, ncol=ncolblock)
+    maxcols <- floor(.Machine$integer.max / max(1, nrow(X)))
+    grid <- NULL
+    if (budget) {
+        avail <- .mem_fraction_R * maxmem - insize - .held_mem()
+        nz <- if (multicol) NULL else .col_nzcounts(X)
+        if (!is.null(nz))
+            grid <- .nzcount_col_grid(X, 160 * pmax(1, nz), avail,
+                                      min(ncolblock, maxcols))
+        else {
+            eltbytes <- if (type(X) == "integer") 4 else 8
+            nzpercol <- insize / (eltbytes + 4) / ncol(X)
+            ncolblock <- min(ncolblock,
+                             floor(avail / (160 * max(1, nzpercol))))
+        }
+    }
+    if (is.null(grid)) {
+        ncolblock <- as.integer(max(1, min(ncol(X), ncolblock, maxcols)))
+        grid <- colAutoGrid(X, ncol=ncolblock)
+    }
     blocks <- lapply(seq_along(grid), function(i)
                          as(read_block(X, grid[[i]], as.sparse=TRUE),
                             "SVT_SparseMatrix"))
@@ -436,6 +453,65 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     dimnames(res) <- dimnames(X)
 
     res
+}
+
+## number of nonzero values of each column of the sparse matrix 'X', when
+## they can be known without reading its values: from the pointers to the
+## start of each column in the compressed sparse column (CSC) layout of
+## HDF5 files, e.g., those written by saveHDF5GSVA() or by 10x Genomics,
+## through the delayed operations that restrict, bind along the columns or
+## name them; those of whole columns bound those of a subset of their rows.
+## NULL otherwise
+#' @importClassesFrom HDF5Array CSC_H5SparseMatrixSeed
+#' @importClassesFrom DelayedArray DelayedSubset DelayedAbind DelayedSetDimnames
+.col_nzcounts <- function(X) {
+    nz <- .seed_col_nzcounts(if (is(X, "DelayedArray")) X@seed else X)
+    if (is.null(nz) || length(nz) != ncol(X))
+        return(NULL)
+
+    as.numeric(nz)
+}
+
+.seed_col_nzcounts <- function(s) {
+    if (is(s, "CSC_H5SparseMatrixSeed"))
+        return(s@indptr_ranges$width)
+    if (is(s, "DelayedArray") || is(s, "DelayedSetDimnames"))
+        return(.seed_col_nzcounts(s@seed))
+    if (is(s, "DelayedSubset")) {
+        nz <- .seed_col_nzcounts(s@seed)
+        j <- s@index[[2L]]
+        if (is.null(nz) || is.null(j))
+            return(nz)
+        return(nz[j])
+    }
+    if (is(s, "DelayedAbind") && s@along == 2L) {
+        nzs <- lapply(s@seeds, .seed_col_nzcounts)
+        if (any(vapply(nzs, is.null, logical(1))))
+            return(NULL)
+        return(unlist(nzs, use.names=FALSE))
+    }
+
+    NULL
+}
+
+## grid of blocks of consecutive columns of 'X', whose columns take 'bytes'
+## bytes each while read, of at most 'maxcols' columns and as many columns as
+## fit in 'avail' bytes, or a single column when it does not fit by itself
+#' @importFrom DelayedArray ArbitraryArrayGrid
+.nzcount_col_grid <- function(X, bytes, avail, maxcols) {
+    n <- length(bytes)
+    cs <- cumsum(bytes)
+    ends <- integer(0)
+    last <- 0L
+    while (last < n) {
+        used <- if (last == 0L) 0 else cs[last]
+        end <- findInterval(used + avail, cs)
+        end <- min(max(end, last + 1L), last + maxcols, n)
+        ends <- c(ends, as.integer(end))
+        last <- end
+    }
+
+    ArbitraryArrayGrid(list(nrow(X), ends))
 }
 
 .check_sparse_load_input_expr <- function(expr, method, first, last, whdim,
