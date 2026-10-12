@@ -353,9 +353,15 @@ setMethod("anyNA", signature=c("plageParam"),
 ## not use random numbers, until the eigenvector changes less than 'tol'.
 ## power iteration converges at a rate given by the ratio between the second
 ## and the first eigenvalues, and when it does not converge in 'maxiter'
-## iterations, e.g., when both eigenvalues are very close, eigen() is used
+## iterations, e.g., when both eigenvalues are very close, eigen() is used.
+## power iteration may also converge to a smaller eigenvalue, when the sum of
+## the columns has no component along the leading eigenvector, e.g., when
+## its values sum to zero. the eigenvalue d^2 found is the largest one if,
+## and only if, d^2 (1 + 'certtol') I - Z_gs Z_gs^T is positive definite,
+## which its Cholesky decomposition verifies in a fraction of the time of
+## eigen(), e.g., about one sixth, and otherwise eigen() is used
 .plage_leading_eigen <- function(gram, maxeigen=1000, tol=1e-12,
-                                 maxiter=1000) {
+                                 maxiter=1000, certtol=1e-8) {
     if (nrow(gram) <= maxeigen) {
         e <- eigen(gram, symmetric=TRUE)
         return(list(vector=e$vectors[, 1L], value=e$values[1L]))
@@ -371,8 +377,15 @@ setMethod("anyNA", signature=c("plageParam"),
         if (ny == 0) ## the gene set has no variability
             break
         y <- y / ny
-        if (sqrt(sum((y - x)^2)) < tol)
-            return(list(vector=y, value=drop(crossprod(y, gram %*% y))))
+        if (sqrt(sum((y - x)^2)) < tol) {
+            value <- drop(crossprod(y, gram %*% y))
+            cert <- tryCatch(chol(diag(value * (1 + certtol), nrow(gram)) -
+                                  gram),
+                             error=function(e) NULL)
+            if (!is.null(cert))
+                return(list(vector=y, value=value))
+            break ## not the leading eigenvalue
+        }
         x <- y
     }
 
