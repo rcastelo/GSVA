@@ -279,6 +279,14 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     funargs <- list()
     assay <- NA_character_
 
+    ## each job receives the whole input data, from which the assays not
+    ## used by the step are dropped, see .keep_used_assay()
+    if (!is.list(inputData))
+        inputData <- .keep_used_assay(inputData,
+                         if (identical(FUN, gsvaRowNorm)) get_assay(inputData)
+                         else if (identical(FUN, gsvaColRanks)) "gsvarnorm"
+                         else "gsvaranks")
+
     if (identical(FUN, gsvaRowNorm)) {
 
         funargs <- c(funargs, list(param=inputData,
@@ -319,12 +327,16 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         if (is.null(mapinfo)) {
             ## each job has its own memory 'maxmem', not shared with the
             ## other jobs, and its chunk takes the memory of the selected
-            ## step, see .map_step_factors()
+            ## step, see .map_step_factors(), besides the memory of the rest
+            ## of the input data that each job receives, see .check_map_mem()
             Xd <- unwrapData(get_exprData(inputData), assay)
             mf <- .map_step_factors(funname, inputData, Xd)
+            container <- .map_container_mem(inputData, assay)
             grid <- gridsizefun(Xd, nworkers, maxmem, mf$workfactor,
                                 mf$outfactor, mf$outextra, workermem=0,
-                                dense=mf$densify, sharedmem=FALSE)
+                                dense=mf$densify,
+                                heldmem=max(0, container - .inmem_size(Xd)),
+                                sharedmem=FALSE)
             X <- splitinrangesfun(grid)
             chunks <- data.frame(first=vapply(X, start, integer(1)),
                                  last=vapply(X, end, integer(1)))
@@ -626,6 +638,38 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
     invisible(TRUE)
 }
 
+## the input data 'x' of gsvaMap(), a parameter object or a container of
+## expression data, keeping only the assay 'assay' used by the step when the
+## container is a SummarizedExperiment object, as the steps do in their
+## output with 'dropExistingAssays=TRUE', so that the jobs do not receive
+## the other assays. this modifies a copy of the container, without changing
+## the input data of the caller, and its matrices are shared, not copied. an
+## ExpressionSet object, whose assay data may be stored in an environment, is
+## kept as is, and the memory of its other assays is counted, see
+## .map_container_mem()
+#' @importMethodsFrom SummarizedExperiment assays "assays<-" assayNames
+.keep_used_assay <- function(x, assay) {
+    if (is(x, "GsvaMethodParam")) {
+        x@exprData <- .keep_used_assay(x@exprData, assay)
+        return(x)
+    }
+    if (is(x, "SummarizedExperiment") && assay %in% assayNames(x) &&
+        length(assayNames(x)) > 1)
+        assays(x, withDimnames=FALSE) <- assays(x, withDimnames=FALSE)[assay]
+
+    x
+}
+
+## memory in bytes that the input data 'x' of gsvaMap(), a parameter object
+## or a container of expression data, takes in main memory in each job, see
+## .container_held_mem()
+.map_container_mem <- function(x, assay) {
+    if (is(x, "GsvaMethodParam"))
+        return(.input_held_mem(x))
+
+    .container_held_mem(x, assay)
+}
+
 ## memory factors of the step 'funname' of gsvaMap() on the input data
 ## 'inputData', whose matrix 'X' is processed, see .step_mem_factors(), and
 ## whether the step gives a dense output from a sparse input ('densify'), as
@@ -709,8 +753,7 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition, walltime=600,
     mf <- .map_step_factors(funname, inputData, X)
     ## each job receives the whole input data, whose assays in main memory
     ## remain allocated while it processes its chunk, see .step_held_input()
-    container <- if (is(inputData, "gsvaParam")) .input_held_mem(inputData)
-                 else .container_held_mem(inputData, assay)
+    container <- .map_container_mem(inputData, assay)
     held <- .step_held_input(X, dims, whdim, FALSE, container)
     inmemory <- .step_data_mem(dims, whdim, insize, eltbytes, sparse, TRUE,
                                mf, held, densify=mf$densify) <=

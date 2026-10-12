@@ -1053,14 +1053,28 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 }
 
 ## memory in bytes that the container 'x' of expression data takes in main
-## memory: the one of all its assays, when it is a SummarizedExperiment
-## object, including those not used by the calculations, or otherwise the one
-## of its matrix of the assay 'assay'
-#' @importFrom SummarizedExperiment assays
+## memory. for a SummarizedExperiment object, all of it: all its assays held
+## in main memory, including those not used by the calculations, and the rest
+## of its data, such as the reduced dimensions and alternative experiments of
+## a SingleCellExperiment object, or the spatial coordinates and images of a
+## SpatialExperiment object, in its internal slots 'int_colData' and
+## 'int_metadata'. for an ExpressionSet object, also the matrices of its assay
+## data, which object.size() does not include when they are stored in an
+## environment. otherwise, the one of its matrix of the assay 'assay'
+#' @importFrom utils object.size
+#' @importMethodsFrom Biobase assayData
 .container_held_mem <- function(x, assay) {
     if (is(x, "SummarizedExperiment"))
-        return(sum(vapply(assays(x, withDimnames=FALSE), .inmem_size,
-                          numeric(1))))
+        return(as.numeric(object.size(x)))
+    if (is(x, "ExpressionSet")) {
+        held <- as.numeric(object.size(x))
+        ad <- assayData(x)
+        if (is.environment(ad))
+            held <- held + sum(vapply(ls(ad), function(nm)
+                                          .inmem_size(get(nm, envir=ad)),
+                                      numeric(1)))
+        return(held)
+    }
 
     .inmem_size(unwrapData(x, assay))
 }

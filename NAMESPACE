@@ -257,6 +257,7 @@ importFrom(utils,
   packageVersion,
   tail
 )
+importMethodsFrom(Biobase,assayData)
 importMethodsFrom(Biobase,experimentData)
 importMethodsFrom(Biobase,exprs)
 importMethodsFrom(Biobase,featureNames)
@@ -271,6 +272,7 @@ importMethodsFrom(S4Vectors,"metadata<-")
 importMethodsFrom(S4Vectors,metadata)
 importMethodsFrom(SpatialExperiment,imgData)
 importMethodsFrom(SpatialExperiment,spatialCoords)
+importMethodsFrom(SummarizedExperiment,"assays<-")
 importMethodsFrom(SummarizedExperiment,assayNames)
 importMethodsFrom(SummarizedExperiment,assays)
 importMethodsFrom(SummarizedExperiment,colData)
