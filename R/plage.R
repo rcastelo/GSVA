@@ -503,6 +503,9 @@ plage <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
                                  u <- -u
                              u / sqrt(e$value)
                          })
+        ## the products of this group are released before accumulating those
+        ## of the next one, whose memory budget does not include them
+        rm(grams)
     }
 
     mf <- .step_mem_factors("plagescores", ngs=length(geneSets))
