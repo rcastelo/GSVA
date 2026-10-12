@@ -560,11 +560,13 @@ test_mapReduceRedo <- function() {
     checkException(gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE,
                            BTPARAM=btpar, MAPREDO=c(wds[1], wds[2])),
                    silent=TRUE)
-    ## while the right ones resubmit the failed chunk
-    unlink(rankspaths[[2]], recursive=TRUE)
+    ## while the right ones resubmit the failed chunk, whose file, if it is
+    ## not a result, is not taken as one but replaced
+    writeLines("not a result", rankspaths[[2]])
     redone <- gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE, BTPARAM=btpar,
                       MAPREDO=partial)
     checkIdentical(redone, rankspaths)
+    checkTrue(GSVA:::.is_gsva_h5_file(rankspaths[[2]]))
 
     ## the same input saved in two formats in the same directory requires
     ## setting the output format to choose between their manifests

@@ -394,7 +394,7 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         if (output == "object")
             idx <- which(.map_failed(MAPREDO))
         else { ## the results on disk tell which chunks are missing
-            done <- file.exists(paths)
+            done <- .valid_map_results(paths)
             res[done] <- as.list(paths[done])
             idx <- which(!done)
         }
@@ -773,8 +773,9 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         fname <- X$fname
         X <- X$chunk
         ## completed by another job, such as one left running by a call to
-        ## gsvaMap() whose R session ended
-        if (file.exists(fname))
+        ## gsvaMap() whose R session ended; a file that is not a result is
+        ## replaced by the one of this job
+        if (.valid_map_result(fname, output))
             return(fname)
     }
     rng <- X
@@ -833,20 +834,42 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         ## the temporary name is unique to this job, because a job left
         ## running by a call to gsvaMap() whose R session ended may be saving
         ## the same chunk, whose file, if already saved, is replaced by the
-        ## identical one of this job
+        ## identical one of this job. when it cannot be replaced, e.g., on
+        ## Windows while it is open, it is kept only if it is a result
         tmpname <- .unique_tmpname(fname)
         if (output == "HDF5")
             saveHDF5GSVA(res, tmpname)
         else
             saveParquetGSVA(res, tmpname)
-        if (!suppressWarnings(file.rename(tmpname, fname))) {
-            unlink(tmpname, recursive=TRUE)
-            if (!file.exists(fname))
-                cli_abort(c("x"="cannot save results to {fname}."))
+        if (!.replace_file(tmpname, fname)) {
+            unlink(tmpname)
+            if (!.valid_map_result(fname, output))
+                cli_abort(c("x"="cannot save results to {.file {fname}}."))
         }
         res <- fname
     }
     return(res)
+}
+
+## whether the file 'fname' is a result of gsvaMap() saved in the format
+## 'output', "HDF5" or "Parquet", given by default by the extension of its
+## name, see .map_file_names(), which only checks the format of the file,
+## because results are only written to their final name once complete
+.valid_map_result <- function(fname,
+                              output=if (grepl("\\.parquet$", fname))
+                                         "Parquet" else "HDF5") {
+    if (!file.exists(fname) || dir.exists(fname))
+        return(FALSE)
+    if (output == "HDF5")
+        return(.is_gsva_h5_file(fname))
+
+    .is_parquet_file(fname)
+}
+
+## whether each of the files in 'paths' is a result of gsvaMap(), see
+## .valid_map_result()
+.valid_map_results <- function(paths) {
+    vapply(paths, .valid_map_result, logical(1), USE.NAMES=FALSE)
 }
 
 #' @importFrom S4Vectors metadata
@@ -1185,7 +1208,7 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         errmsg <- conditionMessage(err)
         cli_abort(c("x"="{errmsg}", jobinfo), parent=err)
     }
-    done <- file.exists(paths)
+    done <- .valid_map_results(paths)
     if (!any(done)) {
         errmsg <- conditionMessage(err)
         cli_abort(c("x"="No chunk was completed: {errmsg}", jobinfo,
