@@ -216,7 +216,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up dependencies
+      - id: setup
+        name: Set up dependencies
         uses: ./.github/actions/setup-bioc-deps
         with:
           biocversion: ${{ needs.define-docker-info.outputs.biocversion }}
@@ -226,14 +227,16 @@ jobs:
       ## BiocFileCache (e.g., spatialLIBD::fetch_data()), is stored under the
       ## temporary directory of the runner, whose path runner.temp is the same
       ## for the actions/cache step and for R, which both run in the container.
-      ## This data rarely changes, so a fixed key is used. Update the number in
-      ## the key to download the data again.
+      ## Cached data is never checked against its online source, so the key
+      ## includes the Bioconductor version to download the data again at each
+      ## Bioconductor release. Update the number at the end of the key to
+      ## download the data again in between releases.
       - name: Cache data downloaded by the vignettes
         if: "!contains(github.event.head_commit.message, '/nocache')"
         uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/vignettedata
-          key: ${{ env.cache-version }}-${{ runner.os }}-vignettedata-v2
+          key: ${{ env.cache-version }}-${{ runner.os }}-vignettedata-bioc-${{ steps.setup.outputs.biocversionnum }}-v1
 
       - name: Build package with vignettes
         env:
