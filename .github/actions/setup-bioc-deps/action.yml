@@ -1,0 +1,112 @@
+## Setup steps shared by the jobs of the check-bioc.yml workflow. They run
+## inside the Bioconductor docker container, after actions/checkout, and
+## install the package dependencies into the host-site-library directory that
+## is linked to /home/runner/work/_temp/Library on the GHA runner, which is the
+## directory that gets cached.
+
+name: Set up Bioconductor dependencies
+description: Install and cache the dependencies of the package in the Bioconductor docker container
+
+inputs:
+  biocversion:
+    description: Bioconductor branch (devel or RELEASE_X_Y) inferred from the GitHub branch
+    required: true
+  cache-version:
+    description: Prefix of the cache key, change it to clear the cache of packages
+    required: true
+
+outputs:
+  rversion:
+    description: R version corresponding to the Bioconductor version
+    value: ${{ steps.findrversion.outputs.rversion }}
+  biocversionnum:
+    description: Bioconductor version number
+    value: ${{ steps.findrversion.outputs.biocversionnum }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up RStudio Package Manager for R binary packages
+      run: |
+        sudo apt-get update -y
+        sudo apt-get -y install apt-file
+        Rscript --vanilla -e 'install.packages("rspm", repos="https://cran.r-project.org")'
+      shell: bash
+
+    - name: Install remotes package
+      run: |
+        rspm::enable()
+        install.packages("remotes")
+      shell: Rscript {0}
+
+    ## The dependencies are queried in the Bioconductor repositories, such
+    ## that the cache key below changes when a Bioconductor dependency is
+    ## updated, and the cache is saved again with the updated package.
+    - name: Query dependencies
+      run: |
+        message(paste('****', Sys.time(), 'installing BiocManager ****'))
+        rspm::enable()
+        remotes::install_cran("BiocManager")
+        saveRDS(remotes::dev_package_deps(dependencies = TRUE, repos = BiocManager::repositories()), ".github/depends.Rds", version = 2)
+      shell: Rscript {0}
+
+    ## Find the R and Bioconductor version numbers, used in the cache key
+    - id: findrversion
+      name: Find Bioc and R versions
+      run: |
+        ## Find what branch we are working on. On pull requests, GITHUB_REF
+        ## is refs/pull/N/merge, so use the target branch instead.
+        ref="${GITHUB_BASE_REF:-$GITHUB_REF}"
+        if echo "$ref" | grep -q "devel"; then
+            biocversion="devel"
+        elif echo "$ref" | grep -q "RELEASE_"; then
+            biocversion="release"
+        fi
+
+        ## Define the R and Bioconductor version numbers
+        biocversionnum=$(Rscript -e "info <- BiocManager:::.version_map_get_online('https://bioconductor.org/config.yaml'); res <- subset(info, BiocStatus == '${biocversion}')[, 'Bioc']; cat(as.character(res))")
+        rversion=$(Rscript -e "info <- BiocManager:::.version_map_get_online('https://bioconductor.org/config.yaml'); res <- subset(info, BiocStatus == '${biocversion}')[, 'R']; cat(as.character(res))")
+
+        ## Print the results
+        echo $biocversion
+        echo $biocversionnum
+        echo $rversion
+
+        ## Save the info for the calling job
+        echo "rversion=${rversion}" >> $GITHUB_OUTPUT
+        echo "biocversionnum=${biocversionnum}" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Cache R packages
+      if: "!contains(github.event.head_commit.message, '/nocache')"
+      uses: actions/cache@v5
+      with:
+        path: /home/runner/work/_temp/Library
+        key: ${{ inputs.cache-version }}-${{ runner.os }}-biocdocker-biocbranch-${{ inputs.biocversion }}-r-${{ steps.findrversion.outputs.rversion }}-bioc-${{ steps.findrversion.outputs.biocversionnum }}-${{ hashFiles('.github/depends.Rds') }}
+        restore-keys: ${{ inputs.cache-version }}-${{ runner.os }}-biocdocker-biocbranch-${{ inputs.biocversion }}-r-${{ steps.findrversion.outputs.rversion }}-bioc-${{ steps.findrversion.outputs.biocversionnum }}-
+
+    - name: Install dependencies
+      run: |
+        ## Try installing the package dependencies in steps. First the local
+        ## dependencies, then any remaining dependencies to avoid the
+        ## issues described at
+        ## https://stat.ethz.ch/pipermail/bioc-devel/2020-April/016675.html
+        ## https://github.com/r-lib/remotes/issues/296
+        ## Ideally, all dependencies should get installed in the first pass.
+
+        ## Pass #1 at installing dependencies
+        message(paste('****', Sys.time(), 'pass number 1 at installing dependencies: local dependencies ****'))
+        local_deps <- remotes::local_package_deps(dependencies = TRUE)
+        deps <- remotes::dev_package_deps(dependencies = TRUE, repos = BiocManager::repositories())
+        rspm::enable()
+        BiocManager::install(local_deps[local_deps %in% deps$package[deps$diff != 0]])
+
+        ## Pass #2 at installing dependencies
+        message(paste('****', Sys.time(), 'pass number 2 at installing dependencies: any remaining dependencies ****'))
+        deps <- remotes::dev_package_deps(dependencies = TRUE, repos = BiocManager::repositories())
+        BiocManager::install(deps$package[deps$diff != 0])
+
+        ## For running the checks
+        message(paste('****', Sys.time(), 'installing rcmdcheck ****'))
+        remotes::install_cran("rcmdcheck")
+      shell: Rscript {0}
