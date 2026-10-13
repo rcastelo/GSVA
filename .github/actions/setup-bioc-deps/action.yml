@@ -39,12 +39,15 @@ runs:
         install.packages("remotes")
       shell: Rscript {0}
 
+    ## The dependencies are queried in the Bioconductor repositories, such
+    ## that the cache key below changes when a Bioconductor dependency is
+    ## updated, and the cache is saved again with the updated package.
     - name: Query dependencies
       run: |
-        saveRDS(remotes::dev_package_deps(dependencies = TRUE), ".github/depends.Rds", version = 2)
         message(paste('****', Sys.time(), 'installing BiocManager ****'))
         rspm::enable()
         remotes::install_cran("BiocManager")
+        saveRDS(remotes::dev_package_deps(dependencies = TRUE, repos = BiocManager::repositories()), ".github/depends.Rds", version = 2)
       shell: Rscript {0}
 
     ## Find the R and Bioconductor version numbers, used in the cache key

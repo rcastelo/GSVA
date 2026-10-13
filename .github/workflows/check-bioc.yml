@@ -238,6 +238,18 @@ jobs:
       - name: Build package with vignettes
         run: R CMD build --no-manual --no-resave-data .
 
+      ## Temporary diagnostic step to find out where the data downloaded by
+      ## the vignettes is stored, to cache that directory.
+      - name: Report size of downloaded data
+        if: always()
+        run: |
+          echo "HOME=$HOME"
+          du -sh /usr/local/share/ExperimentHub "$HOME"/.cache/R/* "$HOME"/.cache/* 2>/dev/null || true
+          echo "Files larger than 10MB created after the checkout:"
+          find / \( -path /proc -o -path /sys -o -path /dev -o -path /__w -o -path /__e -o -path /usr/local/lib/R \) -prune \
+            -o -type f -size +10M -newer "$GITHUB_WORKSPACE/DESCRIPTION" -exec ls -lh {} + 2>/dev/null || true
+        shell: bash
+
   test-coverage:
     ## This job computes test coverage and uploads it to codecov, in parallel
     ## to the job R-CMD-check-bioc. It only runs on the devel branch.
