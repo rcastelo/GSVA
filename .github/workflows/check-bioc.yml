@@ -208,18 +208,11 @@ jobs:
       NOT_CRAN: true
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-      ## Data downloaded by the vignettes, through ExperimentHub and through
-      ## BiocFileCache (e.g., spatialLIBD::fetch_data()), is stored in
-      ## directories linked to the GHA runner, which are cached below.
-      EXPERIMENT_HUB_CACHE: /usr/local/share/ExperimentHub
-      BFC_CACHE: /usr/local/share/BiocFileCache
 
     container:
       image: ${{ needs.define-docker-info.outputs.imagename }}
       volumes:
         - /home/runner/work/_temp/Library:/usr/local/lib/R/host-site-library
-        - /home/runner/work/_temp/ExperimentHub:/usr/local/share/ExperimentHub
-        - /home/runner/work/_temp/BiocFileCache:/usr/local/share/BiocFileCache
     steps:
       - uses: actions/checkout@v6
 
@@ -229,37 +222,27 @@ jobs:
           biocversion: ${{ needs.define-docker-info.outputs.biocversion }}
           cache-version: ${{ env.cache-version }}
 
-      ## The data downloaded by the vignettes rarely changes, so a fixed key
-      ## is used. Update the number in the key to download the data again.
+      ## Data downloaded by the vignettes, through ExperimentHub and through
+      ## BiocFileCache (e.g., spatialLIBD::fetch_data()), is stored under the
+      ## temporary directory of the runner, whose path runner.temp is the same
+      ## for the actions/cache step and for R, which both run in the container.
+      ## This data rarely changes, so a fixed key is used. Update the number in
+      ## the key to download the data again.
       - name: Cache data downloaded by the vignettes
         if: "!contains(github.event.head_commit.message, '/nocache')"
         uses: actions/cache@v5
         with:
-          path: |
-            /home/runner/work/_temp/ExperimentHub
-            /home/runner/work/_temp/BiocFileCache
+          path: ${{ runner.temp }}/vignettedata
           key: ${{ env.cache-version }}-${{ runner.os }}-vignettedata-v2
 
       - name: Build package with vignettes
-        run: R CMD build --no-manual --no-resave-data .
-
-      ## Temporary diagnostic step to find out why the data downloaded by
-      ## the vignettes through BiocFileCache is not cached.
-      - name: Report location of downloaded data
-        if: always()
+        env:
+          EXPERIMENT_HUB_CACHE: ${{ runner.temp }}/vignettedata/ExperimentHub
+          BFC_CACHE: ${{ runner.temp }}/vignettedata/BiocFileCache
         run: |
-          env | grep -i "cache" || true
-          Rscript -e 'suppressMessages(library(BiocFileCache)); cat("BFC CACHE option:", getBFCOption("CACHE"), "\n")'
-          for d in /usr/local/share/BiocFileCache /usr/local/share/ExperimentHub \
-                   /home/runner/work/_temp/BiocFileCache /__w/_temp/BiocFileCache \
-                   "$HOME/.cache/R/BiocFileCache" "$HOME/.cache/R/ExperimentHub"; do
-            echo "## $d"; ls -la "$d" 2>&1 | head -20
-          done
-          mount | grep -i "share\|_temp\|github" || true
-          echo "Files larger than 10MB created after the checkout:"
-          find / \( -path /proc -o -path /sys -o -path /dev -o -path /__e -o -path /usr/local/lib/R \) -prune \
-            -o -type f -size +10M -newer "$GITHUB_WORKSPACE/DESCRIPTION" -exec ls -lh {} + 2>/dev/null || true
-        shell: bash
+          mkdir -p "$EXPERIMENT_HUB_CACHE" "$BFC_CACHE"
+          R CMD build --no-manual --no-resave-data .
+          du -sh "$EXPERIMENT_HUB_CACHE" "$BFC_CACHE"
 
   test-coverage:
     ## This job computes test coverage and uploads it to codecov, in parallel
