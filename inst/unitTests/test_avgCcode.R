@@ -225,9 +225,20 @@ test_avgInputTypes <- function() {
     inputs <- list(m * 1.0, m, as(m * 1.0, "dgCMatrix"),
                    as(m, "SVT_SparseMatrix"), as(m * 1.0, "SVT_SparseMatrix"),
                    h5)
+    ## SparseArray warns about omp_pause_resource() on every call to its C
+    ## code under the LLVM OpenMP runtime (e.g., Windows arm64), which is
+    ## unrelated to GSVA and therefore ignored here
     for (x in inputs) {
         es <- withCallingHandlers(gsva(avgParam(x, gsets), verbose=FALSE),
-                                  warning=function(w) stop(conditionMessage(w)))
+                  warning=function(w) {
+                      if (grepl("omp_pause_resource", conditionMessage(w)))
+                          invokeRestart("muffleWarning")
+                      stop(conditionMessage(w))
+                  },
+                  message=function(m) {
+                      if (grepl("dense matrix", conditionMessage(m)))
+                          stop(conditionMessage(m))
+                  })
         checkEqualsNumeric(ref, as.matrix(es))
     }
 

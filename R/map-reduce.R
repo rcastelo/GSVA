@@ -422,7 +422,7 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     if (output != "object") {
         if (is.null(mapinfo)) {
             outdir <- normalizePath(path.expand(BTPARAM$registryargs$work.dir),
-                                    mustWork=TRUE)
+                                    winslash="/", mustWork=TRUE)
             files <- .map_file_names(funname, fingerprint, output, chunks,
                                      length(X))
         } else {
@@ -590,7 +590,7 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     else
         dir.create(dir, recursive=TRUE)
 
-    dir <- normalizePath(dir, mustWork=TRUE)
+    dir <- normalizePath(dir, winslash="/", mustWork=TRUE)
 
     if (missing(partition) || is.null(partition) || !is.character(partition))
         cli_abort(c("x"=paste("You must provide a valid partition name",
@@ -1490,7 +1490,7 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
                               "{.file {basename(fnames[match])}}.")))
 
     m <- manifests[[which(match)]]
-    dir <- dirname(normalizePath(fnames[match]))
+    dir <- dirname(normalizePath(fnames[match], winslash="/"))
     paths <- file.path(dir, m$files)
     res <- lapply(paths, function(p) {
         if (file.exists(p))

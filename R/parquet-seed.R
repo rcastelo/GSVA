@@ -341,7 +341,7 @@ GsvaParquetSeed <- function(path, backend=NULL, verbose=FALSE) {
     if (!.is_uri(path)) {
         if (!file.exists(path))
             cli_abort(c("x"="Cannot find the Parquet file {.file {path}}."))
-        path <- normalizePath(path, mustWork=TRUE)
+        path <- normalizePath(path, winslash="/", mustWork=TRUE)
     }
 
     info <- .parquet_file_info(path, backend, verbose=verbose)
@@ -826,7 +826,7 @@ setMethod("extract_sparse_array", "GsvaParquetSeed", function(x, index) {
 ## process, releasing the memory mapping of the file, which on Windows
 ## prevents replacing it
 .close_parquet_readers <- function(path) {
-    path <- normalizePath(path, mustWork=FALSE)
+    path <- normalizePath(path, winslash="/", mustWork=FALSE)
     keys <- ls(.gsva_parquet_readers)
     cached <- startsWith(keys, paste0(Sys.getpid(), "|", path, "|"))
     if (any(cached)) {

@@ -444,7 +444,7 @@ loadHDF5GSVA <- function(file, assay="auto", verbose=TRUE) {
         cli_abort(c("x"=paste("The file {.file {file}} does not contain GSVA",
                               "output saved with 'saveHDF5GSVA()'.")))
 
-    file <- normalizePath(file)
+    file <- normalizePath(file, winslash="/")
     if (verbose)
         cli_alert_info("Reading the metadata of {.file {file}}")
     gsvacontainer <- .restore_gsva_shell(unserialize(as.raw(h5read(file,
