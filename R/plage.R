@@ -449,7 +449,7 @@ setMethod("anyNA", signature=c("plageParam"),
     if (is.null(nms))
         nms <- as.character(gm$oversized)
     if (length(nms) > 5)
-        nms <- c(nms[1:5], "...")
+        nms <- c(nms[seq_len(5)], "...")
     n <- length(gm$oversized)
     largest <- as.character(mu(max(gm$grambytes[gm$oversized])))
     maxgramtxt <- as.character(mu(gm$maxgram))

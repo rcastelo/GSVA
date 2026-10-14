@@ -51,8 +51,8 @@
 #' @exportClass GsvaExprData
 setClassUnion("GsvaExprData",
               c("matrix", "dgCMatrix", "SVT_SparseMatrix", "DelayedMatrix",
-                "ExpressionSet", "SummarizedExperiment", "SingleCellExperiment",
-                "SpatialExperiment", "HDF5Matrix"))
+              "ExpressionSet", "SummarizedExperiment", "SingleCellExperiment",
+              "SpatialExperiment", "HDF5Matrix"))
 
 
 #' `GsvaGeneSets` class
@@ -171,7 +171,8 @@ setClassUnion("GsvaGeneSets",
 #' gsets
 #'
 #' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
-#'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+#'             dimnames=list(paste("g", seq_len(p), sep=""),
+#'                           paste("s", seq_len(n), sep="")))
 #'
 #' gsvapar <- gsvaParam(y, gsets)
 #'

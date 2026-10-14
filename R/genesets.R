@@ -52,7 +52,8 @@
 #' gsets
 #'
 #' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
-#'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+#'             dimnames=list(paste("g", seq_len(p), sep=""),
+#'                           paste("s", seq_len(n), sep="")))
 #'
 #' gsvapar <- gsvaParam(y, gsets)
 #' geneSets(gsvapar)
@@ -589,10 +590,11 @@ readGMT <- function (con,
     }
     dups <- new.env(parent = emptyenv())
     lines <- lapply(lines, function(elt, dups) {
-        dmask <- duplicated(elt[-(1:2)])
+        v12 <- seq_len(2)
+        dmask <- duplicated(elt[-v12])
         if (any(dmask)) {
-            dups[[elt[[1]]]] <- unique(elt[-(1:2)][dmask])
-            elt <- c(elt[1:2], unique(elt[-(1:2)]))
+            dups[[elt[[1]]]] <- unique(elt[-v12][dmask])
+            elt <- c(elt[v12], unique(elt[-v12]))
         }
         elt
     }, dups)

@@ -78,7 +78,8 @@ gsets <- list(set1=paste0("g", 1:3),
 gsets
 
 y <- matrix(rnorm(n*p), nrow=p, ncol=n,
-            dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+            dimnames=list(paste("g", seq_len(p), sep=""),
+                          paste("s", seq_len(n), sep="")))
 
 gsvapar <- gsvaParam(y, gsets)
 geneSets(gsvapar)

@@ -149,7 +149,7 @@ setMethod("wrapData", signature(container="ExpressionSet"),
               stopifnot(!missing(dropAssays))
               pdata <- phenoData(container)
               if (!is.na(first) && !is.na(last) && whdim == 2)
-                  pdata <- pdata[first:last, , drop=FALSE]
+                  pdata <- pdata[seq.int(first, last, 1), , drop=FALSE]
               rval <- new("ExpressionSet", exprs=dataMatrix,
                           phenoData=pdata,
                           experimentData=experimentData(container),
@@ -194,7 +194,7 @@ setMethod("wrapData", signature(container="SummarizedExperiment"),
                   mask <- rownames(container) %in% rownames(dataMatrix)
                   if (!dropAssays) {
                       if (!is.na(first) && !is.na(last) && whdim == 2)
-                          adata <- c(assays(container[mask, first:last]), adata)
+                          adata <- c(assays(container[mask, seq.int(first, last, 1)]), adata)
                       else
                           adata <- c(assays(container[mask, ]), adata)
                   }
@@ -202,7 +202,7 @@ setMethod("wrapData", signature(container="SummarizedExperiment"),
               }
               cdata <- colData(container)
               if (!is.na(first) && !is.na(last) && whdim == 2)
-                  cdata <- cdata[first:last, , drop=FALSE]
+                  cdata <- cdata[seq.int(first, last, 1), , drop=FALSE]
               rval <- SummarizedExperiment(assays=adata, colData=cdata,
                                            rowData=rdata,
                                            metadata=metadata(container))
@@ -249,13 +249,14 @@ setMethod("wrapData", signature(container="SingleCellExperiment"),
                   mask <- rownames(container) %in% rownames(dataMatrix)
                   if (!dropAssays) {
                       if (!is.na(first) && !is.na(last) && whdim == 2) {
-                          adata <- c(assays(container[mask, first:last]), adata)
+                          first_to_last <- seq.int(first, last, 1)
+                          adata <- c(assays(container[mask, first_to_last]), adata)
                           rdimdata <- lapply(rdimdata,
                                              function(x)
-                                                 x[first:last, , drop=FALSE])
+                                                 x[first_to_last, , drop=FALSE])
                           aexpsdata <- lapply(aexpsdata,
                                               function(x)
-                                                  x[, first:last, , drop=FALSE])
+                                                  x[, first_to_last, , drop=FALSE])
                       } else
                           adata <- c(assays(container[mask, ]), adata)
                   }
@@ -263,7 +264,7 @@ setMethod("wrapData", signature(container="SingleCellExperiment"),
               }
               cdata <- colData(container)
               if (!is.na(first) && !is.na(last) && whdim == 2)
-                  cdata <- cdata[first:last, , drop=FALSE]
+                  cdata <- cdata[seq.int(first, last, 1), , drop=FALSE]
               rval <- SingleCellExperiment(assays=adata, colData=cdata,
                                            rowData=rdata, reducedDims=rdimdata,
                                            altExps=aexpsdata,
@@ -309,7 +310,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                   mask <- rownames(container) %in% rownames(dataMatrix)
                   if (!dropAssays) {
                       if (!is.na(first) && !is.na(last) && whdim == 2)
-                          adata <- c(assays(container[mask, first:last]), adata)
+                          adata <- c(assays(container[mask, seq.int(first, last, 1)]), adata)
                       else
                           adata <- c(assays(container[mask, ]), adata)
                   }
@@ -317,7 +318,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
               }
               cdata <- colData(container)
               if (!is.na(first) && !is.na(last) && whdim == 2)
-                  cdata <- cdata[first:last, , drop=FALSE]
+                  cdata <- cdata[seq.int(first, last, 1), , drop=FALSE]
               rval <- SpatialExperiment(
                   assays=adata,
                   colData=cdata,
@@ -536,13 +537,13 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                 msg <- "Restricting to rows {first}:{last}"
                 cli_alert_info(msg)
             }
-            expr <- expr[first:last, , drop=FALSE]
+            expr <- expr[seq.int(first, last, 1), , drop=FALSE]
         } else if (whdim == 2) {
             if (verbose) {
                 msg <- "Restricting to columns {first}:{last}"
                 cli_alert_info(msg)
             }
-            expr <- expr[, first:last, drop=FALSE]
+            expr <- expr[, seq.int(first, last, 1), drop=FALSE]
         } else
             cli_abort(c("x"="Invalid internal value for 'whdim' argument."))
     }
@@ -900,7 +901,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             limitfile <- "memory.limit_in_bytes"
         } else
             next
-        path <- strsplit(paste(fields[-(1:2)], collapse=":"), "/",
+        path <- strsplit(paste(fields[-seq_len(2)], collapse=":"), "/",
                          fixed=TRUE)[[1]]
         path <- path[path != ""]
         for (k in rev(seq_len(length(path) + 1L) - 1L)) {

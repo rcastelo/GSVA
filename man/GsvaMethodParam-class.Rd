@@ -21,6 +21,10 @@
 \arguments{
 \item{object}{An object of class \code{GsvaMethodParam} or one of its subclasses.}
 }
+\value{
+The \code{details()} method returns a detailed summary of the parameter
+values stored in the \code{GsvaMethodParam} object and its subclasses.
+}
 \description{
 Virtual superclass of method parameter classes supported by \code{GSVA}.
 
@@ -99,10 +103,26 @@ gsets <- list(set1=paste0("g", 1:3),
 gsets
 
 y <- matrix(rnorm(n*p), nrow=p, ncol=n,
-            dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+            dimnames=list(paste("g", seq_len(p), sep=""),
+                          paste("s", seq_len(n), sep="")))
 
 gsvapar <- gsvaParam(y, gsets)
 
+class(gsvapar)
+is(gsvapar, "GsvaMethodParam")
+
+
+suppressPackageStartupMessages({
+    library(GSVA)
+    library(GSVAdata)
+})
+
+data(geneprotExpCostaEtAl2021)
+data(c2BroadSets)
+
+gsvapar <- gsvaParam(geneExpCostaEtAl2021, c2BroadSets)
+gsvapar
+details(gsvapar)
 class(gsvapar)
 is(gsvapar, "GsvaMethodParam")
 

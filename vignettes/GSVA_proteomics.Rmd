@@ -286,12 +286,12 @@ on the imputed data.
 r_es_gsva <- r_es_ssgsea <- numeric(nrow(es_gsva))
 for (i in 1:nrow(es_gsva)) {
   r_es_gsva[i] <- cor(assay(es_gsva)[i, ], assay(es_gsva_imp)[i, ],
-		      use="complete.obs")
+                      use="complete.obs")
   r_es_ssgsea[i] <- cor(assay(es_ssgsea)[i, ], assay(es_ssgsea_imp)[i, ],
-			use="complete.obs")
+                        use="complete.obs")
 }
 boxplot(list(GSVA=r_es_gsva, ssGSEA=r_es_ssgsea),
-	ylab="Correlation before/after imputation", las=1)
+        ylab="Correlation before/after imputation", las=1)
 ```
 
 # Session information {.unnumbered}

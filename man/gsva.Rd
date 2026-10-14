@@ -142,7 +142,8 @@ geneSets <- list(set1=paste("g", 1:3, sep=""),
 
 ## sample data from a normal distribution with mean 0 and st.dev. 1
 y <- matrix(rnorm(n*p), nrow=p, ncol=n,
-            dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+            dimnames=list(paste("g", seq_len(p), sep=""),
+                          paste("s", seq_len(n), sep="")))
 
 ## genes in set1 are expressed at higher levels in the last 'nGrp1+1' to 'n' samples
 y[geneSets$set1, (nGrp1+1):n] <- y[geneSets$set1, (nGrp1+1):n] + 2

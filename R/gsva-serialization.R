@@ -148,7 +148,8 @@
 #'
 #' ## sample data from a normal distribution with mean 0 and st.dev. 1
 #' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
-#'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+#'             dimnames=list(paste("g", seq_len(p), sep=""),
+#'                           paste("s", seq_len(n), sep="")))
 #'
 #' ## build GSVA parameter object
 #' gsvapar <- gsvaParam(y, geneSets)
@@ -303,7 +304,7 @@ saveHDF5GSVA <- function(gsvaExprData, file, assay="auto", replace=FALSE,
         block <- if (is(X, "DelayedArray"))
                      .read_block_range(X, 2L, IRanges(first, last))
                  else
-                     X[, first:last, drop=FALSE]
+                     X[, seq.int(first, last, 1), drop=FALSE]
         if (sparse)
             st <- .h5_csc_append(st, block)
         else {

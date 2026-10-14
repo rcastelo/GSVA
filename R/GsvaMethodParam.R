@@ -12,8 +12,27 @@
 #' method-specific parameter class that is used to invoke each of them with a
 #' matching set of parameters.
 #'
+#' @return The `details()` method returns a detailed summary of the parameter
+#' values stored in the `GsvaMethodParam` object and its subclasses.
+#'
 #' @seealso [`plageParam`], [`zscoreParam`], [`ssgseaParam`], [`gsvaParam`]
 #' 
+#' @examples
+#'
+#' suppressPackageStartupMessages({
+#'     library(GSVA)
+#'     library(GSVAdata)
+#' })
+#'
+#' data(geneprotExpCostaEtAl2021)
+#' data(c2BroadSets)
+#'
+#' gsvapar <- gsvaParam(geneExpCostaEtAl2021, c2BroadSets)
+#' gsvapar
+#' details(gsvapar)
+#' class(gsvapar)
+#' is(gsvapar, "GsvaMethodParam")
+#'
 #' @name GsvaMethodParam-class
 #' @rdname GsvaMethodParam-class
 NULL

@@ -214,7 +214,8 @@
 #'
 #' ## sample data from a normal distribution with mean 0 and st.dev. 1
 #' y <- matrix(rnorm(n*p), nrow=p, ncol=n,
-#'             dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
+#'             dimnames=list(paste("g", seq_len(p), sep=""),
+#'                           paste("s", seq_len(n), sep="")))
 #'
 #' ## build GSVA parameter object
 #' gsvapar <- gsvaParam(y, geneSets)
@@ -242,7 +243,7 @@
 #' ## The user must ensure that this path is reachable by all compute nodes in
 #' ## the HPC environment, and must manually delete its contents after the GSVA
 #' ## calculations are finished.
-#' \dontrun{
+#' \donttest{
 #' gsvabtpar <- gsvaBatchtoolsSlurmParam(partition="short")
 #' gsvaes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, BTPARAM=gsvabtpar))
 #'
