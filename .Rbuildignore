@@ -4,3 +4,4 @@
 ^docs$
 ^\.covrignore
 ^\.codecov.yml
+^benchmarks$
