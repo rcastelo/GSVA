@@ -9,3 +9,5 @@ src/*.so
 *~
 *.swp
 *.swo
+/benchmarks/cache/
+/benchmarks/*_results.csv
