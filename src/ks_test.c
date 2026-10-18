@@ -38,11 +38,14 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
   int      nunprotect = 0;
   int*     decordstat_col;
   double*  symrnkstat_col;
-  ranks_ctx_t* ctx;
+  ranks_ctx_t*   rankctx;
+  rndwalk_ctx_t* walkctx;
 
-  ctx = ranks_ctx_create(ranksR, intrnks, sparse);
-  p = ctx->p; /* number of rows/genes */
-  n = ctx->n; /* number of columns/samples */
+  rankctx = ranks_ctx_create(ranksR, intrnks, sparse);
+  p = rankctx->p; /* number of rows/genes */
+  n = rankctx->n; /* number of columns/samples */
+
+  walkctx = rndwalk_ctx_create(genesetsidxR);
 
   decordstat_col = (int*)R_alloc(p, sizeof(int));
   symrnkstat_col = (double*)R_alloc(p, sizeof(double));
@@ -62,10 +65,10 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
     }
 
     if (anyna)
-      invalidranks = ranks2stats_nas(ctx, i, decordstat_col, symrnkstat_col,
+      invalidranks = ranks2stats_nas(rankctx, i, decordstat_col, symrnkstat_col,
                                      &nzeros_col, &zerosymrnkstat, &nnas);
     else
-      invalidranks = ranks2stats(ctx, i, decordstat_col, symrnkstat_col,
+      invalidranks = ranks2stats(rankctx, i, decordstat_col, symrnkstat_col,
                                  &nzeros_col, &zerosymrnkstat);
 
     /* ranks out of range would lead to reading and writing out of the
@@ -107,8 +110,8 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
                                nzeros_col, zerosymrnkstat, &walkstatpos,
                                &walkstatneg);
         else
-          gsva_rnd_walk(gsetidx, k, decordstat_col, symrnkstat_col, p, tau,
-                        &walkstatpos, &walkstatneg);
+          gsva_rnd_walk(walkctx, gsetidx, k, decordstat_col, symrnkstat_col,
+                        p, tau, &walkstatpos, &walkstatneg);
       }
 
       es[idx] = NA_REAL;

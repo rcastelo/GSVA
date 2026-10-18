@@ -9,32 +9,47 @@ static int compare_gene_steps(const void *a, const void *b) {
     return (stepA->rank - stepB->rank);
 }
 
-void gsva_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, int n,
-                   double tau, double* walkstatpos, double* walkstatneg) {
+rndwalk_ctx_t* rndwalk_ctx_create(SEXP genesetsidxR) {
+    int            m = length(genesetsidxR);
+    int            maxk = 0;
+    rndwalk_ctx_t* ctx;
+
+    for (int j = 0; j < m; j++) {
+        R_xlen_t len = length(VECTOR_ELT(genesetsidxR, j));
+        if (len > maxk) maxk = (int)len;
+    }
+
+    ctx = (rndwalk_ctx_t*)R_alloc(1, sizeof(rndwalk_ctx_t));
+    ctx->maxk  = maxk;
+    ctx->steps = (gene_step_t*)R_alloc(maxk, sizeof(gene_step_t));
+    return ctx;
+}
+
+void gsva_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
+                   double* symrnkstat, int n, double tau, double* walkstatpos,
+                   double* walkstatneg) {
     if (k == 0 || k == n) {
         *walkstatpos = 0.0;
         *walkstatneg = 0.0;
         return;
     }
 
-    gene_step_t *steps = (gene_step_t *)R_Calloc(k, gene_step_t);
     double total_pos_sum = 0.0;
 
     for (int i = 0; i < k; i++) {
         int gene_idx = gsetidx[i];
-        steps[i].rank = decordstat[gene_idx - 1] - 1;
-        steps[i].score = pow(fabs(symrnkstat[gene_idx - 1]), tau);
-        total_pos_sum += steps[i].score;
+        ctx->steps[i].rank = decordstat[gene_idx - 1] - 1;
+        ctx->steps[i].score = pow(fabs(symrnkstat[gene_idx - 1]), tau);
+        total_pos_sum += ctx->steps[i].score;
     }
 
     if (total_pos_sum == 0.0) {
         *walkstatpos = 0.0;
         *walkstatneg = 0.0;
-        R_Free(steps);
         return;
     }
 
-    qsort(steps, k, sizeof(gene_step_t), compare_gene_steps);
+    qsort(ctx->steps, k, sizeof(gene_step_t), compare_gene_steps);
 
     double running_pos_sum = 0.0;
     double max_peak = 0.0;
@@ -42,7 +57,7 @@ void gsva_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, int
     double neg_step = 1.0 / (double)(n - k);
 
     for (int i = 0; i < k; i++) {
-        int current_rank = steps[i].rank;
+        int current_rank = ctx->steps[i].rank;
         double neg_penalty = (current_rank - i) * neg_step;
 
         double normalized_pos = running_pos_sum / total_pos_sum;
@@ -51,7 +66,7 @@ void gsva_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, int
             min_valley = current_valley;
         }
 
-        running_pos_sum += steps[i].score;
+        running_pos_sum += ctx->steps[i].score;
 
         normalized_pos = running_pos_sum / total_pos_sum;
         double current_peak = normalized_pos - neg_penalty;
@@ -62,7 +77,6 @@ void gsva_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, int
 
     *walkstatpos = max_peak;
     *walkstatneg = min_valley;
-    R_Free(steps);
 }
 
 void
