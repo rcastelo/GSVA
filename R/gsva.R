@@ -1367,14 +1367,9 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
        if (any_na) {
            walkStat <- .gsvaRndWalk_nas(gSetIdx, decOrdStat, symRnkStat,
                                         tau, na_use, minSize)
-           if (any(!is.na(walkStat))) {
-               if (na_use == "na.rm")
-                   maxDev <- c(max(c(0, max(walkStat, na.rm=TRUE))),
-                               min(c(0, min(walkStat, na.rm=TRUE))))
-               else
-                   maxDev <- c(max(c(0, max(walkStat))),
-                               min(c(0, min(walkStat))))
-           }
+           if (any(!is.na(walkStat))) ## NAs beyond the nonmissing genes
+               maxDev <- c(max(c(0, max(walkStat, na.rm=TRUE))),
+                           min(c(0, min(walkStat, na.rm=TRUE))))
        } else {
            decOrdStat <- .redistribute_geneset_zeros(decOrdStat, gSetIdx, whz)
            walkStat <- .gsvaRndWalk(gSetIdx, decOrdStat, symRnkStat, tau)
@@ -1397,10 +1392,14 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 }
 
 ## here gSetIdx, decOrderStat and symRnkStat contain the positions with respect
-## to the original order of genes in the data
+## to the original order of genes in the data. the random walk runs only along
+## the nonmissing genes, whose decreasing order statistics go from 1 to their
+## number 'nnotna', and the returned vector has length equal to the number of
+## genes, with NA values in the positions beyond 'nnotna'
 .gsvaRndWalk_nas <- function(gSetIdx, decOrderStat, symRnkStat, tau, na_use,
                              minSize=1L, wna_env) {
     n <- length(decOrderStat)
+    nnotna <- sum(!is.na(decOrderStat))
     gSetRnk <- decOrderStat[gSetIdx]
 
     if (anyNA(gSetRnk)) {
@@ -1418,24 +1417,24 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     walkStat <- rep(NA_real_, n)
     if (k >= minSize) {
 
-        stepCDFinGeneSet <- integer(n)
+        stepCDFinGeneSet <- integer(nnotna)
         if (tau == 1)
           stepCDFinGeneSet[gSetRnk] <- symRnkStat[gSetIdx]
         else {
-          stepCDFinGeneSet <- numeric(n)
+          stepCDFinGeneSet <- numeric(nnotna)
           stepCDFinGeneSet[gSetRnk] <- symRnkStat[gSetIdx]^tau
         }
 
         stepCDFinGeneSet <- cumsum(stepCDFinGeneSet)
-        stepCDFoutGeneSet <- rep(1L, n)
+        stepCDFoutGeneSet <- rep(1L, nnotna)
         stepCDFoutGeneSet[gSetRnk] <- 0L
         stepCDFoutGeneSet <- cumsum(stepCDFoutGeneSet)
 
-        if (stepCDFinGeneSet[n] > 0 && stepCDFoutGeneSet[n] > 0) {
-            stepCDFinGeneSet <- stepCDFinGeneSet / stepCDFinGeneSet[n]
-            stepCDFoutGeneSet <- stepCDFoutGeneSet / stepCDFoutGeneSet[n]
+        if (stepCDFinGeneSet[nnotna] > 0 && stepCDFoutGeneSet[nnotna] > 0) {
+            stepCDFinGeneSet <- stepCDFinGeneSet / stepCDFinGeneSet[nnotna]
+            stepCDFoutGeneSet <- stepCDFoutGeneSet / stepCDFoutGeneSet[nnotna]
 
-            walkStat <- stepCDFinGeneSet - stepCDFoutGeneSet
+            walkStat[seq_len(nnotna)] <- stepCDFinGeneSet - stepCDFoutGeneSet
         }
     } else if (!get("w", envir=wna_env)) ## warn only once. it can only happen
         assign("w", TRUE, envir=wna_env) ## with na_use="na.rm"
@@ -1625,14 +1624,9 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
         walkStat <- .gsvaRndWalk_nas(geneSetIdx, rnkstats$dos, rnkstats$srs,
                                      tau, na_use, minSize, wna_env=wna_env)
         maxDev <- whMaxDev <- c(NA, NA)
-        if (any(!is.na(walkStat))) {
-          if (na_use == "na.rm")
-              maxDev <- c(max(c(0, max(walkStat, na.rm=TRUE))),
-                          min(c(0, min(walkStat, na.rm=TRUE))))
-          else
-              maxDev <- c(max(c(0, max(walkStat))),
-                          min(c(0, min(walkStat))))
-        }
+        if (any(!is.na(walkStat))) ## NAs beyond the nonmissing genes
+            maxDev <- c(max(c(0, max(walkStat, na.rm=TRUE))),
+                        min(c(0, min(walkStat, na.rm=TRUE))))
         if (length(which.max(walkStat)) > 0)
             whMaxDev[1] <- which.max(walkStat)
         if (length(which.min(walkStat)) > 0)
