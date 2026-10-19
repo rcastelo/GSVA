@@ -368,6 +368,7 @@ gsvaParam <- function(exprData, geneSets,
                       verbose=TRUE) {
 
     .check_input_expr_gene_sets(exprData, geneSets)
+    geneSets <- .remove_duplicated_genes(geneSets)
 
     kcdf <- match.arg(kcdf)
     kcdfNoneMinSampleSize <- as.integer(kcdfNoneMinSampleSize)
@@ -814,7 +815,7 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
 setReplaceMethod("geneSets", signature=signature(object="gsvaRanksParam",
                                                  value="GsvaGeneSets"),
                  function(object, value) {
-                   object@geneSets <- value
+                   object@geneSets <- .remove_duplicated_genes(value)
                    object
                  })
 
@@ -1430,7 +1431,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
         stepCDFoutGeneSet[gSetRnk] <- 0L
         stepCDFoutGeneSet <- cumsum(stepCDFoutGeneSet)
 
-        if (stepCDFinGeneSet[n] > 0 && stepCDFinGeneSet[n] > 0) {
+        if (stepCDFinGeneSet[n] > 0 && stepCDFoutGeneSet[n] > 0) {
             stepCDFinGeneSet <- stepCDFinGeneSet / stepCDFinGeneSet[n]
             stepCDFoutGeneSet <- stepCDFoutGeneSet / stepCDFoutGeneSet[n]
 
@@ -1545,7 +1546,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     intrnks <- is.integer(R[1, 1])
 
     wna_env <- new.env()
-    assign("w", FALSE, envir=wna_env)
+    assign("w", FALSE, envir=wna_env) ## warn only once abt small gene sets
+    assign("u", 0, envir=wna_env)     ## number of undefined random walks
     es <- NULL
     if (is(R, "DelayedMatrix") || ondisk) {
         sink <- HDF5RealizationSink(c(length(geneSetsIdx), ncol(R)),
@@ -1589,6 +1591,15 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
                          "than {minSize} genes after removing missing values")
             cli_alert_warning(msg)
         }
+
+    nundef <- get("u", envir=wna_env)
+    if (nundef > 0) {
+        msg <- paste("{nundef} NA enrichment score{?s} from undefined random",
+                     "walks, which happen when a gene set contains all genes",
+                     "or all its genes have a zero rank statistic, e.g., a",
+                     "single gene at the middle rank")
+        cli_alert_warning(msg)
+    }
 
     if (ncol(R) > 10000) ## free up ASAP memory we need not anymore and was
         out <- gc()      ## allocated during score calculations on a big R
@@ -2015,6 +2026,12 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
           assign("w", TRUE, envir=wna_env)
 
       attr(sco, "attrNAs") <- NULL ## clean up the NA informing attribute
+    }
+
+    nundef <- attr(sco, "attrUndefWalks")
+    if (!is.null(nundef)) {
+        assign("u", get("u", envir=wna_env) + nundef, envir=wna_env)
+        attr(sco, "attrUndefWalks") <- NULL ## clean up informing attribute
     }
 
     sco

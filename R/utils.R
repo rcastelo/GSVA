@@ -198,6 +198,50 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                        paste(subclassnames, collapse=", "))
         cli_abort(c("x"=msg))
     }
+    if (is(geneSets, "list")) {
+        element_types <- vapply(geneSets, typeof, character(1))
+        if (length(unique(element_types)) > 1) {
+            msg <- paste("All elements of the 'geneSets' list must be of the",
+                         "same type (either character or numeric)")
+            cli_abort(c("x"=msg))
+        }
+    }
+}
+
+## remove duplicated genes within gene sets given as a list of character or
+## numeric vectors and warn about it; 'GeneSetCollection' objects need not be
+## checked because 'GSEABase::GeneSet()' does not allow duplicated gene IDs
+#' @importFrom cli cli_alert_warning
+#' @importFrom methods is
+#' @importFrom IRanges CharacterList
+#' @importFrom BiocGenerics anyDuplicated
+.remove_duplicated_genes <- function(geneSets) {
+    if (is(geneSets, "GeneSetCollection"))
+        return(geneSets)
+
+    geneSets2 <- geneSets
+    if (is.numeric(geneSets[[1]]))
+        geneSets2 <- IntegerList(geneSets)
+    else if (is.character(geneSets[[1]]))
+        geneSets2 <- CharacterList(geneSets)
+    else {
+        msg <- paste("When argument 'geneSets' is a 'list' object it can",
+                     "only contain either character or numeric vectors.")
+        cli_abort(c("x"=msg))
+    }
+
+    dupmask <- anyDuplicated(geneSets2)
+    if (any(dupmask)) {
+        geneSets2[dupmask] <- unique(geneSets2[dupmask])
+        gsnames <- names(geneSets2)[dupmask]
+        if (is.null(gsnames))
+            gsnames <- as.character(which(dupmask))
+        msg <- paste("Duplicated genes removed from {sum(dupmask)} gene",
+                     "set{?s}: {.val {gsnames}}")
+        cli_alert_warning(msg)
+    }
+
+    as.list(geneSets2)
 }
 
 .check_bpparam <- function(BPPARAM) {

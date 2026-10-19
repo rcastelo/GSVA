@@ -156,6 +156,7 @@ plageParam <- function(exprData, geneSets,
                        verbose=TRUE) {
 
     .check_input_expr_gene_sets(exprData, geneSets)
+    geneSets <- .remove_duplicated_genes(geneSets)
 
     ondisk <- match.arg(ondisk)
 

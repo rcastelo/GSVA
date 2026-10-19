@@ -1130,18 +1130,23 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 ## is a 'list' object with character string vectors as elements,
 ## and 'features' is a character string vector object. it assumes
 ## features in both input objects follow the same nomenclature,
+## it removes NA values and duplicated indices, which may arise, e.g., when
+## different gene IDs are mapped to the same feature.
 
 #' @importFrom cli cli_abort
-#' @importFrom IRanges CharacterList match
+#' @importFrom IRanges CharacterList
+#' @importFrom BiocGenerics match unique
 .mapGeneSetsToFeatures <- function(gsets, features) {
+    stopifnot(is.character(gsets[[1]])) ## QC
+    stopifnot(is.character(features)) ## QC
 
     ## Aaron Lun's suggestion at
     ## https://github.com/rcastelo/GSVA/issues/39#issuecomment-765549620
     gsets2 <- CharacterList(gsets)
     mt <- match(gsets2, features)
-    mapdgenesets <- as.list(mt[!is.na(mt)])
+    mapdgenesets <- as.list(unique(mt[!is.na(mt)]))
 
-    if (length(unlist(mapdgenesets, use.names=FALSE)) == 0) {
+    if (sum(lengths(mapdgenesets)) == 0) {
       msg <- paste("No identifiers in the gene sets could be matched to the",
                    "identifiers in the expression data.")
       cli_abort(c("x"=msg))
@@ -1162,7 +1167,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
         geneSets <- geneSets[wgset]
 
     ## we'll try to handle index lists of numeric/integer vectors as gene sets
-    if (is(geneSets, "list") && all(vapply(geneSets, is.numeric, logical(1)))) {
+    if (is(geneSets, "list") && is.numeric(geneSets[[1]])) {
         mappedGeneSets <- lapply(geneSets, function(idx) {
             as.integer(idx[idx > 0 & idx <= nrow(filteredDataMatrix)])
         })
@@ -1176,6 +1181,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
                          "gene {settxt} ({diffGstxt}) have been dropped")
             cli_alert_warning(msg)
         }
+        mappedGeneSets <- lapply(mappedGeneSets, unique)
     } else { # not a list of index vectors, i.e., as before
         ## note that the method for 'GeneSetCollection' calls geneIds(), i.e., 
         ## whatever the input, from here on we have a list of character vectors

@@ -17,15 +17,25 @@ extern SEXP Matrix_DimNamesSym,
             SVT_SparseArray_dimNamesSym,
             SVT_SparseArray_dimSym,
             SVT_SparseArray_svtSym,
-            GSVA_attrNAsSym;
+            GSVA_attrNAsSym,
+            GSVA_attrUndefWalksSym;
 
-void
+/* the random walk is undefined, and its maximum deviations are set to NA,
+ * when its in-gene-set or its out-gene-set steps sum up to zero. the latter
+ * happens when the gene set contains all (nonmissing) genes and the former
+ * when all genes in the gene set have a zero symmetric rank statistic, e.g.,
+ * a single gene at the middle rank p/2 of a dense column with p even, or only
+ * zero-expressed genes in a sparse column with a single nonzero value.
+ * returned value - 1 if the random walk is undefined, 0 otherwise
+ */
+int
 gsva_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, int n,
               double tau, double* walkstat, double* walkstatpos,
               double* walkstatneg) {
   int*    gsetrnk;
   double* stepcdfingeneset;
   int*    stepcdfoutgeneset;
+  int     undefined;
 
   gsetrnk = R_Calloc(k, int);
   for (int i=0; i < k; i++)
@@ -52,7 +62,8 @@ gsva_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, int n,
   }
 
   *walkstatpos = *walkstatneg = NA_REAL;
-  if (stepcdfingeneset[n-1] > 0 && stepcdfoutgeneset[n-1] > 0) {
+  undefined = !(stepcdfingeneset[n-1] > 0 && stepcdfoutgeneset[n-1] > 0);
+  if (!undefined) {
     *walkstatpos = *walkstatneg = 0;
     for (int i=0; i < n; i++) {
       double wlkstat = 0;
@@ -76,9 +87,13 @@ gsva_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, int n,
 
   R_Free(stepcdfoutgeneset);
   R_Free(stepcdfingeneset);
+
+  return undefined;
 }
 
-void
+/* returned value - 1 if the random walk is undefined, 0 otherwise,
+ * see gsva_rnd_walk() */
+int
 gsva_sparse_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, int n,
                      double tau, int nzeros, double zerosymrnkstat,
                      double* walkstat, double* walkstatpos, double* walkstatneg) {
@@ -88,6 +103,7 @@ gsva_sparse_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, i
   int*    gsetidx_nnz;
   double* stepcdfingeneset;
   int*    stepcdfoutgeneset;
+  int     undefined;
 
   nnz = n - nzeros;
 
@@ -155,7 +171,8 @@ gsva_sparse_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, i
   }
 
   *walkstatpos = *walkstatneg = NA_REAL;
-  if (stepcdfingeneset[n-1] > 0 && stepcdfoutgeneset[n-1] > 0) {
+  undefined = !(stepcdfingeneset[n-1] > 0 && stepcdfoutgeneset[n-1] > 0);
+  if (!undefined) {
     *walkstatpos = *walkstatneg = 0;
     for (int i=0; i < n; i++) {
       double wlkstat = 0;
@@ -181,9 +198,14 @@ gsva_sparse_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, i
 
   R_Free(stepcdfoutgeneset);
   R_Free(stepcdfingeneset);
+
+  return undefined;
 }
 
-void
+/* returned value - 1 if the random walk is undefined, 0 otherwise, see
+ * gsva_rnd_walk(); a gene set with missing values under na_use < 3 or with
+ * less than 'minsize' nonmissing genes does not lead to an undefined walk */
+int
 gsva_rnd_walk_nas(int* gsetidx, int k, int* decordstat, double* symrnkstat, int n,
                   double tau, int na_use, int minsize, double* walkstat,
                   double* walkstatpos, double* walkstatneg, int* wna) {
@@ -192,6 +214,7 @@ gsva_rnd_walk_nas(int* gsetidx, int k, int* decordstat, double* symrnkstat, int 
   double* stepcdfingeneset;
   int*    stepcdfoutgeneset;
   int     k_notna = 0;
+  int     undefined = 0;
 
   gsetidx_wonas = R_Calloc(k, int);
   gsetrnk = R_Calloc(k, int);
@@ -202,8 +225,11 @@ gsva_rnd_walk_nas(int* gsetidx, int k, int* decordstat, double* symrnkstat, int 
       gsetrnk[k_notna] = decordstat[gsetidx[i]-1];
       k_notna++;
     } else {
-      if (na_use < 3) /* everything or all.obs */
-        return;
+      if (na_use < 3) { /* everything or all.obs */
+        R_Free(gsetrnk);
+        R_Free(gsetidx_wonas);
+        return 0;
+      }
     }
   }
 
@@ -230,7 +256,8 @@ gsva_rnd_walk_nas(int* gsetidx, int k, int* decordstat, double* symrnkstat, int 
       stepcdfoutgeneset[i] = stepcdfoutgeneset[i-1] + stepcdfoutgeneset[i];
     }
 
-    if (stepcdfingeneset[n-1] > 0 && stepcdfoutgeneset[n-1] > 0) {
+    undefined = !(stepcdfingeneset[n-1] > 0 && stepcdfoutgeneset[n-1] > 0);
+    if (!undefined) {
       *walkstatpos = *walkstatneg = 0;
       for (int i=0; i < n; i++) {
         double wlkstat = 0;
@@ -262,6 +289,8 @@ gsva_rnd_walk_nas(int* gsetidx, int k, int* decordstat, double* symrnkstat, int 
 
   R_Free(gsetrnk);
   R_Free(gsetidx_wonas);
+
+  return undefined;
 }
 
 /* fetch integer column from a dense matrix XR of type integer
@@ -273,8 +302,13 @@ gsva_rnd_walk_nas(int* gsetidx, int k, int* decordstat, double* symrnkstat, int 
 int
 fetch_intcol_intmatrix(SEXP XR, int nr, int j, int* col) {
   int* X=INTEGER(XR);
+#ifdef LONG_VECTOR_SUPPORT
+  R_xlen_t offset = (R_xlen_t) nr * j;
+#else
+  int      offset = nr * j;
+#endif
 
-  Memcpy(col, X+nr*j, (size_t) nr);
+  Memcpy(col, X+offset, (size_t) nr);
 
   return nr;
 }
@@ -288,9 +322,14 @@ fetch_intcol_intmatrix(SEXP XR, int nr, int j, int* col) {
 int
 fetch_intcol_dblmatrix(SEXP XR, int nr, int j, int* col) {
   double* X=REAL(XR);
+#ifdef LONG_VECTOR_SUPPORT
+  R_xlen_t offset = (R_xlen_t) nr * j;
+#else
+  int      offset = nr * j;
+#endif
 
   for (int i=0; i < nr; i++)
-    col[i] = ISNAN(X[nr*j+i]) ? NA_INTEGER : (int) X[nr*j+i];
+    col[i] = ISNAN(X[offset+i]) ? NA_INTEGER : (int) X[offset+i];
 
   return nr;
 }
@@ -448,6 +487,7 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
   SEXP     esR;
   double*  es;
   int      wna=0;
+  double   nundefwalks=0; /* double to avoid overflowing m x n */
   Rboolean abort=FALSE;
   Rboolean verbose=asLogical(verboseR);
   SEXP     pb=R_NilValue;
@@ -519,22 +559,26 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
       int      idx = (size_t) m * i + j;
 #endif
       double  walkstatpos, walkstatneg;
+      int     undefwalk;
 
       walkstatpos = walkstatneg = NA_REAL;
       gsetidx = INTEGER(gsetidxR);
       if (anyna)
-        gsva_rnd_walk_nas(gsetidx, k, decordstat_col, symrnkstat_col, p, tau,
-                          nause, minsize, NULL, &walkstatpos, &walkstatneg,
-                          &wna);
+        undefwalk = gsva_rnd_walk_nas(gsetidx, k, decordstat_col,
+                                      symrnkstat_col, p, tau, nause, minsize,
+                                      NULL, &walkstatpos, &walkstatneg, &wna);
       else {
         if (sparse && nzeros_col > 0)
-          gsva_sparse_rnd_walk(gsetidx, k, decordstat_col, symrnkstat_col, p,
-                               tau, nzeros_col, zerosymrnkstat, NULL,
-                               &walkstatpos, &walkstatneg);
+          undefwalk = gsva_sparse_rnd_walk(gsetidx, k, decordstat_col,
+                                           symrnkstat_col, p, tau, nzeros_col,
+                                           zerosymrnkstat, NULL, &walkstatpos,
+                                           &walkstatneg);
         else
-          gsva_rnd_walk(gsetidx, k, decordstat_col, symrnkstat_col, p, tau,
-                        NULL, &walkstatpos, &walkstatneg);
+          undefwalk = gsva_rnd_walk(gsetidx, k, decordstat_col,
+                                    symrnkstat_col, p, tau, NULL,
+                                    &walkstatpos, &walkstatneg);
       }
+      nundefwalks += undefwalk;
 
       es[idx] = NA_REAL;
       if (!anyna || (!ISNA(walkstatpos) && !ISNA(walkstatneg))) {
@@ -546,7 +590,8 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
 		        es[idx] = (walkstatpos > fabs(walkstatneg)) ? walkstatpos : walkstatneg;
 	      }
       } else {
-        if (anyna && (ISNA(walkstatpos) || ISNA(walkstatneg)) && nause == 2) { /* all.obs */
+        /* an undefined walk is not caused by missing values */
+        if (anyna && !undefwalk && nause == 2) { /* all.obs */
           abort=TRUE;
           break;
         }
@@ -571,6 +616,15 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
       Rf_setAttrib(esR, GSVA_attrNAsSym, attr);
       UNPROTECT(1); /* attr */
     }
+  }
+
+  /* report the number of NA scores coming from undefined random walks */
+  if (nundefwalks > 0) {
+    SEXP attr;
+
+    PROTECT(attr = ScalarReal(nundefwalks));
+    Rf_setAttrib(esR, GSVA_attrUndefWalksSym, attr);
+    UNPROTECT(1); /* attr */
   }
 
   if (verbose)

@@ -94,7 +94,8 @@ SEXP Matrix_DimNamesSym,
      SVT_SparseArray_dimNamesSym,
      SVT_SparseArray_dimSym,
      SVT_SparseArray_svtSym,
-     GSVA_attrNAsSym;
+     GSVA_attrNAsSym,
+     GSVA_attrUndefWalksSym;
 
 void
 R_init_GSVA(DllInfo *info) {
@@ -115,6 +116,7 @@ R_init_GSVA(DllInfo *info) {
   SVT_SparseArray_svtSym = install("SVT");
 
   GSVA_attrNAsSym = install("attrNAs");
+  GSVA_attrUndefWalksSym = install("attrUndefWalks");
 
   R_useDynamicSymbols(info, TRUE);
 }
