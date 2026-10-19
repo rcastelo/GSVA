@@ -1213,17 +1213,19 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 ## the latter is necessary for the 'average' method with sparse data
 
 #' @importFrom cli cli_abort
-#' @importFrom IRanges CharacterList match
-#' @importFrom BiocGenerics sort
+#' @importFrom IRanges CharacterList
+#' @importFrom BiocGenerics sort match unique
 .mapGeneSetsToFeatures <- function(gsets, features) {
+    stopifnot(is.character(gsets[[1]])) ## QC
+    stopifnot(is.character(features)) ## QC
 
     ## Aaron Lun's suggestion at
     ## https://github.com/rcastelo/GSVA/issues/39#issuecomment-765549620
     gsets2 <- CharacterList(gsets)
     mt <- match(gsets2, features)
-    mapdgenesets <- as.list(sort(mt[!is.na(mt)]))
+    mapdgenesets <- as.list(sort(unique(mt[!is.na(mt)])))
 
-    if (length(unlist(mapdgenesets, use.names=FALSE)) == 0) {
+    if (sum(lengths(mapdgenesets)) == 0) {
       msg <- paste("No identifiers in the gene sets could be matched to the",
                    "identifiers in the expression data.")
       cli_abort(c("x"=msg))
@@ -1244,7 +1246,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
         geneSets <- geneSets[wgset]
 
     ## we'll try to handle index lists of numeric/integer vectors as gene sets
-    if (is(geneSets, "list") && all(vapply(geneSets, is.numeric, logical(1)))) {
+    if (is(geneSets, "list") && is.numeric(geneSets[[1]])) {
         mappedGeneSets <- lapply(geneSets, function(idx) {
             as.integer(idx[idx > 0 & idx <= nrow(filteredDataMatrix)])
         })

@@ -414,6 +414,7 @@ gsvaParam <- function(exprData, geneSets,
                       verbose=TRUE) {
 
     .check_input_expr_gene_sets(exprData, geneSets)
+    geneSets <- .remove_duplicated_genes(geneSets)
 
     rowNorm <- match.arg(rowNorm)
     kcdf <- match.arg(kcdf)
@@ -491,7 +492,7 @@ gsvaParam <- function(exprData, geneSets,
 setReplaceMethod("geneSets", signature=signature(object="gsvaParam",
                                                  value="GsvaGeneSets"),
                  function(object, value) {
-                   object@geneSets <- value
+                   object@geneSets <- .remove_duplicated_genes(value)
                    object
                  })
 
