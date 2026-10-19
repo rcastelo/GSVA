@@ -203,7 +203,10 @@ gsva_sparse_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat, i
   return undefined;
 }
 
-/* returned value: 1 if the random walk is undefined, 0 otherwise, ee
+/* 'n' is the number of nonmissing genes in the column, i.e., the length of
+ * the random walk, since nonmissing genes have decreasing order statistics
+ * between 1 and 'n', and missing genes are left out of the walk.
+ * returned value: 1 if the random walk is undefined, 0 otherwise, see
  * gsva_rnd_walk(); a gene set with missing values under na_use < 3 or with
  * less than 'minsize' nonmissing genes does not lead to an undefined walk
  */
@@ -532,6 +535,7 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
         cli_progress_set(pb, i);
     }
 
+    nnas = 0;
     if (anyna)
       invalidranks = ranks2stats_nas(ranksR, p, n, i, sparse, fetch_col,
                                      decordstat_col, symrnkstat_col,
@@ -577,8 +581,9 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
       gsetidx = INTEGER(gsetidxR);
       if (anyna) {
         undefwalk = gsva_rnd_walk_nas(gsetidx, k, decordstat_col,
-                                      symrnkstat_col, p, tau, nause, minsize,
-                                      NULL, &walkstatpos, &walkstatneg, &wna);
+                                      symrnkstat_col, p - nnas, tau, nause,
+                                      minsize, NULL, &walkstatpos,
+                                      &walkstatneg, &wna);
       } else {
         if (sparse && nzeros_col > 0)
           undefwalk = gsva_sparse_rnd_walk(gsetidx, k, decordstat_col,

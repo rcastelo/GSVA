@@ -173,6 +173,7 @@ test_gsvaCcode <- function() {
     ## calculate GSVA scores using the C implementation
     wna_env <- new.env()
     assign("w", FALSE, envir=wna_env)
+    assign("u", 0, envir=wna_env)
     sco_C <- GSVA:::.gsva_score_genesets(R, gsetsidx, is.integer(R[1, 1]),
                                          sparse=GSVA:::.get_sparse(param), 
                                          maxDiff=GSVA:::.get_maxDiff(param),
