@@ -139,7 +139,10 @@
 ## processing many smaller blocks makes calculations too slow, so that a smaller
 ## 'maxmem' is not honored, and they have at most as many rows or columns as
 ## needed to give one block to each worker, and as the DelayedArray package
-## supports
+## supports. with 'sendblocks=TRUE', this process takes a copy of the block of
+## each worker from 'X' in main memory to send it to that worker, see
+## .sends_blocks(), so that each row or column of a block takes, besides its
+## working memory and output, its size in 'X'
 #' @importFrom BiocGenerics type
 #' @importFrom utils object.size
 #' @importFrom DelayedArray getAutoBlockLength
@@ -148,7 +151,7 @@
                              outfactor=1, outextra=0,
                              workermem=.worker_mem(), dense=FALSE,
                              heldmem=.held_mem(), sinkout=FALSE,
-                             sharedmem=TRUE) {
+                             sharedmem=TRUE, sendblocks=FALSE) {
     nunits <- dim(X)[whdim]
     inmemory <- !is(X, "DelayedArray")
     eltbytes <- if (type(X) == "integer") 4 else 8
@@ -175,8 +178,9 @@
     ## take each a block within the whole of it
     nsharing <- if (sharedmem) nworkers else 1
     avail <- (.mem_fraction_R * maxmem - fixed) / nsharing
+    sendbytes <- if (sendblocks && inmemory) inunitbytes else 0
     nperblock <- floor(avail / ((workfactor + outfactor) * unitbytes +
-                                outextra))
+                                outextra + sendbytes))
     otherdim <- max(1, as.numeric(dim(X)[-whdim]))
     nperblock <- max(nperblock, floor(getAutoBlockLength(type(X)) / nsharing /
                                       otherdim))
@@ -197,13 +201,15 @@
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .rowgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
                          outextra=0, workermem=.worker_mem(), dense=FALSE,
-                         heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE) {
+                         heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE,
+                         sendblocks=FALSE) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
       nrowblock <- .units_per_block(X, 1L, nworkers, maxmem, workfactor,
                                     outfactor, outextra, workermem,
                                     dense=dense, heldmem=heldmem,
-                                    sinkout=sinkout, sharedmem=sharedmem)
+                                    sinkout=sinkout, sharedmem=sharedmem,
+                                    sendblocks=sendblocks)
       grid <- rowAutoGrid(X, nrow=.align_to_chunks(nrowblock, X, 1L))
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
@@ -229,13 +235,15 @@
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .colgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
                          outextra=0, workermem=.worker_mem(), dense=FALSE,
-                         heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE) {
+                         heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE,
+                         sendblocks=FALSE) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
       ncolblock <- .units_per_block(X, 2L, nworkers, maxmem, workfactor,
                                     outfactor, outextra, workermem,
                                     dense=dense, heldmem=heldmem,
-                                    sinkout=sinkout, sharedmem=sharedmem)
+                                    sinkout=sinkout, sharedmem=sharedmem,
+                                    sendblocks=sendblocks)
       grid <- colAutoGrid(X, ncol=.align_to_chunks(ncolblock, X, 2L))
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
@@ -272,28 +280,12 @@
     rir
 }
 
-## which elements of the result of bplapply() or bpiterate() did not fail;
-## bpiterate() leaves the elements that failed as NULL, and stores their
-## errors in the attribute 'errors', named by the position of the element
+## which elements of the result of bplapply() did not fail
 #' @importFrom BiocParallel bpok
-.bp_ok <- function(res) {
-    ok <- bpok(res)
-    errs <- attr(res, "errors")
-    if (!is.null(errs))
-        ok[as.integer(names(errs))] <- FALSE
+.bp_ok <- function(res) bpok(res)
 
-    ok
-}
-
-## error of the first element of the result of bplapply() or bpiterate() that
-## failed
-.bp_first_error <- function(res) {
-    errs <- attr(res, "errors")
-    if (!is.null(errs))
-        return(errs[[1L]])
-
-    res[[which(!bpok(res))[1L]]]
-}
+## error of the first element of the result of bplapply() that failed
+.bp_first_error <- function(res) res[[which(!bpok(res))[1L]]]
 
 #' @importFrom cli cli_alert_warning
 .report_parallel_errors <- function(res) {
@@ -306,7 +298,7 @@
     out <- lapply(msg, cli_alert_warning)
 }
 
-## evaluate 'expr', a call to bplapply() or bpiterate(), replacing the
+## evaluate 'expr', a call to bplapply(), replacing the
 ## uninformative error that BiocParallel gives when a forked worker process
 ## ends without returning its result, such as "wrong args for environment
 ## subassignment", by an error that tells what happened. that error of
@@ -344,13 +336,9 @@
         })
 }
 
-## bplapply() and bpiterate() with the arguments in '...', see
-## .with_dead_worker_check()
+## bplapply() with the arguments in '...', see .with_dead_worker_check()
 #' @importFrom BiocParallel bplapply
 .gsva_bplapply <- function(...) .with_dead_worker_check(bplapply(...))
-
-#' @importFrom BiocParallel bpiterate
-.gsva_bpiterate <- function(...) .with_dead_worker_check(bpiterate(...))
 
 ## apply 'WRAPPED_FUN' to a block of rows or columns of a matrix sent to a
 ## worker; defined outside the functions processing matrices by blocks, so
@@ -730,33 +718,88 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
     out
 }
 
+## whether the 'nworkers' workers of 'BPPARAM' receive the blocks of the
+## matrix 'X' from this process, which then takes a copy of one block per
+## worker, see .bp_blocks(); 'X' can also be given by whether it is in main
+## memory
+.sends_blocks <- function(X, BPPARAM, nworkers) {
+    inmemory <- if (is.logical(X)) X else !is(X, "DelayedArray")
+    nworkers > 1L && inmemory && !is(BPPARAM, "MulticoreParam")
+}
+
 ## blocks of rows (whdim=1) or columns (whdim=2) of the matrix 'X' in main
 ## memory, with the ranges 'rngs', processed by the workers of 'BPPARAM'. workers
 ## not forked from this process, such as socket workers, receive the blocks
-## one at a time, as they become free, while forked workers, and workers
-## processing a matrix stored on disk, take their blocks from 'X' themselves
-## with 'FUN_WRAPPER', which would send the whole 'X' to workers not forked
-## from this process. 'BPREDO' gives the result of a previous call to
-## recompute only its failed elements
-#' @importFrom BiocParallel MulticoreParam
-#' @importFrom IRanges start end
+## in rounds of as many blocks as workers, taken from 'X' in this process
+## right before each round, so that this process holds at most one block per
+## worker, while forked workers, and workers processing a matrix stored on
+## disk, take their blocks from 'X' themselves with 'FUN_WRAPPER', which would
+## send the whole 'X' to workers not forked from this process. the rounds are
+## run by bplapply(), instead of sending the blocks as workers become free with
+## bpiterate(), because bpiterate() is not supported by all the back-ends, such
+## as DoparParam, which, in addition, queues all the elements of a call to
+## bplapply() before sending them to the workers. 'BPREDO' gives the result of
+## a previous call to recompute only its failed elements, whose attribute
+## "rounds" holds the result of bplapply() in each round, which keeps what
+## bplapply() needs to recompute the failed elements of that round
+#' @importFrom BiocParallel MulticoreParam bpnworkers bptry bpok bpisup
+#' @importFrom BiocParallel bpstart bpstop bpprogressbar "bpprogressbar<-"
+#' @importFrom cli cli_progress_bar cli_progress_update
+#' @importFrom IRanges start end width
 .bp_blocks <- function(X, whdim, rngs, FUN, FUN_WRAPPER, ..., BPREDO=list(),
                        BPPARAM) {
-    if (is(X, "DelayedArray") || is(BPPARAM, "MulticoreParam"))
+    if (!.sends_blocks(X, BPPARAM, 2L))
         return(.gsva_bplapply(rngs, FUN=FUN_WRAPPER, verbose=FALSE,
                               idpbe=NULL, WRAPPED_FUN=FUN, ..., BPREDO=BPREDO,
                               BPPARAM=BPPARAM))
 
-    i <- 0L
-    ITER <- function() {
-        i <<- i + 1L
-        if (i > length(rngs))
-            return(NULL)
-        rng <- start(rngs[[i]]):end(rngs[[i]])
-        if (whdim == 1L) X[rng, , drop=FALSE] else X[, rng, drop=FALSE]
+    ## the workers run all the rounds, instead of being started anew for
+    ## each of them
+    if (!bpisup(BPPARAM)) {
+        bpstart(BPPARAM)
+        on.exit(bpstop(BPPARAM), add=TRUE)
     }
-    .gsva_bpiterate(ITER, FUN=BLOCK_FUN_WRAPPER, WRAPPED_FUN=FUN, ...,
-                    BPREDO=BPREDO, BPPARAM=BPPARAM)
+    ## progress is reported over all the rounds, instead of by bplapply() in
+    ## each of them; 'BPPARAM' is a reference class object, so this change
+    ## reaches the object of the caller, which is restored on exit
+    idpb <- NULL
+    if (bpprogressbar(BPPARAM)) {
+        bpprogressbar(BPPARAM) <- FALSE
+        on.exit(bpprogressbar(BPPARAM) <- TRUE, add=TRUE)
+        idpb <- cli_progress_bar(total=sum(vapply(rngs, width, integer(1))))
+    }
+    rounds <- split(seq_along(rngs),
+                    ceiling(seq_along(rngs) / max(1L, bpnworkers(BPPARAM))))
+    prev <- attr(BPREDO, "rounds")
+    res <- vector("list", length(rounds))
+    for (k in seq_along(rounds)) {
+        redo <- if (is.null(prev)) list() else prev[[k]]
+        if (!is.null(prev) && all(bpok(redo))) { ## nothing to recompute
+            res[[k]] <- redo
+            next
+        }
+        blocks <- lapply(rngs[rounds[[k]]], function(r) {
+            rng <- start(r):end(r)
+            if (whdim == 1L) X[rng, , drop=FALSE] else X[, rng, drop=FALSE]
+        })
+        res[[k]] <- bptry(.gsva_bplapply(blocks, FUN=BLOCK_FUN_WRAPPER,
+                                         WRAPPED_FUN=FUN, ..., BPREDO=redo,
+                                         BPPARAM=BPPARAM))
+        ## the blocks of this round are released before taking the ones of
+        ## the next round, because otherwise R collects them only after the
+        ## memory allocated reaches a threshold, which grows with the memory
+        ## used by 'X', piling up the blocks of several rounds
+        blocks <- NULL
+        invisible(gc(full=FALSE))
+        if (!is.null(idpb))
+            cli_progress_update(id=idpb,
+                inc=sum(vapply(rngs[rounds[[k]]], width, integer(1))))
+    }
+
+    out <- unlist(lapply(res, function(r) { attributes(r) <- NULL; r }),
+                  recursive=FALSE)
+    attr(out, "rounds") <- res
+    out
 }
 
 ## replace in the seeds of the on-disk matrix 'X' the H5File objects of the
@@ -831,7 +874,8 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
     X <- .h5file_seeds_to_paths(X, BPPARAM, nworkers)
 
     grid <- .rowgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra,
-                         dense=dense, heldmem=heldmem, sinkout=sinkout)
+                         dense=dense, heldmem=heldmem, sinkout=sinkout,
+                         sendblocks=.sends_blocks(X, BPPARAM, nworkers))
     rir <- .splitRowsInRanges(grid)
     if (length(rir) > 1 && verbose) {
         sze <- howbig(as.numeric(width(rir[[1]])), as.numeric(ncol(X)),
@@ -976,7 +1020,8 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
     X <- .h5file_seeds_to_paths(X, BPPARAM, nworkers)
 
     grid <- .colgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra,
-                         dense=dense, heldmem=heldmem, sinkout=sinkout)
+                         dense=dense, heldmem=heldmem, sinkout=sinkout,
+                         sendblocks=.sends_blocks(X, BPPARAM, nworkers))
     cir <- .splitColsInRanges(grid)
 
     if (length(cir) > 1 && verbose) {

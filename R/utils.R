@@ -1062,10 +1062,13 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## factors of the step, see .step_mem_factors(). with 'densify=TRUE', the
 ## calculations give a dense output from a sparse input, e.g., the classical
 ## algorithm of GSVA on sparse data, and the output and the working memory of
-## the blocks take the size of the dense form, while the input keeps its size
+## the blocks take the size of the dense form, while the input keeps its size.
+## with 'sendblocks=TRUE', the main R process takes a copy of the block of each
+## worker to send it to that worker, see .sends_blocks()
 #' @importFrom DelayedArray getAutoBlockSize
 .step_data_mem <- function(dims, whdim, insize, eltbytes, sparse, inmemory,
-                           mf, heldmem=.held_mem(), densify=FALSE) {
+                           mf, heldmem=.held_mem(), densify=FALSE,
+                           sendblocks=FALSE) {
     nunits <- max(1, dims[whdim])
     denseunitbytes <- as.numeric(dims[-whdim]) * eltbytes
     unitbytes <- if (inmemory && !densify) insize / nunits else denseunitbytes
@@ -1073,7 +1076,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     .fixed_mem(nunits, insize / nunits, whdim, sparse && !densify, inmemory,
                mf$outfactor, mf$outextra, mf$assembly,
                outunitbytes=if (densify) denseunitbytes else insize / nunits) +
-        mf$workfactor * minunits * unitbytes + heldmem
+        mf$workfactor * minunits * unitbytes +
+        (if (sendblocks && inmemory) minunits * insize / nunits else 0) +
+        heldmem
 }
 
 ## verifies that the 'ondisk' parameter is either 'auto', 'yes' or 'no' and, if
@@ -1281,7 +1286,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## workers, where 'mf' gives the memory factors of the step, see
 ## .step_mem_factors(). the main R process and each worker take .worker_mem(),
 ## and the data of the step take .step_data_mem() from the fraction
-## .mem_fraction_R of the memory available to the allocations of R. each R
+## .mem_fraction_R of the memory available to the allocations of R, including
+## the copies of the blocks sent to the workers with 'sendblocks=TRUE', see
+## .sends_blocks(). each R
 ## process also takes .disk_read_mem() when the input data is read from disk,
 ## i.e., when it is not loaded in main memory ('inmemory=FALSE'). forked
 ## workers do not take a copy of the input data in main memory: the garbage
@@ -1290,14 +1297,15 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## Linux, while the many small objects of the packages loaded are copied, which
 ## .worker_mem() includes
 .step_mem_need <- function(dims, insize, whdim, eltbytes, sparse, inmemory,
-                           mf, nworkers, heldmem=.held_mem(), densify=FALSE) {
+                           mf, nworkers, heldmem=.held_mem(), densify=FALSE,
+                           sendblocks=FALSE) {
     permem <- .worker_mem()
     if (!inmemory)
         permem <- permem + .disk_read_mem()
 
     (1 + nworkers) * permem +
         .step_data_mem(dims, whdim, insize, eltbytes, sparse, inmemory, mf,
-                       heldmem, densify) / .mem_fraction_R
+                       heldmem, densify, sendblocks) / .mem_fraction_R
 }
 
 ## warn, before the calculations of a step start, when the estimated memory
@@ -1370,7 +1378,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                .step_held_input(X, dims, whdim, ondisk, container)
     need <- .step_mem_need(dims, insize, whdim, eltbytes,
                            is_sparse(X) && !dense, !ondisk, mf, nworkers,
-                           heldmem, densify)
+                           heldmem, densify,
+                           .sends_blocks(!ondisk, BPPARAM, nworkers))
 
     .check_mem_need(need, maxmem, nworkers)
 }
@@ -1427,7 +1436,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         stepheld <- held + if (inres && !inmemory) insize else 0
         need <- max(need, .step_mem_need(dims, insize, st$whdim, eltbytes,
                                          sparse, inmemory, mf, nworkers,
-                                         stepheld, densify))
+                                         stepheld, densify,
+                                         .sends_blocks(inmemory, BPPARAM,
+                                                       nworkers)))
         ## the input of the next step and its size: without row
         ## normalization, it is the assay used, held by the input data
         if (st$step == "rownorm" && rownormnone) {

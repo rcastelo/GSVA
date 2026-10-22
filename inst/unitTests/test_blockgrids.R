@@ -73,7 +73,10 @@ test_units_per_block <- function() {
 
     message("Running unit tests for the size of blocks within a memory budget")
 
-    suppressPackageStartupMessages(library(DelayedArray))
+    suppressPackageStartupMessages({
+        library(DelayedArray)
+        library(BiocParallel)
+    })
 
     oldautoblocksize <- getAutoBlockSize()
     on.exit(setAutoBlockSize(oldautoblocksize))
@@ -103,7 +106,27 @@ test_units_per_block <- function() {
     ## without them
     checkIdentical(GSVA:::.units_per_block(X, 2L, 2, maxmem / frac,
                                            workermem=1e12), 25L)
+    ## blocks sent to the workers from this process, which takes a copy of
+    ## the block of each worker, take one more column per column of a block
+    maxmem <- insize + 2 * insize + 2 * 25.5 * (2 + 1 + 1) * colbytes
+    checkIdentical(upb(2, maxmem, sendblocks=TRUE), 25L)
+    checkIdentical(upb(2, maxmem), 34L)
+    ## except data on disk, which the workers take from it themselves
+    checkIdentical(GSVA:::.units_per_block(DelayedArray(X), 2L, 2,
+                                           2 * 25.5 * (2 + 1) * colbytes / frac,
+                                           workermem=0, sendblocks=TRUE), 25L)
+    ## and, with them, the memory estimated for the step
+    mf <- list(workfactor=2, outfactor=1, outextra=0)
+    datamem <- function(sendblocks)
+        GSVA:::.step_data_mem(dim(X), 2L, insize, 8, FALSE, TRUE, mf, 0,
+                              sendblocks=sendblocks)
+    checkEqualsNumeric(datamem(TRUE) - datamem(FALSE), 10 * colbytes)
+    checkTrue(GSVA:::.sends_blocks(X, SnowParam(2), 2L))
+    checkTrue(!GSVA:::.sends_blocks(X, MulticoreParam(2), 2L))
+    checkTrue(!GSVA:::.sends_blocks(DelayedArray(X), SnowParam(2), 2L))
+    checkTrue(!GSVA:::.sends_blocks(X, SnowParam(2), 0L))
     ## more working memory per column
+    maxmem <- insize + 2 * insize + 50.5 * (2 + 1) * colbytes
     checkIdentical(upb(1, maxmem, workfactor=4), 30L)
     ## an output of 8 bytes per gene set per column for 100 gene sets
     maxmem <- insize + 2 * 800 * 500 + 50.5 * (2 * colbytes + 800)
@@ -254,4 +277,66 @@ test_blockprocessing_socket_workers <- function() {
         checkTrue(is.character(err) &&
                   grepl("Cancelling execution", err, fixed=TRUE))
     }
+}
+
+## with a DoparParam back-end, which does not support bpiterate(), blocks of
+## data in main memory are sent to the workers in rounds of as many blocks as
+## workers, with the same results, retries of failed blocks and errors as with
+## other workers. the foreach back-end of doParallel forks this process, which
+## is only possible in unix, so that the workers do not need to load GSVA
+test_blockprocessing_dopar_workers <- function() {
+
+    if (.Platform$OS.type != "unix" ||
+        !requireNamespace("doParallel", quietly=TRUE))
+        return(invisible(TRUE))
+
+    message("Running unit tests for block processing with a DoparParam back-end")
+
+    suppressPackageStartupMessages(library(BiocParallel))
+
+    doParallel::registerDoParallel(cores=2)
+    on.exit(foreach::registerDoSEQ(), add=TRUE)
+    bpparam <- DoparParam()
+
+    set.seed(123)
+    X <- matrix(rnorm(200 * 150), nrow=200, ncol=150)
+    flag <- tempfile()
+    on.exit(unlink(flag), add=TRUE)
+    ## fails the first time it is called on a block whose first value is
+    ## 'x11', in any worker
+    flaky_fun <- function(x, verbose, flag, x11) {
+        if (x[1, 1] == x11 && !file.exists(flag)) {
+            file.create(flag)
+            stop("simulated transient failure")
+        }
+        x * 2
+    }
+    failing_fun <- function(x, verbose) stop("simulated failure")
+    for (proc in list(GSVA:::.processMatrixRows, GSVA:::.processMatrixCols)) {
+        res <- suppressMessages(proc(X, FUN=function(x, verbose) x * 2,
+                                     verbose=FALSE, BPPARAM=bpparam))
+        checkEqualsNumeric(X * 2, res)
+        err <- tryCatch(suppressMessages(proc(X, FUN=failing_fun,
+                                              verbose=FALSE,
+                                              BPPARAM=bpparam)),
+                        error=conditionMessage)
+        checkTrue(is.character(err) &&
+                  grepl("Cancelling execution", err, fixed=TRUE))
+    }
+    checkTrue(bpstopOnError(bpparam))
+
+    ## seven blocks of rows run in four rounds by two workers, where a failed
+    ## block of the second round is executed again, recomputing only that
+    ## round
+    rngs <- lapply(seq(1, 200, by=30), function(s)
+                   IRanges::IRanges(s, min(s + 29, nrow(X))))
+    bpstopOnError(bpparam) <- FALSE
+    res <- bptry(GSVA:::.bp_blocks(X, 1L, rngs, flaky_fun, NULL, flag=flag,
+                                   x11=X[91, 1], BPPARAM=bpparam))
+    checkIdentical(length(attr(res, "rounds")), 4L)
+    checkIdentical(bpok(res), seq_along(rngs) != 4L)
+    res <- GSVA:::.bp_blocks(X, 1L, rngs, flaky_fun, NULL, flag=flag,
+                             x11=X[91, 1], BPREDO=res, BPPARAM=bpparam)
+    checkTrue(all(bpok(res)))
+    checkEqualsNumeric(X * 2, do.call("rbind", res))
 }
