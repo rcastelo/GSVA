@@ -896,8 +896,8 @@ setMethod("mapGeneSetsToAnno",
 
               if(.isAnnoPkgValid(annoDb)) {
                   if(!.isAnnoPkgInstalled(annoDb)) {
-                      msg <- "Please install the annotation package {anno}."
-                      cli_abort(c("x"=msg, anno))
+                      msg <- "Please install the annotation package {annoDb}."
+                      cli_abort(c("x"=msg))
                   }
 
                   if (verbose)
