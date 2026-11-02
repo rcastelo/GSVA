@@ -1,0 +1,189 @@
+#include <math.h>
+#include <string.h>
+#include <R.h>
+#include <Rdefines.h>
+#include <cli/progress.h>
+#include "ranks.h"
+#include "rnd_walk.h"
+
+/* global variables */
+extern SEXP GSVA_attrNAsSym,
+            GSVA_attrUndefWalksSym;
+
+/* figures out whether 'obj' is a matrix, dgCMatrix or SVT_SparseMatrix
+ * and returns the class name */
+const char*
+get_class_name(SEXP obj) {
+    if (isMatrix(obj))
+        return "matrix";
+
+    SEXP classR = getAttrib(obj, R_ClassSymbol);
+    return CHAR(STRING_ELT(classR, 0));
+}
+
+SEXP
+gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
+                      SEXP sparseR, SEXP maxdiffR, SEXP absrnkR, SEXP tauR,
+                      SEXP anynaR, SEXP nauseR, SEXP minsizeR, SEXP verboseR) {
+  int      p, n, nnas;
+  int      m = length(genesetsidxR);
+  Rboolean intrnks=asLogical(intrnksR);
+  Rboolean sparse=asLogical(sparseR);
+  Rboolean maxdiff=asLogical(maxdiffR);
+  Rboolean absrnk=asLogical(absrnkR);
+  double   tau=REAL(tauR)[0];
+  Rboolean anyna=asLogical(anynaR);
+  int      nause=INTEGER(nauseR)[0]; /* everything=1, all.obs=2, na.rm=3 */
+  int      minsize=INTEGER(minsizeR)[0];
+  SEXP     esR;
+  double*  es;
+  int      wna=0;
+  double   nundefwalks=0; /* double to avoid overflowing m x n */
+  Rboolean abort=FALSE;
+  Rboolean verbose=asLogical(verboseR);
+  SEXP     pb=R_NilValue;
+  int      nunprotect=0;
+  int*     decordstat_col;
+  double*  symrnkstat_col;
+  int      nzeros_col=0;
+  double   zerosymrnkstat=0;
+  int      invalidranks=0;
+  ranks_ctx_t*   rankctx;
+  rndwalk_ctx_t* walkctx;
+
+  /* memory below is allocated with R_alloc(), which is released by R when
+   * this function returns, also on error() */
+  rankctx = ranks_ctx_create(ranksR, intrnks, sparse);
+  p = rankctx->p; /* number of rows/genes/features */
+  n = rankctx->n; /* number of columns/samples/cells/spots */
+
+  walkctx = rndwalk_ctx_create(genesetsidxR);
+
+  decordstat_col = (int*) R_alloc(p, sizeof(int));
+  symrnkstat_col = (double*) R_alloc(p, sizeof(double));
+
+  PROTECT(esR = allocMatrix(REALSXP, m, n)); nunprotect++;
+  es = REAL(esR);
+
+  if (verbose) {
+    pb = PROTECT(cli_progress_bar(n, NULL)); nunprotect++; /* one tick per column */
+    cli_progress_set_name(pb, "Calculating GSVA scores");
+  }
+
+  for (int i=0; i < n; i++) {
+    if (verbose) { /* show progress */
+      if (i % 100 == 0 && CLI_SHOULD_TICK)
+        cli_progress_set(pb, i);
+    }
+
+    nnas = 0;
+    if (anyna)
+      invalidranks = ranks2stats_nas(rankctx, i, decordstat_col,
+                                     symrnkstat_col, &nzeros_col,
+                                     &zerosymrnkstat, &nnas);
+    else
+      invalidranks = ranks2stats(rankctx, i, decordstat_col, symrnkstat_col,
+                                 &nzeros_col, &zerosymrnkstat);
+
+    /* ranks out of range would lead to reading and writing out of the
+     * bounds of the arrays used in the random walk */
+    if (invalidranks) {
+      if (verbose)
+        cli_progress_done(pb);
+      UNPROTECT(nunprotect); /* esR pb */
+      if (invalidranks == 2)
+        error("GSVA ranks have missing values, but the GSVA parameters "
+              "indicate that the input data has none, e.g., because "
+              "'checkNA=\"no\"' was used in 'gsvaParam()'.");
+      else
+        error("GSVA ranks are out of range for the %d rows of the input "
+              "data. This may happen when rows are removed after "
+              "calculating the ranks with 'gsvaColRanks()'; remove them "
+              "before calling 'gsvaRowNorm()' instead.", p);
+    }
+
+    for (int j=0; j < m; j++) {
+      SEXP     gsetidxR = VECTOR_ELT(genesetsidxR, j);
+      int*     gsetidx;
+      int      k = length(gsetidxR);
+#ifdef LONG_VECTOR_SUPPORT
+      R_xlen_t idx = (R_xlen_t) m * i + j;
+#else
+      int      idx = (size_t) m * i + j;
+#endif
+      double  walkstatpos, walkstatneg;
+      int     undefwalk = 0;
+
+      walkstatpos = walkstatneg = NA_REAL;
+      gsetidx = INTEGER(gsetidxR);
+      if (anyna) {
+        undefwalk = gsva_rnd_walk_nas(gsetidx, k, decordstat_col,
+                                      symrnkstat_col, p - nnas, tau, nause,
+                                      minsize, &walkstatpos, &walkstatneg,
+                                      &wna);
+      } else {
+        if (sparse && nzeros_col > 0)
+          undefwalk = gsva_sparse_rnd_walk(gsetidx, k, decordstat_col,
+                                           symrnkstat_col, p, tau, nzeros_col,
+                                           zerosymrnkstat, &walkstatpos,
+                                           &walkstatneg);
+        else
+          undefwalk = gsva_rnd_walk(walkctx, gsetidx, k, decordstat_col,
+                                    symrnkstat_col, p, tau, &walkstatpos,
+                                    &walkstatneg);
+      }
+      nundefwalks = nundefwalks + undefwalk;
+
+      es[idx] = NA_REAL;
+      if (!anyna || (!ISNA(walkstatpos) && !ISNA(walkstatneg))) {
+	      if (maxdiff) {
+		      es[idx] = walkstatpos + walkstatneg;
+          if (absrnk)
+            es[idx] = walkstatpos - walkstatneg;
+	      } else {
+		        es[idx] = (walkstatpos > fabs(walkstatneg)) ? walkstatpos : walkstatneg;
+	      }
+      } else {
+        /* an undefined random walk is not caused by missing values */
+        if (anyna && !undefwalk && nause == 2) { /* all.obs */
+          abort=TRUE;
+          break;
+        }
+      }
+    }
+    if (abort)
+      break;
+  }
+
+  if (anyna) {
+    SEXP attr;
+
+    if (nause == 2 && abort) {
+      PROTECT(attr = allocVector(STRSXP, 1));
+      SET_STRING_ELT(attr, 0, mkChar("abort"));
+      Rf_setAttrib(esR, GSVA_attrNAsSym, attr);
+      UNPROTECT(1); /* attr */
+    } else if (nause == 3 && wna == 1) {
+      PROTECT(attr = allocVector(STRSXP, 1));
+      SET_STRING_ELT(attr, 0, mkChar("wna"));
+      Rf_setAttrib(esR, GSVA_attrNAsSym, attr);
+      UNPROTECT(1); /* attr */
+    }
+  }
+
+  /* report the number of NA scores coming from undefined random walks */
+  if (nundefwalks > 0) {
+    SEXP attr;
+
+    PROTECT(attr = ScalarReal(nundefwalks));
+    Rf_setAttrib(esR, GSVA_attrUndefWalksSym, attr);
+    UNPROTECT(1); /* attr */
+  }
+
+  if (verbose)
+    cli_progress_done(pb);
+
+  UNPROTECT(nunprotect); /* esR pb */
+
+  return(esR);
+}
