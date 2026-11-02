@@ -4,7 +4,7 @@
 #include <R.h>
 #include <Rinternals.h>
 
-/* context for the dense random walk, created once per call to
+/* context for the dense and sparse random walks, created once per call to
  * gsva_score_genesets_R(), with a buffer sized for the largest gene set
  * that is reused for every gene set and column */
 typedef struct {
@@ -19,13 +19,14 @@ rndwalk_ctx_create(SEXP genesetsidxR);
 
 int
 gsva_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
-              double* symrnkstat, int n, double tau, double* walkstatpos,
+              double* symrnkstat, int p, double tau, double* walkstatpos,
               double* walkstatneg);
 
 int
-gsva_sparse_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat,
-                     int n, double tau, int nzeros, double zerosymrnkstat,
-                     double* walkstatpos, double* walkstatneg);
+gsva_sparse_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
+                     double* symrnkstat, int p, double tau, int nzeros,
+                     double zerosymrnkstat, double* walkstatpos,
+                     double* walkstatneg);
 
 int
 gsva_rnd_walk_nas(int* gsetidx, int k, int* decordstat, double* symrnkstat,

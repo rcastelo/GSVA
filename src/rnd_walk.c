@@ -41,7 +41,7 @@ rndwalk_ctx_create(SEXP genesetsidxR) {
  * (ranks[i] - i) steps down before it, which gives the value of the walk
  * right before (current_valley) and right after (current_peak) its step up.
  * walking through the 'k' positions instead of the 'p' ones reduces the
- * computational cost from O(n) to O(k). the caller should check beforehand
+ * computational cost from O(p) to O(k). the caller should check beforehand
  * that the walk is defined, i.e., 0 < k < p and total_pos_sum > 0.
  */
 static void
@@ -110,7 +110,7 @@ gsva_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
                  * place, and it must start as 0..k-1 to pair each sorted
                  * position in 'ranks' with its weight in 'weights' */
     weights[i] = tau == 1 ? symrnkstat[gene_idx] :
-                           pow(symrnkstat[gene_idx], tau);
+                            pow(symrnkstat[gene_idx], tau);
     total_pos_sum += weights[i];
   }
 
@@ -127,107 +127,93 @@ gsva_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
   return 0;
 }
 
-/* returned value: 1 if the random walk is undefined, 0 otherwise
- * see gsva_rnd_walk()
+/* random walk on a column of a sparse matrix, where the 'nzeros' genes with a
+ * zero expression value share the same rank. genes in the gene set with a
+ * nonzero expression value keep their positions in 'decordstat', which lie
+ * among the first 'nnz' ones, and those with a zero expression value, all of
+ * them with the same weight given by 'zerosymrnkstat', are redistributed
+ * evenly across the last 'nzeros' positions of the walk, at the 1-based
+ * positions nnz + round(i * step + 1), with step = (nzeros - 1) / (gset_nzeros - 1), for
+ * i = 0, ..., gset_nzeros - 1, so that the walk does not depend on the order
+ * in which ties among zeros are broken, see .redistribute_geneset_zeros() in
+ * R/gsva.R. these positions are distinct, because step >= 1 when
+ * gset_nzeros > 1, and are generated in increasing order after the nonzero
+ * ones, so only the positions of the nonzero genes need to be sorted. the
+ * walk thus has 'k' steps up at distinct positions and p - k steps down,
+ * as in the dense random walk, and rnd_walk_extremes() computes its maximum
+ * and minimum deviations. sorting only the 'gset_nnz' positions of the
+ * nonzero genes in the gene set gives a cost of O(gset_nnz log gset_nnz + k)
+ * time instead of O(p), which is at most the O(k log k) of the dense walk.
+ *
+ * returned value: 1 if the random walk is undefined, 0 otherwise, see
+ * gsva_rnd_walk()
  */
 int
-gsva_sparse_rnd_walk(int* gsetidx, int k, int* decordstat, double* symrnkstat,
-                     int n, double tau, int nzeros, double zerosymrnkstat,
-                     double* walkstatpos, double* walkstatneg) {
-  int     nnz, gset_nnz, gset_nzeros;
-  int*    gsetrnk;
-  int*    gsetrnk_nnz;
-  int*    gsetidx_nnz;
-  double* stepcdfingeneset;
-  int*    stepcdfoutgeneset;
-  int     undefined;
+gsva_sparse_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
+                     double* symrnkstat, int p, double tau, int nzeros,
+                     double zerosymrnkstat, double* walkstatpos,
+                     double* walkstatneg) {
+  int*    ranks = ctx->ranks;
+  int*    idx = ctx->idx;
+  double* weights = ctx->weights;
+  int     nnz = p - nzeros;
+  int     gset_nnz = 0;
+  int     gset_nzeros;
+  double  total_pos_sum = 0.0;
 
-  nnz = n - nzeros;
+  *walkstatpos = *walkstatneg = NA_REAL;
+  if (k == 0 || k == p) /* no in-gene-set or no out-gene-set steps */
+    return 1;
 
-  gsetrnk = R_Calloc(k, int);
-  gsetrnk_nnz = R_Calloc(k, int);
-  gsetidx_nnz = R_Calloc(k, int);
-  gset_nnz = gset_nzeros = 0;
-
+  /* genes in the gene set with a nonzero expression value go first */
   for (int i=0; i < k; i++) {
-    gsetrnk[i] = decordstat[gsetidx[i]-1];
-    if (gsetrnk[i] <= nnz) { /* assuming nonzeros expression values are positive */
-      gsetrnk_nnz[gset_nnz] = gsetrnk[i];
-      gsetidx_nnz[gset_nnz] = gsetidx[i];
+    /* convert 1-based gene indices and positions to 0-based ! */
+    int gene_idx = gsetidx[i] - 1;
+    int pos = decordstat[gene_idx] - 1;
+
+    if (pos < nnz) { /* assuming nonzero expression values are positive */
+      ranks[gset_nnz] = pos;
+      idx[gset_nnz] = gset_nnz; /* see gsva_rnd_walk() */
+      weights[gset_nnz] = tau == 1 ? symrnkstat[gene_idx] :
+                                     pow(symrnkstat[gene_idx], tau);
+      total_pos_sum += weights[gset_nnz];
       gset_nnz++;
-    } else
-      gset_nzeros++;
-  }
-
-  stepcdfingeneset = R_Calloc(n, double);  /* assuming zeros are set */
-  stepcdfoutgeneset = R_Calloc(n, int);
-  for (int i=0; i < n; i++)
-    stepcdfoutgeneset[i] = 1;
-
-  if (gset_nnz > 0) { /* if there are nonzero expression values in the gene set */
-    for (int i=0; i < gset_nnz; i++) {
-      /* convert 1-based gene indices to 0-based ! */
-      if (tau == 1)
-        stepcdfingeneset[gsetrnk_nnz[i]-1] = symrnkstat[gsetidx_nnz[i]-1];
-      else
-        stepcdfingeneset[gsetrnk_nnz[i]-1] = pow(symrnkstat[gsetidx_nnz[i]-1], tau);
-      stepcdfoutgeneset[gsetrnk_nnz[i]-1] = 0;
     }
   }
+  gset_nzeros = k - gset_nnz;
 
-  R_Free(gsetrnk);
-  R_Free(gsetrnk_nnz);
-  R_Free(gsetidx_nnz);
+  /* R_qsort_int_I() takes 1-based inclusive bounds, so 1, gset_nnz sorts
+   * ranks[0..gset_nnz-1] */
+  if (gset_nnz > 1)
+    R_qsort_int_I(ranks, idx, 1, gset_nnz);
 
-  if (gset_nzeros > 0) { /* if there are zero expression values in the gene set */
-    int*   gsetrnk_zeros;
+  /* genes in the gene set with a zero expression value go next, at their
+   * redistributed positions, which are already in increasing order */
+  if (gset_nzeros > 0) {
     double step = 0;
+    double zeroweight = tau == 1 ? zerosymrnkstat : pow(zerosymrnkstat, tau);
 
     if (gset_nzeros > 1)
       step = (double) (nzeros - 1) / (double) (gset_nzeros - 1);
 
-    gsetrnk_zeros = R_Calloc(gset_nzeros, int);
-    for (int i=0; i < gset_nzeros; i++)
-      gsetrnk_zeros[i] = ((int) round(((double) i) * step + 1)) + nnz;
-
     for (int i=0; i < gset_nzeros; i++) {
-      /* convert 1-based gene indices to 0-based ! */
-      if (tau == 1)
-        stepcdfingeneset[gsetrnk_zeros[i]-1] = zerosymrnkstat;
-      else
-        stepcdfingeneset[gsetrnk_zeros[i]-1] = pow(zerosymrnkstat, tau);
-      stepcdfoutgeneset[gsetrnk_zeros[i]-1] = 0;
-    }
+      int j = gset_nnz + i;
 
-    R_Free(gsetrnk_zeros);
-  }
-
-  for (int i=1; i < n; i++) {
-    stepcdfingeneset[i] = stepcdfingeneset[i-1] + stepcdfingeneset[i];
-    stepcdfoutgeneset[i] = stepcdfoutgeneset[i-1] + stepcdfoutgeneset[i];
-  }
-
-  *walkstatpos = *walkstatneg = NA_REAL;
-  undefined = !(stepcdfingeneset[n-1] > 0 && stepcdfoutgeneset[n-1] > 0);
-  if (!undefined) {
-    *walkstatpos = *walkstatneg = 0;
-    for (int i=0; i < n; i++) {
-      double wlkstat = ((double) stepcdfingeneset[i]) /
-                       ((double) stepcdfingeneset[n-1]) -
-                       ((double) stepcdfoutgeneset[i]) /
-                       ((double) stepcdfoutgeneset[n-1]);
-
-      if (wlkstat > *walkstatpos)
-        *walkstatpos = wlkstat;
-      if (wlkstat < *walkstatneg)
-        *walkstatneg = wlkstat;
+      /* 1-based position nnz + round(i * step + 1), converted to 0-based */
+      ranks[j] = nnz + ((int) round(((double) i) * step + 1)) - 1;
+      idx[j] = j;
+      weights[j] = zeroweight;
+      total_pos_sum += zeroweight;
     }
   }
 
-  R_Free(stepcdfoutgeneset);
-  R_Free(stepcdfingeneset);
+  if (total_pos_sum == 0.0) /* in-gene-set steps sum up to zero */
+    return 1;
 
-  return undefined;
+  rnd_walk_extremes(ranks, idx, weights, k, p, total_pos_sum, walkstatpos,
+                    walkstatneg);
+
+  return 0;
 }
 
 /* 'n' is the number of nonmissing genes in the column, i.e., the length of
