@@ -22,9 +22,54 @@ rndwalk_ctx_create(SEXP genesetsidxR) {
   ctx->maxk = maxk;
   ctx->ranks = (int*) R_alloc(maxk, sizeof(int));
   ctx->idx = (int*) R_alloc(maxk, sizeof(int));
-  ctx->scores = (double*) R_alloc(maxk, sizeof(double));
+  ctx->weights = (double*) R_alloc(maxk, sizeof(double));
 
   return ctx;
+}
+
+/* maximum and minimum deviations of a random walk of length 'p' that goes up
+ * at the 'k' positions in 'ranks', with the 'weights' that sum up to
+ * 'total_pos_sum', and goes down by 1/(p-k) at every other position. 'ranks'
+ * should hold 0-based, distinct, positions sorted in increasing order, and
+ * 'idx' should give, for the i-th of them, the index in 'weights' of its
+ * weight.
+ *
+ * the deviations are computed without walking through the 'p' positions: the
+ * walk goes up only at the positions in 'ranks' and goes down at every other
+ * position, so its maximum is attained right after a step up and its minimum
+ * right before one. at the i-th position in 'ranks' (0-based) there are
+ * (ranks[i] - i) steps down before it, which gives the value of the walk
+ * right before (current_valley) and right after (current_peak) its step up.
+ * walking through the 'k' positions instead of the 'p' ones reduces the
+ * computational cost from O(n) to O(k). the caller should check beforehand
+ * that the walk is defined, i.e., 0 < k < p and total_pos_sum > 0.
+ */
+static void
+rnd_walk_extremes(const int* ranks, const int* idx, const double* weights,
+                  int k, int p, double total_pos_sum, double* walkstatpos,
+                  double* walkstatneg) {
+  double running_pos_sum = 0.0;
+  double max_peak = 0.0;
+  double min_valley = 0.0;
+  double neg_step = 1.0 / ((double) (p - k));
+
+  for (int i=0; i < k; i++) {
+    double neg_penalty = ((double) (ranks[i] - i)) * neg_step;
+    double current_valley, current_peak;
+
+    current_valley = running_pos_sum / total_pos_sum - neg_penalty;
+    if (current_valley < min_valley)
+      min_valley = current_valley;
+
+    running_pos_sum += weights[idx[i]];
+
+    current_peak = running_pos_sum / total_pos_sum - neg_penalty;
+    if (current_peak > max_peak)
+      max_peak = current_peak;
+  }
+
+  *walkstatpos = max_peak;
+  *walkstatneg = min_valley;
 }
 
 /* the random walk is undefined, and its maximum deviations are set to NA,
@@ -34,37 +79,26 @@ rndwalk_ctx_create(SEXP genesetsidxR) {
  * a single gene at the middle rank p/2 of a dense column with p even, or only
  * zero-expressed genes in a sparse column with a single nonzero value.
  *
- * the maximum and minimum deviations of the walk are computed without walking
- * through the 'n' genes: the walk goes up only at the positions of the 'k'
- * genes of the gene set and goes down at every other position, so its maximum
- * is attained right after a step up and its minimum right before one. after
- * sorting the genes of the gene set by position, at the i-th of them (0-based)
- * there are (rank - i) genes outside the gene set ranked above it, which gives
- * the value of the walk right before (current_valley) and right after
- * (current_peak) its step up. the positions are sorted with R_qsort_int_I(),
+ * the positions of the genes of the gene set are sorted with R_qsort_int_I(),
  * which also permutes the indices of the genes to read their weights in that
- * order. walking through the genes in the gene set reduces the original O(p)
- * -O(n) in the code- computational cost to O(k log k) time. note that gene
- * gene indices in 'gsetidx' are assumed to be unique, which is guaranteed by
- * the R code that maps gene sets to features.
+ * order, and then rnd_walk_extremes() computes the maximum and minimum
+ * deviations of the walk. this reduces the original O(p) computational cost to
+ * O(k log k) time. note that gene indices in 'gsetidx' are assumed to be
+ * unique, which is guaranteed by the R code that maps gene sets to features.
  *
  * returned value: 1 if the random walk is undefined, 0 otherwise
  */
 int
 gsva_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
-              double* symrnkstat, int n, double tau, double* walkstatpos,
+              double* symrnkstat, int p, double tau, double* walkstatpos,
               double* walkstatneg) {
-  int*         ranks = ctx->ranks;
-  int*         idx = ctx->idx;
-  double*      scores = ctx->scores;
-  double       total_pos_sum = 0.0;
-  double       running_pos_sum = 0.0;
-  double       max_peak = 0.0;
-  double       min_valley = 0.0;
-  double       neg_step;
+  int*    ranks = ctx->ranks;
+  int*    idx = ctx->idx;
+  double* weights = ctx->weights;
+  double  total_pos_sum = 0.0;
 
   *walkstatpos = *walkstatneg = NA_REAL;
-  if (k == 0 || k == n) /* no in-gene-set or no out-gene-set steps */
+  if (k == 0 || k == p) /* no in-gene-set or no out-gene-set steps */
     return 1;
 
   for (int i=0; i < k; i++) {
@@ -74,35 +108,21 @@ gsva_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
     ranks[i] = decordstat[gene_idx] - 1;
     idx[i] = i; /* reset on every call: R_qsort_int_I() permutes 'idx' in
                  * place, and it must start as 0..k-1 to pair each sorted
-                 * position in 'ranks' with its weight in 'scores' */
-    scores[i] = tau == 1 ? symrnkstat[gene_idx] :
+                 * position in 'ranks' with its weight in 'weights' */
+    weights[i] = tau == 1 ? symrnkstat[gene_idx] :
                            pow(symrnkstat[gene_idx], tau);
-    total_pos_sum += scores[i];
+    total_pos_sum += weights[i];
   }
 
   if (total_pos_sum == 0.0) /* in-gene-set steps sum up to zero */
     return 1;
 
+  /* R_qsort_int_I() takes 1-based inclusive bounds, so 1, k sorts
+   * ranks[0..k-1] */
   R_qsort_int_I(ranks, idx, 1, k);
 
-  neg_step = 1.0 / ((double) (n - k));
-  for (int i=0; i < k; i++) {
-    double neg_penalty = ((double) (ranks[i] - i)) * neg_step;
-    double current_valley, current_peak;
-
-    current_valley = running_pos_sum / total_pos_sum - neg_penalty;
-    if (current_valley < min_valley)
-      min_valley = current_valley;
-
-    running_pos_sum += scores[idx[i]];
-
-    current_peak = running_pos_sum / total_pos_sum - neg_penalty;
-    if (current_peak > max_peak)
-      max_peak = current_peak;
-  }
-
-  *walkstatpos = max_peak;
-  *walkstatneg = min_valley;
+  rnd_walk_extremes(ranks, idx, weights, k, p, total_pos_sum, walkstatpos,
+                    walkstatneg);
 
   return 0;
 }
