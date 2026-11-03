@@ -1,3 +1,5 @@
+source(system.file("unitTests", "test_helpers.R", package = "GSVA"))
+
 test_gsvaCcode <- function() {
     message("Running unit tests for GSVA C code without missing data.")
 
@@ -11,6 +13,23 @@ test_gsvaCcode <- function() {
         names(gsets) <- paste0("gs", seq_len(k))
 
         gsets
+    }
+
+    ## utility to score a rank matrix with the C implementation.
+    scoreC <- function(R, gsetsidx, param, device="cpu") {
+        wna_env <- new.env()
+        assign("w", FALSE, envir=wna_env)
+        assign("u", 0, envir=wna_env)
+        GSVA:::.gsva_score_genesets(R, gsetsidx, is.integer(R[1, 1]),
+                                    sparse=GSVA:::.get_sparse(param),
+                                    maxDiff=GSVA:::.get_maxDiff(param),
+                                    absRanking=GSVA:::.get_absRanking(param),
+                                    tau=GSVA:::.get_tau(param),
+                                    any_na=anyNA(param),
+                                    na_use=GSVA:::.get_NAuse(param),
+                                    minSize=GSVA:::get_minSize(param),
+                                    wna_env=wna_env, verbose=FALSE,
+                                    device=device)
     }
 
     p <- 10 ## number of genes
@@ -61,21 +80,16 @@ test_gsvaCcode <- function() {
     sco_R <- do.call("cbind", sco_R)
 
     ## calculate GSVA scores using the C implementation
-    wna_env <- new.env()
-    assign("w", FALSE, envir=wna_env)
-    sco_C <- GSVA:::.gsva_score_genesets(R, gsetsidx, is.integer(R[1, 1]),
-					                     sparse=GSVA:::.get_sparse(param), 
-                                         maxDiff=GSVA:::.get_maxDiff(param),
-                                         absRanking=GSVA:::.get_absRanking(param),
-                                         tau=GSVA:::.get_tau(param),
-                                         any_na=anyNA(param),
-                                         na_use=GSVA:::.get_NAuse(param),
-                                         minSize=GSVA:::get_minSize(param),
-                                         wna_env=wna_env, verbose=FALSE,
-                                         device="cpu")
+    sco_C <- scoreC(R, gsetsidx, param)
 
     ## both approaches to calculate GSVA scores must give the same result
     checkEqualsNumeric(sco_R, sco_C)
+
+    ## CPU vs GPU
+    .run_with_gpu({
+        sco_G <- scoreC(R, gsetsidx, param, device="gpu")
+        .check_gpu_equiv(sco_C, sco_G)
+    })
 
     ## with missing data
     message("Running unit tests for GSVA C code with missing data.")
@@ -123,18 +137,7 @@ test_gsvaCcode <- function() {
     sco_R <- do.call("cbind", sco_R)
 
     ## calculate GSVA scores using the C implementation
-    wna_env <- new.env()
-    assign("w", FALSE, envir=wna_env)
-    sco_C <- GSVA:::.gsva_score_genesets(R, gsetsidx, is.integer(R[1, 1]),
-                                         sparse=GSVA:::.get_sparse(param), 
-                                         maxDiff=GSVA:::.get_maxDiff(param),
-                                         absRanking=GSVA:::.get_absRanking(param),
-                                         tau=GSVA:::.get_tau(param),
-                                         any_na=anyNA(param),
-                                         na_use=GSVA:::.get_NAuse(param),
-                                         minSize=GSVA:::get_minSize(param),
-                                         wna_env=wna_env, verbose=FALSE,
-                                         device="cpu")
+    sco_C <- scoreC(R, gsetsidx, param)
 
     ## both approaches to calculate GSVA scores must give the same result
     checkEqualsNumeric(sco_R, sco_C)
@@ -173,19 +176,7 @@ test_gsvaCcode <- function() {
     sco_R <- do.call("cbind", sco_R)
 
     ## calculate GSVA scores using the C implementation
-    wna_env <- new.env()
-    assign("w", FALSE, envir=wna_env)
-    assign("u", 0, envir=wna_env)
-    sco_C <- GSVA:::.gsva_score_genesets(R, gsetsidx, is.integer(R[1, 1]),
-                                         sparse=GSVA:::.get_sparse(param), 
-                                         maxDiff=GSVA:::.get_maxDiff(param),
-                                         absRanking=GSVA:::.get_absRanking(param),
-                                         tau=GSVA:::.get_tau(param),
-                                         any_na=anyNA(param),
-                                         na_use=GSVA:::.get_NAuse(param),
-                                         minSize=GSVA:::get_minSize(param),
-                                         wna_env=wna_env, verbose=FALSE,
-                                         device="cpu")
+    sco_C <- scoreC(R, gsetsidx, param)
 
     ## both approaches to calculate GSVA scores must give the same result
     checkEqualsNumeric(sco_R, sco_C)
@@ -245,19 +236,16 @@ test_gsvaCcode <- function() {
     sco_R <- do.call("cbind", sco_R)
 
     ## calculate GSVA scores using the C implementation
-    sco_C <- GSVA:::.gsva_score_genesets(R, gsetsidx, is.integer(R[1, 1]),
-                                         sparse=GSVA:::.get_sparse(param), 
-                                         maxDiff=GSVA:::.get_maxDiff(param),
-                                         absRanking=GSVA:::.get_absRanking(param),
-                                         tau=GSVA:::.get_tau(param),
-                                         any_na=anyNA(param),
-                                         na_use=GSVA:::.get_NAuse(param),
-                                         minSize=GSVA:::get_minSize(param),
-                                         wna_env=wna_env, verbose=FALSE,
-                                         device="cpu")
+    sco_C <- scoreC(R, gsetsidx, param)
 
     ## both approaches to calculate GSVA scores must give the same result
     checkEqualsNumeric(sco_R, sco_C)
+
+    ## CPU vs GPU
+    .run_with_gpu({
+        sco_G <- scoreC(R, gsetsidx, param, device="gpu")
+        .check_gpu_equiv(sco_C, sco_G)
+    })
 
     ## check now with an SVT_SparseMatrix object
     y <- SparseArray(y)
@@ -293,19 +281,16 @@ test_gsvaCcode <- function() {
     sco_R <- do.call("cbind", sco_R)
 
     ## calculate GSVA scores using the C implementation
-    sco_C <- GSVA:::.gsva_score_genesets(R, gsetsidx, is.integer(R[1, 1]),
-                                         sparse=GSVA:::.get_sparse(param), 
-                                         maxDiff=GSVA:::.get_maxDiff(param),
-                                         absRanking=GSVA:::.get_absRanking(param),
-                                         tau=GSVA:::.get_tau(param),
-                                         any_na=anyNA(param),
-                                         na_use=GSVA:::.get_NAuse(param),
-                                         minSize=GSVA:::get_minSize(param),
-                                         wna_env=wna_env, verbose=FALSE,
-                                         device="cpu")
+    sco_C <- scoreC(R, gsetsidx, param)
 
     ## both approaches to calculate GSVA scores must give the same result
     checkEqualsNumeric(sco_R, sco_C)
+
+    ## CPU vs GPU
+    .run_with_gpu({
+        sco_G <- scoreC(R, gsetsidx, param, device="gpu")
+        .check_gpu_equiv(sco_C, sco_G)
+    })
 }
 
 test_gsvaCcode_radix <- function() {
@@ -317,7 +302,7 @@ test_gsvaCcode_radix <- function() {
     library(Matrix)
 
     ## calculates GSVA scores with the R and the C implementations
-    scoreRandC <- function(y, gsets, use="everything") {
+    scoreRandC <- function(y, gsets, use="everything", device="cpu") {
         gsvapar <- gsvaParam(y, gsets, minSize=1, use=use)
         gsvarownorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
         gsvacolranks <- gsvaColRanks(gsvarownorm, verbose=FALSE)
@@ -360,7 +345,7 @@ test_gsvaCcode_radix <- function() {
                                              na_use=GSVA:::.get_NAuse(param),
                                              minSize=GSVA:::get_minSize(param),
                                              wna_env=wna_env, verbose=FALSE,
-                                             device="cpu")
+                                             device=device)
 
         list(R=sco_R, C=sco_C)
     }
@@ -381,6 +366,12 @@ test_gsvaCcode_radix <- function() {
     sco <- scoreRandC(y, gsets)
     checkEqualsNumeric(sco$R, sco$C)
 
+    ## CPU vs GPU
+    .run_with_gpu({
+        sco_G <- scoreRandC(y, gsets, device="gpu")
+        .check_gpu_equiv(sco$C, sco_G$C)
+    })
+
     ## dense data with missing values
     set.seed(123)
     y[sample(p*n, size=floor(0.05*p*n))] <- NA ## 5% missing data
@@ -397,6 +388,12 @@ test_gsvaCcode_radix <- function() {
     y <- Matrix(y, sparse=TRUE)
     sco <- scoreRandC(y, gsets)
     checkEqualsNumeric(sco$R, sco$C)
+
+    ## CPU vs GPU
+    .run_with_gpu({
+        sco_G <- scoreRandC(y, gsets, device="gpu")
+        .check_gpu_equiv(sco$C, sco_G$C)
+    })
 
     ## sparse data with few genes, where redistributing the zero genes of
     ## small gene sets among all zeros leads to positions ending in .5, which
@@ -415,6 +412,12 @@ test_gsvaCcode_radix <- function() {
     names(gsets) <- paste0("gs", seq_along(gsets))
     sco <- scoreRandC(y, gsets)
     checkEqualsNumeric(sco$R, sco$C)
+
+    ## CPU vs GPU
+    .run_with_gpu({
+        sco_G <- scoreRandC(y, gsets, device="gpu")
+        .check_gpu_equiv(sco$C, sco_G$C)
+    })
 }
 
 test_gsvaCcodeUndefWalkOverflow <- function() {
