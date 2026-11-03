@@ -12,8 +12,12 @@ extern "C" {
 #endif
 
 typedef struct {
-  int G, S, max_k;
+  int G, S;
   int *gsetofft, *gsetidxs;
+
+  // Gene sets grouped by size for optimal kernel
+  int cat_count[GSVA_NUM_CATS];        // number of gene sets per category
+  int *cat_gset[GSVA_NUM_CATS];        // device arrays of global gset indices
 
   cudaStream_t stream[GSVA_CUDA_STREAMS];
 

@@ -96,7 +96,7 @@ NVCC = ${NVCC}
 # GPU architecture flags (empty if no CUDA)
 GPU_ARCH_FLAGS = ${GPU_ARCH_FLAGS}
 # nvcc flags
-NVCC_FLAGS = -g -lineinfo
+NVCC_FLAGS = -O3
 # FP32 define
 FP32_FLAG = -DUSE_FP32
 # HAVE_CUDA preprocessor define (empty if no CUDA)
