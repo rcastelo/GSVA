@@ -47,12 +47,45 @@ void gsva_device_init(gsva_device_t *ptr, SEXP genesetsidxR, int G,
   for (int s = 0; s < S; s++) {
     SEXP gsetidxR = VECTOR_ELT(genesetsidxR, s);
     int k = length(gsetidxR);
+    if (k > ptr->max_k)
+      ptr->max_k = k;
+  }
+
+  int cat_count[GSVA_NUM_CATS] = {0};
+  for (int s = 0; s < S; s++) {
+    SEXP gsetidxR = VECTOR_ELT(genesetsidxR, s);
+    int k = length(gsetidxR);
+    if (k <= 160) cat_count[0]++;
+    else if (k <= 256) cat_count[1]++;
+    else if (k <= 644) cat_count[2]++;
+    else if (k <= 2048) cat_count[3]++;
+    else cat_count[4]++;
+  }
+
+  int *cat_gset[GSVA_NUM_CATS];
+  for (int cat = 0; cat < GSVA_NUM_CATS; cat++) {
+    if (cat_count[cat] > 0) {
+      cat_gset[cat] = (int *)R_alloc(cat_count[cat], sizeof(int));
+    } else {
+      cat_gset[cat] = NULL;
+    }
+  }
+  
+  int cat_pos[GSVA_NUM_CATS] = {0};
+  for (int s = 0; s < S; s++) {
+    SEXP gsetidxR = VECTOR_ELT(genesetsidxR, s);
+    int k = length(gsetidxR);
     if (k > GSVA_MAX_GPU_GSET_SIZE) {
       error("Gene set %d has %d genes, exceeding GPU limit of %d.",
             s + 1, k, GSVA_MAX_GPU_GSET_SIZE);
     }
-    if (k > ptr->max_k)
-      ptr->max_k = k;
+    int cat;
+    if (k <= 160) cat = 0;
+    else if (k <= 256) cat = 1;
+    else if (k <= 644) cat = 2;
+    else if (k <= 2048) cat = 3;
+    else cat = 4;
+    cat_gset[cat][cat_pos[cat]++] = s;
   }
 
   GSVA_CUDA_CALL(cudaMalloc(&ptr->gsetofft, size_offt));
@@ -72,11 +105,21 @@ void gsva_device_init(gsva_device_t *ptr, SEXP genesetsidxR, int G,
     GSVA_CUDA_CALL(cudaMalloc(&ptr->symrnkstat[i], size_block_float));
     GSVA_CUDA_CALL(cudaMalloc(&ptr->es[i], size_es_block));
   }
-
   GSVA_CUDA_CALL(
       cudaMemcpy(ptr->gsetofft, gsetofft, size_offt, cudaMemcpyHostToDevice));
   GSVA_CUDA_CALL(
       cudaMemcpy(ptr->gsetidxs, gsetidxs, size_idxs, cudaMemcpyHostToDevice));
+
+  for (int cat = 0; cat < GSVA_NUM_CATS; cat++) {
+    ptr->cat_count[cat] = cat_count[cat];
+    if (cat_count[cat] > 0) {
+      GSVA_CUDA_CALL(cudaMalloc(&ptr->cat_gset[cat],
+                                (size_t)cat_count[cat] * sizeof(int)));
+      GSVA_CUDA_CALL(cudaMemcpy(ptr->cat_gset[cat], cat_gset[cat],
+                                (size_t)cat_count[cat] * sizeof(int),
+                                cudaMemcpyHostToDevice));
+    }
+  }
 }
 
 void gsva_device_deinit(gsva_device_t *d) {
@@ -108,6 +151,10 @@ void gsva_device_deinit(gsva_device_t *d) {
   d->gsetofft = NULL;
   cudaFree(d->gsetidxs);
   d->gsetidxs = NULL;
+  for (int cat = 0; cat < GSVA_NUM_CATS; cat++) {
+    cudaFree(d->cat_gset[cat]);
+    d->cat_gset[cat] = NULL;
+  }
 }
 
 void gsva_host_init(gsva_host_t *h, int G, int S, Rboolean sparse) {

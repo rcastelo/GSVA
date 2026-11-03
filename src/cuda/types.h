@@ -20,6 +20,7 @@
 
 #define GSVA_BLOCK_C 32
 #define GSVA_CUDA_STREAMS 2
+#define GSVA_NUM_CATS 5
 #define GSVA_MAX_GPU_GSET_SIZE (8 * 512)
 
 #define GSVA_CUDA_CALL(call) do { \

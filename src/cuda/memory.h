@@ -15,6 +15,10 @@ typedef struct {
   int G, S, max_k;
   int *gsetofft, *gsetidxs;
 
+  // Gene sets grouped by size for optimal kernel
+  int cat_count[GSVA_NUM_CATS];        // number of gene sets per category
+  int *cat_gset[GSVA_NUM_CATS];        // device arrays of global gset indices
+
   cudaStream_t stream[GSVA_CUDA_STREAMS];
 
   int *r_scratch[GSVA_CUDA_STREAMS];   // [G*B_C] scratch for rank shift

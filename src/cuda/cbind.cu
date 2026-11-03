@@ -186,36 +186,45 @@ static void gsva_rnd_walk_gpu_dispatch(gsva_float_t *h_es, int S, int G, int C,
                                        gsva_device_t *device, int stream_idx) {
   cudaStream_t stream = device->stream[stream_idx];
   size_t es_size = (size_t)S * C * sizeof(gsva_float_t);
-  int max_k = device->max_k;
 
-  dim3 numBlocks(C, S);
-  cudaError_t err;
+  for (int cat = 0; cat < GSVA_NUM_CATS; cat++) {
+    int cat_s = device->cat_count[cat];
+    if (cat_s == 0) continue;
 
-  if (max_k <= 32) {
-    gsea_walk_kernel<1, 32><<<numBlocks, 32, 0, stream>>>(
-        device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-        device->symrnkstat[stream_idx], device->es[stream_idx], S, G, C, tau,
-        score_type);
-  } else if (max_k <= 128) {
-    gsea_walk_kernel<4, 32><<<numBlocks, 32, 0, stream>>>(
-        device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-        device->symrnkstat[stream_idx], device->es[stream_idx], S, G, C, tau,
-        score_type);
-  } else if (max_k <= 2048) {
-    gsea_walk_kernel<4, 512><<<numBlocks, 512, 0, stream>>>(
-        device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-        device->symrnkstat[stream_idx], device->es[stream_idx], S, G, C, tau,
-        score_type);
-  } else {
-    gsea_walk_kernel<8, 512><<<numBlocks, 512, 0, stream>>>(
-        device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-        device->symrnkstat[stream_idx], device->es[stream_idx], S, G, C, tau,
-        score_type);
-  }
+    dim3 numBlocks(C, cat_s);
 
-  err = cudaGetLastError();
-  if (err != cudaSuccess) {
-    error("CUDA kernel launch error: %s", cudaGetErrorString(err));
+    if (cat == 0) {
+      gsea_walk_kernel<5, 32><<<numBlocks, 32, 0, stream>>>(
+          device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+          device->symrnkstat[stream_idx], device->es[stream_idx],
+          device->cat_gset[cat], S, G, C, tau, score_type);
+    } else if (cat == 1) {
+      gsea_walk_kernel<2, 128><<<numBlocks, 128, 0, stream>>>(
+          device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+          device->symrnkstat[stream_idx], device->es[stream_idx],
+          device->cat_gset[cat], S, G, C, tau, score_type);
+    } else if (cat == 2) {
+      gsea_walk_kernel<3, 256><<<numBlocks, 256, 0, stream>>>(
+          device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+          device->symrnkstat[stream_idx], device->es[stream_idx],
+          device->cat_gset[cat], S, G, C, tau, score_type);
+    } else if (cat == 3) {
+      gsea_walk_kernel<8, 256><<<numBlocks, 256, 0, stream>>>(
+          device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+          device->symrnkstat[stream_idx], device->es[stream_idx],
+          device->cat_gset[cat], S, G, C, tau, score_type);
+    } else {
+      gsea_walk_kernel<8, 512><<<numBlocks, 512, 0, stream>>>(
+          device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+          device->symrnkstat[stream_idx], device->es[stream_idx],
+          device->cat_gset[cat], S, G, C, tau, score_type);
+    }
+
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      error("gsea_walk_kernel launch error at %s:%d: %s", __FILE__, __LINE__,
+            cudaGetErrorString(err));
+    }
   }
 
   GSVA_CUDA_CALL(cudaMemcpyAsync(h_es, device->es[stream_idx], es_size,

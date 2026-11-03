@@ -101,7 +101,7 @@ __global__ void ranks2stats_gpu(
     for (int g = tid; g < G; g += threads) {
         int rshifted = d_r[cell * G + g];
         decordstat[cell * G + g] = G - rshifted + 1;
-        
+
         if (sparse_mode && nzs > 0 && fetch_type == R2S_SPARSE) {
             if (rshifted > nzs) {
                 int raw_r = rshifted - nzs;
@@ -116,6 +116,20 @@ __global__ void ranks2stats_gpu(
     }
 }
 
+struct PeakValley {
+    gsva_float_t peak;
+    gsva_float_t valley;
+};
+
+struct PVReduceOp {
+    __device__ PeakValley operator()(PeakValley a, PeakValley b) const {
+        return {
+            a.peak > b.peak ? a.peak : b.peak,
+            a.valley < b.valley ? a.valley : b.valley
+        };
+    }
+};
+
 template<int GSVA_WALK_ITEMS, int GSVA_WALK_THREADS>
 __global__ void gsea_walk_kernel(
     const int* __restrict__ gsetofft,
@@ -123,6 +137,7 @@ __global__ void gsea_walk_kernel(
     const int* __restrict__ decordstat_block,
     const gsva_float_t* __restrict__ symrnkstat_block,
     gsva_float_t* __restrict__ out_es,
+    const int* __restrict__ cat_gset,
     int S,
     int G,
     int C,
@@ -131,24 +146,23 @@ __global__ void gsea_walk_kernel(
 ) {
     typedef cub::BlockRadixSort<int, GSVA_WALK_THREADS, GSVA_WALK_ITEMS, gsva_float_t> BlockRadixSort;
     typedef cub::BlockScan<double, GSVA_WALK_THREADS> BlockScanDouble;
-    typedef cub::BlockScan<int, GSVA_WALK_THREADS> BlockScanInt;
-    typedef cub::BlockReduce<gsva_float_t, GSVA_WALK_THREADS> BlockReduce;
+    typedef cub::BlockReduce<PeakValley, GSVA_WALK_THREADS> BlockReducePV;
 
     union TempStorage {
         typename BlockRadixSort::TempStorage sort_storage;
-        typename BlockScanDouble::TempStorage scan_storage_float;
-        typename BlockScanInt::TempStorage scan_storage_int;
-        typename BlockReduce::TempStorage reduce_storage;
+        typename BlockScanDouble::TempStorage scan_storage;
+        typename BlockReducePV::TempStorage reduce_storage;
     };
 
     __shared__ TempStorage tmp;
     __shared__ double thread_total;
 
     int c = blockIdx.x;
-    int gset = blockIdx.y;
+    int gset_local = blockIdx.y;
     int tid = threadIdx.x;
 
-    if (c >= C || gset >= S) return;
+    int gset = cat_gset[gset_local];
+    if (c >= C || gset_local >= S) return;
 
     int offset = gsetofft[gset];
     int k = gsetofft[gset + 1] - offset;
@@ -174,23 +188,16 @@ __global__ void gsea_walk_kernel(
     __syncthreads();
 
     double stat_sums[GSVA_WALK_ITEMS];
-    int gene_ranks[GSVA_WALK_ITEMS];
-
     for (int i = 0; i < GSVA_WALK_ITEMS; i++) {
         if (keys[i] != INT_MAX) {
-            stat_sums[i]  = vals[i];
-            gene_ranks[i] = 1;
+            stat_sums[i] = vals[i];
         } else {
-            stat_sums[i]  = 0.0;
-            gene_ranks[i] = 0;
+            stat_sums[i] = 0.0;
         }
     }
 
-    BlockScanDouble(tmp.scan_storage_float).InclusiveSum(stat_sums, stat_sums);
-    __syncthreads();
-    BlockScanInt(tmp.scan_storage_int).ExclusiveSum(gene_ranks, gene_ranks);
-
-    if (tid == GSVA_WALK_THREADS-1) thread_total = stat_sums[GSVA_WALK_ITEMS - 1];
+    BlockScanDouble(tmp.scan_storage).InclusiveSum(stat_sums, stat_sums);
+    if (tid == GSVA_WALK_THREADS - 1) thread_total = stat_sums[GSVA_WALK_ITEMS - 1];
     __syncthreads();
 
     double stat_total = thread_total;
@@ -202,38 +209,38 @@ __global__ void gsea_walk_kernel(
     double thread_max_peak = -1e30;
     double thread_min_valley = 1e30;
     double neg_step = 1.0f / (gsva_float_t)(G - k);
+    double inv_stat_total = 1.0 / stat_total;
 
     for (int i = 0; i < GSVA_WALK_ITEMS; i++) {
+        int idx = thread_start + i;
         if (keys[i] == INT_MAX) continue;
 
         double stat_running = stat_sums[i] - vals[i];
-        double stat_norm = stat_running / stat_total;
-        double neg_penalty    = (keys[i] - gene_ranks[i]) * neg_step;
+        double stat_norm = stat_running * inv_stat_total;
+        double neg_penalty = (keys[i] - idx) * neg_step;
         double current_valley = stat_norm - neg_penalty;
         if (current_valley < thread_min_valley) thread_min_valley = current_valley;
 
         stat_running += vals[i];
-        stat_norm = stat_running / stat_total;
+        stat_norm = stat_running * inv_stat_total;
         double current_peak = stat_norm - neg_penalty;
         if (current_peak > thread_max_peak) thread_max_peak = current_peak;
     }
 
-    struct RMax { __device__ gsva_float_t operator()(gsva_float_t a, gsva_float_t b) const { return a > b ? a : b; } };
-    struct RMin { __device__ gsva_float_t operator()(gsva_float_t a, gsva_float_t b) const { return a < b ? a : b; } };
-
-    gsva_float_t final_max_peak = BlockReduce(tmp.reduce_storage).Reduce((gsva_float_t)thread_max_peak, RMax());
-    __syncthreads();
-    gsva_float_t final_min_valley = BlockReduce(tmp.reduce_storage).Reduce((gsva_float_t)thread_min_valley, RMin());
+    PeakValley pv = {(gsva_float_t)thread_max_peak, (gsva_float_t)thread_min_valley};
+    PeakValley result = BlockReducePV(tmp.reduce_storage).Reduce(pv, PVReduceOp());
 
     if (tid == 0) {
-        gsva_float_t result = 0.0f;
+        gsva_float_t final_max_peak = result.peak;
+        gsva_float_t final_min_valley = result.valley;
+        gsva_float_t res = 0.0f;
         switch (score_type) {
-            case 0: result = final_max_peak + final_min_valley; break;
-            case 1: result = final_max_peak - final_min_valley; break;
-            case 2: result = (final_max_peak > GSVA_FABS(final_min_valley)) ? final_max_peak : final_min_valley; break;
-            default: result = -1.0f; break;
+            case 0: res = final_max_peak + final_min_valley; break;
+            case 1: res = final_max_peak - final_min_valley; break;
+            case 2: res = (final_max_peak > GSVA_FABS(final_min_valley)) ? final_max_peak : final_min_valley; break;
+            default: res = -1.0f; break;
         }
-        out_es[c * S + gset] = result;
+        out_es[c * S + gset] = res;
     }
 }
 
