@@ -18,7 +18,8 @@ test_rankbounds <- function() {
                                            is(R, "SVT_SparseMatrix"),
                                     maxDiff=TRUE, absRanking=FALSE, tau=1,
                                     any_na=any_na, na_use="na.rm", minSize=1L,
-                                    wna_env=new.env(), verbose=FALSE)
+                                    wna_env=new.env(), verbose=FALSE,
+                                    device="cpu")
 
     p <- 20 ## number of genes
     n <- 8 ## number of samples
@@ -77,7 +78,7 @@ test_rankbounds <- function() {
                                      verbose=FALSE)
         subranks <- gsvacolranks[1:15, ]
         metadata(subranks)$ranksNrow <- NULL
-        msg <- tryCatch(gsvaColScores(subranks, verbose=FALSE),
+        msg <- tryCatch(gsvaColScores(subranks, verbose=FALSE, device="cpu"),
                         error=conditionMessage)
         checkTrue(is.character(msg) && grepl("out of range", msg))
         ## a column with ranks out of range
@@ -111,7 +112,8 @@ test_rankmissing <- function() {
                                     sparse=is(R, "SVT_SparseMatrix"),
                                     maxDiff=TRUE, absRanking=FALSE, tau=1,
                                     any_na=any_na, na_use="na.rm", minSize=1L,
-                                    wna_env=new.env(), verbose=FALSE)
+                                    wna_env=new.env(), verbose=FALSE,
+                                    device="cpu")
 
     p <- 20 ## number of genes
     n <- 8 ## number of samples

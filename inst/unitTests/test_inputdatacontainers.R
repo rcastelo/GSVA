@@ -16,7 +16,7 @@ test_inputdatacontainers <- function() {
                 dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
 
     ## estimate GSVA enrichment scores with input as a matrix
-    es.mat <- gsva(gsvaParam(y, gsets, verbose=FALSE), verbose=FALSE)
+    es.mat <- gsva(gsvaParam(y, gsets, verbose = FALSE), verbose = FALSE, device = "cpu")
     gsets.mat <- geneSets(es.mat)
 
     library(cli)
@@ -35,7 +35,7 @@ test_inputdatacontainers <- function() {
                           featureData=as(data.frame(dummy=1:nrow(y),
                                                     row.names=rownames(y)),
                                          "AnnotatedDataFrame"))
-    es.eset <- gsva(gsvaParam(eset, gsets, verbose=FALSE), verbose=FALSE)
+    es.eset <- gsva(gsvaParam(eset, gsets, verbose = FALSE), verbose = FALSE, device = "cpu")
     gsets.eSet <- geneSets(es.eset)
 
     es.mat2 <- es.mat
@@ -54,7 +54,7 @@ test_inputdatacontainers <- function() {
                                colData=DataFrame(data.frame(dummy=1:ncol(y),
                                                             row.names=colnames(y))))
     gsvapar <- gsvaParam(se, gsets, verbose=FALSE)
-    es.se <- gsva(gsvapar, verbose=FALSE)
+    es.se <- gsva(gsvapar, verbose=FALSE, device="cpu")
     gsets.se <- geneSets(es.se)
 
     checkEqualsNumeric(es.mat2, assay(es.se))
@@ -66,7 +66,7 @@ test_inputdatacontainers <- function() {
 
     gsvarownr <- gsvaRowNorm(gsvapar, dropExistingAssays=TRUE, verbose=FALSE)
     gsvaranks <- gsvaColRanks(gsvarownr, dropExistingAssays=TRUE, verbose=FALSE)
-    es.se2 <- gsvaColScores(gsvaranks, verbose=FALSE)
+    es.se2 <- gsvaColScores(gsvaranks, verbose=FALSE, device="cpu")
     checkEqualsNumeric(assay(es.se), assay(es.se2))
 
     ## estimate GSVA enrichment scores with input as a dgCMatrix object
@@ -83,7 +83,7 @@ test_inputdatacontainers <- function() {
     checkTrue(length(out) > 0 && sum(nchar(out)) > 0,
 	      "gsvaParam object details method output is empty")
 
-    es.dgCMat <- gsva(param, verbose=FALSE)
+    es.dgCMat <- gsva(param, verbose=FALSE, device="cpu")
     gsets.dgCMat <- geneSets(es.dgCMat)
 
     checkEqualsNumeric(es.mat2, es.dgCMat)
@@ -102,7 +102,7 @@ test_inputdatacontainers <- function() {
     yMatSp <- Matrix(ysp, nrow=nrow(yMat), ncol=ncol(yMat),
 		     dimnames=dimnames(yMat), sparse=TRUE)
     paramSp <- gsvaParam(yMatSp, gsets, verbose=FALSE)
-    es.dgCMatSp <- gsva(paramSp, verbose=FALSE)
+    es.dgCMatSp <- gsva(paramSp, verbose=FALSE, device="cpu")
     
     ## estimate GSVA enrichment scores with input as a SingleCellExperiment object
     suppressPackageStartupMessages(library(SingleCellExperiment))
@@ -116,7 +116,7 @@ test_inputdatacontainers <- function() {
     out <- gsvaAnnotation(sce)
     param <- gsvaParam(sce, gsets, verbose=FALSE)
     show(param)
-    es.sce <- gsva(param, verbose=FALSE)
+    es.sce <- gsva(param, verbose=FALSE, device="cpu")
     gsets.sce <- geneSets(es.sce)
 
     checkEqualsNumeric(es.dgCMatSp, assay(es.sce))

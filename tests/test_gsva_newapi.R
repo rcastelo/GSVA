@@ -21,9 +21,9 @@ gs <- lapply(gs, function(n, p)
                    paste0("g", sample(1:p, size=n, replace=FALSE)), p)
 names(gs) <- paste0("gs", 1:length(gs))
 gsvaPar <- gsvaParam(X, gs, verbose=FALSE)
-gsva.es <- gsva(gsvaPar, verbose=FALSE)
+gsva.es <- gsva(gsvaPar, verbose=FALSE, device="cpu")
 dim(gsva.es)
-gsva.es[seq.int(min(nRowsToPrint, nrow(gsva.es))),]
+round(as.matrix(gsva.es[seq.int(min(nRowsToPrint, nrow(gsva.es))),]), digits=5)
 
 cat("tau=-1 rejected:",
     inherits(try(gsvaParam(X, gs, tau=-1, verbose=FALSE), silent=TRUE),
@@ -36,5 +36,5 @@ c2BroadSets <- c2BroadSets[c(grep("_UP$", names(c2BroadSets)),
                              grep("_DN$", names(c2BroadSets)))]
 firPar <- gsvaParam(geneExpCostaEtAl2021, c2BroadSets,
                     minSize=10, maxSize=500, verbose=FALSE)
-fir_es <- gsva(firPar, verbose=FALSE)
-assay(fir_es)[seq.int(min(nRowsToPrint, nrow(fir_es))),]
+fir_es <- gsva(firPar, verbose=FALSE, device="cpu")
+round(as.matrix(assay(fir_es)[seq.int(min(nRowsToPrint, nrow(fir_es))),]), digits=5)

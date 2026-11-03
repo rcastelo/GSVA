@@ -21,7 +21,7 @@ test_gsvaColRanks <- function() {
     gsvapar <- gsvaParam(y, gsets)
 
     ## calculate GSVA scores in one step
-    gsva_es1 <- gsva(gsvapar, verbose=FALSE)
+    gsva_es1 <- gsva(gsvapar, verbose=FALSE, device="cpu")
 
     ## calculate GSVA scores in three steps
     ## first calculate row-normalized expression values
@@ -31,7 +31,7 @@ test_gsvaColRanks <- function() {
     gsvaranks <- gsvaColRanks(gsvarownorm, verbose=FALSE)
 
     ## third calculate GSVA scores from column ranks
-    gsva_es2 <- gsvaColScores(gsvaranks, verbose=FALSE)
+    gsva_es2 <- gsvaColScores(gsvaranks, device = "cpu", verbose = FALSE)
 
     ## both approaches to calculate GSVA scores must give
     ## the same result with the same input gene sets
@@ -65,8 +65,8 @@ test_gsvaColRanks <- function() {
     checkEqualsNumeric(gsvaranks, cbind(gsvaranks1, gsvaranks2, gsvaranks3))
 
     ## calculate again GSVA scores from column ranks, but this time in chunks
-    gsva_es_c1 <- gsvaColScores(gsvaranks, first=1, last=10, verbose=FALSE)
-    gsva_es_c2 <- gsvaColScores(gsvaranks, first=11, last=20, verbose=FALSE)
-    gsva_es_c3 <- gsvaColScores(gsvaranks, first=21, last=30, verbose=FALSE)
+    gsva_es_c1 <- gsvaColScores(gsvaranks, first=1, last=10, device="cpu", verbose=FALSE)
+    gsva_es_c2 <- gsvaColScores(gsvaranks, first=11, last=20, device="cpu", verbose=FALSE)
+    gsva_es_c3 <- gsvaColScores(gsvaranks, first=21, last=30, device="cpu", verbose=FALSE)
     checkEqualsNumeric(gsva_es1, cbind(gsva_es_c1, gsva_es_c2, gsva_es_c3))
 }

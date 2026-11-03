@@ -31,12 +31,12 @@ test_ondisk <- function() {
     H5 <- as(M, "HDF5Matrix")
 
     ## estimate GSVA enrichment scores with and without HDF5 input and check that they are identical
-    es_noh5 <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE)
-    es_h5 <- gsva(gsvaParam(H5, gsets, verbose=FALSE), verbose=FALSE)
+    es_noh5 <- gsva(gsvaParam(M, gsets, verbose = FALSE), verbose = FALSE, device = "cpu")
+    es_h5 <- gsva(gsvaParam(H5, gsets, verbose = FALSE), verbose = FALSE, device = "cpu")
     checkIdentical(es_noh5, es_h5)
 
     ## estimate GSVA enrichment scores with HDF5 input and output and check that they are identical
-    es_h5ondisk <- gsva(gsvaParam(H5, gsets, ondisk="yes", verbose=FALSE), verbose=FALSE)
+    es_h5ondisk <- gsva(gsvaParam(H5, gsets, ondisk = "yes", verbose = FALSE), verbose = FALSE, device = "cpu")
     es_h5ondiskmat <- as.matrix(es_h5ondisk)
     checkEqualsNumeric(es_noh5, es_h5ondiskmat)
 
