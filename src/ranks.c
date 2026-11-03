@@ -58,7 +58,7 @@ fetch_intcol_dgCMatrix(ranks_ctx_t* ctx, int j) {
   const double* XCsp_x = ctx->u.dgc.x;
 
   /* put the sparse column into a dense vector */
-  memset(ctx->r, 0, (size_t) ctx->p * sizeof(int));
+  Memzero(ctx->r, (size_t) ctx->p);
   for (int i=XCsp_p[j]; i < XCsp_p[j+1]; i++)
     ctx->r[XCsp_i[i]] = ISNAN(XCsp_x[i]) ? NA_INTEGER : (int) XCsp_x[i];
 
@@ -75,7 +75,7 @@ fetch_intcol_intSVT_SparseMatrix(ranks_ctx_t* ctx, int j) {
   int  nnz = 0;
 
   /* put the sparse column into a dense vector */
-  memset(ctx->r, 0, (size_t) ctx->p * sizeof(int));
+  Memzero(ctx->r, (size_t) ctx->p);
   if (svtLeaf != R_NilValue) {
     SEXP valsR = VECTOR_ELT(svtLeaf, 0);
     SEXP offsetsR = VECTOR_ELT(svtLeaf, 1);
@@ -108,7 +108,7 @@ fetch_intcol_dblSVT_SparseMatrix(ranks_ctx_t* ctx, int j) {
   int  nnz = 0;
 
   /* put the sparse column into a dense vector */
-  memset(ctx->r, 0, (size_t) ctx->p * sizeof(int));
+  Memzero(ctx->r, (size_t) ctx->p);
   if (svtLeaf != R_NilValue) {
     SEXP    valsR = VECTOR_ELT(svtLeaf, 0);
     SEXP    offsetsR = VECTOR_ELT(svtLeaf, 1);

@@ -23,8 +23,78 @@ rndwalk_ctx_create(SEXP genesetsidxR) {
   ctx->ranks = (int*) R_alloc(maxk, sizeof(int));
   ctx->idx = (int*) R_alloc(maxk, sizeof(int));
   ctx->weights = (double*) R_alloc(maxk, sizeof(double));
+  ctx->tmpranks = (int*) R_alloc(maxk, sizeof(int));
+  ctx->tmpidx = (int*) R_alloc(maxk, sizeof(int));
 
   return ctx;
+}
+
+/* sorts the 'm' distinct 0-based positions in ctx->ranks[0..m-1], all of
+ * them smaller than 'p', in increasing order, and applies the same
+ * permutation to ctx->idx[0..m-1]. positions are integers in [0, p), so they
+ * are sorted with a least significant digit (LSD) radix sort on 8-bit
+ * digits, which takes one pass over the 'm' positions for each 8-bit digit
+ * of p - 1, i.e., two passes for p <= 2^16 and three for p <= 2^24, and
+ * reduces the cost of the sort from O(m log m) to O(m). each pass counts the
+ * positions with each of the 256 values of the digit, and moves them, in a
+ * stable way, between 'ranks' and 'idx' and the buffers 'tmpranks' and
+ * 'tmpidx'. passes where all positions have the same digit are skipped.
+ * because each pass also goes through the 256 counts, a comparison sort with
+ * R_qsort_int_I() is faster for fewer than RADIX_SORT_MIN_POSITIONS positions
+ */
+#define RADIX_SORT_MIN_POSITIONS 20
+
+static void
+sort_positions(rndwalk_ctx_t* ctx, int m, int p) {
+  int  count[256];
+  int* src_ranks = ctx->ranks;
+  int* src_idx = ctx->idx;
+  int* dst_ranks = ctx->tmpranks;
+  int* dst_idx = ctx->tmpidx;
+
+  if (m < 2)
+    return;
+
+  if (m < RADIX_SORT_MIN_POSITIONS) {
+    /* R_qsort_int_I() takes 1-based inclusive bounds, so 1, m sorts
+     * ranks[0..m-1] */
+    R_qsort_int_I(ctx->ranks, ctx->idx, 1, m);
+    return;
+  }
+
+  for (int shift=0; ((p - 1) >> shift) > 0; shift += 8) {
+    int  sum = 0;
+    int* tmp;
+
+    Memzero(count, 256);
+    for (int i=0; i < m; i++)
+      count[(src_ranks[i] >> shift) & 0xFF]++;
+
+    if (count[(src_ranks[0] >> shift) & 0xFF] == m) /* all digits are equal */
+      continue;
+
+    for (int d=0; d < 256; d++) { /* counts into starting offsets */
+      int c = count[d];
+
+      count[d] = sum;
+      sum += c;
+    }
+
+    for (int i=0; i < m; i++) {
+      int j = count[(src_ranks[i] >> shift) & 0xFF]++;
+
+      dst_ranks[j] = src_ranks[i];
+      dst_idx[j] = src_idx[i];
+    }
+
+    tmp = src_ranks; src_ranks = dst_ranks; dst_ranks = tmp;
+    tmp = src_idx; src_idx = dst_idx; dst_idx = tmp;
+  }
+
+  if (src_ranks != ctx->ranks) { /* odd number of passes */
+    Memcpy(ctx->ranks, src_ranks, (size_t) m);
+    Memcpy(ctx->idx, src_idx, (size_t) m);
+  }
 }
 
 /* maximum and minimum deviations of a random walk of length 'p' that goes up
@@ -79,11 +149,11 @@ rnd_walk_extremes(const int* ranks, const int* idx, const double* weights,
  * a single gene at the middle rank p/2 of a dense column with p even, or only
  * zero-expressed genes in a sparse column with a single nonzero value.
  *
- * the positions of the genes of the gene set are sorted with R_qsort_int_I(),
+ * the positions of the genes of the gene set are sorted with sort_positions(),
  * which also permutes the indices of the genes to read their weights in that
  * order, and then rnd_walk_extremes() computes the maximum and minimum
  * deviations of the walk. this reduces the original O(p) computational cost to
- * O(k log k) time. note that gene indices in 'gsetidx' are assumed to be
+ * O(k) time. note that gene indices in 'gsetidx' are assumed to be
  * unique, which is guaranteed by the R code that maps gene sets to features.
  *
  * returned value: 1 if the random walk is undefined, 0 otherwise
@@ -106,7 +176,7 @@ gsva_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
     int gene_idx = gsetidx[i] - 1;
 
     ranks[i] = decordstat[gene_idx] - 1;
-    idx[i] = i; /* reset on every call: R_qsort_int_I() permutes 'idx' in
+    idx[i] = i; /* reset on every call: sort_positions() permutes 'idx' in
                  * place, and it must start as 0..k-1 to pair each sorted
                  * position in 'ranks' with its weight in 'weights' */
     weights[i] = tau == 1 ? symrnkstat[gene_idx] :
@@ -117,9 +187,7 @@ gsva_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
   if (total_pos_sum == 0.0) /* in-gene-set steps sum up to zero */
     return 1;
 
-  /* R_qsort_int_I() takes 1-based inclusive bounds, so 1, k sorts
-   * ranks[0..k-1] */
-  R_qsort_int_I(ranks, idx, 1, k);
+  sort_positions(ctx, k, p);
 
   rnd_walk_extremes(ranks, idx, weights, k, p, total_pos_sum, walkstatpos,
                     walkstatneg);
@@ -141,9 +209,9 @@ gsva_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
  * ones, so only the positions of the nonzero genes need to be sorted. the
  * walk thus has 'k' steps up at distinct positions and p - k steps down,
  * as in the dense random walk, and rnd_walk_extremes() computes its maximum
- * and minimum deviations. sorting only the 'gset_nnz' positions of the
- * nonzero genes in the gene set gives a cost of O(gset_nnz log gset_nnz + k)
- * time instead of O(p), which is at most the O(k log k) of the dense walk.
+ * and minimum deviations. only the 'gset_nnz' positions of the nonzero genes
+ * in the gene set are sorted, with sort_positions(), which gives a cost of
+ * O(k) time instead of O(p).
  *
  * returned value: 1 if the random walk is undefined, 0 otherwise, see
  * gsva_rnd_walk()
@@ -182,10 +250,8 @@ gsva_sparse_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
   }
   gset_nzeros = k - gset_nnz;
 
-  /* R_qsort_int_I() takes 1-based inclusive bounds, so 1, gset_nnz sorts
-   * ranks[0..gset_nnz-1] */
-  if (gset_nnz > 1)
-    R_qsort_int_I(ranks, idx, 1, gset_nnz);
+  /* positions of nonzero genes are smaller than 'nnz' */
+  sort_positions(ctx, gset_nnz, nnz);
 
   /* genes in the gene set with a zero expression value go next, at their
    * redistributed positions, which are already in increasing order */
@@ -225,7 +291,7 @@ gsva_sparse_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
  * it has less than 'minsize' nonmissing genes. otherwise, the 'k_notna'
  * nonmissing genes of the gene set are sorted by position, as in
  * gsva_rnd_walk(), and rnd_walk_extremes() computes the maximum and minimum
- * deviations of the walk in O(k log k) time instead of O(p).
+ * deviations of the walk in O(k) time instead of O(p).
  *
  * returned value: 1 if the random walk is undefined, 0 otherwise, see
  * gsva_rnd_walk(); a gene set with missing values under na_use < 3 or with
@@ -269,9 +335,7 @@ gsva_rnd_walk_nas(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
   if (k_notna == 0 || k_notna == p || total_pos_sum == 0.0)
     return 1;
 
-  /* R_qsort_int_I() takes 1-based inclusive bounds, so 1, k_notna sorts
-   * ranks[0..k_notna-1] */
-  R_qsort_int_I(ranks, idx, 1, k_notna);
+  sort_positions(ctx, k_notna, p);
 
   rnd_walk_extremes(ranks, idx, weights, k_notna, p, total_pos_sum,
                     walkstatpos, walkstatneg);

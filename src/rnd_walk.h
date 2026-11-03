@@ -8,10 +8,12 @@
  * gsva_score_genesets_R(), with a buffer sized for the largest gene set
  * that is reused for every gene set and column */
 typedef struct {
-  int     maxk;    /* size of the largest gene set */
-  int*    ranks;   /* 0-based positions of the genes in the gene set */
-  int*    idx;     /* permutation applied to 'ranks' by the sort */
-  double* weights; /* weights of the genes in the gene set */
+  int     maxk;     /* size of the largest gene set */
+  int*    ranks;    /* 0-based positions of the genes in the gene set */
+  int*    idx;      /* permutation applied to 'ranks' by the sort */
+  double* weights;  /* weights of the genes in the gene set */
+  int*    tmpranks; /* buffers for the radix sort of 'ranks' and 'idx' */
+  int*    tmpidx;
 } rndwalk_ctx_t;
 
 rndwalk_ctx_t*
