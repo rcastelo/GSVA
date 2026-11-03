@@ -117,7 +117,7 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
       walkstatpos = walkstatneg = NA_REAL;
       gsetidx = INTEGER(gsetidxR);
       if (anyna) {
-        undefwalk = gsva_rnd_walk_nas(gsetidx, k, decordstat_col,
+        undefwalk = gsva_rnd_walk_nas(walkctx, gsetidx, k, decordstat_col,
                                       symrnkstat_col, p - nnas, tau, nause,
                                       minsize, &walkstatpos, &walkstatneg,
                                       &wna);

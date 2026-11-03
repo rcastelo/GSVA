@@ -29,8 +29,9 @@ gsva_sparse_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
                      double* walkstatneg);
 
 int
-gsva_rnd_walk_nas(int* gsetidx, int k, int* decordstat, double* symrnkstat,
-                  int n, double tau, int na_use, int minsize,
-                  double* walkstatpos, double* walkstatneg, int* wna);
+gsva_rnd_walk_nas(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
+                  double* symrnkstat, int p, double tau, int na_use,
+                  int minsize, double* walkstatpos, double* walkstatneg,
+                  int* wna);
 
 #endif
