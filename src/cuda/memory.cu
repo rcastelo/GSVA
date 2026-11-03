@@ -47,6 +47,10 @@ void gsva_device_init(gsva_device_t *ptr, SEXP genesetsidxR, int G,
   for (int s = 0; s < S; s++) {
     SEXP gsetidxR = VECTOR_ELT(genesetsidxR, s);
     int k = length(gsetidxR);
+    if (k > GSVA_MAX_GPU_GSET_SIZE) {
+      error("Gene set %d has %d genes, exceeding GPU limit of %d.",
+            s + 1, k, GSVA_MAX_GPU_GSET_SIZE);
+    }
     if (k > ptr->max_k)
       ptr->max_k = k;
   }

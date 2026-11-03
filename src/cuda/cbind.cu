@@ -332,3 +332,11 @@ SEXP gsva_score_genesets_gpu_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
 
   return R_ExecWithCleanup(gsva_score_body, &job, gsva_score_cleanup, &job);
 }
+
+SEXP gsva_cuda_max_gset_size_R(void) {
+  SEXP res;
+  PROTECT(res = allocVector(INTSXP, 1));
+  INTEGER(res)[0] = GSVA_MAX_GPU_GSET_SIZE;
+  UNPROTECT(1);
+  return res;
+}

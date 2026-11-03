@@ -14,6 +14,8 @@ gsva_score_genesets_gpu_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
                           SEXP sparseR, SEXP maxdiffR, SEXP absrnkR, SEXP tauR,
                           SEXP minsizeR, SEXP verboseR);
 
+SEXP gsva_cuda_max_gset_size_R(void);
+
 #ifdef __cplusplus
 }
 #endif

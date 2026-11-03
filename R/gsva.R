@@ -2551,13 +2551,22 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     n_cols  <- ncol(R)
     sco <- matrix(NA_real_, nrow = n_gsets, ncol = n_cols)
 
-    ## The GPU sparse walk is not yet implemented, and the walk
-    ## kernels are instantiated for at most 4096 members per gene set
-    ## (larger sets would be silently truncated).
-    if (!any_na && !sparse && device == "gpu" &&
-        max(lengths(geneSetsIdx)) <= 4096L) {
-        gpu_idxs <- seq_len(n_gsets)
-        cpu_idxs <- integer(0)
+    ## The GPU sparse walk is not yet implemented.
+    if (!any_na && !sparse && device == "gpu") {
+        gset_sizes  <- lengths(geneSetsIdx)
+        max_gpu_sz  <- .gsva_cuda_max_gset_size()
+        gpu_idxs    <- which(gset_sizes <= max_gpu_sz)
+        cpu_idxs    <- which(gset_sizes >  max_gpu_sz)
+
+        if (length(cpu_idxs) > 0 && verbose) {
+            n_gpu_gsets <- length(gpu_idxs)
+            n_cpu_gsets <- length(cpu_idxs)
+            max_csize   <- max(gset_sizes[cpu_idxs])
+            cli_alert_info(
+                c("Hybrid GPU/CPU dispatch: {n_gpu_gsets} gene sets at most {max_gpu_sz} genes on GPU",
+                  "{n_cpu_gsets} gene sets max {max_csize} genes on CPU")
+            )
+        }
     } else {
         gpu_idxs <- integer(0)
         cpu_idxs <- seq_len(n_gsets)
