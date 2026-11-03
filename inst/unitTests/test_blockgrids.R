@@ -1,7 +1,8 @@
 ## the blocks of rows and columns in which GSVA processes data stored in
 ## chunks, such as in HDF5 or Parquet files, are aligned with those chunks,
 ## without growing beyond the blocks calculated without alignment, while the
-## blocks of data not stored in chunks are the same as without alignment
+## blocks of data not stored in chunks are the same as without alignment,
+## balanced among the workers, see test_balanced_blocks()
 test_blockgrids <- function() {
 
     message("Running unit tests for block grids aligned with chunks")
@@ -14,20 +15,23 @@ test_blockgrids <- function() {
 
     ## blocks calculated without alignment, as before aligning them: with a
     ## finite maximum memory, as many rows or columns as fit in it and,
-    ## otherwise, the default block length, split among the workers
+    ## otherwise, the default block length, split among the workers, and then
+    ## balanced among them
     unaligned <- function(X, nworkers, maxmem, whdim) {
-        autogrid <- if (whdim == 1) rowAutoGrid else colAutoGrid
-        if (is.finite(maxmem)) {
+        if (is.finite(maxmem))
             n <- GSVA:::.units_per_block(X, whdim, nworkers, maxmem)
-            return(if (whdim == 1) rowAutoGrid(X, nrow=n)
-                   else colAutoGrid(X, ncol=n))
+        else {
+            if (nworkers == 1 && !is(X, "DelayedMatrix"))
+                return(DummyArrayGrid(dim(X)))
+            mbl <- min(.Machine$integer.max,
+                       getAutoBlockLength(type(X)) / nworkers)
+            ebl <- max(1, ceiling(dim(X)[whdim] / nworkers) *
+                          as.numeric(dim(X)[-whdim]))
+            n <- min(max(1, floor(min(mbl, ebl) / max(1, dim(X)[-whdim]))),
+                     dim(X)[whdim])
         }
-        if (nworkers == 1 && !is(X, "DelayedMatrix"))
-            return(DummyArrayGrid(dim(X)))
-        mbl <- min(.Machine$integer.max, getAutoBlockLength(type(X)) / nworkers)
-        ebl <- max(1, ceiling(dim(X)[whdim] / nworkers) *
-                      as.numeric(dim(X)[-whdim]))
-        autogrid(X, block.length=min(mbl, ebl))
+        n <- GSVA:::.balance_blocks(n, X, whdim, nworkers)
+        if (whdim == 1) rowAutoGrid(X, nrow=n) else colAutoGrid(X, ncol=n)
     }
 
     set.seed(123)
@@ -339,4 +343,58 @@ test_blockprocessing_dopar_workers <- function() {
                              x11=X[91, 1], BPREDO=res, BPPARAM=bpparam)
     checkTrue(all(bpok(res)))
     checkEqualsNumeric(X * 2, do.call("rbind", res))
+}
+
+## with more than one worker, the number of blocks is a multiple of the number
+## of workers, so that no worker is idle in the last round of blocks, by
+## narrowing the blocks while keeping their number of rounds, and blocks of
+## data stored in chunks keep taking whole chunks
+test_balanced_blocks <- function() {
+
+    message("Running unit tests for blocks balanced among the workers")
+
+    suppressPackageStartupMessages({
+        library(DelayedArray)
+        library(HDF5Array)
+    })
+
+    X <- matrix(0, nrow=2, ncol=1000000)
+    bb <- function(n, nworkers) GSVA:::.balance_blocks(n, X, 2L, nworkers)
+    ## blocks of the scores of 1,000,000 cells with 10 workers, which were 11,
+    ## 23 and 55, in 2, 3 and 6 rounds, become 20, 30 and 60
+    for (x in list(c(93982, 50000, 20), c(43546, 33334, 30),
+                   c(18328, 16667, 60))) {
+        w <- bb(as.integer(x[1]), 10L)
+        checkIdentical(w, as.integer(x[2]))
+        checkEqualsNumeric(ceiling(ncol(X) / w), x[3])
+    }
+    ## blocks already balanced, a single worker or a single block, unchanged
+    checkIdentical(bb(100000L, 10L), 100000L)
+    checkIdentical(bb(93982L, 1L), 93982L)
+    checkIdentical(bb(1000000L, 10L), 1000000L)
+    ## blocks that do not split evenly: 3000 columns in 120 blocks of 25 with
+    ## 7 workers, 18 rounds, become 125 blocks of 24, still 18 rounds
+    X <- matrix(0, nrow=2, ncol=3000)
+    checkIdentical(bb(25L, 7L), 24L)
+
+    ## through the grids of columns and rows: with an automatic block size of
+    ## 100 columns of doubles, 3 workers take blocks of 33 columns or rows,
+    ## 34 blocks, which become 36 blocks of 31
+    oldautoblocksize <- getAutoBlockSize()
+    on.exit(setAutoBlockSize(oldautoblocksize))
+    setAutoBlockSize(8 * 1100 * 100)
+    X <- matrix(0, nrow=1100, ncol=1100)
+    checkIdentical(length(GSVA:::.colgridsize(X, 3L)), 36L)
+    checkIdentical(length(GSVA:::.rowgridsize(X, 3L)), 36L)
+    checkIdentical(ncol(GSVA:::.colgridsize(X, 3L)[[1L]]), 31L)
+    setAutoBlockSize(oldautoblocksize)
+
+    ## data in chunks of 31 columns, 3000 columns in 97 chunks: blocks of 6
+    ## chunks with 10 workers, 17 blocks in 2 rounds, become 20 blocks of 5
+    ## chunks, while blocks of 4 chunks with 3 workers, 25 blocks in 9 rounds,
+    ## cannot take less time with whole chunks and are kept
+    H <- writeHDF5Array(matrix(0, nrow=2, ncol=3000), chunkdim=c(2L, 31L))
+    checkIdentical(GSVA:::.balance_blocks(186L, H, 2L, 10L), 155L)
+    checkIdentical(length(colAutoGrid(H, ncol=155L)), 20L)
+    checkIdentical(GSVA:::.balance_blocks(124L, H, 2L, 3L), 124L)
 }

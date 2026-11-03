@@ -210,7 +210,9 @@
                                     dense=dense, heldmem=heldmem,
                                     sinkout=sinkout, sharedmem=sharedmem,
                                     sendblocks=sendblocks)
-      grid <- rowAutoGrid(X, nrow=.align_to_chunks(nrowblock, X, 1L))
+      grid <- rowAutoGrid(X, nrow=.balance_blocks(.align_to_chunks(nrowblock,
+                                                                   X, 1L),
+                                                  X, 1L, nworkers))
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
       ## by the number of workers and, in any case, it cannot exceed
@@ -221,7 +223,9 @@
       block.length <- min(max.block.length, expected.block.length)
       ## number of rows per block, as calculated by rowAutoGrid()
       nrowblock <- min(max(1, floor(block.length / max(1, ncol(X)))), nrow(X))
-      grid <- rowAutoGrid(X, nrow=.align_to_chunks(nrowblock, X, 1L))
+      grid <- rowAutoGrid(X, nrow=.balance_blocks(.align_to_chunks(nrowblock,
+                                                                   X, 1L),
+                                                  X, 1L, nworkers))
   }
   grid
 }
@@ -244,7 +248,9 @@
                                     dense=dense, heldmem=heldmem,
                                     sinkout=sinkout, sharedmem=sharedmem,
                                     sendblocks=sendblocks)
-      grid <- colAutoGrid(X, ncol=.align_to_chunks(ncolblock, X, 2L))
+      grid <- colAutoGrid(X, ncol=.balance_blocks(.align_to_chunks(ncolblock,
+                                                                   X, 2L),
+                                                  X, 2L, nworkers))
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
       ## by the number of workers and, in any case, it cannot exceed
@@ -255,7 +261,9 @@
       block.length <- min(max.block.length, expected.block.length)
       ## number of columns per block, as calculated by colAutoGrid()
       ncolblock <- min(max(1, floor(block.length / max(1, nrow(X)))), ncol(X))
-      grid <- colAutoGrid(X, ncol=.align_to_chunks(ncolblock, X, 2L))
+      grid <- colAutoGrid(X, ncol=.balance_blocks(.align_to_chunks(ncolblock,
+                                                                   X, 2L),
+                                                  X, 2L, nworkers))
   }
   grid
 }
@@ -271,6 +279,37 @@
     if (!is.null(cd) && cd[whdim] > 0 && n >= cd[whdim])
         n <- (n %/% cd[whdim]) * cd[whdim]
     as.integer(n)
+}
+
+## with more than one worker, narrow the blocks of width 'n' along the
+## dimension 'whdim' of 'X' so that their number is a multiple of 'nworkers',
+## spreading the rows or columns of 'X' evenly among them. the workers process
+## the blocks in rounds of 'nworkers' blocks, so that a last round with fewer
+## blocks leaves the other workers idle while it lasts as long as the previous
+## ones, e.g., 11 blocks take two rounds of 10 workers, as long as 20 blocks of
+## about half their width. the blocks keep the number of rounds of blocks of
+## width 'n' and only become narrower, so that they still fit in the memory
+## behind 'n'; their number may be slightly smaller than that multiple when
+## the rows or columns do not split evenly into blocks of the same width.
+## when 'n' is a multiple of the width of the chunks of 'X', see
+## .align_to_chunks(), blocks keep taking whole chunks, which may leave their
+## number unchanged. with a single block, 'X' is not split, as without
+## parallelism
+#' @importFrom DelayedArray chunkdim
+.balance_blocks <- function(n, X, whdim, nworkers) {
+    nunits <- dim(X)[whdim]
+    if (nworkers < 2L || n < 1L || n >= nunits)
+        return(as.integer(n))
+
+    ## widths in multiples of the width 'u' of the chunks or of one row or
+    ## column, of which 'X' has 'm'
+    u <- 1
+    cd <- if (is(X, "DelayedArray")) chunkdim(X) else NULL
+    if (!is.null(cd) && cd[whdim] > 0 && n >= cd[whdim] && n %% cd[whdim] == 0)
+        u <- cd[whdim]
+    m <- ceiling(nunits / u)
+    rounds <- ceiling(ceiling(m / (n %/% u)) / nworkers)
+    as.integer(ceiling(m / (rounds * nworkers)) * u)
 }
 
 #' @importClassesFrom IRanges IRanges
