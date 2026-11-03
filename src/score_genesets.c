@@ -117,16 +117,16 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
       walkstatpos = walkstatneg = NA_REAL;
       gsetidx = INTEGER(gsetidxR);
       if (anyna) {
-        undefwalk = gsva_rnd_walk_nas(gsetidx, k, decordstat_col,
+        undefwalk = gsva_rnd_walk_nas(walkctx, gsetidx, k, decordstat_col,
                                       symrnkstat_col, p - nnas, tau, nause,
                                       minsize, &walkstatpos, &walkstatneg,
                                       &wna);
       } else {
         if (sparse && nzeros_col > 0)
-          undefwalk = gsva_sparse_rnd_walk(gsetidx, k, decordstat_col,
-                                           symrnkstat_col, p, tau, nzeros_col,
-                                           zerosymrnkstat, &walkstatpos,
-                                           &walkstatneg);
+          undefwalk = gsva_sparse_rnd_walk(walkctx, gsetidx, k,
+                                           decordstat_col, symrnkstat_col, p,
+                                           tau, nzeros_col, zerosymrnkstat,
+                                           &walkstatpos, &walkstatneg);
         else
           undefwalk = gsva_rnd_walk(walkctx, gsetidx, k, decordstat_col,
                                     symrnkstat_col, p, tau, &walkstatpos,
