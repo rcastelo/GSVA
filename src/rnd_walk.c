@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <limits.h>
 #include <math.h>
 #include <R_ext/Utils.h>
 #include "rnd_walk.h"
@@ -34,9 +35,10 @@ rndwalk_ctx_create(SEXP genesetsidxR) {
  * permutation to ctx->idx[0..m-1]. positions are integers in [0, p), so they
  * are sorted with a least significant digit (LSD) radix sort on 8-bit
  * digits, which takes one pass over the 'm' positions for each 8-bit digit
- * of p - 1, i.e., two passes for p <= 2^16 and three for p <= 2^24, and
- * reduces the cost of the sort from O(m log m) to O(m). each pass counts the
- * positions with each of the 256 values of the digit, and moves them, in a
+ * of p - 1, i.e., two passes for p <= 2^16, three for p <= 2^24 and four for
+ * larger p, which as an int is smaller than 2^31, and reduces the cost of
+ * the sort from O(m log m) to O(m). each pass counts the positions with
+ * each of the 256 values of the digit, and moves them, in a
  * stable way, between 'ranks' and 'idx' and the buffers 'tmpranks' and
  * 'tmpidx'. passes where all positions have the same digit are skipped.
  * because each pass also goes through the 256 counts, a comparison sort with
@@ -62,7 +64,10 @@ sort_positions(rndwalk_ctx_t* ctx, int m, int p) {
     return;
   }
 
-  for (int shift=0; ((p - 1) >> shift) > 0; shift += 8) {
+  /* shifting an int by its width or more is undefined behavior, so 'shift'
+   * is bounded before (p - 1) >> shift is evaluated */
+  for (int shift=0; shift < (int) (sizeof(int) * CHAR_BIT) &&
+                    ((p - 1) >> shift) > 0; shift += 8) {
     int  sum = 0;
     int* tmp;
 
