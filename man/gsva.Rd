@@ -21,7 +21,8 @@
   param,
   verbose = TRUE,
   BPPARAM = SerialParam(progressbar = verbose),
-  maxmem = "auto"
+  maxmem = "auto",
+  device = c("auto", "cpu", "gpu")
 )
 
 \S4method{gsva}{plageParam}(
@@ -110,6 +111,10 @@ memory it estimates they require exceeds \code{maxmem}, suggesting to use fewer
 parallel workers or a larger \code{maxmem}. The memory taken by each R process
 can be set with the option \code{GSVA.workermem}, in bytes, and this check can be
 disabled with \code{options(GSVA.check_memory=FALSE)}.}
+
+\item{device}{The computational device to use. Options are "auto" (default),
+"cpu", or "gpu". When set to "auto", the function attempts to use the GPU,
+falling back to the CPU if no GPU is detected.}
 }
 \value{
 A gene-set by sample matrix of GSVA enrichment scores stored in a

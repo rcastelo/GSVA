@@ -26,24 +26,24 @@ test_mainAPI <- function() {
     library(cli)
     xf2 <- rbind(rep(1, 30), xf)
     gsvapar <- gsvaParam(xf2, gs)
-    out <- cli_fmt(g1 <- gsva(gsvapar, verbose=TRUE))
+    out <- cli_fmt(g1 <- gsva(gsvapar, verbose=TRUE, device="cpu"))
     checkTrue(grepl("1 row with constant values throughout the columns", out[3]))
 
-    g1 <- gsva(gsvaParam(exprData=xf, geneSets=gs), verbose=FALSE)
+    g1 <- gsva(gsvaParam(exprData=xf, geneSets=gs), verbose=FALSE, device="cpu")
     checkIdentical(class(xf), class(g1))
     checkEquals(names(gs), rownames(g1))
     checkEquals(colnames(xf), colnames(g1))
     checkTrue(min(g1) >= -1 && (max(g1) <= 1))
     checkTrue(!any(is.na(g1)))
 
-    g2 <- gsva(gsvaParam(exprData=xi, geneSets=gs, kcdf="Poisson"), verbose=FALSE)
+    g2 <- gsva(gsvaParam(exprData=xi, geneSets=gs, kcdf="Poisson"), verbose=FALSE, device="cpu")
     checkIdentical(class(xi), class(g2))
     checkEquals(names(gs), rownames(g2))
     checkEquals(colnames(xi), colnames(g2))
     checkTrue(min(g2) >= -1 && (max(g2) <= 1))
     checkTrue(!any(is.na(g2)))
 
-    g3 <- gsva(gsvaParam(exprData=xf, geneSets=gs, kcdf="none"), verbose=FALSE)
+    g3 <- gsva(gsvaParam(exprData=xf, geneSets=gs, kcdf="none"), verbose=FALSE, device="cpu")
     checkIdentical(class(xf), class(g3))
     checkEquals(names(gs), rownames(g3))
     checkEquals(colnames(xf), colnames(g3))
@@ -54,7 +54,7 @@ test_mainAPI <- function() {
     checkException(g4 <- gsva(gsvaParam(exprData=xf, geneSets=gs,
                                         rowNorm="clr"), verbose=FALSE))
     g4 <- gsva(gsvaParam(exprData=abs(xf), geneSets=gs,
-                         rowNorm="clr"), verbose=FALSE)
+                         rowNorm="clr"), verbose=FALSE, device="cpu")
     checkIdentical(class(xf), class(g4))
     checkEquals(names(gs), rownames(g4))
     checkEquals(colnames(xf), colnames(g4))
@@ -62,7 +62,7 @@ test_mainAPI <- function() {
     checkTrue(!any(is.na(g4)))
 
     g5 <- gsva(gsvaParam(exprData=abs(xf), geneSets=gs,
-                         rowNorm="none"), verbose=FALSE)
+                         rowNorm="none"), verbose=FALSE, device="cpu")
     checkIdentical(class(xf), class(g5))
     checkEquals(names(gs), rownames(g5))
     checkEquals(colnames(xf), colnames(g5))

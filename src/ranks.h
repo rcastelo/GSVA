@@ -1,6 +1,10 @@
 #ifndef RANKS_H
 #define RANKS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <R.h>
 #include <Rdefines.h>
 
@@ -42,5 +46,9 @@ ranks2stats(ranks_ctx_t* ctx, int j, int* decordstat, double* symrnkstat,
 int
 ranks2stats_nas(ranks_ctx_t* ctx, int j, int* decordstat, double* symrnkstat,
                 int* nzeros_col, double* zerosymrnkstat, int* nnas);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

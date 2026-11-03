@@ -31,12 +31,12 @@ test_spatial <- function() {
 
     ## calculate GSVA enrichment scores and check output
     gsvapar <- gsvaParam(spe, gsets, verbose=TRUE)
-    es <- gsva(gsvapar, verbose=TRUE)
+    es <- gsva(gsvapar, verbose=TRUE, device="cpu")
     checkTrue(is(es, "SpatialExperiment"))
     checkTrue(all(dim(es) == c(length(gsets), ncol(spe))))
     checkTrue(all(colnames(es) == colnames(spe)))
     checkTrue(is(geneSets(es), "list"))
-    out <- cli_fmt(es <- gsva(gsvapar, verbose=FALSE, maxmem="100K"))
+    out <- cli_fmt(es <- gsva(gsvapar, verbose=FALSE, device="cpu", maxmem="100K"))
     checkTrue(is(assay(es), "DelayedMatrix"))
     checkTrue(grepl("on-disk", out))
 

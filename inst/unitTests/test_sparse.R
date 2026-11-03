@@ -29,8 +29,8 @@ test_sparseMethods <- function(){
     M <- Matrix(m, sparse=TRUE)
     
     checkException(mg <- gsva(gsvaParam(x, gsets), verbose=TRUE))
-    out <- cli_fmt(mg <- gsva(gsvaParam(m, gsets), verbose=TRUE))
-    out <- cli_fmt(Mg <- gsva(gsvaParam(M, gsets, sparse=FALSE), verbose=TRUE))
+    out <- cli_fmt(mg <- gsva(gsvaParam(m, gsets), verbose=TRUE, device="cpu"))
+    out <- cli_fmt(Mg <- gsva(gsvaParam(M, gsets, sparse=FALSE), verbose=TRUE, device="cpu"))
     checkEqualsNumeric(mg, Mg)
 
     out <- cli_fmt(mp <- gsva(plageParam(m, gsets), verbose=TRUE))

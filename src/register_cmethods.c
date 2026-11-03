@@ -3,6 +3,10 @@
 #include <Rdefines.h>
 #include <R_ext/Rdynload.h>
 
+#ifdef HAVE_CUDA
+#include "cuda/cbind.h"
+#endif
+
 /* prototypes of functions to be registered */
 
 SEXP
@@ -71,6 +75,9 @@ static R_CallMethodDef callMethods[] = {
   {"ecdfvals_dense_to_dense_nas_R", (DL_FUNC) &ecdfvals_dense_to_dense_nas_R, 2},
   {"gsva_score_genesets_R", (DL_FUNC) &gsva_score_genesets_R, 11},
   {"avg_score_genesets_R", (DL_FUNC) &avg_score_genesets_R, 6},
+#ifdef HAVE_CUDA
+  {"gsva_score_genesets_gpu_R", (DL_FUNC) &gsva_score_genesets_gpu_R, 9},
+#endif
   {"fetch_row_nzvals_R", (DL_FUNC) &fetch_row_nzvals_R, 3},
   {"rowbycols_stats_sparse_R", (DL_FUNC) &rowbycols_stats_sparse_R, 3},
   {NULL, NULL, 0}

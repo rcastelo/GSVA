@@ -372,7 +372,11 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
             funargs <- c(funargs, list(rankExprData=inputData))
         } else
             funargs <- c(funargs, list(recompute_nzcount=TRUE))
+
         assay <- "gsvaranks"
+        ## the GPU code path is incompatible with the CPU multiprocess workers
+        ## of gsvaMap(): the scores are always computed on the CPU
+        funargs <- c(funargs, list(device="cpu"))
 
     } else
         cli_abort(c("x"="Internal error, invalid FUN argument."))

@@ -120,7 +120,7 @@ test_mapReduce <- function() {
                        assay(gsvaredranksfls, "gsvaranks"))
 
     ## calculate column GSVA scores without map-reduce
-    gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+    gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE, device="cpu")
 
     ## calculate column GSVA scores with map-reduce
     gsvaesmapred <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, verbose=FALSE,
@@ -189,7 +189,7 @@ test_mapReduce <- function() {
     ## check with input expression data stored in a matrix
     expr <- as(logcounts(sce), "matrix")
     gsvapar <- gsvaParam(expr, gsets, verbose=FALSE)
-    gsvaes <- gsva(gsvapar, verbose=FALSE)
+    gsvaes <- gsva(gsvapar, verbose=FALSE, device="cpu")
     ## set output="HDF5" once to test stripping of attributes and wrapping into an SE for saving
     gsvarnorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, output="HDF5", verbose=FALSE, BTPARAM=btpar),
                             verbose=FALSE)
@@ -269,7 +269,7 @@ test_mapReduceParquet <- function() {
         gsvapar <- gsvaParam(input, gsets, verbose=FALSE)
         gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
         gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
-        gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+        gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE, device="cpu")
 
         ## row-normalized values mapped by rows
         rnormpaths <- gsvaMap(gsvaRowNorm, gsvapar, output="Parquet",
@@ -294,7 +294,7 @@ test_mapReduceParquet <- function() {
 
         ## scores from reduced ranks read from the Parquet files, and from
         ## the Parquet files given as input to gsvaMap()
-        gsvaes2 <- gsvaColScores(gsvaranks2, verbose=FALSE)
+        gsvaes2 <- gsvaColScores(gsvaranks2, verbose=FALSE, device="cpu")
         checkEqualsNumeric(getvals(gsvaes, "es"), getvals(gsvaes2, "es"))
         gsvaes3 <- gsvaReduce(gsvaMap(gsvaColScores, rankspaths,
                                       verbose=FALSE, BTPARAM=btpar),
@@ -354,7 +354,7 @@ test_mapReduceScoresOutput <- function() {
                                                         verbose=FALSE),
                                               verbose=FALSE),
                                   verbose=FALSE)
-        gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+        gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE, device="cpu")
 
         for (fmt in formats) {
             espaths <- gsvaMap(gsvaColScores, gsvaranks, output=fmt,
@@ -442,7 +442,7 @@ test_mapReduceRedo <- function() {
     gsvapar <- gsvaParam(y, gsets, verbose=FALSE)
     gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
     gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
-    gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+    gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE, device="cpu")
     btparranks <- newbtpar()
     rankspaths <- gsvaMap(gsvaColRanks, gsvarnorm, output="HDF5",
                           verbose=FALSE, BTPARAM=btparranks)

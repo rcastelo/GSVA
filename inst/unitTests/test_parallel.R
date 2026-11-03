@@ -29,14 +29,14 @@ test_parallel <- function() {
 
     ## estimate GSVA enrichment scores with and without parallel execution
     ## and check that they are identical
-    es_serial <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE)
+    es_serial <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE, device="cpu")
     es_parallel <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE,
-                        BPPARAM=MulticoreParam(workers=2))
+                        BPPARAM=MulticoreParam(workers=2), device="cpu")
     checkIdentical(es_serial, es_parallel)
 
     M[1, 2] <- NA
     checkException(gsva(gsvaParam(M, gsets, kcdf="Gaussian", verbose=FALSE),
-			verbose=FALSE, BPPARAM=MulticoreParam(workers=2)))
+			verbose=FALSE, BPPARAM=MulticoreParam(workers=2), device="cpu"))
 }
 
 test_parallel_bpparam_unchanged <- function() {

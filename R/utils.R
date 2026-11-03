@@ -1953,3 +1953,10 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     ap <- c(ap, paste0(ap, ".db"))
     return(any(ap %in% rownames(installed.packages())))
 }
+
+.gsva_cuda_available <- function() {
+    tryCatch({
+        getNativeSymbolInfo("gsva_score_genesets_gpu_R", PACKAGE = "GSVA")
+        TRUE
+    }, error = function(e) FALSE)
+}
