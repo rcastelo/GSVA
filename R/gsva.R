@@ -1917,9 +1917,15 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     whz_gset <- intersect(gset, whz)
     if (length(whz_gset) > 0) {                 ## if gene set has zeros, then
         whz2 <- integer(length(whz))            ## create a new vector where
-        whz_gset2 <- round(seq(1, length(whz2), ## redistribute gene set zeros
-                               length.out=length(whz_gset)))
-        whz2[whz_gset2] <- whz_gset             ## evenly among all zeros
+        step <- 0                               ## redistribute gene set zeros
+        if (length(whz_gset) > 1)               ## evenly among all zeros, at
+            step <- (length(whz) - 1) / (length(whz_gset) - 1)
+        ## positions 1 + i * step, i=0,...,length(whz_gset)-1, rounding halves
+        ## up, as round() does in the C code, instead of rounding them to the
+        ## even integer, as R's round() does, e.g., round(2.5) == 2 in R or
+        ## whz_gset2 <- round(seq(1, length(whz2), length.out=length(whz_gset)))
+        whz_gset2 <- floor((seq_along(whz_gset) - 1) * step + 1 + 0.5)
+        whz2[whz_gset2] <- whz_gset
         whz2[whz2 == 0] <- setdiff(whz, whz_gset)  ## fill in remaining zeros
         nnz <- length(dos) - length(whz)        ## number of nonzero values
         dos2[whz2] <- nnz + seq_along(whz2)     ## assign new dos to rearranged
