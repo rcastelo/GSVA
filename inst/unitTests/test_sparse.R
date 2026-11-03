@@ -1,3 +1,5 @@
+source(system.file("unitTests", "test_helpers.R", package = "GSVA"))
+
 test_sparseMethods <- function(){
     message("Running unit tests for sparse methods")
     
@@ -32,6 +34,13 @@ test_sparseMethods <- function(){
     out <- cli_fmt(mg <- gsva(gsvaParam(m, gsets), verbose=TRUE, device="cpu"))
     out <- cli_fmt(Mg <- gsva(gsvaParam(M, gsets, sparse=FALSE), verbose=TRUE, device="cpu"))
     checkEqualsNumeric(mg, Mg)
+    .run_with_gpu({
+        mg_gpu <- gsva(gsvaParam(m, gsets), verbose=FALSE, device="gpu")
+        .check_gpu_equiv(mg, mg_gpu)
+
+        Mg_gpu <- gsva(gsvaParam(M, gsets, sparse=FALSE), verbose=FALSE, device="gpu")
+        .check_gpu_equiv(Mg, Mg_gpu)
+    })
 
     out <- cli_fmt(mp <- gsva(plageParam(m, gsets), verbose=TRUE))
     out <- cli_fmt(Mp <- gsva(plageParam(M, gsets), verbose=TRUE))
@@ -187,6 +196,73 @@ test_kcdfvals <- function() {
     checkEqualsNumeric(res_R_sparse_to_sparse, res_C_sparseh5_to_sparseh5, tolerance=0.0001)
 }
 
+test_sparseWalkInterpolation <- function() {
+    message("Running unit tests for the sparse walk interpolation")
+
+    suppressPackageStartupMessages(library(Matrix))
+
+    set.seed(42)
+    p <- 2000L                     ## genes
+    n <- 2000L                     ## cells
+    m <- 100L                      ## gene set size
+    n_gsets <- 200L
+    nnz <- as.integer(round(0.03 * p)) ## expressed genes per cell
+
+    ## ranks in sparse format; absent entries have rank zero
+    ii <- integer(0); jj <- integer(0); xx <- numeric(0)
+    for (j in seq_len(n)) {
+        idx <- sample.int(p, nnz)
+        ii <- c(ii, idx)
+        jj <- c(jj, rep(j, nnz))
+        xx <- c(xx, sample.int(nnz))
+    }
+    ranks <- as(Matrix::sparseMatrix(i = ii, j = jj, x = xx, dims = c(p, n),
+                                     dimnames = list(paste0("g", seq_len(p)),
+                                                     paste0("c", seq_len(n)))),
+                "dgCMatrix")
+
+    gene_names <- paste0("g", seq_len(p))
+    gsetsidx <- lapply(seq_len(n_gsets),
+                       function(s) match(paste0("g", sample.int(p, m)),
+                                         gene_names))
+
+    ## the set must be small enough to be dispatched to the GPU kernel, and
+    ## must contain zero-expressed genes, otherwise this test would pass
+    ## without ever exercising the interpolated zero tail
+    checkTrue(m <= GSVA:::.gsva_cuda_max_gset_size())
+    checkTrue(all(vapply(gsetsidx[seq_len(5)],
+                         function(g) sum(ranks[g, 1L] == 0) > 1L,
+                         logical(1))))
+
+    run_walk <- function(device) {
+        wna_env <- new.env()
+        assign("w", FALSE, envir = wna_env)
+        assign("u", 0, envir = wna_env)
+        do.call(GSVA:::.gsva_score_genesets,
+                list(R = ranks, geneSetsIdx = gsetsidx, intrnks = FALSE,
+                     sparse = TRUE, maxDiff = TRUE, absRanking = FALSE,
+                     tau = 1, any_na = FALSE, na_use = "everything",
+                     minSize = 1L, wna_env = wna_env, verbose = FALSE,
+                     device = device))
+    }
+
+    cpu <- run_walk("cpu")
+    checkTrue(!any(is.na(cpu)))
+
+    .run_with_gpu({
+        gpu <- run_walk("gpu")
+        maxabs <- max(abs(as.vector(cpu) - as.vector(gpu)))
+        checkTrue(maxabs < 1e-6,
+                  msg = sprintf(paste("largest CPU/GPU enrichment-score",
+                                      "discrepancy %.3e exceeds the 1e-6",
+                                      "per-element bound; a discrepancy means",
+                                      "that the zero-position interpolation of",
+                                      "gsea_sparse_walk_kernel disagrees with",
+                                      "src/rnd_walk.c on some event position"),
+                                maxabs))
+    })
+}
+
 test_svt_lacunar <- function() {
     message("Running unit tests for ECDF and KCDF values on lacunar SVT leaves")
 
@@ -229,4 +305,69 @@ test_svt_lacunar <- function() {
                        as.matrix(GSVA:::.ecdfvals_svt_to_svt(svt, FALSE)))
     checkEqualsNumeric(matrix(0, nrow=3, ncol=2),
                        as.matrix(GSVA:::.kcdfvals_svt_to_svt(svt, TRUE, FALSE)))
+}
+
+test_undefinedWalks <- function() {
+    message("Running unit tests for undefined random walks on the GPU path")
+
+    runWalk <- function(R, gsetsidx, sparse, device) {
+        wna_env <- new.env()
+        assign("w", FALSE, envir = wna_env)
+        assign("u", 0, envir = wna_env)
+        sco <- do.call(GSVA:::.gsva_score_genesets,
+                       list(R = R, geneSetsIdx = gsetsidx, intrnks = FALSE,
+                            sparse = sparse, maxDiff = TRUE,
+                            absRanking = FALSE, tau = 1, any_na = FALSE,
+                            na_use = "everything", minSize = 1L,
+                            wna_env = wna_env, verbose = FALSE,
+                            device = device))
+        list(sco = sco, nundef = get("u", envir = wna_env))
+    }
+
+    set.seed(123)
+    p <- 10L
+    ranks <- matrix(as.numeric(sample.int(p)), ncol = 1L,
+                    dimnames = list(paste0("g", seq_len(p)), "c1"))
+
+    ## a gene set with all the genes leaves no out-of-gene-set steps, a set
+    ## with only the gene at the middle rank has zero in-gene-set steps; both
+    ## make the walk undefined
+    midRank <- which(ranks[, 1L] == p / 2L)
+    checkTrue(identical(length(midRank), 1L))
+    gsetsidx <- list(allGenes = seq_len(p),
+                     midRank = as.integer(midRank),
+                     control = as.integer(c(1L, 3L, 7L)))
+
+    cpu <- runWalk(ranks, gsetsidx, FALSE, "cpu")
+    checkTrue(all(is.na(cpu$sco[1:2, , drop = FALSE])))
+    checkTrue(!any(is.na(cpu$sco[3, , drop = FALSE])))
+    checkEquals(cpu$nundef, 2)
+
+    .run_with_gpu({
+        gpu <- runWalk(ranks, gsetsidx, FALSE, "gpu")
+        checkEquals(is.na(gpu$sco), is.na(cpu$sco))
+        checkEqualsNumeric(cpu$sco[3, ], gpu$sco[3, ], tolerance = 1e-6)
+        checkEquals(gpu$nundef, cpu$nundef)
+    })
+
+    ## hybrid dispatch: sets larger than GSVA_MAX_GPU_GSET_SIZE run on the CPU
+    ## while the rest run on the GPU, and both counts have to add up
+    P <- 5000L
+    checkTrue(P > GSVA:::.gsva_cuda_max_gset_size())
+    set.seed(123)
+    ranks_big <- matrix(as.numeric(sample.int(P)), ncol = 1L,
+                        dimnames = list(paste0("g", seq_len(P)), "c1"))
+    mid_big <- which(ranks_big[, 1L] == P / 2L)
+    checkTrue(identical(length(mid_big), 1L))
+    gsetsidx_big <- list(gpuUndefined = as.integer(mid_big),
+                         cpuUndefined = seq_len(P))
+
+    cpu_big <- runWalk(ranks_big, gsetsidx_big, FALSE, "cpu")
+    checkEquals(cpu_big$nundef, 2)
+
+    .run_with_gpu({
+        gpu_big <- runWalk(ranks_big, gsetsidx_big, FALSE, "gpu")
+        checkEquals(is.na(gpu_big$sco), is.na(cpu_big$sco))
+        checkEquals(gpu_big$nundef, cpu_big$nundef)
+    })
 }
