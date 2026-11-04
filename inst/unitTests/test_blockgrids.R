@@ -102,10 +102,33 @@ test_units_per_block <- function() {
     checkIdentical(upb(1, maxmem), 50L)
     ## shared by two workers
     checkIdentical(upb(2, maxmem), 25L)
-    ## which take, with more than one worker, the memory of their R processes
+    ## which take, with the main R process, the memory of their R processes
     wm <- 1e6
-    checkIdentical(GSVA:::.units_per_block(X, 2L, 2, maxmem / frac + 2 * wm,
+    checkIdentical(GSVA:::.units_per_block(X, 2L, 2, maxmem / frac + 3 * wm,
                                            workermem=wm), 25L)
+    checkIdentical(GSVA:::.units_per_block(X, 2L, 1, maxmem / frac + wm,
+                                           workermem=wm), 50L)
+    ## which, by default, is the memory of this process besides the data of
+    ## the calculations, see .worker_mem(), and forked workers take a copy of
+    ## one third of sparse data, unless they are stored in a dgCMatrix object
+    oldopt <- options(GSVA.workermem=NULL)
+    on.exit(options(oldopt), add=TRUE)
+    extra <- GSVA:::.proc_extra_mem()
+    checkEqualsNumeric(GSVA:::.worker_mem(Inf), extra)
+    checkTrue(GSVA:::.worker_mem() > GSVA:::.worker_mem(insize))
+    checkEqualsNumeric(GSVA:::.worker_mem(session=FALSE), 0.8 * 1024^3)
+    checkTrue(GSVA:::.worker_mem(full=TRUE) <= GSVA:::.worker_mem())
+    ## measured with a full collection of garbage only for large data
+    checkTrue(!GSVA:::.large_data(dim(X)))
+    checkTrue(GSVA:::.large_data(c(1e4, 1e6), 4))
+    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, sparse=TRUE), 1e6)
+    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, sparse=TRUE, dgc=TRUE), 0)
+    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, sparse=FALSE), 0)
+    ## up to the small changes of the memory of this process between calls
+    wm <- GSVA:::.worker_mem(insize)
+    upbdef <- GSVA:::.units_per_block(X, 2L, 2, maxmem / frac + 3 * wm)
+    checkTrue(upbdef >= 24L && upbdef <= 26L)
+    options(oldopt)
     ## unless they leave no memory for the blocks, which are then as large as
     ## without them
     checkIdentical(GSVA:::.units_per_block(X, 2L, 2, maxmem / frac,

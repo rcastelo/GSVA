@@ -85,16 +85,21 @@ SLURM workload manager. To avoid setting any bound on the maximum memory,
 use \code{maxmem=Inf}. Note that the amount of main memory used in an R session
 or script may depend on other commands and packages used in that same
 session or script. In particular, each R process running GSVA, the main one
-and each of its parallel workers in \code{BPPARAM}, takes about 0.8 GB by itself
-for loading GSVA and the packages it depends on, including forked workers,
-such as those of a \code{\link[BiocParallel:MulticoreParam-class]{MulticoreParam}}
+and each of its parallel workers in \code{BPPARAM}, takes by itself the memory
+allocated by R in the session where GSVA runs, besides the expression data
+given to it, and about 0.3 GB more; loading GSVA and the packages it depends
+on takes about 0.6 GB in a new R session. This includes forked workers, such
+as those of a \code{\link[BiocParallel:MulticoreParam-class]{MulticoreParam}}
 object, which end up taking most of that memory as their own while they
-run. The memory that GSVA estimates includes the expression data given to
-it, with all the assays of a \code{SummarizedExperiment} object held in main
-memory, but not other objects of the R session, such as other large
-matrices or data sets, which reduce the memory actually available to GSVA;
-when such objects are present, consider setting \code{maxmem} to the memory that
-they leave. Before starting its calculations, GSVA gives a warning when the
+run, together with about one third of sparse expression data held in main
+memory, except when stored in a \code{dgCMatrix} object. The memory that GSVA
+estimates includes the expression data given to it, with all the assays of
+a \code{SummarizedExperiment} object held in main memory, and the other objects
+of the R session, once for each R process, which overestimates the memory
+of forked workers when these objects are large matrices, because forked
+workers share their memory with the main R process; when such objects are
+present, consider removing them before running GSVA. Before starting its
+calculations, GSVA gives a warning when the
 memory it estimates they require exceeds \code{maxmem}, suggesting to use fewer
 parallel workers or a larger \code{maxmem}. The memory taken by each R process
 can be set with the option \code{GSVA.workermem}, in bytes, and this check can be

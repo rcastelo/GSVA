@@ -121,11 +121,17 @@
 ## by .step_mem_factors(). the memory available to the blocks of the workers
 ## is what is left by the memory that remains allocated, see .fixed_mem(),
 ## from the fraction .mem_fraction_R, available to the allocations of R, of
-## the memory that the R processes of more than one worker, of 'workermem'
-## bytes each, see .worker_mem(), leave from 'maxmem', when they leave enough
-## for the memory that remains allocated; 'workermem=0' and 'sharedmem=FALSE'
-## when the workers do not share 'maxmem' but have each their own, such as the
-## jobs of gsvaMap(), whose blocks can then take each the whole of 'maxmem'.
+## the memory that the R processes, the main one and each of more than one
+## worker, of 'workermem' bytes each, leave from 'maxmem', when they leave
+## enough for the memory that remains allocated. by default, 'workermem' is
+## the memory of this process besides the data of the calculations that it
+## holds, see .worker_mem(), measured with a full collection of garbage when
+## 'X' is large, see .large_data(), together with its buffers to read 'X' from
+## disk, see .disk_read_mem(), and each forked worker takes besides a copy of
+## a part of those data, see .fork_copied_mem(); 'workermem=0' and
+## 'sharedmem=FALSE' when the workers do not share 'maxmem' but have each
+## their own, such as the jobs of gsvaMap(), whose blocks can then take each
+## the whole of 'maxmem'.
 ## the size of a row or column of 'X' stored on disk is the one of its
 ## dense form, which overestimates the size of sparse data. with 'dense=TRUE',
 ## the calculations convert each block of a sparse 'X' in main memory into a
@@ -149,7 +155,7 @@
 #' @importFrom S4Arrays is_sparse
 .units_per_block <- function(X, whdim, nworkers, maxmem, workfactor=2,
                              outfactor=1, outextra=0,
-                             workermem=.worker_mem(), dense=FALSE,
+                             workermem=NULL, dense=FALSE,
                              heldmem=.held_mem(), sinkout=FALSE,
                              sharedmem=TRUE, sendblocks=FALSE) {
     nunits <- dim(X)[whdim]
@@ -168,12 +174,24 @@
     fixed <- .fixed_mem(nunits, inunitbytes, whdim, sparse, inmemory,
                         outfactor, outextra, assembly,
                         outunitbytes=unitbytes, sinkout=sinkout) + heldmem
-    ## with more than one worker, their R processes take memory from 'maxmem',
-    ## unless they leave no memory for the blocks, when 'maxmem' cannot be
-    ## honored anyway, and smaller blocks would only make calculations slower
-    if (nworkers > 1 &&
-        .mem_fraction_R * (maxmem - nworkers * workermem) > fixed)
-        maxmem <- maxmem - nworkers * workermem
+    ## the main R process and, with more than one worker, their R processes
+    ## take memory from 'maxmem', unless they leave no memory for the blocks,
+    ## when 'maxmem' cannot be honored anyway, and smaller blocks would only
+    ## make calculations slower
+    copiedmem <- 0
+    if (is.null(workermem)) {
+        datamem <- (if (inmemory) nunits * inunitbytes else 0) + heldmem
+        workermem <- .worker_mem(datamem,
+                                 full=.large_data(dim(X), eltbytes)) +
+                     if (inmemory) 0 else .disk_read_mem()
+        copiedmem <- .fork_copied_mem(datamem, is_sparse(X),
+                                      is(X, "dgCMatrix"))
+    }
+    procmem <- workermem
+    if (nworkers > 1)
+        procmem <- procmem + nworkers * (workermem + copiedmem)
+    if (.mem_fraction_R * (maxmem - procmem) > fixed)
+        maxmem <- maxmem - procmem
     ## workers with their own memory each, such as the jobs of gsvaMap(),
     ## take each a block within the whole of it
     nsharing <- if (sharedmem) nworkers else 1
@@ -200,7 +218,7 @@
 #' @importFrom BiocGenerics type
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .rowgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
-                         outextra=0, workermem=.worker_mem(), dense=FALSE,
+                         outextra=0, workermem=NULL, dense=FALSE,
                          heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE,
                          sendblocks=FALSE) {
   grid <- DummyArrayGrid(dim(X))
@@ -238,7 +256,7 @@
 #' @importFrom BiocGenerics type
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .colgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
-                         outextra=0, workermem=.worker_mem(), dense=FALSE,
+                         outextra=0, workermem=NULL, dense=FALSE,
                          heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE,
                          sendblocks=FALSE) {
   grid <- DummyArrayGrid(dim(X))
