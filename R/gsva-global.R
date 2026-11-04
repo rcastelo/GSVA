@@ -14,3 +14,8 @@ gsva_global$check_memory <- TRUE
 ## while a step processes its input in blocks, such as the input data of
 ## gsva() while it runs the steps after the row normalization, see .held_mem()
 gsva_global$heldmem <- 0
+
+## memory in bytes of the matrices of the assays among the objects of
+## 'heldmem', which forked workers share with the main R process, see
+## .held_shared_mem()
+gsva_global$heldshared <- 0

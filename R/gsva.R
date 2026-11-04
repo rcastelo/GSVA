@@ -198,7 +198,11 @@ setMethod("gsva", signature(param="gsvaParam"),
               ## the input data in main memory remains allocated while the
               ## next steps run, which their blocks cannot take
               gsva_global$heldmem <- .input_held_mem(param)
-              on.exit(gsva_global$heldmem <- 0, add=TRUE)
+              gsva_global$heldshared <- .input_shared_mem(param)
+              on.exit({
+                  gsva_global$heldmem <- 0
+                  gsva_global$heldshared <- 0
+              }, add=TRUE)
 
               gsvaranks <- gsvaColRanks(rowNormExprData=gsvarnorm,
                                         verbose=verbose,
@@ -1018,9 +1022,10 @@ gsvaRowNorm <- function(param,
                             recompute_nzcount=FALSE, maxmem=maxmem,
                             verbose=verbose, mf=mf, densify=densify)
     container <- .input_held_mem(param)
+    shared <- .input_shared_mem(param)
     .check_step_mem(dataMatrix, 1L, first, last, ondisk, mf, BPPARAM, maxmem,
-                    densify=densify, container=container)
-    .hold_input_mem(dataMatrix, 1L, first, last, container)
+                    densify=densify, container=container, shared=shared)
+    .hold_input_mem(dataMatrix, 1L, first, last, container, shared=shared)
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=1,
@@ -1165,9 +1170,10 @@ gsvaColRanks <- function(rowNormExprData,
                             recompute_nzcount=FALSE, maxmem=maxmem,
                             verbose=verbose, mf=mf)
     container <- .input_held_mem(param)
+    shared <- .input_shared_mem(param)
     .check_step_mem(dataMatrix, 2L, first, last, ondisk, mf, BPPARAM, maxmem,
-                    container=container)
-    .hold_input_mem(dataMatrix, 2L, first, last, container)
+                    container=container, shared=shared)
+    .hold_input_mem(dataMatrix, 2L, first, last, container, shared=shared)
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=2,
@@ -1303,9 +1309,10 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                 recompute_nzcount=recompute_nzcount,
                                 maxmem=maxmem, verbose=verbose, mf=mf)
     container <- .input_held_mem(param)
+    shared <- .input_shared_mem(param)
     .check_step_mem(filtDataMatrix, 2L, first, last, ondisk, mf, BPPARAM,
-                    maxmem, container=container)
-    .hold_input_mem(filtDataMatrix, 2L, first, last, container)
+                    maxmem, container=container, shared=shared)
+    .hold_input_mem(filtDataMatrix, 2L, first, last, container, shared=shared)
 
     filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix, "GSVA",
                                                     first, last, whdim=2,

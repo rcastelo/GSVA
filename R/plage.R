@@ -46,10 +46,12 @@ setMethod("gsva", signature(param="plageParam"),
                                     else bpnworkers(BPPARAM))
               .check_plage_gram_mem(filtMappedGeneSets, gm)
               container <- .input_held_mem(param)
+              shared <- .input_shared_mem(param)
               .check_step_mem(filtDataMatrix, 2L, NA, NA, ondisk, mf, BPPARAM,
                               maxmem, dense=TRUE, extramem=gm$mem,
-                              container=container)
-              .hold_input_mem(filtDataMatrix, 2L, NA, NA, container)
+                              container=container, shared=shared)
+              .hold_input_mem(filtDataMatrix, 2L, NA, NA, container,
+                              shared=shared)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "PLAGE", first=NA,

@@ -124,6 +124,13 @@ test_units_per_block <- function() {
     checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, sparse=TRUE), 1e6)
     checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, sparse=TRUE, dgc=TRUE), 0)
     checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, sparse=FALSE), 0)
+    ## the data shared with forked workers are the matrices of the assays of
+    ## the input data, not the rest of its data, such as the names of cells
+    se <- SummarizedExperiment::SummarizedExperiment(
+              assays=list(counts=X, logcounts=DelayedArray(X)),
+              colData=S4Vectors::DataFrame(barcode=sprintf("cell%04d", 1:500)))
+    checkEqualsNumeric(GSVA:::.container_shared_mem(se, "counts"), insize)
+    checkTrue(GSVA:::.container_held_mem(se, "counts") > insize)
     ## up to the small changes of the memory of this process between calls
     wm <- GSVA:::.worker_mem(insize)
     upbdef <- GSVA:::.units_per_block(X, 2L, 2, maxmem / frac + 3 * wm)

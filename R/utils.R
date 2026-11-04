@@ -1234,6 +1234,13 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     as.numeric(gsva_global$heldmem)
 }
 
+## memory in bytes of the matrices of the assays among the objects held by
+## .held_mem(), which forked workers share with the main R process, see
+## .worker_mem()
+.held_shared_mem <- function() {
+    as.numeric(gsva_global$heldshared)
+}
+
 ## memory in bytes that the matrix 'X' takes in main memory, which is none
 ## when it is stored on disk
 #' @importFrom utils object.size
@@ -1277,6 +1284,32 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     .container_held_mem(get_exprData(param), get_assay(param))
 }
 
+## memory in bytes that the matrices of the assays of the container 'x' of
+## expression data take in main memory, see .container_held_mem(), whose
+## values are in large vectors that forked workers share with the main R
+## process, see .fork_copied_mem(), unlike the rest of its data, such as the
+## many character strings of the names of the cells of single-cell data,
+## which they end up copying, see .worker_mem()
+#' @importMethodsFrom SummarizedExperiment assays
+#' @importMethodsFrom Biobase assayData
+.container_shared_mem <- function(x, assay) {
+    if (is(x, "SummarizedExperiment"))
+        return(sum(vapply(assays(x, withDimnames=FALSE), .inmem_size,
+                          numeric(1))))
+    if (is(x, "ExpressionSet")) {
+        ad <- assayData(x)
+        nms <- if (is.environment(ad)) ls(ad) else names(ad)
+        return(sum(vapply(nms, function(nm) .inmem_size(ad[[nm]]),
+                          numeric(1))))
+    }
+
+    .inmem_size(unwrapData(x, assay))
+}
+
+.input_shared_mem <- function(param) {
+    .container_shared_mem(get_exprData(param), get_assay(param))
+}
+
 ## memory in bytes held, besides the memory of the step itself, while a step
 ## processes the input matrix 'X', restricted to dimensions 'dims' along
 ## 'whdim', from a container whose assays take 'container' bytes in main
@@ -1308,19 +1341,27 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## held by other objects, see .held_mem(), which the blocks of the
 ## calculations cannot take, while the calling function runs, restoring it
 ## when that function exits; 'container' is the memory that the assays of the
-## input data take in main memory, see .container_held_mem(). the part of
-## 'X' processed is not included, because the blocks of the calculations
-## include it when it is in main memory, see .units_per_block()
+## input data take in main memory, see .container_held_mem(), and 'shared'
+## the one of its matrices of assays among them, see .container_shared_mem(),
+## which is held likewise, see .held_shared_mem(). the part of 'X' processed
+## is not included, because the blocks of the calculations include it when
+## it is in main memory, see .units_per_block()
 .hold_input_mem <- function(X, whdim, first, last, container,
-                            envir=parent.frame()) {
+                            shared=.inmem_size(X), envir=parent.frame()) {
     dims <- dim(X)
     if (!is.na(first) || !is.na(last))
         dims[whdim] <- (if (is.na(last)) dims[whdim] else last) -
                        (if (is.na(first)) 1 else first) + 1
     old <- gsva_global$heldmem
+    oldshared <- gsva_global$heldshared
     gsva_global$heldmem <- old + .step_held_input(X, dims, whdim, FALSE,
                                                    container)
-    do.call(on.exit, list(substitute(gsva_global$heldmem <- old, list(old=old)),
+    gsva_global$heldshared <- oldshared +
+                              .step_held_input(X, dims, whdim, FALSE, shared)
+    do.call(on.exit, list(substitute({
+                              gsva_global$heldmem <- old
+                              gsva_global$heldshared <- oldshared
+                          }, list(old=old, oldshared=oldshared)),
                           add=TRUE), envir=envir)
 
     invisible(old)
@@ -1419,14 +1460,16 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## products of the genes of each gene set in PLAGE, see .plage_gram_mem().
 ## the memory of the container of 'X', 'container', see .container_held_mem(),
 ## and of 'X' itself remains allocated as given by .step_held_input(),
-## independently of whether the output is written to disk
+## independently of whether the output is written to disk, where 'shared' is
+## the memory of the matrices of its assays, see .container_shared_mem()
 ## input data in main memory, which is not loaded from disk, remains
 ## allocated when the calculations are done on disk
 #' @importFrom S4Arrays is_sparse
 #' @importFrom BiocGenerics type
 .check_step_mem <- function(X, whdim, first, last, ondisk, mf, BPPARAM,
                             maxmem, dense=FALSE, densify=FALSE,
-                            extramem=0, container=.inmem_size(X)) {
+                            extramem=0, container=.inmem_size(X),
+                            shared=.inmem_size(X)) {
     if (!gsva_global$check_memory || !getOption("GSVA.check_memory", TRUE))
         return(invisible(FALSE))
 
@@ -1440,9 +1483,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     nworkers <- .n_par_workers(BPPARAM, dims)
     heldmem <- .held_mem() + extramem +
                .step_held_input(X, dims, whdim, ondisk, container)
-    ## each R process takes the memory of this one, besides the input data
-    ## that it holds, see .worker_mem()
-    permem <- .worker_mem(.held_mem() + container,
+    ## each R process takes the memory of this one, besides the matrices of
+    ## the assays of the input data that it holds, see .worker_mem()
+    permem <- .worker_mem(.held_shared_mem() + shared,
                           full=.large_data(dims, eltbytes))
     need <- .step_mem_need(dims, insize, whdim, eltbytes,
                            is_sparse(X) && !dense, !ondisk, mf, nworkers,
@@ -1490,9 +1533,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     rownormnone <- .get_rowNorm(param) == "none"
     held <- max(0, container - .inmem_size(X))
     inres <- !is(X, "DelayedArray")
-    ## each R process takes the memory of this one, besides the input data
-    ## that it holds, see .worker_mem()
-    permem <- .worker_mem(container, full=.large_data(dims))
+    ## each R process takes the memory of this one, besides the matrices of
+    ## the assays of the input data that it holds, see .worker_mem()
+    permem <- .worker_mem(.input_shared_mem(param), full=.large_data(dims))
     need <- 0
     for (st in steps) {
         mf <- .step_mem_factors(st$step, ngs=ngs, sparse=sparse && !densify,

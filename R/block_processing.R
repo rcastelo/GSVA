@@ -180,7 +180,11 @@
     ## make calculations slower
     copiedmem <- 0
     if (is.null(workermem)) {
-        datamem <- (if (inmemory) nunits * inunitbytes else 0) + heldmem
+        ## the data held besides 'X' are shared with forked workers, except
+        ## for the part of those of .held_mem() other than matrices of
+        ## assays, see .held_shared_mem()
+        datamem <- (if (inmemory) nunits * inunitbytes else 0) + heldmem -
+                   max(0, .held_mem() - .held_shared_mem())
         workermem <- .worker_mem(datamem,
                                  full=.large_data(dim(X), eltbytes)) +
                      if (inmemory) 0 else .disk_read_mem()

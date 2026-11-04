@@ -40,9 +40,11 @@ setMethod("gsva", signature(param="avgParam"),
                                       recompute_nzcount=FALSE, maxmem=maxmem,
                                       verbose=verbose, mf=mf)
               container <- .input_held_mem(param)
+              shared <- .input_shared_mem(param)
               .check_step_mem(filtDataMatrix, 2L, NA, NA, ondisk, mf, BPPARAM,
-                              maxmem, container=container)
-              .hold_input_mem(filtDataMatrix, 2L, NA, NA, container)
+                              maxmem, container=container, shared=shared)
+              .hold_input_mem(filtDataMatrix, 2L, NA, NA, container,
+                              shared=shared)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "average", first=NA,
