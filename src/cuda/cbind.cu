@@ -183,6 +183,7 @@ static void ranks2stats_gpu(ranks_ctx_t *ctx, int G, int block_c,
 
 static void gsva_rnd_walk_gpu_dispatch(gsva_float_t *h_es, int S, int G, int C,
                                        gsva_float_t tau, int score_type,
+                                       int sparse_mode,
                                        gsva_device_t *device, int stream_idx) {
   cudaStream_t stream = device->stream[stream_idx];
   size_t es_size = (size_t)S * C * sizeof(gsva_float_t);
@@ -193,36 +194,70 @@ static void gsva_rnd_walk_gpu_dispatch(gsva_float_t *h_es, int S, int G, int C,
 
     dim3 numBlocks(C, cat_s);
 
-    if (cat == 0) {
-      gsea_walk_kernel<5, 32><<<numBlocks, 32, 0, stream>>>(
-          device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-          device->symrnkstat[stream_idx], device->es[stream_idx],
-          device->cat_gset[cat], S, G, C, tau, score_type);
-    } else if (cat == 1) {
-      gsea_walk_kernel<2, 128><<<numBlocks, 128, 0, stream>>>(
-          device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-          device->symrnkstat[stream_idx], device->es[stream_idx],
-          device->cat_gset[cat], S, G, C, tau, score_type);
-    } else if (cat == 2) {
-      gsea_walk_kernel<3, 256><<<numBlocks, 256, 0, stream>>>(
-          device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-          device->symrnkstat[stream_idx], device->es[stream_idx],
-          device->cat_gset[cat], S, G, C, tau, score_type);
-    } else if (cat == 3) {
-      gsea_walk_kernel<8, 256><<<numBlocks, 256, 0, stream>>>(
-          device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-          device->symrnkstat[stream_idx], device->es[stream_idx],
-          device->cat_gset[cat], S, G, C, tau, score_type);
+    if (sparse_mode != 0) {
+      if (cat == 0) {
+        gsea_sparse_walk_kernel<5, 32><<<numBlocks, 32, 0, stream>>>(
+            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+            device->symrnkstat[stream_idx], device->es[stream_idx],
+            device->cat_gset[cat], S, G, C, tau, score_type,
+            device->nnzpercell[stream_idx]);
+      } else if (cat == 1) {
+        gsea_sparse_walk_kernel<2, 128><<<numBlocks, 128, 0, stream>>>(
+            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+            device->symrnkstat[stream_idx], device->es[stream_idx],
+            device->cat_gset[cat], S, G, C, tau, score_type,
+            device->nnzpercell[stream_idx]);
+      } else if (cat == 2) {
+        gsea_sparse_walk_kernel<3, 256><<<numBlocks, 256, 0, stream>>>(
+            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+            device->symrnkstat[stream_idx], device->es[stream_idx],
+            device->cat_gset[cat], S, G, C, tau, score_type,
+            device->nnzpercell[stream_idx]);
+      } else if (cat == 3) {
+        gsea_sparse_walk_kernel<8, 256><<<numBlocks, 256, 0, stream>>>(
+            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+            device->symrnkstat[stream_idx], device->es[stream_idx],
+            device->cat_gset[cat], S, G, C, tau, score_type,
+            device->nnzpercell[stream_idx]);
+      } else {
+        gsea_sparse_walk_kernel<8, 512><<<numBlocks, 512, 0, stream>>>(
+            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+            device->symrnkstat[stream_idx], device->es[stream_idx],
+            device->cat_gset[cat], S, G, C, tau, score_type,
+            device->nnzpercell[stream_idx]);
+      }
     } else {
-      gsea_walk_kernel<8, 512><<<numBlocks, 512, 0, stream>>>(
-          device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-          device->symrnkstat[stream_idx], device->es[stream_idx],
-          device->cat_gset[cat], S, G, C, tau, score_type);
+      if (cat == 0) {
+        gsea_dense_walk_kernel<5, 32><<<numBlocks, 32, 0, stream>>>(
+            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+            device->symrnkstat[stream_idx], device->es[stream_idx],
+            device->cat_gset[cat], S, G, C, tau, score_type);
+      } else if (cat == 1) {
+        gsea_dense_walk_kernel<2, 128><<<numBlocks, 128, 0, stream>>>(
+            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+            device->symrnkstat[stream_idx], device->es[stream_idx],
+            device->cat_gset[cat], S, G, C, tau, score_type);
+      } else if (cat == 2) {
+        gsea_dense_walk_kernel<3, 256><<<numBlocks, 256, 0, stream>>>(
+            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+            device->symrnkstat[stream_idx], device->es[stream_idx],
+            device->cat_gset[cat], S, G, C, tau, score_type);
+      } else if (cat == 3) {
+        gsea_dense_walk_kernel<8, 256><<<numBlocks, 256, 0, stream>>>(
+            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+            device->symrnkstat[stream_idx], device->es[stream_idx],
+            device->cat_gset[cat], S, G, C, tau, score_type);
+      } else {
+        gsea_dense_walk_kernel<8, 512><<<numBlocks, 512, 0, stream>>>(
+            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
+            device->symrnkstat[stream_idx], device->es[stream_idx],
+            device->cat_gset[cat], S, G, C, tau, score_type);
+      }
     }
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
-      error("gsea_walk_kernel launch error at %s:%d: %s", __FILE__, __LINE__,
+      error("walk kernel launch error at %s:%d: %s", __FILE__, __LINE__,
             cudaGetErrorString(err));
     }
   }
@@ -286,10 +321,11 @@ static SEXP gsva_score_body(void *data) {
       }
     }
 
-    ranks2stats_gpu(ctx, G, block_c, block_size, (int)job->sparse,
-                    &job->device, &job->host, stream_idx, job->ranksR);
+    ranks2stats_gpu(ctx, G, block_c, block_size, (int)job->sparse, &job->device,
+                    &job->host, stream_idx, job->ranksR);
     gsva_rnd_walk_gpu_dispatch(job->host.es[stream_idx], S, G, block_size,
-                               job->tau, job->score_type, &job->device,
+                               job->tau, job->score_type,
+                               (int)(job->sparse != 0), &job->device,
                                stream_idx);
   }
 

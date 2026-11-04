@@ -2551,8 +2551,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     n_cols  <- ncol(R)
     sco <- matrix(NA_real_, nrow = n_gsets, ncol = n_cols)
 
-    ## The GPU sparse walk is not yet implemented.
-    if (!any_na && !sparse && device == "gpu") {
+    if (!any_na && device == "gpu") {
         gset_sizes  <- lengths(geneSetsIdx)
         max_gpu_sz  <- .gsva_cuda_max_gset_size()
         gpu_idxs    <- which(gset_sizes <= max_gpu_sz)

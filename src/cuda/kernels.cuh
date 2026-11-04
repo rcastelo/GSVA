@@ -121,6 +121,12 @@ struct PeakValley {
     gsva_float_t valley;
 };
 
+struct GSVAMaxOp {
+    __device__ gsva_float_t operator()(gsva_float_t a, gsva_float_t b) const {
+        return a > b ? a : b;
+    }
+};
+
 struct PVReduceOp {
     __device__ PeakValley operator()(PeakValley a, PeakValley b) const {
         return {
@@ -131,7 +137,7 @@ struct PVReduceOp {
 };
 
 template<int GSVA_WALK_ITEMS, int GSVA_WALK_THREADS>
-__global__ void gsea_walk_kernel(
+__global__ void gsea_dense_walk_kernel(
     const int* __restrict__ gsetofft,
     const int* __restrict__ gsetidxs,
     const int* __restrict__ decordstat_block,
@@ -155,7 +161,7 @@ __global__ void gsea_walk_kernel(
     };
 
     __shared__ TempStorage tmp;
-    __shared__ double thread_total;
+    __shared__ double s_thread_total;
 
     int c = blockIdx.x;
     int gset_local = blockIdx.y;
@@ -197,10 +203,10 @@ __global__ void gsea_walk_kernel(
     }
 
     BlockScanDouble(tmp.scan_storage).InclusiveSum(stat_sums, stat_sums);
-    if (tid == GSVA_WALK_THREADS - 1) thread_total = stat_sums[GSVA_WALK_ITEMS - 1];
+    if (tid == GSVA_WALK_THREADS - 1) s_thread_total = stat_sums[GSVA_WALK_ITEMS - 1];
     __syncthreads();
 
-    double stat_total = thread_total;
+    double stat_total = s_thread_total;
     if (!(stat_total > 0.0 && isfinite(stat_total)) || k == G) {
         if (tid == 0) out_es[c * S + gset] = GSVA_NAN;
         return;
@@ -244,4 +250,172 @@ __global__ void gsea_walk_kernel(
     }
 }
 
+template<int GSVA_WALK_ITEMS, int GSVA_WALK_THREADS>
+__global__ void gsea_sparse_walk_kernel(
+    const int* __restrict__ gsetofft,
+    const int* __restrict__ gsetidxs,
+    const int* __restrict__ decordstat_block,
+    const gsva_float_t* __restrict__ symrnkstat_block,
+    gsva_float_t* __restrict__ out_es,
+    const int* __restrict__ cat_gset,
+    int S, int G, int C,
+    gsva_float_t tau, int score_type,
+    const int* __restrict__ nnzpercell
+) {
+    typedef cub::BlockRadixSort<int, GSVA_WALK_THREADS, GSVA_WALK_ITEMS, gsva_float_t> BlockRadixSort;
+    typedef cub::BlockScan<double, GSVA_WALK_THREADS> BlockScanDouble;
+    typedef cub::BlockScan<int, GSVA_WALK_THREADS> BlockScanInt;
+    typedef cub::BlockReduce<PeakValley, GSVA_WALK_THREADS> BlockReducePV;
+    typedef cub::BlockReduce<int, GSVA_WALK_THREADS> BlockReduceInt;
+    typedef cub::BlockReduce<gsva_float_t, GSVA_WALK_THREADS> BlockReduceFloat;
+
+    union TempStorage {
+        typename BlockRadixSort::TempStorage sort_storage;
+        typename BlockScanDouble::TempStorage scan_float;
+        typename BlockScanInt::TempStorage scan_int;
+        typename BlockReduceInt::TempStorage reduce_int;
+        typename BlockReduceFloat::TempStorage reduce_float;
+        typename BlockReducePV::TempStorage reduce;
+    };
+
+    __shared__ TempStorage tmp;
+    __shared__ double s_nonzero_total;
+    __shared__ int s_nonzero_events;
+    __shared__ int s_gset_nonzeros;
+    __shared__ gsva_float_t s_zero_weight;
+
+    int c = blockIdx.x;
+    int gset_local = blockIdx.y;
+    int tid = threadIdx.x;
+    if (c >= C || gset_local >= S) return;
+
+    int gset = cat_gset[gset_local];
+    int offset = gsetofft[gset];
+    int k = gsetofft[gset + 1] - offset;
+
+    int nnz = nnzpercell[c];
+    int nzeros = G - nnz;
+    int base = c * G;
+
+    int keys[GSVA_WALK_ITEMS];
+    gsva_float_t vals[GSVA_WALK_ITEMS];
+    int zcount = 0;
+    gsva_float_t zero_weight = (gsva_float_t)0.0;
+
+    int thread_start = tid * GSVA_WALK_ITEMS;
+    for (int i = 0; i < GSVA_WALK_ITEMS; i++) {
+        int idx = thread_start + i;
+        if (idx < k) {
+            int gene = gsetidxs[offset + idx] - 1;
+            int cell = base + gene;
+            int desc_rank = decordstat_block[cell];  // 1-based
+            if (desc_rank <= nnz) {
+                keys[i] = desc_rank - 1;  // 0-based
+                vals[i] = GSVA_POW(symrnkstat_block[cell], tau);
+            } else {
+                // in-set, zero-expressed gene: kept out of the sort array
+                zcount++;
+                if (zcount == 1)
+                    zero_weight = GSVA_POW(symrnkstat_block[cell], tau);
+                
+                keys[i] = INT_MAX;
+                vals[i] = (gsva_float_t)0.0;
+            }
+        } else {
+            keys[i] = INT_MAX;
+            vals[i] = 0.0f;
+        }
+    }
+
+    int gset_nonzeros = BlockReduceInt(tmp.reduce_int).Sum(zcount);
+    if (tid == 0) s_gset_nonzeros = gset_nonzeros;
+    __syncthreads();
+    gset_nonzeros = s_gset_nonzeros;
+
+    zero_weight = BlockReduceFloat(tmp.reduce_float).Reduce(zero_weight, GSVAMaxOp());
+    if (tid == 0) s_zero_weight = zero_weight;
+    __syncthreads();
+    zero_weight = s_zero_weight;
+
+    BlockRadixSort(tmp.sort_storage).Sort(keys, vals);
+    __syncthreads();
+
+    int keep[GSVA_WALK_ITEMS];
+    double stat_sums[GSVA_WALK_ITEMS];
+    for (int i = 0; i < GSVA_WALK_ITEMS; i++) {
+        keep[i] = (keys[i] != INT_MAX) ? 1 : 0;
+        stat_sums[i] = keep[i] ? vals[i] : 0.0;
+    }
+
+    int event_idxs[GSVA_WALK_ITEMS];
+    BlockScanInt(tmp.scan_int).InclusiveSum(keep, event_idxs);
+    if (tid == GSVA_WALK_THREADS - 1) s_nonzero_events = event_idxs[GSVA_WALK_ITEMS - 1];
+    __syncthreads();
+    int nonzero_events = s_nonzero_events;
+
+    BlockScanDouble(tmp.scan_float).InclusiveSum(stat_sums, stat_sums);
+    if (tid == GSVA_WALK_THREADS - 1) s_nonzero_total = stat_sums[GSVA_WALK_ITEMS - 1];
+    __syncthreads();
+
+    double nonzero_total = s_nonzero_total;
+    double stat_total = nonzero_total + (double)gset_nonzeros * zero_weight;
+    if (!(stat_total > 0.0 && isfinite(stat_total)) || k == G) {
+        if (tid == 0) out_es[c * S + gset] = GSVA_NAN;
+        return;
+    }
+
+    double thread_max_peak = -1e30;
+    double thread_min_valley = 1e30;
+    gsva_float_t neg_step = 1.0f / (gsva_float_t)(G - (nonzero_events + gset_nonzeros));
+    double inv_stat_total = 1.0 / stat_total;
+    double step = 0.0;
+    if (gset_nonzeros > 1)
+        step = ((double) nzeros - 1.0) / ((double) gset_nonzeros - 1.0);
+
+    // in-set, non-zero expressed genes
+    for (int i = 0; i < GSVA_WALK_ITEMS; i++) {
+        if (!keep[i]) continue;
+        int idx = event_idxs[i] - 1;
+
+        double stat_running = stat_sums[i] - vals[i];
+        double stat_norm = stat_running * inv_stat_total;
+        gsva_float_t neg_penalty = (keys[i] - idx) * neg_step;
+        double current_valley = stat_norm - neg_penalty;
+        if (current_valley < thread_min_valley) thread_min_valley = current_valley;
+
+        stat_running += vals[i];
+        stat_norm = stat_running * inv_stat_total;
+        double current_peak = stat_norm - neg_penalty;
+        if (current_peak > thread_max_peak) thread_max_peak = current_peak;
+    }
+
+    // in-set, zero-expressed genes
+    for (int j = tid; j < gset_nonzeros; j += GSVA_WALK_THREADS) {
+        int key = (nnz - 1) + (int)round(((double) j) * step + 1.0);
+        double stat_running = nonzero_total + (double)j * zero_weight;
+        gsva_float_t neg_penalty = (gsva_float_t)(key - (nonzero_events + j)) * neg_step;
+        double current_valley = stat_running * inv_stat_total - neg_penalty;
+        if (current_valley < thread_min_valley) thread_min_valley = current_valley;
+
+        double current_peak =
+            (stat_running + zero_weight) * inv_stat_total - neg_penalty;
+        if (current_peak > thread_max_peak) thread_max_peak = current_peak;
+    }
+
+    PeakValley pv = {(gsva_float_t)thread_max_peak, (gsva_float_t)thread_min_valley};
+    PeakValley result = BlockReducePV(tmp.reduce).Reduce(pv, PVReduceOp());
+
+    if (tid == 0) {
+        gsva_float_t final_max_peak = result.peak;
+        gsva_float_t final_min_valley = result.valley;
+        gsva_float_t res = 0.0f;
+        switch (score_type) {
+            case 0: res = final_max_peak + final_min_valley; break;
+            case 1: res = final_max_peak - final_min_valley; break;
+            case 2: res = (final_max_peak > GSVA_FABS(final_min_valley)) ? final_max_peak : final_min_valley; break;
+            default: res = -1.0f; break;
+        }
+        out_es[c * S + gset] = res;
+    }
+}
 #endif
