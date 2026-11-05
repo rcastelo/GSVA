@@ -227,14 +227,16 @@
                          sendblocks=FALSE) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
-      nrowblock <- .units_per_block(X, 1L, nworkers, maxmem, workfactor,
-                                    outfactor, outextra, workermem,
-                                    dense=dense, heldmem=heldmem,
-                                    sinkout=sinkout, sharedmem=sharedmem,
-                                    sendblocks=sendblocks)
-      grid <- rowAutoGrid(X, nrow=.balance_blocks(.align_to_chunks(nrowblock,
-                                                                   X, 1L),
-                                                  X, 1L, nworkers))
+      upb <- function(nw)
+          .units_per_block(X, 1L, nw, maxmem, workfactor, outfactor,
+                           outextra, workermem, dense=dense, heldmem=heldmem,
+                           sinkout=sinkout, sharedmem=sharedmem,
+                           sendblocks=sendblocks)
+      nrowblock <- .balance_blocks(.align_to_chunks(upb(nworkers), X, 1L),
+                                X, 1L, nworkers)
+      grid <- rowAutoGrid(X, nrow=nrowblock)
+      if (sharedmem)
+          .check_chunk_blocks(X, 1L, nrowblock, nworkers, maxmem, upb)
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
       ## by the number of workers and, in any case, it cannot exceed
@@ -265,14 +267,16 @@
                          sendblocks=FALSE) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
-      ncolblock <- .units_per_block(X, 2L, nworkers, maxmem, workfactor,
-                                    outfactor, outextra, workermem,
-                                    dense=dense, heldmem=heldmem,
-                                    sinkout=sinkout, sharedmem=sharedmem,
-                                    sendblocks=sendblocks)
-      grid <- colAutoGrid(X, ncol=.balance_blocks(.align_to_chunks(ncolblock,
-                                                                   X, 2L),
-                                                  X, 2L, nworkers))
+      upb <- function(nw)
+          .units_per_block(X, 2L, nw, maxmem, workfactor, outfactor,
+                           outextra, workermem, dense=dense, heldmem=heldmem,
+                           sinkout=sinkout, sharedmem=sharedmem,
+                           sendblocks=sendblocks)
+      ncolblock <- .balance_blocks(.align_to_chunks(upb(nworkers), X, 2L),
+                                X, 2L, nworkers)
+      grid <- colAutoGrid(X, ncol=ncolblock)
+      if (sharedmem)
+          .check_chunk_blocks(X, 2L, ncolblock, nworkers, maxmem, upb)
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
       ## by the number of workers and, in any case, it cannot exceed
@@ -294,13 +298,125 @@
 ## round down the block width 'n' along the dimension 'whdim' to a multiple of
 ## the chunk width, so that blocks do not split chunks, which would then be
 ## read more than once; when a block is narrower than a chunk, its width is
-## kept, to avoid exceeding the memory bound behind the block width
-#' @importFrom DelayedArray chunkdim
+## kept, to avoid exceeding the memory bound behind the block width. the
+## chunks are the ones of the on-disk data of 'X', also when 'X' is a delayed
+## operation on them, such as a subset, along the dimensions where their
+## boundaries are the ones of 'X', see .ondisk_chunkdim()
 .align_to_chunks <- function(n, X, whdim) {
-    cd <- if (is(X, "DelayedArray")) chunkdim(X) else NULL
-    if (!is.null(cd) && cd[whdim] > 0 && n >= cd[whdim])
+    cd <- .ondisk_chunkdim(X, aligned=TRUE)
+    if (!is.null(cd) && !is.na(cd[whdim]) && cd[whdim] > 0 &&
+        n >= cd[whdim])
         n <- (n %/% cd[whdim]) * cd[whdim]
     as.integer(n)
+}
+
+## warn when the blocks of width 'n' along the dimension 'whdim' of 'X', stored
+## on disk in chunks, are narrower than half a chunk, so that each chunk is
+## read and decompressed once for each of the at least three blocks that it
+## overlaps, which makes the calculations much slower, e.g., ten times slower
+## with blocks of 700 columns of chunks of 10000 columns, as measured on
+## single-cell data. such blocks are kept, see .align_to_chunks(), because
+## wider ones do not fit in the maximum memory 'maxmem', and the warning
+## suggests the largest number of workers below 'nworkers' whose blocks would
+## take whole chunks within 'maxmem', where 'upb' gives the width of the
+## blocks with a given number of workers, see .units_per_block(), or a larger
+## 'maxmem' when there is none. the chunks are the ones of the on-disk data
+## of 'X', also when 'X' is a delayed operation on them, see
+## .ondisk_chunkdim(), even when their boundaries are not the ones of 'X',
+## because blocks narrower than chunks read them more than once anyway. it
+## is skipped with the option 'GSVA.check_memory=FALSE'
+#' @importFrom cli cli_warn
+#' @importFrom memuse mu
+.check_chunk_blocks <- function(X, whdim, n, nworkers, maxmem, upb) {
+    cd <- .ondisk_chunkdim(X)
+    if (!getOption("GSVA.check_memory", TRUE) || is.null(cd) ||
+        cd[whdim] <= 2 * n || n >= dim(X)[whdim])
+        return(invisible(FALSE))
+
+    what <- if (whdim == 1L) "rows" else "columns"
+    nreads <- ceiling(cd[whdim] / n)
+    msg <- c("!"=paste("The calculations process the input data on disk in",
+                       "blocks of {n} {what}, narrower than its chunks of",
+                       "{cd[whdim]} {what}, which are then read and",
+                       "decompressed at least {nreads} times each, making the",
+                       "calculations much slower."))
+    nw <- nworkers - 1L
+    while (nw >= 1L && upb(nw) < cd[whdim])
+        nw <- nw - 1L
+    maxmemtxt <- as.character(mu(maxmem))
+    if (nw >= 1L)
+        msg <- c(msg, "i"=paste("With {nw} parallel worker{?s} in",
+                                "{.arg BPPARAM}, instead of {nworkers}, the",
+                                "blocks would take whole chunks within the",
+                                "maximum available main memory of",
+                                "{maxmemtxt}."))
+    else
+        msg <- c(msg, "i"=paste("Consider using a larger {.arg maxmem}, for",
+                                "the blocks to take whole chunks."))
+    cli_warn(msg)
+
+    invisible(TRUE)
+}
+
+## dimensions of the chunks in which the data of 'X' are stored on disk, such
+## as in an HDF5 file, also when 'X' is a delayed operation on them, which
+## chunkdim() does not give for some of them, such as the subset of the
+## cells of a SingleCellExperiment object stored in an HDF5 file. with
+## 'aligned=TRUE', they are NA along the dimensions where the boundaries of
+## the chunks are not the ones of 'X', because a subset along them takes
+## rows or columns that are not consecutive, or that do not start at the
+## start of a chunk, see .chunks_of_seed(). the chunks are at most as large
+## as 'X'. it gives NULL when the data of 'X' are not stored in chunks, or
+## when their chunks are not known, e.g., with several seeds
+.ondisk_chunkdim <- function(X, aligned=FALSE) {
+    if (!is(X, "DelayedArray"))
+        return(NULL)
+    ch <- .chunks_of_seed(X@seed)
+    if (is.null(ch) || length(ch$cd) != length(dim(X)))
+        return(NULL)
+    cd <- pmin(ch$cd, dim(X))
+    if (aligned)
+        cd[!ch$aligned] <- NA
+
+    cd
+}
+
+## dimensions 'cd' of the chunks of the seed or delayed operation 'x', see
+## .ondisk_chunkdim(), from those of the seeds under delayed operations that
+## keep the geometry of their input, such as setting the dimnames or
+## operating on each value, transposing it, or taking a subset of it, where
+## 'aligned' tells, along each dimension, whether the boundaries of the chunks
+## are the ones of 'x': along the dimensions of a subset, when it takes
+## consecutive rows or columns starting at the start of a chunk
+#' @importFrom DelayedArray chunkdim
+#' @importClassesFrom DelayedArray DelayedSubset DelayedAperm DelayedUnaryIsoOp
+.chunks_of_seed <- function(x) {
+    if (is(x, "DelayedSubset")) {
+        ch <- .chunks_of_seed(x@seed)
+        if (is.null(ch))
+            return(NULL)
+        for (i in seq_along(x@index)) {
+            idx <- x@index[[i]]
+            if (!is.null(idx))
+                ch$aligned[i] <- ch$aligned[i] && length(idx) > 0 &&
+                                 all(diff(idx) == 1L) &&
+                                 (idx[1L] - 1L) %% ch$cd[i] == 0
+        }
+        return(ch)
+    }
+    if (is(x, "DelayedAperm")) {
+        ch <- .chunks_of_seed(x@seed)
+        if (is.null(ch) || length(x@perm) != length(ch$cd))
+            return(NULL)
+        return(list(cd=ch$cd[x@perm], aligned=ch$aligned[x@perm]))
+    }
+    if (is(x, "DelayedUnaryIsoOp"))
+        return(.chunks_of_seed(x@seed))
+    cd <- tryCatch(chunkdim(x), error=function(e) NULL)
+    if (is.null(cd))
+        return(NULL)
+
+    list(cd=cd, aligned=rep(TRUE, length(cd)))
 }
 
 ## with more than one worker, narrow the blocks of width 'n' along the
@@ -317,7 +433,6 @@
 ## .align_to_chunks(), blocks keep taking whole chunks, which may leave their
 ## number unchanged. with a single block, 'X' is not split, as without
 ## parallelism
-#' @importFrom DelayedArray chunkdim
 .balance_blocks <- function(n, X, whdim, nworkers) {
     nunits <- dim(X)[whdim]
     if (nworkers < 2L || n < 1L || n >= nunits)
@@ -326,8 +441,9 @@
     ## widths in multiples of the width 'u' of the chunks or of one row or
     ## column, of which 'X' has 'm'
     u <- 1
-    cd <- if (is(X, "DelayedArray")) chunkdim(X) else NULL
-    if (!is.null(cd) && cd[whdim] > 0 && n >= cd[whdim] && n %% cd[whdim] == 0)
+    cd <- .ondisk_chunkdim(X, aligned=TRUE)
+    if (!is.null(cd) && !is.na(cd[whdim]) && cd[whdim] > 0 &&
+        n >= cd[whdim] && n %% cd[whdim] == 0)
         u <- cd[whdim]
     m <- ceiling(nunits / u)
     rounds <- ceiling(ceiling(m / (n %/% u)) / nworkers)

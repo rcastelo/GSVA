@@ -67,6 +67,55 @@ test_blockgrids <- function() {
     checkIdentical(124L, ncol(GSVA:::.colgridsize(H)[[1L]]))
     checkIdentical(31L, ncol(GSVA:::.colgridsize(H, 3)[[1L]]))
     checkIdentical(25L, ncol(GSVA:::.colgridsize(H, 5)[[1L]]))
+
+    ## blocks narrower than half a chunk, within a maximum memory that fits
+    ## blocks of 120 columns for all the workers together, give a warning
+    ## suggesting the number of workers whose blocks take whole chunks
+    H <- writeHDF5Array(m, chunkdim=c(37L, 40L))
+    upb <- function(nw) as.integer(120 %/% nw)
+    chunkwarning <- function(n, nworkers)
+        tryCatch(GSVA:::.check_chunk_blocks(H, 2L, n, nworkers, 1e9, upb),
+                 warning=conditionMessage)
+    w <- chunkwarning(15L, 8L)
+    checkTrue(is.character(w) && grepl("blocks of 15 columns", w) &&
+              grepl("With 3 parallel workers", w))
+    ## or a larger maximum memory, when no number of workers fits whole chunks
+    w <- chunkwarning(15L, 1L)
+    checkTrue(is.character(w) && grepl("larger", w))
+    ## while blocks of at least half a chunk, or a single block, do not
+    checkTrue(!chunkwarning(20L, 6L))
+    checkTrue(!chunkwarning(ncol(H), 1L))
+    checkTrue(!GSVA:::.check_chunk_blocks(m, 2L, 15L, 8L, 1e9, upb))
+    ## also for a subset of the on-disk data, with the chunks of its seed
+    checkTrue(is.null(chunkdim(H[, 1:2000])))
+    checkIdentical(as.integer(GSVA:::.ondisk_chunkdim(H[, 1:2000])),
+                   c(37L, 40L))
+    w <- tryCatch(GSVA:::.check_chunk_blocks(H[, 1:2000], 2L, 15L, 8L, 1e9,
+                                             upb),
+                  warning=conditionMessage)
+    checkTrue(is.character(w) && grepl("chunks of 40 columns", w))
+    ## whose blocks are aligned to the chunks when their boundaries are the
+    ## ones of the subset: consecutive columns from the start of a chunk,
+    ## also after operations on each value, or transposing it, while rows
+    ## that are not consecutive leave the alignment of the columns
+    checkIdentical(GSVA:::.align_to_chunks(100L, H[, 1:2000], 2L), 80L)
+    checkIdentical(GSVA:::.align_to_chunks(100L, H[, 41:2000], 2L), 80L)
+    checkIdentical(GSVA:::.align_to_chunks(100L, H[, 2:2000], 2L), 100L)
+    checkIdentical(GSVA:::.align_to_chunks(100L, H[, c(1:40, 81:200)], 2L),
+                   100L)
+    checkIdentical(GSVA:::.align_to_chunks(100L, log1p(H)[, 1:2000], 2L), 80L)
+    checkIdentical(GSVA:::.align_to_chunks(100L, t(H)[1:2000, ], 1L), 80L)
+    checkIdentical(GSVA:::.align_to_chunks(100L, H[c(3, 1, 2), 1:2000], 2L),
+                   80L)
+    checkIdentical(GSVA:::.align_to_chunks(50L, H[c(3, 1, 2), ], 1L), 50L)
+    checkTrue(is.na(GSVA:::.ondisk_chunkdim(H[, 2:2000], aligned=TRUE)[2]))
+    ## the number of blocks of a subset is balanced in whole chunks, see
+    ## .balance_blocks(): the 1960 columns, 49 chunks, in blocks of 2 chunks
+    ## take three rounds of 10 workers, which blocks of 2 chunks still take,
+    ## while blocks of 20 chunks take two rounds of 2 workers, which blocks of
+    ## 13 chunks also take
+    checkIdentical(GSVA:::.balance_blocks(80L, H[, 41:2000], 2L, 10L), 80L)
+    checkIdentical(GSVA:::.balance_blocks(800L, H[, 41:2000], 2L, 2L), 520L)
 }
 
 ## the number of rows or columns of a block is the one that fits in the memory
