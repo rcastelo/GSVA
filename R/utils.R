@@ -436,10 +436,12 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## nonzero value while it lasts, as measured on single-cell data, and the
 ## blocks of columns already read form the result, which takes their memory
 ## when bound. when 'X' is stored in chunks of several columns, as in dense
-## HDF5 datasets, blocks span the width of the chunks, because blocks
-## splitting chunks make their reading slower, while wider blocks do not make
-## it faster: the smallest multiple of that width not narrower than the
-## default block of the DelayedArray package. otherwise, as in the compressed
+## HDF5 datasets, also through delayed operations such as a subset of its
+## columns, see .ondisk_chunkdim(), blocks span the width of the chunks,
+## because blocks splitting chunks make their reading slower, while wider
+## blocks do not make it faster: the smallest multiple of that width not
+## narrower than the default block of the DelayedArray package. otherwise, as
+## in the compressed
 ## sparse column (CSC) layout of HDF5 files, e.g., those written by
 ## saveHDF5GSVA(), where each column is a chunk, or when 'X' binds several
 ## files, blocks are as wide as the memory allows, because each block reads
@@ -449,14 +451,20 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## size. blocks are narrower when their memory does not fit in the fraction
 ## .mem_fraction_R of the maximum main memory 'maxmem' left by the result,
 ## whose estimated size is 'insize', when both are known, and by the memory
-## held by other objects, see .held_mem(). the number of nonzero values of
+## held by other objects, see .held_mem(), but not narrower than a chunk, or
+## than the default block when 'X' is not stored in chunks of several columns,
+## because narrower blocks would make the loading take much longer, e.g.,
+## blocks of a single column would decompress all the chunks that it spans for
+## each column, when the memory left by the result is too small, where the
+## whole calculations do not fit in 'maxmem' anyway. the number of nonzero
+## values of
 ## each column, when the layout of 'X' gives it without reading its values,
 ## see .col_nzcounts(), sets the width of each block to the columns that fit
 ## in that memory, because columns with many more nonzero values than the
 ## average, e.g., of cells with deeper sequencing, may be stored next to each
 ## other, and the average number of nonzero values per column, estimated
 ## from 'insize', otherwise
-#' @importFrom DelayedArray colAutoGrid read_block chunkdim ArbitraryArrayGrid
+#' @importFrom DelayedArray colAutoGrid read_block ArbitraryArrayGrid
 #' @importFrom BiocGenerics type
 .load_sparse_by_blocks <- function(X, maxmem=Inf, insize=NA_real_) {
     if (ncol(X) == 0L)
@@ -465,11 +473,13 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     ncolblock <- ncol(colAutoGrid(X)[[1L]]) ## default block size
     budget <- !is.null(maxmem) && !is.null(insize) && is.finite(maxmem) &&
               !is.na(insize)
-    cd <- chunkdim(X)
+    cd <- .ondisk_chunkdim(X)
     multicol <- !is.null(cd) && cd[2] > 1
     if (multicol) ## multiple of the width of the chunks
         ncolblock <- cd[2] * ceiling(ncolblock / cd[2])
-    else if (budget) ## as wide as the memory allows, see below
+    ## the narrowest blocks within the memory available
+    mincols <- if (multicol) cd[2] else ncolblock
+    if (!multicol && budget) ## as wide as the memory allows, see below
         ncolblock <- ncol(X)
     ## the DelayedArray package does not support blocks with more than
     ## .Machine$integer.max values
@@ -478,14 +488,19 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     if (budget) {
         avail <- .mem_fraction_R * maxmem - insize - .held_mem()
         nz <- if (multicol) NULL else .col_nzcounts(X)
-        if (!is.null(nz))
+        if (!is.null(nz)) {
+            ## at least the memory of 'mincols' columns of average width
+            avail <- max(avail, 160 * mean(pmax(1, nz)) * mincols)
             grid <- .nzcount_col_grid(X, 160 * pmax(1, nz), avail,
                                       min(ncolblock, maxcols))
-        else {
+        } else {
             eltbytes <- if (type(X) == "integer") 4 else 8
             nzpercol <- insize / (eltbytes + 4) / ncol(X)
-            ncolblock <- min(ncolblock,
-                             floor(avail / (160 * max(1, nzpercol))))
+            ncolblock <- max(mincols,
+                             min(ncolblock,
+                                 floor(avail / (160 * max(1, nzpercol)))))
+            if (multicol) ## whole chunks
+                ncolblock <- cd[2] * (ncolblock %/% cd[2])
         }
     }
     if (is.null(grid)) {

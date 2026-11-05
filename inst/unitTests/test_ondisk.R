@@ -227,6 +227,34 @@ test_load_sparse_by_blocks <- function() {
     checkIdentical(GSVA:::.load_sparse_by_blocks(x, maxmem=maxmem,
                                                  insize=insize),
                    as(x, "SVT_SparseMatrix"))
+
+    ## with a budget smaller than the result, blocks are not narrower than a
+    ## chunk, also through a subset of the columns, whose chunkdim() is NULL,
+    ## or than the default block without chunks of several columns, as
+    ## counted by the calls to read_block()
+    imports <- parent.env(asNamespace("GSVA"))
+    readblock <- get("read_block", envir=imports)
+    nreads <- 0L
+    unlockBinding("read_block", imports)
+    assign("read_block", function(...) {
+               nreads <<- nreads + 1L
+               readblock(...)
+           }, envir=imports)
+    on.exit({
+        assign("read_block", readblock, envir=imports)
+        lockBinding("read_block", imports)
+    }, add=TRUE)
+    loads <- function(x) {
+        nreads <<- 0L
+        insize <- as.numeric(object.size(as(x, "SVT_SparseMatrix")))
+        res <- GSVA:::.load_sparse_by_blocks(x, maxmem=insize, insize=insize)
+        checkIdentical(res, as(x, "SVT_SparseMatrix"))
+        nreads
+    }
+    h <- writeHDF5Array(as.matrix(m), chunkdim=c(50L, 30L))
+    checkTrue(is.null(chunkdim(h[, 1:90])))
+    checkIdentical(loads(h[, 1:90]), 3L)
+    checkTrue(loads(x) <= 2L)
 }
 
 test_memory_check <- function() {
