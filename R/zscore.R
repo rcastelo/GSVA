@@ -62,10 +62,13 @@ setMethod("gsva", signature(param="zscoreParam"),
                   cli_alert_info("Calculating Z-scores for {n} gene sets")
               }
 
-              zscore_es <- zscore(X=filtDataMatrix,
-                                  geneSets=filtMappedGeneSets,
-                                  ondisk=ondisk, verbose=verbose,
-                                  BPPARAM=BPPARAM, maxmem=maxmem)
+              ## one warning for all the steps whose blocks are narrower
+              ## than the chunks of the input data on disk
+              zscore_es <- .with_chunk_blocks(
+                  zscore(X=filtDataMatrix,
+                         geneSets=filtMappedGeneSets,
+                         ondisk=ondisk, verbose=verbose,
+                         BPPARAM=BPPARAM, maxmem=maxmem))
 
               gs <- .geneSetsIndices2Names(
                   indices=filtMappedGeneSets,

@@ -190,6 +190,14 @@ setMethod("gsva", signature(param="gsvaParam"),
               gsva_global$check_memory <- FALSE
               on.exit(gsva_global$check_memory <- TRUE, add=TRUE)
 
+              ## the steps whose blocks are narrower than the chunks of the
+              ## input data on disk give one warning for all of them at the
+              ## end, see .check_chunk_blocks()
+              oldcb <- .start_chunk_blocks()
+              cbdone <- FALSE
+              on.exit(if (!cbdone) gsva_global$chunkblocks <- oldcb,
+                      add=TRUE)
+
               gsvarnorm <- gsvaRowNorm(param=param, verbose=verbose,
                                        dropExistingAssays=TRUE,
                                        errorOnTooFewRows=TRUE,
@@ -220,6 +228,8 @@ setMethod("gsva", signature(param="gsvaParam"),
 
               es <- gsvaColScores(rankExprData=gsvaranks, verbose=verbose,
                                   BPPARAM=BPPARAM, maxmem=maxmem)
+              .end_chunk_blocks(oldcb)
+              cbdone <- TRUE
 
               if (verbose)
                   cli_alert_success("Calculations finished")
@@ -1343,7 +1353,8 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                   outfactor=mf$outfactor,
                                   outextra=mf$outextra,
                                   sinkout=(ondisk ||
-                                           is(filtDataMatrix, "DelayedMatrix")))
+                                           is(filtDataMatrix, "DelayedMatrix")),
+                                  step="Calculating GSVA scores")
 
     rownames(gsva_es) <- names(filtMappedGeneSets)
     colnames(gsva_es) <- colnames(filtDataMatrix)
@@ -1636,7 +1647,7 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
                                   maxmem=maxmem, workfactor=mf$workfactor,
                                   outfactor=mf$outfactor,
                                   outextra=mf$outextra, dense=densify,
-                                  sinkout=TRUE))
+                                  sinkout=TRUE, step="Normalizing rows"))
     }
 
     .clr_scale(expr, g, sparse)
@@ -1856,7 +1867,8 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                                 workfactor=mf$workfactor,
                                 outfactor=mf$outfactor, outextra=mf$outextra,
                                 dense=densify,
-                                sinkout=(ondisk || is(expr, "DelayedMatrix")))
+                                sinkout=(ondisk || is(expr, "DelayedMatrix")),
+                                step="Normalizing rows")
     else if (rowNorm == "clr") {
         ## the statistics of the rows are calculated through blocks of
         ## columns, unless they were already calculated while filtering rows
@@ -1923,7 +1935,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
                             BPPARAM=BPPARAM, maxmem=maxmem,
                             workfactor=mf$workfactor, outfactor=mf$outfactor,
                             outextra=mf$outextra,
-                            sinkout=(ondisk || is(Z, "DelayedMatrix")))
+                            sinkout=(ondisk || is(Z, "DelayedMatrix")),
+                            step="Ranking columns")
 
     return(R)
 }

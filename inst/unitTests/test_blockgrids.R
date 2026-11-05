@@ -68,24 +68,65 @@ test_blockgrids <- function() {
     checkIdentical(31L, ncol(GSVA:::.colgridsize(H, 3)[[1L]]))
     checkIdentical(25L, ncol(GSVA:::.colgridsize(H, 5)[[1L]]))
 
-    ## blocks narrower than half a chunk, within a maximum memory that fits
-    ## blocks of 120 columns for all the workers together, give a warning
-    ## suggesting the number of workers whose blocks take whole chunks
+    ## blocks narrower than half a chunk, within a maximum memory of 1e9 bytes
+    ## that fits blocks of 120 columns for all the workers together, give a
+    ## warning suggesting the smallest maximum memory, in whole GiB, whose
+    ## blocks with the same workers take whole chunks: 40 columns for each of
+    ## 8 workers fit in 8/3 * 1e9 bytes, 2.48 GiB
     H <- writeHDF5Array(m, chunkdim=c(37L, 40L))
-    upb <- function(nw) as.integer(120 %/% nw)
-    chunkwarning <- function(n, nworkers)
-        tryCatch(GSVA:::.check_chunk_blocks(H, 2L, n, nworkers, 1e9, upb),
+    upb <- function(nw, mm) as.integer(floor(120 * mm / 1e9 / nw))
+    checkEquals(GSVA:::.chunk_maxmem(40L, 8L, 1e9, upb), 3 * 1024^3)
+    checkIdentical(GSVA:::.maxmem_text(3 * 1024^3), "3G")
+    ## or MiB, below 1 GiB: 8/3 * 1e8 bytes, 254.3 MiB
+    upbm <- function(nw, mm) as.integer(floor(120 * mm / 1e8 / nw))
+    checkEquals(GSVA:::.chunk_maxmem(40L, 8L, 1e8, upbm), 255 * 1024^2)
+    checkIdentical(GSVA:::.maxmem_text(255 * 1024^2), "255M")
+    ## a text that 'maxmem' takes
+    checkEquals(GSVA:::.memtext2bytes(GSVA:::.maxmem_text(3 * 1024^3)),
+                3 * 1024^3)
+    chunkwarning <- function(n, nworkers, upb, step=NULL)
+        tryCatch(GSVA:::.check_chunk_blocks(H, 2L, n, nworkers, 1e9, upb,
+                                            step),
                  warning=conditionMessage)
-    w <- chunkwarning(15L, 8L)
+    w <- chunkwarning(15L, 8L, upb)
     checkTrue(is.character(w) && grepl("blocks of 15 columns", w) &&
-              grepl("With 3 parallel workers", w))
-    ## or a larger maximum memory, when no number of workers fits whole chunks
-    w <- chunkwarning(15L, 1L)
+              grepl("The calculations process", w) &&
+              grepl('maxmem="3G"', w, fixed=TRUE) &&
+              grepl("with\\s+the\\s+8\\s+parallel\\s+workers", w) &&
+              grepl("Fewer parallel workers", w))
+    ## naming the step of the calculations
+    w <- chunkwarning(15L, 8L, upb, step="Ranking columns")
+    checkTrue(is.character(w) && grepl("Ranking columns processes", w))
+    ## or a larger maximum memory, when none gives whole chunks
+    w <- chunkwarning(15L, 8L, function(nw, mm) 15L)
     checkTrue(is.character(w) && grepl("larger", w))
+    checkTrue(is.na(GSVA:::.chunk_maxmem(40L, 8L, 1e9, function(nw, mm) 15L)))
     ## while blocks of at least half a chunk, or a single block, do not
-    checkTrue(!chunkwarning(20L, 6L))
-    checkTrue(!chunkwarning(ncol(H), 1L))
+    checkTrue(!chunkwarning(20L, 6L, upb))
+    checkTrue(!chunkwarning(ncol(H), 1L, upb))
     checkTrue(!GSVA:::.check_chunk_blocks(m, 2L, 15L, 8L, 1e9, upb))
+    ## the warnings of several steps collected, as gsva() does, give a single
+    ## warning with the largest of their maximum memory, here for 12 workers
+    ## with blocks of 10 columns, 4 GiB, or none when no step warns
+    w <- tryCatch(GSVA:::.with_chunk_blocks({
+                      GSVA:::.check_chunk_blocks(H, 2L, 15L, 8L, 1e9, upb,
+                                                 "Normalizing rows")
+                      GSVA:::.check_chunk_blocks(H, 2L, 10L, 12L, 1e9, upb,
+                                                 "Ranking columns")
+                  }), warning=conditionMessage)
+    checkTrue(is.character(w) && grepl("Some steps", w) &&
+              grepl("Normalizing rows: blocks of 15 columns", w) &&
+              grepl("Ranking columns: blocks of 10 columns", w) &&
+              grepl('maxmem="4G"', w, fixed=TRUE) &&
+              grepl("blocks of all of them", w))
+    checkIdentical(GSVA:::.with_chunk_blocks(1L), 1L)
+    checkTrue(is.null(GSVA:::gsva_global$chunkblocks))
+    ## and a single step collected gives its own warning
+    w <- tryCatch(GSVA:::.with_chunk_blocks(
+                      GSVA:::.check_chunk_blocks(H, 2L, 15L, 8L, 1e9, upb,
+                                                 "Ranking columns")),
+                  warning=conditionMessage)
+    checkTrue(is.character(w) && grepl("Ranking columns processes", w))
     ## also for a subset of the on-disk data, with the chunks of its seed
     checkTrue(is.null(chunkdim(H[, 1:2000])))
     checkIdentical(as.integer(GSVA:::.ondisk_chunkdim(H[, 1:2000])),
