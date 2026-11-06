@@ -1287,10 +1287,13 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 }
 
 ## memory in bytes that each R process takes outside the allocations of R,
-## such as the memory that R releases but the process keeps, about 0.3 GB, as
-## measured on Linux in forked workers processing blocks of single-cell data
+## such as the memory that R releases but the process keeps, as measured in
+## forked workers processing blocks of single-cell data stored on disk: about
+## 0.3 GB on Linux and about 0.45 GB on macOS, where an R process reading
+## blocks from an HDF5 file takes about 0.65 GB outside R, including the
+## buffers of .disk_read_mem()
 .proc_extra_mem <- function() {
-    0.3 * 1024^3
+    if (Sys.info()[["sysname"]] == "Darwin") 0.45 * 1024^3 else 0.3 * 1024^3
 }
 
 ## memory in bytes that each forked worker takes as its own from the data of

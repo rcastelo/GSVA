@@ -92,8 +92,9 @@ or script may depend on other commands and packages used in that same
 session or script. In particular, each R process running GSVA, the main one
 and each of its parallel workers in \code{BPPARAM}, takes by itself the memory
 allocated by R in the session where GSVA runs, besides the expression data
-given to it, and about 0.3 GB more; loading GSVA and the packages it depends
-on takes about 0.6 GB in a new R session. This includes forked workers, such
+given to it, and about 0.3 GB more (0.45 GB on macOS); loading GSVA and the
+packages it depends on takes about 0.6 GB in a new R session. This includes
+forked workers, such
 as those of a \code{\link[BiocParallel:MulticoreParam-class]{MulticoreParam}}
 object, which end up taking most of that memory as their own while they
 run, together with about one third of sparse expression data held in main
