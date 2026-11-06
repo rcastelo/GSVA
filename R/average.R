@@ -49,7 +49,8 @@ setMethod("gsva", signature(param="avgParam"),
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "average", first=NA,
                                                               last=NA, whdim=2,
-                                                              ondisk, verbose)
+                                                              ondisk, verbose,
+                                                              BPPARAM=BPPARAM)
 
               BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
                                                  minparrows=100, minparcols=100,

@@ -1039,7 +1039,8 @@ gsvaRowNorm <- function(param,
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=1,
-                                                ondisk, verbose)
+                                                ondisk, verbose,
+                                                BPPARAM=BPPARAM)
 
     filtDataMatrix <- dataMatrix
     BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
@@ -1187,7 +1188,8 @@ gsvaColRanks <- function(rowNormExprData,
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=2,
-                                                ondisk, verbose)
+                                                ondisk, verbose,
+                                                BPPARAM=BPPARAM)
     sparse <- .get_sparse(param)
     if (sparse && !is_sparse(dataMatrix))
         sparse <- FALSE
@@ -1326,7 +1328,8 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
 
     filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix, "GSVA",
                                                     first, last, whdim=2,
-                                                    ondisk, verbose)
+                                                    ondisk, verbose,
+                                                    BPPARAM=BPPARAM)
 
     BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
                                        minparrows=100, minparcols=100,

@@ -257,6 +257,70 @@ test_load_sparse_by_blocks <- function() {
     checkTrue(loads(x) <= 2L)
 }
 
+test_load_sparse_by_blocks_bp <- function() {
+
+    message("Running unit tests for loading sparse on-disk data in parallel")
+
+    suppressPackageStartupMessages({
+        library(Matrix)
+        library(HDF5Array)
+        library(BiocParallel)
+    })
+
+    ## sparse on-disk data in three blocks of a chunk each, with a default
+    ## block of a chunk, loaded by the parallel workers into the same object
+    ## as with as(), also through a subset of its columns, with forked and
+    ## socket workers, which leave the parallel back-end as it was
+    set.seed(123)
+    m <- rsparsematrix(200, 90, density=0.1)
+    dimnames(m) <- list(paste0("g", 1:200), paste0("s", 1:90))
+    h <- writeHDF5Array(as.matrix(m), chunkdim=c(50L, 30L))[, 1:90]
+    expected <- as(h, "SVT_SparseMatrix")
+    insize <- as.numeric(object.size(expected))
+    oldbs <- getAutoBlockSize()
+    suppressMessages(setAutoBlockSize(200 * 30 * 8))
+    on.exit(suppressMessages(setAutoBlockSize(oldbs)), add=TRUE)
+    grid <- colAutoGrid(h)
+    checkIdentical(length(grid), 3L)
+    ## socket workers, which take a few seconds to start, are tested once
+    bp <- SnowParam(workers=2)
+    checkIdentical(GSVA:::.load_sparse_by_blocks(h, maxmem=Inf, BPPARAM=bp),
+                   expected)
+    checkTrue(!bpisup(bp))
+    if (.Platform$OS.type != "windows") {
+        bp <- MulticoreParam(workers=2)
+        checkIdentical(GSVA:::.load_workers(h, length(grid), Inf, NA_real_,
+                                            bp), 2L)
+        blocks <- GSVA:::.read_sparse_blocks_bp(h, grid, 2L, bp)
+        checkIdentical(length(blocks), 3L)
+        checkIdentical(unname(do.call(cbind, blocks)), unname(expected))
+        checkIdentical(GSVA:::.load_sparse_by_blocks(h, maxmem=Inf,
+                                                     BPPARAM=bp), expected)
+        checkIdentical(GSVA:::.load_sparse_by_blocks(h, maxmem=2^40,
+                                                     insize=insize,
+                                                     BPPARAM=bp), expected)
+        checkTrue(!bpisup(bp))
+    }
+
+    ## the number of workers reading blocks at the same time is the one of
+    ## the workers or blocks, when the memory is not known, and otherwise the
+    ## one whose blocks fit in the memory left by the result together with
+    ## the memory of all the workers, or 1, to read them in this process
+    bp <- SnowParam(workers=4)
+    checkIdentical(GSVA:::.load_workers(h, 3L, Inf, NA_real_, NULL), 1L)
+    checkIdentical(GSVA:::.load_workers(h, 1L, Inf, NA_real_, bp), 1L)
+    checkIdentical(GSVA:::.load_workers(h, 3L, Inf, NA_real_, bp), 3L)
+    checkIdentical(GSVA:::.load_workers(h, 10L, Inf, NA_real_, bp), 4L)
+    gb <- 1024^3
+    oldopt <- options(GSVA.workermem=gb)
+    on.exit(options(oldopt), add=TRUE)
+    procs <- 4 * GSVA:::.block_worker_mem(h, 2L)$workermem
+    checkIdentical(GSVA:::.load_workers(h, 10L, procs + 2 * gb, gb, bp), 2L)
+    checkIdentical(GSVA:::.load_workers(h, 10L, procs + 9 * gb, gb, bp), 4L)
+    checkIdentical(GSVA:::.load_workers(h, 10L, procs + 1.5 * gb, gb, bp),
+                   1L)
+}
+
 test_memory_check <- function() {
 
     message("Running unit tests for the check of the memory required")
