@@ -12,8 +12,14 @@ test_ssgsea <- function() {
                      set3=paste("g", 7:10, sep=""))
 
     ## sample data from a normal distribution with mean 0 and st.dev. 1
-    ## seeding the random number generator for the purpose of this test
-    set.seed(123)
+    ## seeding the random number generator for the purpose of this test,
+    ## with the default kinds of R >= 3.6.0, on which the expected scores
+    ## below depend, independently of those of the caller, which are
+    ## restored on exit
+    oldrng <- RNGkind()
+    on.exit(RNGkind(oldrng[1], oldrng[2], oldrng[3]), add=TRUE)
+    set.seed(123, kind="Mersenne-Twister", normal.kind="Inversion",
+             sample.kind="Rejection")
     y <- matrix(rnorm(n*p), nrow=p, ncol=n,
                 dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
 

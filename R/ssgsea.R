@@ -41,9 +41,12 @@ setMethod("gsva", signature(param="ssgseaParam"),
                                       recompute_nzcount=FALSE, maxmem=maxmem,
                                       verbose=verbose, mf=mf, dense=TRUE)
               container <- .input_held_mem(param)
+              shared <- .input_shared_mem(param)
               .check_step_mem(filtDataMatrix, 2L, NA, NA, ondisk, mf, BPPARAM,
-                              maxmem, dense=TRUE, container=container)
-              .hold_input_mem(filtDataMatrix, 2L, NA, NA, container)
+                              maxmem, dense=TRUE, container=container,
+                              shared=shared)
+              .hold_input_mem(filtDataMatrix, 2L, NA, NA, container,
+                              shared=shared)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "ssGSEA", first=NA,
@@ -60,15 +63,18 @@ setMethod("gsva", signature(param="ssgseaParam"),
                   cli_alert_info("Calculating ssGSEA scores for {n} gene sets")
               }
 
-              ssgsea_es <- ssgsea(X=filtDataMatrix,
-                                  geneSetsIdx=filtMappedGeneSets,
-                                  alpha=.get_alpha(param), 
-                                  normalization=.get_normalize(param),
-                                  any_na=anyNA(param),
-                                  na_use=.get_NAuse(param),
-                                  minSize=get_minSize(param),
-                                  ondisk=ondisk, verbose=verbose,
-                                  BPPARAM=BPPARAM, maxmem=maxmem)
+              ## one warning for all the steps whose blocks are narrower
+              ## than the chunks of the input data on disk
+              ssgsea_es <- .with_chunk_blocks(
+                  ssgsea(X=filtDataMatrix,
+                         geneSetsIdx=filtMappedGeneSets,
+                         alpha=.get_alpha(param),
+                         normalization=.get_normalize(param),
+                         any_na=anyNA(param),
+                         na_use=.get_NAuse(param),
+                         minSize=get_minSize(param),
+                         ondisk=ondisk, verbose=verbose,
+                         BPPARAM=BPPARAM, maxmem=maxmem))
 
               gs <- .geneSetsIndices2Names(
                   indices=filtMappedGeneSets,

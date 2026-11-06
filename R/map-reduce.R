@@ -730,7 +730,8 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
 
 ## warn, when creating the parameters of jobs with 'ncpus' CPU cores and 'mem'
 ## bytes of memory each, that the R process of a job and its parallel workers
-## may not fit in 'mem', see .worker_mem(), unless the option
+## may not fit in 'mem', see .worker_mem(), where each R process is a new one,
+## unless the option
 ## 'GSVA.check_memory=FALSE' is set
 #' @importFrom cli cli_warn
 #' @importFrom memuse mu
@@ -739,7 +740,7 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
         return(invisible(FALSE))
 
     nworkers <- .map_job_workers(ncpus)
-    need <- (1 + nworkers) * .worker_mem()
+    need <- (1 + nworkers) * .worker_mem(session=FALSE)
     if (need <= mem)
         return(invisible(FALSE))
 
@@ -843,7 +844,10 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
         dims[whdim] <- chunkwidth
     }
     nworkers <- .map_job_workers(ncpus, dims)
-    baseline <- (1 + nworkers) * .worker_mem()
+    ## the R process of each job is a new one, which does not take the memory
+    ## of this one, see .worker_mem()
+    permem <- .worker_mem(session=FALSE)
+    baseline <- (1 + nworkers) * permem
     if (baseline > maxmem) {
         bltxt <- as.character(mu(baseline))
         mmtxt <- as.character(mu(maxmem))
@@ -878,9 +882,10 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
                 .mem_fraction_R * maxmem
     held <- .step_held_input(X, dims, whdim, !inmemory, container)
     need <- .step_mem_need(dims, insize, whdim, eltbytes, sparse, inmemory,
-                           mf, nworkers, held, densify=mf$densify)
+                           mf, nworkers, held, densify=mf$densify,
+                           dgc=is(X, "dgCMatrix"), permem=permem)
 
-    .check_mem_need(need, maxmem, nworkers, hint=hint)
+    .check_mem_need(need, maxmem, nworkers, hint=hint, permem=permem)
 }
 
 #' @importFrom BiocParallel SerialParam MulticoreParam SnowParam

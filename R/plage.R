@@ -46,10 +46,12 @@ setMethod("gsva", signature(param="plageParam"),
                                     else bpnworkers(BPPARAM))
               .check_plage_gram_mem(filtMappedGeneSets, gm)
               container <- .input_held_mem(param)
+              shared <- .input_shared_mem(param)
               .check_step_mem(filtDataMatrix, 2L, NA, NA, ondisk, mf, BPPARAM,
                               maxmem, dense=TRUE, extramem=gm$mem,
-                              container=container)
-              .hold_input_mem(filtDataMatrix, 2L, NA, NA, container)
+                              container=container, shared=shared)
+              .hold_input_mem(filtDataMatrix, 2L, NA, NA, container,
+                              shared=shared)
 
               filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix,
                                                               "PLAGE", first=NA,
@@ -66,10 +68,13 @@ setMethod("gsva", signature(param="plageParam"),
                   cli_alert_info("Calculating PLAGE scores for {n} gene sets")
               }
 
-              plage_es <- plage(X=filtDataMatrix,
-                                geneSets=filtMappedGeneSets,
-                                ondisk=ondisk, verbose=verbose,
-                                BPPARAM=BPPARAM, maxmem=maxmem)
+              ## one warning for all the steps whose blocks are narrower
+              ## than the chunks of the input data on disk
+              plage_es <- .with_chunk_blocks(
+                  plage(X=filtDataMatrix,
+                        geneSets=filtMappedGeneSets,
+                        ondisk=ondisk, verbose=verbose,
+                        BPPARAM=BPPARAM, maxmem=maxmem))
 
               gs <- .geneSetsIndices2Names(
                   indices=filtMappedGeneSets,

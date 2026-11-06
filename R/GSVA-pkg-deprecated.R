@@ -52,8 +52,13 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
               ## the input data in main memory remains allocated while the
               ## column ranks are calculated, which their blocks cannot take
               oldheld <- gsva_global$heldmem
+              oldshared <- gsva_global$heldshared
               gsva_global$heldmem <- oldheld + .input_held_mem(param)
-              on.exit(gsva_global$heldmem <- oldheld, add=TRUE)
+              gsva_global$heldshared <- oldshared + .input_shared_mem(param)
+              on.exit({
+                  gsva_global$heldmem <- oldheld
+                  gsva_global$heldshared <- oldshared
+              }, add=TRUE)
 
               gsvaranks <- gsvaColRanks(rowNormExprData=gsvarnorm,
                                         verbose=verbose,
