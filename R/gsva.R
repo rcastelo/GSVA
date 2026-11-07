@@ -2569,16 +2569,27 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     if (!any_na && device == "gpu") {
         gset_sizes  <- lengths(geneSetsIdx)
         max_gpu_sz  <- .gsva_cuda_max_gset_size()
-        gpu_idxs    <- which(gset_sizes <= max_gpu_sz)
-        cpu_idxs    <- which(gset_sizes >  max_gpu_sz)
+        walk_safe   <- .gsva_cuda_walk_safe(nrow(R), gset_sizes, tau)
+        full_set    <- gset_sizes == nrow(R)
+
+        gpu_idxs    <- which(gset_sizes <= max_gpu_sz & walk_safe & !full_set)
+        cpu_idxs    <- which(gset_sizes > max_gpu_sz | !walk_safe | full_set)
 
         if (length(cpu_idxs) > 0 && verbose) {
             n_gpu_gsets <- length(gpu_idxs)
             n_cpu_gsets <- length(cpu_idxs)
             max_csize   <- max(gset_sizes[cpu_idxs])
+            n_unsafe    <- sum(!walk_safe)
+            n_full      <- sum(full_set)
             cli_alert_info(paste("Hybrid GPU/CPU dispatch: {n_gpu_gsets} gene sets at most",
                                  "{max_gpu_sz} genes on GPU,",
                                  "{n_cpu_gsets} gene sets max {max_csize} genes on CPU"))
+            if (n_unsafe > 0)
+                cli_alert_info(paste("{n_unsafe} gene sets at risk of float overflow",
+                                     "at tau={tau} scored on CPU"))
+            if (n_full > 0)
+                cli_alert_info(paste("{n_full} gene sets containing all genes",
+                                     "scored on CPU"))
         }
     } else {
         gpu_idxs <- integer(0)

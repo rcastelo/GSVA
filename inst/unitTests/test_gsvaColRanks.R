@@ -130,6 +130,151 @@ test_gsvaColRanksPermutation <- function() {
     }
 }
 
+test_gsvaWalkDivert <- function() {
+    message("Running unit tests for the CPU diversion of overflow-prone walks.")
+
+    safe <- GSVA:::.gsva_cuda_walk_safe
+    checkTrue(safe(20000L, 1500L, 6))
+    ## the weights, not the walk total, set the bound: at tau=9 the largest
+    ## weight is ~1e36 and fits gsva_float_t, the total over the 1500 genes is
+    ## ~1.5e39 and does not; the device side of this case is the tau=9 run below
+    checkTrue(safe(20000L, 1500L, 9))
+    checkTrue(safe(20000L, 1500L, 0))
+    checkTrue(safe(2L, 2L, 1e6))
+    checkTrue(!safe(10L, 1L, Inf))
+    checkTrue(!safe(10L, 1L, NaN))
+    checkTrue(!safe(10L, 1L, -1))
+
+    ## that safety bound is a property of the float type the walk was compiled
+    ## with. tau=100 at G=10 overflows float but not double, so it separates
+    ## the builds
+    narrowWalk <- !safe(10L, 1L, 100L)
+    if (narrowWalk) {
+        ## tau=10 at G=20000 is over the limit: tau * log(G/2) is 92.1, above
+        ## log(FLT_MAX) = 88.72
+        checkIdentical(c(FALSE, FALSE), safe(20000L, c(1500L, 2L), 10))
+        ## the boundary of that limit: tau * log(G/2) < log(FLT_MAX) holds up to
+        ## tau=55 at G=10, since 5^55 < FLT_MAX < 5^56
+        checkTrue(safe(10L, 1L, 55))
+        checkTrue(!safe(10L, 1L, 56))
+    } else {
+        message("Walk weights are doubles; FLT_MAX-bound assertions skipped.")
+    }
+
+    if (!GSVA:::.gsva_cuda_available()) {
+        message("CUDA not available; skipping GPU diversion assertions.")
+        return(invisible(NULL))
+    }
+
+    p <- 20000
+    n <- 10
+    genes <- paste0("g", seq_len(p))
+    set.seed(123)
+    y <- matrix(rnorm(p*n), nrow=p, ncol=n,
+                dimnames=list(genes, paste0("s", seq_len(n))))
+    set.seed(456)
+    gsets <- list(bigset=sample(genes, 1500))
+
+    ## tau=9 at G=20000 is the case the double accumulator rescues: the
+    ## largest weight is (G/2)^9 ~ 1e36, which fits gsva_float_t, while the
+    ## 1500-term total is ~1.5e39, which does not.  The bound tracks the type
+    ## the weights saturate in and charges the walk no extra log(k) headroom,
+    ## so this set stays on the GPU and must match the CPU walk.  Weights are
+    ## computed with GSVA_POW into gsva_float_t and the running peak and valley
+    ## are held in gsva_float_t (struct PeakValley), so terms and extremes carry
+    ## a float rounding even though the sum is double: the relative error
+    ## against the CPU walk is ~1e-5 at p=20000, looser than
+    ## checkEqualsNumeric's default tolerance.
+    risky_par <- gsvaParam(y, gsets, tau=9)
+    checkTrue(safe(p, lengths(gsets), 9))
+    msgs9 <- character()
+    es_gpu9 <- withCallingHandlers(gsva(risky_par, device="gpu", verbose=TRUE),
+                                   message=function(m) {
+                                     msgs9 <<- c(msgs9, conditionMessage(m))
+                                     invokeRestart("muffleMessage") })
+    checkTrue(all(is.finite(es_gpu9)))
+    checkTrue(!any(grepl("at risk of float overflow", msgs9)))
+    es_cpu9 <- gsva(risky_par, device="cpu", verbose=FALSE)
+    .check_gpu_equiv(es_cpu9, es_gpu9, tol=1e-4)
+
+    ## a set whose weights would saturate the GPU walk is diverted to the
+    ## CPU and must score identically to the CPU-only run, without NA or
+    ## sentinel values leaking from the kernel.  Such a tau exists only while
+    ## the walk is narrower than the CPU's own accumulation; in a double build
+    ## GPU and CPU saturate at the same point, so there is nothing to divert.
+    if (!narrowWalk) {
+        message("Walk weights are doubles; saturation-diversion assertions skipped.")
+    } else {
+        bigpar <- gsvaParam(y, gsets, tau=10)
+        es_cpu <- gsva(bigpar, device="cpu", verbose=FALSE)
+        es_gpu <- gsva(bigpar, device="gpu", verbose=FALSE)
+        checkTrue(all(is.finite(es_gpu)))
+        .check_gpu_equiv(es_cpu, es_gpu)
+
+        ## just below the overflow risk
+        okpar <- gsvaParam(y, gsets, tau=3)
+        checkTrue(GSVA:::.gsva_cuda_walk_safe(p, lengths(gsets), 3))
+        es_cpu_ok <- gsva(okpar, device="cpu", verbose=FALSE)
+        es_gpu_ok <- gsva(okpar, device="gpu", verbose=FALSE)
+        checkTrue(all(is.finite(es_gpu_ok)))
+        .check_gpu_equiv(es_cpu_ok, es_gpu_ok, tol=1e-4)
+    }
+
+    ## a gene set covering all genes is diverted to the CPU
+    p2 <- 100
+    n2 <- 6
+    genes2 <- paste0("h", seq_len(p2))
+    set.seed(789)
+    y2 <- matrix(rnorm(p2*n2), nrow=p2, ncol=n2,
+                 dimnames=list(genes2, paste0("c", seq_len(n2))))
+    set.seed(987)
+    fsets <- list(fullset=genes2, ctrl=sample(genes2, 30))
+
+    ## neither set is diverted by size or by the saturation predicate:
+    ## the full-gene-set term must be what sends `fullset` to the CPU
+    checkTrue(all(lengths(fsets) <= GSVA:::.gsva_cuda_max_gset_size()))
+    checkTrue(all(GSVA:::.gsva_cuda_walk_safe(p2, lengths(fsets), 1)))
+
+    fullpar <- gsvaParam(y2, fsets, tau=1)
+    es_cpu_full <- suppressWarnings(gsva(fullpar, device="cpu", verbose=FALSE))
+    checkTrue(all(is.na(es_cpu_full["fullset", ])))
+    checkTrue(all(is.finite(es_cpu_full["ctrl", ])))
+
+    es_gpu_full <- suppressWarnings(gsva(fullpar, device="gpu", verbose=FALSE))
+    checkTrue(all(is.na(es_gpu_full["fullset", ])))
+    checkTrue(all(is.finite(es_gpu_full["ctrl", ])))
+    .check_gpu_equiv(es_cpu_full, es_gpu_full)
+
+    ## the diversion of full gene sets is announced in verbose mode
+    msgs <- character()
+    outs <- capture.output(
+        suppressWarnings(
+            withCallingHandlers(
+                gsva(fullpar, device="gpu", verbose=TRUE),
+                message=function(m) {
+                    msgs <<- c(msgs, conditionMessage(m))
+                    invokeRestart("muffleMessage")
+                })))
+    checkTrue(grepl("containing all genes",
+                    paste(c(outs, msgs), collapse="\n"), fixed=TRUE))
+
+    ## the same diversion applies to the sparse layout
+    p3 <- 200
+    n3 <- 6
+    genes3 <- paste0("q", seq_len(p3))
+    set.seed(654)
+    cnt3 <- matrix(rpois(p3*n3, 0.8), nrow=p3, ncol=n3,
+                   dimnames=list(genes3, paste0("d", seq_len(n3))))
+    ssets <- list(fullset=genes3, ctrl=sample(genes3, 40))
+    spar <- gsvaParam(as(cnt3, "dgCMatrix"), ssets, kcdf="none", tau=1)
+    es_cpu_sp <- suppressWarnings(gsva(spar, device="cpu", verbose=FALSE))
+    es_gpu_sp <- suppressWarnings(gsva(spar, device="gpu", verbose=FALSE))
+    checkTrue(all(is.na(es_cpu_sp["fullset", ])))
+    checkTrue(all(is.na(es_gpu_sp["fullset", ])))
+    checkTrue(all(is.finite(es_gpu_sp["ctrl", ])))
+    .check_gpu_equiv(es_cpu_sp, es_gpu_sp)
+}
+
 test_gsvaColRanksSparseGpu <- function() {
     message("Running unit tests for GSVA sparse-rank scoring on GPU.")
 
