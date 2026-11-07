@@ -1964,3 +1964,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 .gsva_cuda_max_gset_size <- function() {
     .Call("gsva_cuda_max_gset_size_R", PACKAGE = "GSVA")
 }
+
+.gsva_cuda_walk_safe <- function(G, gset_sizes, tau) {
+    .Call("gsva_cuda_walk_safe_R", as.integer(G), as.integer(gset_sizes),
+          as.double(tau), PACKAGE = "GSVA")
+}
