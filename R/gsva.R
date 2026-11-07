@@ -585,9 +585,8 @@ setValidity("gsvaParam", function(object) {
     }
     if(length(object@tau) != 1) {
         inv <- c(inv, "@tau must be of length 1")
-    }
-    if(is.na(object@tau)) {
-        inv <- c(inv, "@tau must not be NA")
+    } else if(!is.finite(object@tau) || object@tau < 0) {
+        inv <- c(inv, "@tau must be a finite non-negative number")
     }
     if(length(object@maxDiff) != 1) {
         inv <- c(inv, "@maxDiff must be of length 1")
