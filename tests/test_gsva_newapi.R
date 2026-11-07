@@ -25,6 +25,13 @@ gsva.es <- gsva(gsvaPar, verbose=FALSE)
 dim(gsva.es)
 gsva.es[seq.int(min(nRowsToPrint, nrow(gsva.es))),]
 
+cat("tau=-1 rejected:",
+    inherits(try(gsvaParam(X, gs, tau=-1, verbose=FALSE), silent=TRUE),
+             "try-error"), "\n")
+cat("tau=Inf rejected:",
+    inherits(try(gsvaParam(X, gs, tau=Inf, verbose=FALSE), silent=TRUE),
+             "try-error"), "\n")
+
 c2BroadSets <- c2BroadSets[c(grep("_UP$", names(c2BroadSets)),
                              grep("_DN$", names(c2BroadSets)))]
 firPar <- gsvaParam(geneExpCostaEtAl2021, c2BroadSets,
