@@ -152,10 +152,11 @@ test_blockgrids <- function() {
     checkTrue(is.na(GSVA:::.ondisk_chunkdim(H[, 2:2000], aligned=TRUE)[2]))
     ## the number of blocks of a subset is balanced in whole chunks, see
     ## .balance_blocks(): the 1960 columns, 49 chunks, in blocks of 2 chunks
-    ## take three rounds of 10 workers, which blocks of 2 chunks still take,
-    ## while blocks of 20 chunks take two rounds of 2 workers, which blocks of
-    ## 13 chunks also take
-    checkIdentical(GSVA:::.balance_blocks(80L, H[, 41:2000], 2L, 10L), 80L)
+    ## take three rounds of 10 workers, while blocks of 1 chunk take five
+    ## rounds, five sixths of their time, and blocks of 20 chunks take two
+    ## rounds of 2 workers, which blocks of 13 chunks also take, while blocks
+    ## of 5 chunks would take five rounds to save only 1/26 of their time
+    checkIdentical(GSVA:::.balance_blocks(80L, H[, 41:2000], 2L, 10L), 40L)
     checkIdentical(GSVA:::.balance_blocks(800L, H[, 41:2000], 2L, 2L), 520L)
 }
 
@@ -513,9 +514,15 @@ test_balanced_blocks <- function() {
     ## data in chunks of 31 columns, 3000 columns in 97 chunks: blocks of 6
     ## chunks with 10 workers, 17 blocks in 2 rounds, become 20 blocks of 5
     ## chunks, while blocks of 4 chunks with 3 workers, 25 blocks in 9 rounds,
-    ## cannot take less time with whole chunks and are kept
+    ## are kept, because narrower blocks of whole chunks would save less than
+    ## a tenth of their time, e.g., 33 blocks of 3 chunks in 11 rounds
     H <- writeHDF5Array(matrix(0, nrow=2, ncol=3000), chunkdim=c(2L, 31L))
     checkIdentical(GSVA:::.balance_blocks(186L, H, 2L, 10L), 155L)
     checkIdentical(length(colAutoGrid(H, ncol=155L)), 20L)
     checkIdentical(GSVA:::.balance_blocks(124L, H, 2L, 3L), 124L)
+    ## 3000 columns in 30 chunks of 100 columns: blocks of 2 chunks, 15 blocks
+    ## in 2 rounds of 10 workers, become 30 blocks of 1 chunk in 3 rounds,
+    ## which take three quarters of their time
+    H <- writeHDF5Array(matrix(0, nrow=2, ncol=3000), chunkdim=c(2L, 100L))
+    checkIdentical(GSVA:::.balance_blocks(200L, H, 2L, 10L), 100L)
 }

@@ -613,8 +613,16 @@
 ## the rows or columns do not split evenly into blocks of the same width.
 ## when 'n' is a multiple of the width of the chunks of 'X', see
 ## .align_to_chunks(), blocks keep taking whole chunks, which may leave their
-## number unchanged. with a single block, 'X' is not split, as without
-## parallelism
+## number unchanged, e.g., 30 chunks in blocks of 2 chunks, 15 blocks, take
+## two rounds of 10 workers, and blocks of whole chunks cannot be narrower in
+## two rounds. blocks of whole chunks can then be narrower in more rounds,
+## when these take less time, which is about the number of rounds times the
+## width of the blocks, e.g., 30 blocks of 1 chunk take three rounds of 10
+## workers, which take three quarters of the time of the two rounds of blocks
+## of 2 chunks. because each round adds the time of starting it and of
+## gathering its results, more rounds are taken only when they save at least
+## a tenth of that time, taking the fewest rounds of those taking the least
+## time. with a single block, 'X' is not split, as without parallelism
 .balance_blocks <- function(n, X, whdim, nworkers) {
     nunits <- dim(X)[whdim]
     if (nworkers < 2L || n < 1L || n >= nunits)
@@ -629,6 +637,13 @@
         u <- cd[whdim]
     m <- ceiling(nunits / u)
     rounds <- ceiling(ceiling(m / (n %/% u)) / nworkers)
+    if (u > 1) {
+        r <- seq(rounds, max(rounds, ceiling(m / nworkers)))
+        cost <- r * ceiling(m / (r * nworkers))
+        better <- cost <= 0.9 * cost[1L]
+        if (any(better))
+            rounds <- r[better][which.min(cost[better])]
+    }
     as.integer(ceiling(m / (rounds * nworkers)) * u)
 }
 
