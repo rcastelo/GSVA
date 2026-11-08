@@ -39,16 +39,22 @@
 #' use `maxmem=Inf`. Note that the amount of main memory used in an R session
 #' or script may depend on other commands and packages used in that same
 #' session or script. In particular, each R process running GSVA, the main one
-#' and each of its parallel workers in `BPPARAM`, takes about 0.8 GB by itself
-#' for loading GSVA and the packages it depends on, including forked workers,
-#' such as those of a [`MulticoreParam`][BiocParallel::MulticoreParam-class]
+#' and each of its parallel workers in `BPPARAM`, takes by itself the memory
+#' allocated by R in the session where GSVA runs, besides the expression data
+#' given to it, and about 0.3 GB more (0.45 GB on macOS); loading GSVA and the
+#' packages it depends on takes about 0.6 GB in a new R session. This includes
+#' forked workers, such
+#' as those of a [`MulticoreParam`][BiocParallel::MulticoreParam-class]
 #' object, which end up taking most of that memory as their own while they
-#' run. The memory that GSVA estimates includes the expression data given to
-#' it, with all the assays of a `SummarizedExperiment` object held in main
-#' memory, but not other objects of the R session, such as other large
-#' matrices or data sets, which reduce the memory actually available to GSVA;
-#' when such objects are present, consider setting `maxmem` to the memory that
-#' they leave. Before starting its calculations, GSVA gives a warning when the
+#' run, together with about one third of sparse expression data held in main
+#' memory, except when stored in a `dgCMatrix` object. The memory that GSVA
+#' estimates includes the expression data given to it, with all the assays of
+#' a `SummarizedExperiment` object held in main memory, and the other objects
+#' of the R session, once for each R process, which overestimates the memory
+#' of forked workers when these objects are large matrices, because forked
+#' workers share their memory with the main R process; when such objects are
+#' present, consider removing them before running GSVA. Before starting its
+#' calculations, GSVA gives a warning when the
 #' memory it estimates they require exceeds `maxmem`, suggesting to use fewer
 #' parallel workers or a larger `maxmem`. The memory taken by each R process
 #' can be set with the option `GSVA.workermem`, in bytes, and this check can be
@@ -185,6 +191,14 @@ setMethod("gsva", signature(param="gsvaParam"),
               gsva_global$check_memory <- FALSE
               on.exit(gsva_global$check_memory <- TRUE, add=TRUE)
 
+              ## the steps whose blocks are narrower than the chunks of the
+              ## input data on disk give one warning for all of them at the
+              ## end, see .check_chunk_blocks()
+              oldcb <- .start_chunk_blocks()
+              cbdone <- FALSE
+              on.exit(if (!cbdone) gsva_global$chunkblocks <- oldcb,
+                      add=TRUE)
+
               gsvarnorm <- gsvaRowNorm(param=param, verbose=verbose,
                                        dropExistingAssays=TRUE,
                                        errorOnTooFewRows=TRUE,
@@ -193,7 +207,11 @@ setMethod("gsva", signature(param="gsvaParam"),
               ## the input data in main memory remains allocated while the
               ## next steps run, which their blocks cannot take
               gsva_global$heldmem <- .input_held_mem(param)
-              on.exit(gsva_global$heldmem <- 0, add=TRUE)
+              gsva_global$heldshared <- .input_shared_mem(param)
+              on.exit({
+                  gsva_global$heldmem <- 0
+                  gsva_global$heldshared <- 0
+              }, add=TRUE)
 
               gsvaranks <- gsvaColRanks(rowNormExprData=gsvarnorm,
                                         verbose=verbose,
@@ -201,12 +219,18 @@ setMethod("gsva", signature(param="gsvaParam"),
                                         BPPARAM=BPPARAM,
                                         maxmem=maxmem)
               ## the row normalization is not needed by the calculation of
-              ## the scores, and its memory is released before it starts
+              ## the scores, and its memory is released before it starts, on
+              ## big data, where the time of a full collection of garbage is
+              ## small compared to the one of the calculations
+              wasbig <- ncol(gsvarnorm) > 10000
               rm(gsvarnorm)
-              invisible(gc())
+              if (wasbig)
+                  invisible(gc())
 
               es <- gsvaColScores(rankExprData=gsvaranks, verbose=verbose,
                                   BPPARAM=BPPARAM, maxmem=maxmem)
+              .end_chunk_blocks(oldcb)
+              cbdone <- TRUE
 
               if (verbose)
                   cli_alert_success("Calculations finished")
@@ -882,16 +906,22 @@ setMethod("details",
 #' use `maxmem=Inf`. Note that the amount of main memory used in an R session
 #' or script may depend on other commands and packages used in that same
 #' session or script. In particular, each R process running GSVA, the main one
-#' and each of its parallel workers in `BPPARAM`, takes about 0.8 GB by itself
-#' for loading GSVA and the packages it depends on, including forked workers,
-#' such as those of a [`MulticoreParam`][BiocParallel::MulticoreParam-class]
+#' and each of its parallel workers in `BPPARAM`, takes by itself the memory
+#' allocated by R in the session where GSVA runs, besides the expression data
+#' given to it, and about 0.3 GB more (0.45 GB on macOS); loading GSVA and the
+#' packages it depends on takes about 0.6 GB in a new R session. This includes
+#' forked workers, such
+#' as those of a [`MulticoreParam`][BiocParallel::MulticoreParam-class]
 #' object, which end up taking most of that memory as their own while they
-#' run. The memory that GSVA estimates includes the expression data given to
-#' it, with all the assays of a `SummarizedExperiment` object held in main
-#' memory, but not other objects of the R session, such as other large
-#' matrices or data sets, which reduce the memory actually available to GSVA;
-#' when such objects are present, consider setting `maxmem` to the memory that
-#' they leave. Before starting its calculations, GSVA gives a warning when the
+#' run, together with about one third of sparse expression data held in main
+#' memory, except when stored in a `dgCMatrix` object. The memory that GSVA
+#' estimates includes the expression data given to it, with all the assays of
+#' a `SummarizedExperiment` object held in main memory, and the other objects
+#' of the R session, once for each R process, which overestimates the memory
+#' of forked workers when these objects are large matrices, because forked
+#' workers share their memory with the main R process; when such objects are
+#' present, consider removing them before running GSVA. Before starting its
+#' calculations, GSVA gives a warning when the
 #' memory it estimates they require exceeds `maxmem`, suggesting to use fewer
 #' parallel workers or a larger `maxmem`. The memory taken by each R process
 #' can be set with the option `GSVA.workermem`, in bytes, and this check can be
@@ -1002,15 +1032,18 @@ gsvaRowNorm <- function(param,
         mf$assembly <- 2
     ondisk <- .check_ondisk(param, first=first, last=last, whdim=1,
                             recompute_nzcount=FALSE, maxmem=maxmem,
-                            verbose=verbose, mf=mf, densify=densify)
+                            verbose=verbose, mf=mf, densify=densify,
+                            BPPARAM=BPPARAM)
     container <- .input_held_mem(param)
+    shared <- .input_shared_mem(param)
     .check_step_mem(dataMatrix, 1L, first, last, ondisk, mf, BPPARAM, maxmem,
-                    densify=densify, container=container)
-    .hold_input_mem(dataMatrix, 1L, first, last, container)
+                    densify=densify, container=container, shared=shared)
+    .hold_input_mem(dataMatrix, 1L, first, last, container, shared=shared)
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=1,
-                                                ondisk, verbose)
+                                                ondisk, verbose,
+                                                BPPARAM=BPPARAM)
 
     filtDataMatrix <- dataMatrix
     BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
@@ -1149,15 +1182,17 @@ gsvaColRanks <- function(rowNormExprData,
     ondisk <- .check_ondisk(param, assay="gsvarnorm",
                             first=first, last=last, whdim=2,
                             recompute_nzcount=FALSE, maxmem=maxmem,
-                            verbose=verbose, mf=mf)
+                            verbose=verbose, mf=mf, BPPARAM=BPPARAM)
     container <- .input_held_mem(param)
+    shared <- .input_shared_mem(param)
     .check_step_mem(dataMatrix, 2L, first, last, ondisk, mf, BPPARAM, maxmem,
-                    container=container)
-    .hold_input_mem(dataMatrix, 2L, first, last, container)
+                    container=container, shared=shared)
+    .hold_input_mem(dataMatrix, 2L, first, last, container, shared=shared)
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=2,
-                                                ondisk, verbose)
+                                                ondisk, verbose,
+                                                BPPARAM=BPPARAM)
     sparse <- .get_sparse(param)
     if (sparse && !is_sparse(dataMatrix))
         sparse <- FALSE
@@ -1287,15 +1322,18 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
         ondisk <- .check_ondisk(param, assay="gsvaranks",
                                 first=first, last=last, whdim=2,
                                 recompute_nzcount=recompute_nzcount,
-                                maxmem=maxmem, verbose=verbose, mf=mf)
+                                maxmem=maxmem, verbose=verbose, mf=mf,
+                                BPPARAM=BPPARAM)
     container <- .input_held_mem(param)
+    shared <- .input_shared_mem(param)
     .check_step_mem(filtDataMatrix, 2L, first, last, ondisk, mf, BPPARAM,
-                    maxmem, container=container)
-    .hold_input_mem(filtDataMatrix, 2L, first, last, container)
+                    maxmem, container=container, shared=shared)
+    .hold_input_mem(filtDataMatrix, 2L, first, last, container, shared=shared)
 
     filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix, "GSVA",
                                                     first, last, whdim=2,
-                                                    ondisk, verbose)
+                                                    ondisk, verbose,
+                                                    BPPARAM=BPPARAM)
 
     BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
                                        minparrows=100, minparcols=100,
@@ -1322,7 +1360,8 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                   outfactor=mf$outfactor,
                                   outextra=mf$outextra,
                                   sinkout=(ondisk ||
-                                           is(filtDataMatrix, "DelayedMatrix")))
+                                           is(filtDataMatrix, "DelayedMatrix")),
+                                  step="Calculating GSVA scores")
 
     rownames(gsva_es) <- names(filtMappedGeneSets)
     colnames(gsva_es) <- colnames(filtDataMatrix)
@@ -1615,7 +1654,7 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
                                   maxmem=maxmem, workfactor=mf$workfactor,
                                   outfactor=mf$outfactor,
                                   outextra=mf$outextra, dense=densify,
-                                  sinkout=TRUE))
+                                  sinkout=TRUE, step="Normalizing rows"))
     }
 
     .clr_scale(expr, g, sparse)
@@ -1718,7 +1757,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
     }
 
     if (ncol(expr) > 10000) ## free up ASAP memory we need not anymore and was
-        out <- gc()         ## allocated during ECDF calculations on a big expr
+        invisible(gc())     ## allocated during ECDF calculations on a big expr
 
     return(gene.cdf)	
 }
@@ -1835,7 +1874,8 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                                 workfactor=mf$workfactor,
                                 outfactor=mf$outfactor, outextra=mf$outextra,
                                 dense=densify,
-                                sinkout=(ondisk || is(expr, "DelayedMatrix")))
+                                sinkout=(ondisk || is(expr, "DelayedMatrix")),
+                                step="Normalizing rows")
     else if (rowNorm == "clr") {
         ## the statistics of the rows are calculated through blocks of
         ## columns, unless they were already calculated while filtering rows
@@ -1877,7 +1917,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     }
 
     if (ncol(Z) > 10000) ## free up ASAP memory we need not anymore and was
-        out <- gc()      ## allocated during rank calculations on a big Z
+        invisible(gc())  ## allocated during rank calculations on a big Z
 
     return(R)
 }
@@ -1902,7 +1942,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
                             BPPARAM=BPPARAM, maxmem=maxmem,
                             workfactor=mf$workfactor, outfactor=mf$outfactor,
                             outextra=mf$outextra,
-                            sinkout=(ondisk || is(Z, "DelayedMatrix")))
+                            sinkout=(ondisk || is(Z, "DelayedMatrix")),
+                            step="Ranking columns")
 
     return(R)
 }
@@ -2170,7 +2211,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     }
 
     if (ncol(R) > 10000) ## free up ASAP memory we need not anymore and was
-        out <- gc()      ## allocated during score calculations on a big R
+        invisible(gc())  ## allocated during score calculations on a big R
 
     return(es)
 }

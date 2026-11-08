@@ -1068,7 +1068,8 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
     .processMatrixCols(X, .rowStats_block, logsums=logsums, verbose=verbose,
                        BPPARAM=BPPARAM, maxmem=maxmem,
                        workfactor=mf$workfactor, outfactor=mf$outfactor,
-                       outextra=mf$outextra, combine=.combine_rowstats)
+                       outextra=mf$outextra, combine=.combine_rowstats,
+                       step="Calculating row statistics")
 }
 
 ## matrix with as many rows as 'X' and 2 columns if 'X' is dense, and 4
