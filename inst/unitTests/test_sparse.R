@@ -350,6 +350,21 @@ test_undefinedWalks <- function() {
         checkEquals(gpu$nundef, cpu$nundef)
     })
 
+    ## pure GPU dispatch: the undefined-walk count must still be reported
+    ## through the C attribute
+    gsetsidx_gpu <- list(midRank = as.integer(midRank),
+                         control = as.integer(c(1L, 3L, 7L)))
+    cpu_pure <- runWalk(ranks, gsetsidx_gpu, FALSE, "cpu")
+    checkEquals(cpu_pure$nundef, 1)
+    checkTrue(all(is.na(cpu_pure$sco[1, , drop = FALSE])))
+    .run_with_gpu({
+        gpu_pure <- runWalk(ranks, gsetsidx_gpu, FALSE, "gpu")
+        checkEquals(dim(gpu_pure$sco), dim(cpu_pure$sco))
+        checkEquals(is.na(gpu_pure$sco), is.na(cpu_pure$sco))
+        checkEqualsNumeric(cpu_pure$sco[2, ], gpu_pure$sco[2, ], tolerance = 1e-6)
+        checkEquals(gpu_pure$nundef, cpu_pure$nundef)
+    })
+
     ## hybrid dispatch: sets larger than GSVA_MAX_GPU_GSET_SIZE run on the CPU
     ## while the rest run on the GPU, and both counts have to add up
     P <- 5000L

@@ -10,6 +10,11 @@
 #include <math.h>
 #include <cuda_runtime.h>
 
+#ifdef __cplusplus
+extern "C"
+#endif
+SEXP GSVA_attrUndefWalksSym;
+
 static inline int min2(int a, int b) { return a < b ? a : b; }
 static inline int max2(int a, int b) { return a > b ? a : b; }
 
@@ -298,6 +303,7 @@ static SEXP gsva_score_body(void *data) {
   SEXP esR;
   PROTECT(esR = allocMatrix(REALSXP, S, C));
   double *es = REAL(esR);
+  double nundefwalks = 0;
 
   int total_blocks = (C + GSVA_BLOCK_C - 1) / GSVA_BLOCK_C;
   for (int block_id = 0; block_id < total_blocks; block_id++) {
@@ -322,6 +328,7 @@ static SEXP gsva_score_body(void *data) {
           if (isnan(v)) {
             // Convert to a R-level NA
             es[col + s] = NA_REAL;
+            nundefwalks++;
           } else {
             es[col + s] = v;
           }
@@ -353,11 +360,19 @@ static SEXP gsva_score_body(void *data) {
         if (isnan(v)) {
           // Convert to a R-level NA
           es[col + s] = NA_REAL;
+          nundefwalks++;
         } else {
           es[col + s] = v;
         }
       }
     }
+  }
+
+  if (nundefwalks > 0) {
+    SEXP attr;
+    PROTECT(attr = ScalarReal(nundefwalks));
+    Rf_setAttrib(esR, GSVA_attrUndefWalksSym, attr);
+    UNPROTECT(1);
   }
 
   UNPROTECT(1);
