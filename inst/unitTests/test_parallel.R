@@ -74,7 +74,7 @@ test_parallel_bpparam_unchanged <- function() {
 
     ## and in gsvaMap(), where BTPARAM gets the value of the verbose argument
     btparam <- BatchtoolsParam(workers=1, progressbar=FALSE,
-                               resources=list(ncpus=1, memory="1G"))
+                               resources=list(ncpus=1, memory="2G"))
     suppressMessages(gsvaMap(gsvaRowNorm, gsvaParam(y, gsets), verbose=TRUE,
                              BTPARAM=btparam))
     checkTrue(!bpprogressbar(btparam))

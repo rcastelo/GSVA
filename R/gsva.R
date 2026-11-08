@@ -47,10 +47,15 @@
 #' as those of a [`MulticoreParam`][BiocParallel::MulticoreParam-class]
 #' object, which end up taking most of that memory as their own while they
 #' run, together with about one third of sparse expression data held in main
-#' memory, except when stored in a `dgCMatrix` object. The memory that GSVA
+#' memory, except when stored in a `dgCMatrix` object. Parallel workers not
+#' forked from the main R process, such as those of a
+#' [`SnowParam`][BiocParallel::SnowParam-class] object, are new R processes,
+#' which take about 0.9 GB each (1.05 GB on macOS) for loading GSVA and the
+#' packages it depends on. The memory that GSVA
 #' estimates includes the expression data given to it, with all the assays of
 #' a `SummarizedExperiment` object held in main memory, and the other objects
-#' of the R session, once for each R process, which overestimates the memory
+#' of the R session, once for the main R process and each forked worker, which
+#' overestimates the memory
 #' of forked workers when these objects are large matrices, because forked
 #' workers share their memory with the main R process; when such objects are
 #' present, consider removing them before running GSVA. Before starting its
@@ -914,10 +919,15 @@ setMethod("details",
 #' as those of a [`MulticoreParam`][BiocParallel::MulticoreParam-class]
 #' object, which end up taking most of that memory as their own while they
 #' run, together with about one third of sparse expression data held in main
-#' memory, except when stored in a `dgCMatrix` object. The memory that GSVA
+#' memory, except when stored in a `dgCMatrix` object. Parallel workers not
+#' forked from the main R process, such as those of a
+#' [`SnowParam`][BiocParallel::SnowParam-class] object, are new R processes,
+#' which take about 0.9 GB each (1.05 GB on macOS) for loading GSVA and the
+#' packages it depends on. The memory that GSVA
 #' estimates includes the expression data given to it, with all the assays of
 #' a `SummarizedExperiment` object held in main memory, and the other objects
-#' of the R session, once for each R process, which overestimates the memory
+#' of the R session, once for the main R process and each forked worker, which
+#' overestimates the memory
 #' of forked workers when these objects are large matrices, because forked
 #' workers share their memory with the main R process; when such objects are
 #' present, consider removing them before running GSVA. Before starting its

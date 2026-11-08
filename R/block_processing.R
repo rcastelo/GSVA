@@ -121,17 +121,18 @@
 ## by .step_mem_factors(). the memory available to the blocks of the workers
 ## is what is left by the memory that remains allocated, see .fixed_mem(),
 ## from the fraction .mem_fraction_R, available to the allocations of R, of
-## the memory that the R processes, the main one and each of more than one
-## worker, of 'workermem' bytes each, leave from 'maxmem', when they leave
-## enough for the memory that remains allocated. by default, 'workermem' is
-## the memory of this process besides the data of the calculations that it
-## holds, see .worker_mem(), measured with a full collection of garbage when
-## 'X' is large, see .large_data(), together with its buffers to read 'X' from
-## disk, see .disk_read_mem(), and each forked worker takes besides a copy of
-## a part of those data ('copiedmem'), see .block_worker_mem(); 'workermem=0' and
-## 'sharedmem=FALSE' when the workers do not share 'maxmem' but have each
-## their own, such as the jobs of gsvaMap(), whose blocks can then take each
-## the whole of 'maxmem'.
+## the memory that the R processes, the main one of 'workermem' bytes and each
+## of more than one worker, of 'parworkermem' bytes, by default 'workermem',
+## leave from 'maxmem', when they leave enough for the memory that remains
+## allocated. by default, 'workermem' is the memory of this process besides the
+## data of the calculations that it holds, see .worker_mem(), measured with a
+## full collection of garbage when 'X' is large, see .large_data(), together
+## with its buffers to read 'X' from disk, see .disk_read_mem(), and each forked
+## worker takes besides a copy of a part of those data ('copiedmem'), while
+## workers not forked from this process ('forked=FALSE') take the memory of a
+## new R process, see .block_worker_mem(); 'workermem=0' and 'sharedmem=FALSE'
+## when the workers do not share 'maxmem' but have each their own, such as the
+## jobs of gsvaMap(), whose blocks can then take each the whole of 'maxmem'.
 ## the size of a row or column of 'X' stored on disk is the one of its
 ## dense form, which overestimates the size of sparse data. with 'dense=TRUE',
 ## the calculations convert each block of a sparse 'X' in main memory into a
@@ -157,7 +158,8 @@
                              outfactor=1, outextra=0,
                              workermem=NULL, dense=FALSE,
                              heldmem=.held_mem(), sinkout=FALSE,
-                             sharedmem=TRUE, sendblocks=FALSE, copiedmem=0) {
+                             sharedmem=TRUE, sendblocks=FALSE, copiedmem=0,
+                             parworkermem=workermem, forked=TRUE) {
     nunits <- dim(X)[whdim]
     inmemory <- !is(X, "DelayedArray")
     eltbytes <- if (type(X) == "integer") 4 else 8
@@ -179,13 +181,14 @@
     ## when 'maxmem' cannot be honored anyway, and smaller blocks would only
     ## make calculations slower
     if (is.null(workermem)) {
-        pm <- .block_worker_mem(X, whdim, heldmem)
+        pm <- .block_worker_mem(X, whdim, heldmem, forked)
         workermem <- pm$workermem
+        parworkermem <- pm$parworkermem
         copiedmem <- pm$copiedmem
     }
     procmem <- workermem
     if (nworkers > 1)
-        procmem <- procmem + nworkers * (workermem + copiedmem)
+        procmem <- procmem + nworkers * (parworkermem + copiedmem)
     if (.mem_fraction_R * (maxmem - procmem) > fixed)
         maxmem <- maxmem - procmem
     ## workers with their own memory each, such as the jobs of gsvaMap(),
@@ -211,24 +214,36 @@
 ## memory of this process besides the data of the calculations that it holds,
 ## see .worker_mem(), measured with a full collection of garbage when 'X' is
 ## large, see .large_data(), together with its buffers to read 'X' from disk,
-## see .disk_read_mem() ('workermem'), and the copy of a part of those data
-## that each forked worker takes besides, see .fork_copied_mem()
-## ('copiedmem'). the data held besides 'X' are shared with forked workers,
-## except for the part of those of .held_mem() other than matrices of assays,
-## see .held_shared_mem()
+## see .disk_read_mem() ('workermem'), the memory of each parallel worker
+## ('parworkermem') and the copy of a part of those data that each worker
+## takes besides ('copiedmem'). forked workers ('forked=TRUE'), such as those
+## of a MulticoreParam object, take the memory of this process, see
+## .worker_mem(), and a copy of a part of its data, see .fork_copied_mem(),
+## where the data held besides 'X' are shared with them, except for the part
+## of those of .held_mem() other than matrices of assays, see
+## .held_shared_mem(). workers not forked from this process, such as those of
+## a SnowParam object, take the memory of a new R process loading GSVA, see
+## .worker_mem(), together with its buffers to read 'X' from disk, and no copy
+## of the data of this process
 #' @importFrom BiocGenerics type
 #' @importFrom utils object.size
 #' @importFrom S4Arrays is_sparse
-.block_worker_mem <- function(X, whdim, heldmem=.held_mem()) {
+.block_worker_mem <- function(X, whdim, heldmem=.held_mem(), forked=TRUE) {
     inmemory <- !is(X, "DelayedArray")
     eltbytes <- if (type(X) == "integer") 4 else 8
     datamem <- (if (inmemory) as.numeric(object.size(X)) else 0) + heldmem -
                max(0, .held_mem() - .held_shared_mem())
+    readmem <- if (inmemory) 0 else .disk_read_mem()
     workermem <- .worker_mem(datamem, full=.large_data(dim(X), eltbytes)) +
-                 if (inmemory) 0 else .disk_read_mem()
+                 readmem
+    parworkermem <- workermem
     copiedmem <- .fork_copied_mem(datamem, is_sparse(X), is(X, "dgCMatrix"))
+    if (!forked) {
+        parworkermem <- .worker_mem(session=FALSE) + readmem
+        copiedmem <- 0
+    }
 
-    list(workermem=workermem, copiedmem=copiedmem)
+    list(workermem=workermem, parworkermem=parworkermem, copiedmem=copiedmem)
 }
 
 ## adapted from .define_multiworker_grid() in beachmat/R/colBlockApply.R; with a
@@ -242,23 +257,26 @@
 .rowgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
                          outextra=0, workermem=NULL, dense=FALSE,
                          heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE,
-                         sendblocks=FALSE, step=NULL) {
+                         sendblocks=FALSE, step=NULL, forked=TRUE) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
       ## the memory of the processes is measured once, for the width of
       ## the blocks with 'nworkers' workers within 'maxmem' and with other
       ## numbers of workers or maximum memory, see .check_chunk_blocks()
       copiedmem <- 0
+      parworkermem <- workermem
       if (is.null(workermem)) {
-          pm <- .block_worker_mem(X, 1L, heldmem)
+          pm <- .block_worker_mem(X, 1L, heldmem, forked)
           workermem <- pm$workermem
+          parworkermem <- pm$parworkermem
           copiedmem <- pm$copiedmem
       }
       upb <- function(nw, mm=maxmem)
           .units_per_block(X, 1L, nw, mm, workfactor, outfactor,
                            outextra, workermem, dense=dense, heldmem=heldmem,
                            sinkout=sinkout, sharedmem=sharedmem,
-                           sendblocks=sendblocks, copiedmem=copiedmem)
+                           sendblocks=sendblocks, copiedmem=copiedmem,
+                           parworkermem=parworkermem)
       nrowblock <- .balance_blocks(.align_to_chunks(upb(nworkers), X, 1L),
                                 X, 1L, nworkers)
       grid <- rowAutoGrid(X, nrow=nrowblock)
@@ -292,23 +310,26 @@
 .colgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
                          outextra=0, workermem=NULL, dense=FALSE,
                          heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE,
-                         sendblocks=FALSE, step=NULL) {
+                         sendblocks=FALSE, step=NULL, forked=TRUE) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
       ## the memory of the processes is measured once, for the width of
       ## the blocks with 'nworkers' workers within 'maxmem' and with other
       ## numbers of workers or maximum memory, see .check_chunk_blocks()
       copiedmem <- 0
+      parworkermem <- workermem
       if (is.null(workermem)) {
-          pm <- .block_worker_mem(X, 2L, heldmem)
+          pm <- .block_worker_mem(X, 2L, heldmem, forked)
           workermem <- pm$workermem
+          parworkermem <- pm$parworkermem
           copiedmem <- pm$copiedmem
       }
       upb <- function(nw, mm=maxmem)
           .units_per_block(X, 2L, nw, mm, workfactor, outfactor,
                            outextra, workermem, dense=dense, heldmem=heldmem,
                            sinkout=sinkout, sharedmem=sharedmem,
-                           sendblocks=sendblocks, copiedmem=copiedmem)
+                           sendblocks=sendblocks, copiedmem=copiedmem,
+                           parworkermem=parworkermem)
       ncolblock <- .balance_blocks(.align_to_chunks(upb(nworkers), X, 2L),
                                 X, 2L, nworkers)
       grid <- colAutoGrid(X, ncol=ncolblock)
@@ -1220,7 +1241,7 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
     grid <- .rowgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra,
                          dense=dense, heldmem=heldmem, sinkout=sinkout,
                          sendblocks=.sends_blocks(X, BPPARAM, nworkers),
-                         step=step)
+                         step=step, forked=.forked_workers(BPPARAM))
     rir <- .splitRowsInRanges(grid)
     if (length(rir) > 1 && verbose) {
         sze <- howbig(as.numeric(width(rir[[1]])), as.numeric(ncol(X)),
@@ -1372,7 +1393,7 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
     grid <- .colgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra,
                          dense=dense, heldmem=heldmem, sinkout=sinkout,
                          sendblocks=.sends_blocks(X, BPPARAM, nworkers),
-                         step=step)
+                         step=step, forked=.forked_workers(BPPARAM))
     cir <- .splitColsInRanges(grid)
 
     if (length(cir) > 1 && verbose) {

@@ -154,10 +154,11 @@ to use for each independent task executed within a compute node. Default: 2.}
 each independent task executed within a compute node, which GSVA uses as its
 maximum main memory, see the \code{maxmem} argument of \code{\link[=gsva]{gsva()}}. Each
 task runs one R process and, with more than one CPU core per task, as many
-parallel workers, and each of these R processes takes about 0.8 GB by
-itself for loading GSVA and the packages it depends on, so that \code{mem}
-should be at least \code{(1 + ncpus_per_task)} times 0.8 GB, plus the memory
-needed by the calculations on each chunk of data. \code{gsvaBatchtoolsSlurmParam()}
+parallel workers, and each of these R processes takes about 0.9 GB
+(1.05 GB on macOS) by itself for loading GSVA and the packages it depends
+on, so that \code{mem} should be at least \code{(1 + ncpus_per_task)} times 0.9 GB,
+plus the memory needed by the calculations on each chunk of data.
+\code{gsvaBatchtoolsSlurmParam()}
 gives a warning when \code{mem} is smaller than the former, while \code{gsvaMap()},
 before submitting any job, gives an error in that case, because such jobs
 would be killed by the workload manager, and a warning when \code{mem} is smaller
@@ -258,7 +259,7 @@ gsvapar <- gsvaParam(y, geneSets)
 ## how to distribute them across multiple compute nodes in a
 ## high-performance computing (HPC) environment
 library(BiocParallel)
-btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="1G"))
+btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="2G"))
 
 ## calculate row-normalized expression values
 gsvarnorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, BTPARAM=btpar))

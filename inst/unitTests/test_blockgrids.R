@@ -206,7 +206,8 @@ test_units_per_block <- function() {
     extra <- GSVA:::.proc_extra_mem()
     checkEqualsNumeric(GSVA:::.worker_mem(Inf), extra)
     checkTrue(GSVA:::.worker_mem() > GSVA:::.worker_mem(insize))
-    checkEqualsNumeric(GSVA:::.worker_mem(session=FALSE), 0.8 * 1024^3)
+    checkEqualsNumeric(GSVA:::.worker_mem(session=FALSE),
+                       0.6 * 1024^3 + extra)
     checkTrue(GSVA:::.worker_mem(full=TRUE) <= GSVA:::.worker_mem())
     ## measured with a full collection of garbage only for large data
     checkTrue(!GSVA:::.large_data(dim(X)))
