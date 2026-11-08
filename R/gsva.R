@@ -2549,7 +2549,6 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 
     n_gsets <- length(geneSetsIdx)
     n_cols  <- ncol(R)
-    sco <- matrix(NA_real_, nrow = n_gsets, ncol = n_cols)
 
     if (!any_na && device == "gpu") {
         gset_sizes  <- lengths(geneSetsIdx)
@@ -2587,12 +2586,20 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
                          maxDiff, absRanking, as.double(tau),
                          minSize, verbose)
 
-        nundef_gpu <- sum(is.na(sco_gpu))
-        if (nundef_gpu > 0)
+        nundef_gpu <- attr(sco_gpu, "attrUndefWalks")
+        if (!is.null(nundef_gpu))
             assign("u", get("u", envir=wna_env) + nundef_gpu, envir=wna_env)
+        attr(sco_gpu, "attrUndefWalks") <- NULL
 
-        sco[gpu_idxs, ] <- sco_gpu
+        # fast path for the GPU-only computation
+        if (length(cpu_idxs) == 0)
+            return(sco_gpu)
     }
+
+    sco <- matrix(NA_real_, nrow = n_gsets, ncol = n_cols)
+
+    if (length(gpu_idxs) > 0)
+        sco[gpu_idxs, ] <- sco_gpu
 
     if (length(cpu_idxs) > 0) {
         sco_cpu <- .Call("gsva_score_genesets_R", R, geneSetsIdx[cpu_idxs],
