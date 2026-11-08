@@ -39,7 +39,8 @@ setMethod("gsva", signature(param="ssgseaParam"),
                                       ngs=length(filtMappedGeneSets))
               ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
                                       recompute_nzcount=FALSE, maxmem=maxmem,
-                                      verbose=verbose, mf=mf, dense=TRUE)
+                                      verbose=verbose, mf=mf, dense=TRUE,
+                                      BPPARAM=BPPARAM)
               container <- .input_held_mem(param)
               shared <- .input_shared_mem(param)
               .check_step_mem(filtDataMatrix, 2L, NA, NA, ondisk, mf, BPPARAM,

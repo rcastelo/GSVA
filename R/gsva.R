@@ -1032,7 +1032,8 @@ gsvaRowNorm <- function(param,
         mf$assembly <- 2
     ondisk <- .check_ondisk(param, first=first, last=last, whdim=1,
                             recompute_nzcount=FALSE, maxmem=maxmem,
-                            verbose=verbose, mf=mf, densify=densify)
+                            verbose=verbose, mf=mf, densify=densify,
+                            BPPARAM=BPPARAM)
     container <- .input_held_mem(param)
     shared <- .input_shared_mem(param)
     .check_step_mem(dataMatrix, 1L, first, last, ondisk, mf, BPPARAM, maxmem,
@@ -1181,7 +1182,7 @@ gsvaColRanks <- function(rowNormExprData,
     ondisk <- .check_ondisk(param, assay="gsvarnorm",
                             first=first, last=last, whdim=2,
                             recompute_nzcount=FALSE, maxmem=maxmem,
-                            verbose=verbose, mf=mf)
+                            verbose=verbose, mf=mf, BPPARAM=BPPARAM)
     container <- .input_held_mem(param)
     shared <- .input_shared_mem(param)
     .check_step_mem(dataMatrix, 2L, first, last, ondisk, mf, BPPARAM, maxmem,
@@ -1321,7 +1322,8 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
         ondisk <- .check_ondisk(param, assay="gsvaranks",
                                 first=first, last=last, whdim=2,
                                 recompute_nzcount=recompute_nzcount,
-                                maxmem=maxmem, verbose=verbose, mf=mf)
+                                maxmem=maxmem, verbose=verbose, mf=mf,
+                                BPPARAM=BPPARAM)
     container <- .input_held_mem(param)
     shared <- .input_shared_mem(param)
     .check_step_mem(filtDataMatrix, 2L, first, last, ondisk, mf, BPPARAM,

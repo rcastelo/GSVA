@@ -38,7 +38,8 @@ setMethod("gsva", signature(param="plageParam"),
                                       ngs=length(filtMappedGeneSets))
               ondisk <- .check_ondisk(param, first=NA, last=NA, whdim=2,
                                       recompute_nzcount=FALSE, maxmem=maxmem,
-                                      verbose=verbose, mf=mf, dense=TRUE)
+                                      verbose=verbose, mf=mf, dense=TRUE,
+                                      BPPARAM=BPPARAM)
               ## the memory required also includes the products of the
               ## expression values of the genes of each gene set, see plage()
               gm <- .plage_gram_mem(filtMappedGeneSets, maxmem,

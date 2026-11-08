@@ -450,8 +450,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## jobs of gsvaMap(); without knowing that memory, blocks have the default
 ## size. blocks are narrower when their memory does not fit in the fraction
 ## .mem_fraction_R of the maximum main memory 'maxmem' left by the result,
-## whose estimated size is 'insize', when both are known, and by the memory
-## held by other objects, see .held_mem(), but not narrower than a chunk, or
+## whose estimated size is 'insize', when both are known, by the memory held
+## by other objects, see .held_mem(), and by the memory of this R process by
+## itself, see .block_worker_mem(), but not narrower than a chunk, or
 ## than the default block when 'X' is not stored in chunks of several columns,
 ## because narrower blocks would make the loading take much longer, e.g.,
 ## blocks of a single column would decompress all the chunks that it spans for
@@ -489,8 +490,10 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     grid <- NULL
     avail <- Inf
     blockbytes <- NA_real_ ## memory of the largest block while it is read
+    pm <- NULL
     if (budget) {
-        avail <- .mem_fraction_R * maxmem - insize - .held_mem()
+        pm <- .block_worker_mem(X, 2L)
+        avail <- .mem_fraction_R * maxmem - insize - .held_mem() - pm$workermem
         nz <- if (multicol) NULL else .col_nzcounts(X)
         if (!is.null(nz)) {
             ## at least the memory of 'mincols' columns of average width
@@ -516,7 +519,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         if (budget)
             blockbytes <- 160 * max(1, nzpercol) * ncolblock
     }
-    nworkers <- .load_workers(X, length(grid), avail, blockbytes, BPPARAM)
+    nworkers <- .load_workers(X, length(grid), avail, blockbytes, BPPARAM,
+                              pm)
     if (nworkers > 1L)
         blocks <- .read_sparse_blocks_bp(X, grid, nworkers, BPPARAM)
     else
@@ -540,20 +544,20 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## 'blockbytes' bytes while it is read, within the memory 'avail' left by the
 ## result, see .load_sparse_by_blocks(): as many as there are workers and
 ## blocks, when the memory is not known, and otherwise as many as fit in
-## 'avail' together with the memory of all the workers, see
+## 'avail' together with the memory of all the workers, 'pm', see
 ## .block_worker_mem(), or 1, to read the blocks in this process, when fewer
 ## than two fit. reading the blocks of 300,000 cells of single-cell data
 ## stored in a dense HDF5 dataset took a third of the time with six workers,
 ## each taking about 2.5 GiB more memory while reading its block
 #' @importFrom BiocParallel bpnworkers
-.load_workers <- function(X, nblocks, avail, blockbytes, BPPARAM) {
+.load_workers <- function(X, nblocks, avail, blockbytes, BPPARAM,
+                          pm=.block_worker_mem(X, 2L)) {
     if (is.null(BPPARAM) || nblocks < 2L)
         return(1L)
     nworkers <- min(bpnworkers(BPPARAM), nblocks)
     if (nworkers < 2L || !is.finite(avail) || is.na(blockbytes))
         return(as.integer(nworkers))
 
-    pm <- .block_worker_mem(X, 2L)
     procs <- bpnworkers(BPPARAM) * (pm$workermem + pm$copiedmem)
     as.integer(max(1, min(nworkers, floor((avail - procs) / blockbytes))))
 }
@@ -1171,12 +1175,16 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## verifies that the 'ondisk' parameter is either 'auto', 'yes' or 'no' and, if
 ## 'auto', checks whether the calculations fit in the maximum available main
 ## memory with the input data in it, and sets 'ondisk' to 'yes' or 'no'
-## accordingly. the calculations fit when the memory taken by their data, see
-## .step_data_mem(), together with the rest of the input data in main memory,
-## see .step_held_input(), fits in the fraction .mem_fraction_R of 'maxmem'
-## available to the allocations of R, where 'mf' gives the memory factors of
-## the step, see .step_mem_factors(), and 'dense=TRUE' indicates that the input
-## data is loaded in main memory as a dense matrix, even when it is sparse. If
+## accordingly. the calculations fit when the memory that they require with
+## the input data in main memory and the parallel workers of 'BPPARAM', see
+## .step_mem_need(), fits in 'maxmem': the one taken by the main R process and
+## by each worker by themselves, see .worker_mem(), and the one taken by their
+## data, see .step_data_mem(), together with the rest of the input data in main
+## memory, see .step_held_input(), from the fraction .mem_fraction_R of
+## 'maxmem' available to the allocations of R, where 'mf' gives the memory
+## factors of the step, see .step_mem_factors(), and 'dense=TRUE' indicates
+## that the input data is loaded in main memory as a dense matrix, even when
+## it is sparse. If
 ## the input data is a DelayedArray, also reports whether the calculations fit
 ## in the maximum available main memory.
 ## If 'ondisk' is set to 'yes', then this function returns TRUE, otherwise it
@@ -1189,7 +1197,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 .check_ondisk <- function(param, assay=get_assay(param), first, last, whdim,
                           recompute_nzcount=FALSE, maxmem, verbose,
                           mf=list(workfactor=2, outfactor=1, outextra=0),
-                          dense=FALSE, densify=FALSE) {
+                          dense=FALSE, densify=FALSE, BPPARAM=NULL) {
     ondisk <- .get_ondisk(param)
     if (ondisk != "auto" && ondisk != "yes" && ondisk != "no")
         cli_abort(c("x"="'ondisk' should be either 'auto', 'yes' or 'no'"))
@@ -1206,12 +1214,19 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         heldmem <- .held_mem() +
                    .step_held_input(X, dims, whdim, FALSE,
                                     .input_held_mem(param))
-        need <- .step_data_mem(dims, whdim, insize,
-                               if (type(X) == "integer") 4 else 8,
-                               is_sparse(X) && !dense, TRUE, mf,
-                               heldmem=heldmem, densify=densify)
+        eltbytes <- if (type(X) == "integer") 4 else 8
+        nworkers <- .n_par_workers(BPPARAM, dims)
+        ## each R process takes the memory of this one, besides the matrices
+        ## of the assays of the input data that it holds, see .worker_mem()
+        permem <- .worker_mem(.held_shared_mem() + .input_shared_mem(param),
+                              full=.large_data(dims, eltbytes))
+        need <- .step_mem_need(dims, insize, whdim, eltbytes,
+                               is_sparse(X) && !dense, TRUE, mf, nworkers,
+                               heldmem, densify,
+                               .sends_blocks(TRUE, BPPARAM, nworkers),
+                               dgc=is(X, "dgCMatrix"), permem=permem)
         ondisk <- "no"
-        if (need > .mem_fraction_R * maxmem) {
+        if (need > maxmem) {
             ondisk <- "yes"
             if (is(X, "DelayedArray") && verbose)
                 cli_alert_info(paste("Calculations with on-disk input data",
@@ -1635,9 +1650,11 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         eltbytes <- if (st$int) 4 else 8
         inmemory <- ondisk == "no"
         if (ondisk == "auto")
-            inmemory <- .step_data_mem(dims, st$whdim, insize, eltbytes,
-                                       sparse, TRUE, mf, held,
-                                       densify) <= .mem_fraction_R * maxmem
+            inmemory <- .step_mem_need(dims, insize, st$whdim, eltbytes,
+                                       sparse, TRUE, mf, nworkers, held,
+                                       densify,
+                                       .sends_blocks(TRUE, BPPARAM, nworkers),
+                                       dgc=dgc, permem=permem) <= maxmem
         stepheld <- held + if (inres && !inmemory) insize else 0
         need <- max(need, .step_mem_need(dims, insize, st$whdim, eltbytes,
                                          sparse, inmemory, mf, nworkers,
