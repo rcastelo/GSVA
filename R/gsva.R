@@ -1209,7 +1209,9 @@ gsvaColRanks <- function(rowNormExprData,
 
     gsvarnks <- .compute_gsva_ranks(Z=dataMatrix, sparse=sparse,
                                     verbose=verbose, BPPARAM=BPPARAM,
-                                    maxmem=maxmem, ondisk=ondisk)
+                                    maxmem=maxmem, ondisk=ondisk,
+                                    density=.input_density(param,
+                                                           "gsvarnorm"))
 
     rownames(gsvarnks) <- rownames(dataMatrix)
     colnames(gsvarnks) <- colnames(dataMatrix)
@@ -1354,6 +1356,11 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
         cli_alert_info("Calculating GSVA scores for {n} gene sets")
     }
 
+    ## blocks of sparse ranks read from disk take their memory by their
+    ## sparse size, see .ondisk_mem_factors()
+    mf <- .ondisk_mem_factors(mf, filtDataMatrix,
+                              .input_density(param, "gsvaranks",
+                                             recompute_nzcount))
     gsva_es <- .processMatrixCols(filtDataMatrix,
                                   FUN=.compute_gsva_scores,
                                   geneSetsIdx=filtMappedGeneSets,
@@ -1935,7 +1942,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 #' @importFrom cli cli_alert_info
 #' @importFrom cli cli_progress_done cli_abort
 .compute_gsva_ranks <- function(Z, sparse, verbose, BPPARAM=NULL, maxmem=Inf,
-                                ondisk=FALSE) {
+                                ondisk=FALSE, density=NA) {
     if (verbose) {
         if (sparse)
             cli_alert_info("Calculating sparse column ranks")
@@ -1944,8 +1951,10 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     }
  
     ## here 'ties.method="last"' allows one to obtain the result
-    ## from 'order()' based on ranks
-    mf <- .step_mem_factors("colranks", Z)
+    ## from 'order()' based on ranks; blocks of sparse data read from disk
+    ## take their memory by their sparse size, from the fraction 'density' of
+    ## nonzero values of 'Z', see .ondisk_mem_factors()
+    mf <- .ondisk_mem_factors(.step_mem_factors("colranks", Z), Z, density)
     R <- .processMatrixCols(Z, FUN=compute.col.ranks, ties.method="last",
                             drop.sparsity=FALSE, verbose=verbose,
                             minparrows=100, minparcols=100,

@@ -930,9 +930,11 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
   return(object@ondisk)
 }
 
-#' @importFrom IRanges IRanges
-#' @importFrom S4Arrays is_sparse ArrayViewport
-#' @importFrom DelayedArray chunkdim chunkGrid
+## number of nonzero values of the assay 'assay' of the expression data
+## 'exprData', counted when it is in main memory or has fewer than 2000
+## columns, and otherwise estimated from a sample of its blocks, see
+## .sample_nonzero_fraction()
+#' @importFrom S4Arrays is_sparse
 #' @importFrom SparseArray nzcount
 #' @importFrom cli cli_alert_info cli_abort
 .estimate_nzcount <- function(exprData, assay, verbose) {
@@ -949,17 +951,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             if (nc < 2000)
                 nzc <- as.numeric(nzcount(as(X, "dgCMatrix")))
             else {
-                block_dim <- chunkdim(X)
-                if (is.null(block_dim)) {
-                    grid <- defaultAutoGrid(X)
-                    block_dim <- dim(grid[[1L]])
-                }
-                block_dim <- c(min(c(nr, block_dim[1])), ## just in case there
-                               min(c(nc, block_dim[2]))) ## is only one block
-                ## just use the first block
-                vp <- ArrayViewport(dim(X), IRanges(c(1, 1), width=block_dim))
-                block <- read_block(X, vp)
-                nzc <- ceiling(tot * as.numeric(nzcount(block)) / prod(block_dim))
+                nzc <- ceiling(tot * .sample_nonzero_fraction(X))
                 estimated_flag <- TRUE
             }
         } else
@@ -976,6 +968,45 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     }
 
     return(nzc)
+}
+
+## fraction of nonzero values of the matrix 'X' stored on disk, estimated
+## from a sample of up to 'nsample' blocks spread over 'X'. when 'X' is stored
+## in chunks, the blocks are chunks, which are read and decompressed at once,
+## taken from different rows and columns of chunks, because the fraction of
+## nonzero values often differs between rows, e.g., between the genes of
+## single-cell data, which may be sorted in the file; otherwise, they are
+## blocks of columns with up to 'maxvalues' values each, which data stored by
+## columns, such as in CSC layout, read at once, see .h5_csc_create()
+#' @importFrom S4Arrays ArrayViewport read_block
+#' @importFrom SparseArray nzcount
+#' @importFrom IRanges IRanges
+.sample_nonzero_fraction <- function(X, nsample=32L, maxvalues=1e6) {
+    dims <- dim(X)
+    if (any(dims == 0))
+        return(0)
+    cd <- .ondisk_chunkdim(X)
+    if (is.null(cd))
+        cd <- c(dims[1L], max(1, floor(maxvalues / as.numeric(dims[1L]))))
+    cd <- pmax(1, pmin(cd, dims))
+    nchunks <- ceiling(dims / cd)
+    k <- seq_len(min(nsample, prod(nchunks)))
+    ## the i-th block is in the i-th of the k spaced rows of chunks, and in
+    ## the i-th of the k spaced columns of chunks, shifted by half of them
+    ## every other block, so that the blocks do not line up
+    rowpos <- floor((k - 1) * nchunks[1L] / length(k))
+    colpos <- (floor((k - 1) * nchunks[2L] / length(k)) +
+               floor(nchunks[2L] / 2) * (k %% 2L)) %% nchunks[2L]
+    nz <- tot <- 0
+    for (i in k) {
+        vpstart <- c(rowpos[i], colpos[i]) * cd + 1
+        vpend <- pmin(vpstart + cd - 1, dims)
+        block <- read_block(X, ArrayViewport(dims, IRanges(vpstart, vpend)))
+        nz <- nz + as.numeric(nzcount(block))
+        tot <- tot + prod(as.numeric(vpend - vpstart + 1))
+    }
+
+    nz / tot
 }
 
 #' @importFrom cli cli_abort
@@ -1099,6 +1130,30 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 }
 
 
+## fraction of nonzero values of the assay 'assay' of the expression data in
+## 'param', from the number of nonzero values in 'param', see
+## .estimate_nzcount(), or recomputed with 'recompute_nzcount=TRUE'
+#' @importFrom SparseArray nzcount
+.input_density <- function(param, assay, recompute_nzcount=FALSE) {
+    X <- unwrapData(get_exprData(param), assay)
+    tot <- as.numeric(nrow(X)) * as.numeric(ncol(X))
+    if (tot == 0)
+        return(1)
+    if (recompute_nzcount)
+        spa <- .estimate_nzcount(get_exprData(param), assay, FALSE) / tot
+    else {
+        spa <- nzcount(param) / tot
+        ## the number of nonzero values in the parameter object
+        ## may correspond to a larger data set, e.g., when columns
+        ## have been removed, and then it has to be recomputed
+        if (spa > 1)
+            spa <- .estimate_nzcount(get_exprData(param), assay,
+                                     FALSE) / tot
+    }
+
+    min(spa, 1)
+}
+
 ## estimated size in bytes of the input data of a step in main memory, i.e.,
 ## of the assay 'assay' of the expression data in 'param', restricted to the
 ## rows (whdim=1) or columns (whdim=2) from 'first' to 'last', when given,
@@ -1114,21 +1169,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     nr <- as.numeric(nrow(X))
     nc <- as.numeric(ncol(X))
     spa <- 1
-    if (is_sparse(X) && !dense) {
-        tot <- nr * nc
-        if (recompute_nzcount)
-            spa <- .estimate_nzcount(get_exprData(param), assay, FALSE) / tot
-        else {
-            spa <- nzcount(param) / tot
-            ## the number of nonzero values in the parameter object
-            ## may correspond to a larger data set, e.g., when columns
-            ## have been removed, and then it has to be recomputed
-            if (spa > 1)
-                spa <- .estimate_nzcount(get_exprData(param), assay,
-                                         FALSE) / tot
-        }
-        spa <- min(spa, 1)
-    }
+    if (is_sparse(X) && !dense)
+        spa <- .input_density(param, assay, recompute_nzcount)
     if (!is.na(first) || !is.na(last)) {
         if (whdim == 1)
             nr <- as.numeric(last - first + 1)

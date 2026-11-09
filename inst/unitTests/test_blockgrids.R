@@ -526,3 +526,42 @@ test_balanced_blocks <- function() {
     H <- writeHDF5Array(matrix(0, nrow=2, ncol=3000), chunkdim=c(2L, 100L))
     checkIdentical(GSVA:::.balance_blocks(200L, H, 2L, 10L), 100L)
 }
+
+test_ondisk_mem_factors <- function() {
+    ## a sparse matrix with a quarter of nonzero values, in every chunk and in
+    ## every column, sampled through its chunks or, without them, through
+    ## blocks of columns
+    x <- matrix(0, nrow=40, ncol=400)
+    x[seq(1L, length(x), by=4L)] <- 1
+    H <- writeHDF5Array(x, chunkdim=c(10L, 50L), as.sparse=TRUE)
+    checkEqualsNumeric(GSVA:::.sample_nonzero_fraction(H), 1/4)
+    checkEqualsNumeric(GSVA:::.sample_nonzero_fraction(DelayedArray(as(x, "dgCMatrix")),
+                                                       maxvalues=400), 1/4)
+
+    ## the factors of ranking columns relative to the sparse size of blocks
+    ## read from disk are scaled by the ratio of that size to their dense
+    ## size, 3/8 with doubles, value and row index, and 1/2 with integers,
+    ## unlike the ones of dense or in-memory data, of steps without such
+    ## factors or without a fraction of nonzero values
+    mf <- GSVA:::.ondisk_mem_factors(GSVA:::.step_mem_factors("colranks", H),
+                                     H, 1/4)
+    checkEqualsNumeric(mf$workfactor, 14.3 * 3/8)
+    checkEqualsNumeric(mf$outfactor, 0.7 * 3/8)
+    xi <- x
+    storage.mode(xi) <- "integer"
+    Hi <- writeHDF5Array(xi, chunkdim=c(10L, 50L), as.sparse=TRUE)
+    mf <- GSVA:::.ondisk_mem_factors(GSVA:::.step_mem_factors("scores", Hi,
+                                                              ngs=10), Hi, 1/4)
+    checkEqualsNumeric(mf$workfactor, 2.5 * 1/2)
+    checkEqualsNumeric(mf$outextra, 80)
+    mf <- GSVA:::.step_mem_factors("colranks", H)
+    checkIdentical(GSVA:::.ondisk_mem_factors(mf, H)$workfactor, 7)
+    D <- writeHDF5Array(x, chunkdim=c(10L, 50L))
+    mf <- GSVA:::.step_mem_factors("colranks", D)
+    checkIdentical(GSVA:::.ondisk_mem_factors(mf, D, 1/4)$workfactor, 2)
+    S <- as(x, "dgCMatrix")
+    mf <- GSVA:::.step_mem_factors("colranks", S)
+    checkIdentical(GSVA:::.ondisk_mem_factors(mf, S, 1/4)$workfactor, 7)
+    mf <- GSVA:::.step_mem_factors("rowstats", H)
+    checkIdentical(GSVA:::.ondisk_mem_factors(mf, H, 1/4)$workfactor, 2)
+}

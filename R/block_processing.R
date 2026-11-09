@@ -62,12 +62,22 @@
                          outextra=0),
            ## the ranks of a dgCMatrix object are double, as large as it,
            ## and binding their blocks of columns takes twice their size,
-           ## see .cbind_blocks()
+           ## see .cbind_blocks(). blocks of sparse data read from disk, whose
+           ## size is the one of their dense form, see .units_per_block(),
+           ## take instead about 9 to 11 times their sparse size, reading,
+           ## ranking and writing them, and up to 15 times with blocks of
+           ## about a thousand columns, as measured on single-cell data,
+           ## so that narrow blocks fit too, see .ondisk_mem_factors()
            colranks=list(workfactor=if (sparse) 7 else 2,
                          outfactor=if (int || (sparse && dgc)) 1
                                    else if (sparse) 0.7 else 0.5,
-                         outextra=0, assembly=if (sparse && dgc) 2 else NULL),
-           scores=list(workfactor=2, outfactor=0, outextra=8 * ngs),
+                         outextra=0, assembly=if (sparse && dgc) 2 else NULL,
+                         sparsedisk=list(workfactor=14.3, outfactor=0.7)),
+           ## the scores of blocks of sparse ranks read from disk take about
+           ## two times their sparse size, besides the scores themselves, as
+           ## measured on single-cell data, see .ondisk_mem_factors()
+           scores=list(workfactor=2, outfactor=0, outextra=8 * ngs,
+                       sparsedisk=list(workfactor=2.5, outfactor=0)),
            ## the average method gives its scores directly, while PLAGE,
            ## z-score and ssGSEA give them from an intermediate matrix as large
            ## as their input, of scaled rows or column ranks; the scores of
@@ -90,6 +100,31 @@
            ## columns, as measured on single-cell data, the larger factors
            ## with smaller blocks
            ssgseascores=list(workfactor=6, outfactor=0, outextra=8 * ngs))
+}
+
+## memory factors 'mf' of a step, see .step_mem_factors(), for processing the
+## matrix 'X' in blocks: when 'X' is sparse and stored on disk, the size of
+## its blocks is the one of their dense form, see .units_per_block(), which
+## overestimates the memory that sparse blocks take by the inverse of the
+## ratio of their sparse size to their dense size, e.g., about 3.75 times with
+## 17.6% of nonzero values, where each nonzero value takes its own size and
+## the 4 bytes of its row index. the factors of the step relative to the sparse
+## size of the blocks ('sparsedisk'), when given, are then scaled by that
+## ratio, from the fraction 'density' of nonzero values of 'X', e.g., the one
+## of the input data of the parameter object, see .input_density()
+#' @importFrom BiocGenerics type
+#' @importFrom S4Arrays is_sparse
+.ondisk_mem_factors <- function(mf, X, density=NA) {
+    if (is.null(mf$sparsedisk) || !is(X, "DelayedArray") || !is_sparse(X) ||
+        is.null(density) || is.na(density))
+        return(mf)
+
+    eltbytes <- if (type(X) == "integer") 4 else 8
+    ratio <- density * (eltbytes + 4) / eltbytes
+    mf$workfactor <- mf$sparsedisk$workfactor * ratio
+    mf$outfactor <- mf$sparsedisk$outfactor * ratio
+
+    mf
 }
 
 ## memory that remains allocated while a matrix with 'nunits' rows (whdim=1)
