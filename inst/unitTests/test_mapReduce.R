@@ -865,3 +865,37 @@ test_mapReduceMemCheck <- function() {
     checkTrue(!GSVA:::.check_map_mem("gsvaRowNorm", gsvapar,
                                      get_assay(gsvapar), 1L, 200, 1, 1 * gb))
 }
+
+## the chunks of gsvaMap() on sparse data read from disk take the memory of
+## the step by their sparse size, as the blocks of the steps themselves do,
+## see .ondisk_mem_factors(), from the fraction of nonzero values of the data
+test_mapChunkFactors <- function() {
+    suppressPackageStartupMessages({
+        library(HDF5Array)
+        library(SummarizedExperiment)
+    })
+
+    ## a quarter of nonzero values, in every chunk and in every column
+    x <- matrix(0, nrow=40, ncol=400,
+                dimnames=list(paste0("g", 1:40), paste0("s", 1:400)))
+    x[seq(1L, length(x), by=4L)] <- 1
+    gsets <- list(gs1=paste0("g", 1:10), gs2=paste0("g", 11:20))
+    H <- writeHDF5Array(x, chunkdim=c(10L, 50L), as.sparse=TRUE)
+    par <- gsvaParam(SummarizedExperiment(assays=list(counts=H)), gsets,
+                     verbose=FALSE)
+    checkEqualsNumeric(GSVA:::.map_density(par, "counts", H), 1/4)
+    mf <- GSVA:::.ondisk_mem_factors(GSVA:::.map_step_factors("gsvaColRanks",
+                                                              par, H),
+                                     H, GSVA:::.map_density(par, "counts", H))
+    checkEqualsNumeric(mf$workfactor, 14.3 * 3/8)
+
+    ## data in main memory and dense data keep the factors of the step
+    S <- as(x, "dgCMatrix")
+    checkEqualsNumeric(GSVA:::.map_density(par, "counts", S), 1/4)
+    mf <- GSVA:::.map_step_factors("gsvaColRanks", par, S)
+    checkIdentical(GSVA:::.ondisk_mem_factors(mf, S, 1/4)$workfactor, 7)
+    checkTrue(is.na(GSVA:::.map_density(par, "counts", x)))
+    D <- writeHDF5Array(x, chunkdim=c(10L, 50L))
+    mf <- GSVA:::.map_step_factors("gsvaColRanks", par, D)
+    checkIdentical(GSVA:::.ondisk_mem_factors(mf, D, NA_real_)$workfactor, 2)
+}

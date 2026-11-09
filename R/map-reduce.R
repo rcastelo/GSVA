@@ -380,9 +380,13 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
             ## each job has its own memory 'maxmem', not shared with the
             ## other jobs, and its chunk takes the memory of the selected
             ## step, see .map_step_factors(), besides the memory of the rest
-            ## of the input data that each job receives, see .check_map_mem()
+            ## of the input data that each job receives, see .check_map_mem();
+            ## sparse data read from disk take it by their sparse size, see
+            ## .ondisk_mem_factors()
             Xd <- unwrapData(get_exprData(inputData), assay)
-            mf <- .map_step_factors(funname, inputData, Xd)
+            mf <- .ondisk_mem_factors(.map_step_factors(funname, inputData,
+                                                        Xd),
+                                      Xd, .map_density(inputData, assay, Xd))
             container <- .map_container_mem(inputData, assay)
             grid <- gridsizefun(Xd, nworkers, maxmem, mf$workfactor,
                                 mf$outfactor, mf$outextra, workermem=0,
@@ -816,6 +820,22 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     c(mf, densify=densify)
 }
 
+## fraction of nonzero values of the matrix 'X' of the assay 'assay' of the
+## input data 'inputData' of gsvaMap(), counted when 'X' is in main memory and
+## otherwise estimated, see .estimate_nzcount(), or NA when 'X' is not sparse
+#' @importFrom S4Arrays is_sparse
+#' @importFrom SparseArray nzcount
+.map_density <- function(inputData, assay, X) {
+    if (!is_sparse(X))
+        return(NA_real_)
+    nzc <- if (is(X, "DelayedArray"))
+               .estimate_nzcount(get_exprData(inputData), assay, FALSE)
+           else
+               as.numeric(nzcount(X))
+
+    min(1, nzc / max(1, prod(as.numeric(dim(X)))))
+}
+
 ## check, before gsvaMap() submits any job, the memory required by the step
 ## 'funname' in each job, on the input data 'inputData', of which each job
 ## processes a chunk of at most 'chunkwidth' rows (whdim=1) or columns
@@ -865,14 +885,9 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     sparse <- is_sparse(X)
     eltbytes <- if (type(X) == "integer") 4 else 8
     insize <- prod(as.numeric(dims)) * eltbytes
-    if (sparse) {
-        nzc <- if (is(X, "DelayedArray"))
-                   .estimate_nzcount(get_exprData(inputData), assay, FALSE)
-               else
-                   as.numeric(nzcount(X))
-        density <- min(1, nzc / prod(as.numeric(dim(X))))
-        insize <- density * prod(as.numeric(dims)) * (eltbytes + 4)
-    }
+    if (sparse)
+        insize <- .map_density(inputData, assay, X) *
+                  prod(as.numeric(dims)) * (eltbytes + 4)
     mf <- .map_step_factors(funname, inputData, X)
     ## each job receives the whole input data, whose assays in main memory
     ## remain allocated while it processes its chunk, see .step_held_input()
