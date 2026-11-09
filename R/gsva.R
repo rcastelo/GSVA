@@ -1338,8 +1338,11 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                 BPPARAM=BPPARAM)
     container <- .input_held_mem(param)
     shared <- .input_shared_mem(param)
+    ## the scores are written to disk block by block when the ranks are
+    ## processed from disk
     .check_step_mem(filtDataMatrix, 2L, first, last, ondisk, mf, BPPARAM,
-                    maxmem, container=container, shared=shared)
+                    maxmem, container=container, shared=shared,
+                    ondisksink=TRUE)
     .hold_input_mem(filtDataMatrix, 2L, first, last, container, shared=shared)
 
     filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix, "GSVA",

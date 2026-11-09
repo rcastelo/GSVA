@@ -1199,18 +1199,20 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## algorithm of GSVA on sparse data, and the output and the working memory of
 ## the blocks take the size of the dense form, while the input keeps its size.
 ## with 'sendblocks=TRUE', the main R process takes a copy of the block of each
-## worker to send it to that worker, see .sends_blocks()
+## worker to send it to that worker, see .sends_blocks(). with 'sinkout=TRUE',
+## the output is written to disk block by block, see .fixed_mem()
 #' @importFrom DelayedArray getAutoBlockSize
 .step_data_mem <- function(dims, whdim, insize, eltbytes, sparse, inmemory,
                            mf, heldmem=.held_mem(), densify=FALSE,
-                           sendblocks=FALSE) {
+                           sendblocks=FALSE, sinkout=FALSE) {
     nunits <- max(1, dims[whdim])
     denseunitbytes <- as.numeric(dims[-whdim]) * eltbytes
     unitbytes <- if (inmemory && !densify) insize / nunits else denseunitbytes
     minunits <- min(nunits, max(1, floor(getAutoBlockSize() / denseunitbytes)))
     .fixed_mem(nunits, insize / nunits, whdim, sparse && !densify, inmemory,
                mf$outfactor, mf$outextra, mf$assembly,
-               outunitbytes=if (densify) denseunitbytes else insize / nunits) +
+               outunitbytes=if (densify) denseunitbytes else insize / nunits,
+               sinkout=sinkout) +
         mf$workfactor * minunits * unitbytes +
         (if (sendblocks && inmemory) minunits * insize / nunits else 0) +
         heldmem
@@ -1556,11 +1558,22 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## .fork_copied_mem(), where 'dgc' tells whether they are stored in dgCMatrix
 ## objects. workers not forked from this process ('forked=FALSE'), such as
 ## those of a SnowParam object, take instead each the memory of a new R
-## process, see .worker_mem(), and no copy of those data
+## process, see .worker_mem(), and no copy of those data. blocks of sparse
+## data read from disk take their memory by their sparse size, see
+## .sparse_disk_factors(), from the ratio 'sparseratio' of the sparse size to
+## the dense size of the input, by default the one of 'insize', the estimated
+## size of the input in main memory, see .input_mem_size(), and not when it
+## is NA. with 'sinkout=TRUE', the output is written to disk block by block,
+## see .step_data_mem()
 .step_mem_need <- function(dims, insize, whdim, eltbytes, sparse, inmemory,
                            mf, nworkers, heldmem=.held_mem(), densify=FALSE,
                            sendblocks=FALSE, datamem=0, dgc=FALSE,
-                           permem=.worker_mem(datamem), forked=TRUE) {
+                           permem=.worker_mem(datamem), forked=TRUE,
+                           sparseratio=insize / max(1, prod(as.numeric(dims)) *
+                                                       eltbytes),
+                           sinkout=FALSE) {
+    if (sparse && !densify && !inmemory)
+        mf <- .sparse_disk_factors(mf, sparseratio)
     readmem <- if (inmemory) 0 else .disk_read_mem()
     parmem <- permem + readmem
     copied <- .fork_copied_mem(heldmem + if (inmemory) insize else 0, sparse,
@@ -1572,7 +1585,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 
     permem + readmem + nworkers * (parmem + copied) +
         .step_data_mem(dims, whdim, insize, eltbytes, sparse, inmemory, mf,
-                       heldmem, densify, sendblocks) / .mem_fraction_R
+                       heldmem, densify, sendblocks, sinkout) / .mem_fraction_R
 }
 
 ## warn, before the calculations of a step start, when the estimated memory
@@ -1636,7 +1649,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## the memory of the container of 'X', 'container', see .container_held_mem(),
 ## and of 'X' itself remains allocated as given by .step_held_input(),
 ## independently of whether the output is written to disk, where 'shared' is
-## the memory of the matrices of its assays, see .container_shared_mem()
+## the memory of the matrices of its assays, see .container_shared_mem().
+## 'ondisksink=TRUE' indicates that the step writes its output to disk block by
+## block when it processes its input from disk, see .step_mem_need()
 ## input data in main memory, which is not loaded from disk, remains
 ## allocated when the calculations are done on disk
 #' @importFrom S4Arrays is_sparse
@@ -1644,7 +1659,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 .check_step_mem <- function(X, whdim, first, last, ondisk, mf, BPPARAM,
                             maxmem, dense=FALSE, densify=FALSE,
                             extramem=0, container=.inmem_size(X),
-                            shared=.inmem_size(X)) {
+                            shared=.inmem_size(X), ondisksink=FALSE) {
     if (!gsva_global$check_memory || !getOption("GSVA.check_memory", TRUE))
         return(invisible(FALSE))
 
@@ -1653,7 +1668,12 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         dims[whdim] <- last - first + 1
     eltbytes <- if (type(X) == "integer") 4 else 8
     insize <- attr(ondisk, "insize")
-    if (is.null(insize)) ## e.g., data in Parquet files, processed from disk
+    ## the size of the input, and of its blocks read from disk, is the one of
+    ## its dense form when it is not estimated, e.g., for data in Parquet
+    ## files, processed from disk, see .step_mem_need()
+    sparseratio <- if (is.null(insize)) NA else
+                       insize / max(1, prod(as.numeric(dims)) * eltbytes)
+    if (is.null(insize))
         insize <- prod(as.numeric(dims)) * eltbytes
     nworkers <- .n_par_workers(BPPARAM, dims)
     heldmem <- .held_mem() + extramem +
@@ -1667,7 +1687,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                            heldmem, densify,
                            .sends_blocks(!ondisk, BPPARAM, nworkers),
                            dgc=is(X, "dgCMatrix"), permem=permem,
-                           forked=.forked_workers(BPPARAM))
+                           forked=.forked_workers(BPPARAM),
+                           sparseratio=sparseratio,
+                           sinkout=ondisksink && isTRUE(as.vector(ondisk)))
 
     .check_mem_need(need, maxmem, nworkers, permem=permem,
                     forked=.forked_workers(BPPARAM))
@@ -1730,13 +1752,17 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                                        forked=.forked_workers(BPPARAM)) <=
                         maxmem
         stepheld <- held + if (inres && !inmemory) insize else 0
+        ## the steps processing their input from disk write their output to
+        ## disk block by block, see gsvaRowNorm(), gsvaColRanks() and
+        ## gsvaColScores()
         need <- max(need, .step_mem_need(dims, insize, st$whdim, eltbytes,
                                          sparse, inmemory, mf, nworkers,
                                          stepheld, densify,
                                          .sends_blocks(inmemory, BPPARAM,
                                                        nworkers),
                                          dgc=dgc, permem=permem,
-                                         forked=.forked_workers(BPPARAM)))
+                                         forked=.forked_workers(BPPARAM),
+                                         sinkout=!inmemory))
         ## the input of the next step and its size: without row
         ## normalization, it is the assay used, held by the input data
         if (st$step == "rownorm" && rownormnone) {

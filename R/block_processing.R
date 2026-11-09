@@ -115,12 +115,21 @@
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
 .ondisk_mem_factors <- function(mf, X, density=NA) {
-    if (is.null(mf$sparsedisk) || !is(X, "DelayedArray") || !is_sparse(X) ||
-        is.null(density) || is.na(density))
+    if (!is(X, "DelayedArray") || !is_sparse(X) || is.null(density))
         return(mf)
 
     eltbytes <- if (type(X) == "integer") 4 else 8
-    ratio <- density * (eltbytes + 4) / eltbytes
+    .sparse_disk_factors(mf, density * (eltbytes + 4) / eltbytes)
+}
+
+## memory factors 'mf' of a step relative to the size of the dense form of the
+## blocks of sparse data read from disk, from its factors relative to their
+## sparse size ('sparsedisk'), when given, and the ratio 'ratio' of the sparse
+## size to the dense size, see .ondisk_mem_factors()
+.sparse_disk_factors <- function(mf, ratio) {
+    if (is.null(mf$sparsedisk) || is.null(ratio) || is.na(ratio))
+        return(mf)
+
     mf$workfactor <- mf$sparsedisk$workfactor * ratio
     mf$outfactor <- mf$sparsedisk$outfactor * ratio
 

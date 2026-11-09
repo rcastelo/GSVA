@@ -564,4 +564,24 @@ test_ondisk_mem_factors <- function() {
     checkIdentical(GSVA:::.ondisk_mem_factors(mf, S, 1/4)$workfactor, 7)
     mf <- GSVA:::.step_mem_factors("rowstats", H)
     checkIdentical(GSVA:::.ondisk_mem_factors(mf, H, 1/4)$workfactor, 2)
+
+    ## the memory required by ranking sparse data read from disk takes the
+    ## blocks by their sparse size, from the ratio of the size of the input to
+    ## its dense size, unless that ratio is NA, and the one of the scores,
+    ## when written to disk, does not take their memory
+    dims <- c(1000, 10000)
+    dense <- prod(dims) * 8
+    need <- function(...)
+        GSVA:::.step_mem_need(dims, 3/8 * dense, 2L, 8, TRUE, FALSE, ...,
+                              nworkers=0, heldmem=0, permem=0)
+    mf <- GSVA:::.step_mem_factors("colranks", sparse=TRUE, int=FALSE)
+    blk <- GSVA:::.step_data_mem(dims, 2L, 3/8 * dense, 8, TRUE, FALSE,
+                                 GSVA:::.sparse_disk_factors(mf, 3/8),
+                                 heldmem=0)
+    checkEqualsNumeric(need(mf), GSVA:::.disk_read_mem() +
+                                 blk / GSVA:::.mem_fraction_R)
+    checkTrue(need(mf) < need(mf, sparseratio=NA))
+    mf <- GSVA:::.step_mem_factors("scores", sparse=TRUE, int=TRUE, ngs=100)
+    checkEqualsNumeric(need(mf) - need(mf, sinkout=TRUE),
+                       2 * 8 * 100 * dims[2] / GSVA:::.mem_fraction_R)
 }
