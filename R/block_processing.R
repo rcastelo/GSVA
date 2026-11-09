@@ -13,7 +13,10 @@
 ## rest being taken by the memory that R releases but that the process keeps,
 ## and by allocations outside R, e.g., by the HDF5 library; in the steps of
 ## GSVA on single-cell data, the peak of memory allocated by R was 70% to 80%
-## of the peak of memory resident in the process
+## of the peak of memory resident in the process. on macOS, the parallel
+## workers keep besides, from one round of blocks to the next, up to about
+## half the memory of a block that R releases, as measured on single-cell
+## data stored on disk, which this rest also covers
 .mem_fraction_R <- 0.7
 
 ## memory taken by the steps of GSVA to process each row or column of the
