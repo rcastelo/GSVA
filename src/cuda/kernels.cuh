@@ -173,6 +173,12 @@ __global__ void gsea_dense_walk_kernel(
     int offset = gsetofft[gset];
     int k = gsetofft[gset + 1] - offset;
 
+    // Oversized gene set: report as undefined rather than truncate it silently.
+    if (k > GSVA_WALK_ITEMS * GSVA_WALK_THREADS) {
+        if (tid == 0) out_es[c * S + gset] = GSVA_NAN;
+        return;
+    }
+
     int keys[GSVA_WALK_ITEMS];
     gsva_float_t vals[GSVA_WALK_ITEMS];
 
@@ -292,6 +298,12 @@ __global__ void gsea_sparse_walk_kernel(
     int gset = cat_gset[gset_local];
     int offset = gsetofft[gset];
     int k = gsetofft[gset + 1] - offset;
+
+    // Oversized gene set: report as undefined rather than truncate it silently.
+    if (k > GSVA_WALK_ITEMS * GSVA_WALK_THREADS) {
+        if (tid == 0) out_es[c * S + gset] = GSVA_NAN;
+        return;
+    }
 
     int nnz = nnzpercell[c];
     int nzeros = G - nnz;

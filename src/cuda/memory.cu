@@ -7,6 +7,18 @@
 #include <stddef.h>
 #include <stdlib.h>
 
+static const int DENSE_CAT_MAX[] = { GSVA_DENSE_WALK(GSVA_CAT_CAP_ENTRY) };
+static const int SPARSE_CAT_MAX[] = { GSVA_SPARSE_WALK(GSVA_CAT_CAP_ENTRY) };
+
+static int gsva_gset_cat(int k, Rboolean sparse) {
+  const int *cat_max = sparse ? SPARSE_CAT_MAX : DENSE_CAT_MAX;
+  for (int cat = 0; cat < GSVA_NUM_CATS; cat++)
+    if (k <= cat_max[cat])
+      return cat;
+  // unreachable: k is capped at GSVA_MAX_GPU_GSET_SIZE
+  return GSVA_NUM_CATS - 1;
+}
+
 void gsva_device_init(gsva_device_t *ptr, SEXP genesetsidxR, int G,
                       Rboolean sparse) {
   int S = length(genesetsidxR);
@@ -55,11 +67,7 @@ void gsva_device_init(gsva_device_t *ptr, SEXP genesetsidxR, int G,
   for (int s = 0; s < S; s++) {
     SEXP gsetidxR = VECTOR_ELT(genesetsidxR, s);
     int k = length(gsetidxR);
-    if (k <= 160) cat_count[0]++;
-    else if (k <= 256) cat_count[1]++;
-    else if (k <= 644) cat_count[2]++;
-    else if (k <= 2048) cat_count[3]++;
-    else cat_count[4]++;
+    cat_count[gsva_gset_cat(k, sparse)]++;
   }
 
   int *cat_gset[GSVA_NUM_CATS];
@@ -79,12 +87,7 @@ void gsva_device_init(gsva_device_t *ptr, SEXP genesetsidxR, int G,
       error("Gene set %d has %d genes, exceeding GPU limit of %d.",
             s + 1, k, GSVA_MAX_GPU_GSET_SIZE);
     }
-    int cat;
-    if (k <= 160) cat = 0;
-    else if (k <= 256) cat = 1;
-    else if (k <= 644) cat = 2;
-    else if (k <= 2048) cat = 3;
-    else cat = 4;
+    int cat = gsva_gset_cat(k, sparse);
     cat_gset[cat][cat_pos[cat]++] = s;
   }
 

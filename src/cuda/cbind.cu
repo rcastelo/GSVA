@@ -184,6 +184,106 @@ static void ranks2stats_gpu(ranks_ctx_t *ctx, int G, int block_c,
   }
 }
 
+// Static checks for the gene-set walk ladders.
+static constexpr int DENSE_CAT_CAP[] = { GSVA_DENSE_WALK(GSVA_CAT_CAP_ENTRY) };
+static constexpr int DENSE_ITEMS[] = { GSVA_DENSE_WALK(GSVA_CAT_ITEMS_ENTRY) };
+static constexpr int DENSE_THREADS[] = {
+    GSVA_DENSE_WALK(GSVA_CAT_THREADS_ENTRY) };
+static constexpr int SPARSE_CAT_CAP[] = {
+    GSVA_SPARSE_WALK(GSVA_CAT_CAP_ENTRY) };
+static constexpr int SPARSE_ITEMS[] = { GSVA_SPARSE_WALK(GSVA_CAT_ITEMS_ENTRY) };
+static constexpr int SPARSE_THREADS[] = {
+    GSVA_SPARSE_WALK(GSVA_CAT_THREADS_ENTRY) };
+
+constexpr bool gsva_cat_fits(int items, int threads, int bin_edge) {
+  return items >= 1 && threads >= 32 && threads <= 1024 &&
+         (threads & 31) == 0 && items * threads >= bin_edge;
+}
+
+constexpr bool gsva_table_fits(const int *caps, const int *items,
+                               const int *threads, int num_cats) {
+  for (int cat = 0; cat < num_cats; cat++) {
+    if (!gsva_cat_fits(items[cat], threads[cat], caps[cat]))
+      return false;
+  }
+  return true;
+}
+
+static_assert(sizeof(DENSE_CAT_CAP) / sizeof(*DENSE_CAT_CAP) == GSVA_NUM_CATS,
+              "the dense walk list must carry one entry per category");
+static_assert(sizeof(SPARSE_CAT_CAP) / sizeof(*SPARSE_CAT_CAP) == GSVA_NUM_CATS,
+              "the sparse walk list must carry one entry per category");
+
+static_assert(gsva_table_fits(DENSE_CAT_CAP, DENSE_ITEMS, DENSE_THREADS,
+                              GSVA_NUM_CATS),
+              "every dense walk shape needs items >= 1, a warp-sized block "
+              "size in [32, 1024], and items * threads covering its bin edge");
+static_assert(gsva_table_fits(SPARSE_CAT_CAP, SPARSE_ITEMS, SPARSE_THREADS,
+                              GSVA_NUM_CATS),
+              "every sparse walk shape needs items >= 1, a warp-sized block "
+              "size in [32, 1024], and items * threads covering its bin edge");
+
+static_assert(GSVA_MAX_GPU_GSET_SIZE == DENSE_CAT_CAP[GSVA_NUM_CATS - 1],
+              "CPU fallback threshold must match the largest dense bin");
+static_assert(GSVA_MAX_GPU_GSET_SIZE == SPARSE_CAT_CAP[GSVA_NUM_CATS - 1],
+              "CPU fallback threshold must match the largest sparse bin");
+
+#define GSVA_WALK_DENSE(cat, ITEMS, THREADS)                                   \
+  gsea_dense_walk_kernel<ITEMS, THREADS>                                       \
+      <<<numBlocks, THREADS, 0, stream>>>(                                     \
+          device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],  \
+          device->symrnkstat[stream_idx], device->es[stream_idx],              \
+          device->cat_gset[cat], S, G, C, tau, score_type)
+
+#define GSVA_WALK_SPARSE(cat, ITEMS, THREADS)                                  \
+  gsea_sparse_walk_kernel<ITEMS, THREADS>                                      \
+      <<<numBlocks, THREADS, 0, stream>>>(                                     \
+          device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],  \
+          device->symrnkstat[stream_idx], device->es[stream_idx],              \
+          device->cat_gset[cat], S, G, C, tau, score_type,                     \
+          device->nnzpercell[stream_idx])
+
+template<int GSVA_WALK_ITEMS, int GSVA_WALK_THREADS>
+static void gsva_dense_walk_launch(gsva_device_t *device, int stream_idx,
+                                   int cat, dim3 numBlocks, int S, int G,
+                                   int C, gsva_float_t tau, int score_type) {
+  cudaStream_t stream = device->stream[stream_idx];
+  GSVA_WALK_DENSE(cat, GSVA_WALK_ITEMS, GSVA_WALK_THREADS);
+}
+
+template<int GSVA_WALK_ITEMS, int GSVA_WALK_THREADS>
+static void gsva_sparse_walk_launch(gsva_device_t *device, int stream_idx,
+                                    int cat, dim3 numBlocks, int S, int G,
+                                    int C, gsva_float_t tau, int score_type) {
+  cudaStream_t stream = device->stream[stream_idx];
+  GSVA_WALK_SPARSE(cat, GSVA_WALK_ITEMS, GSVA_WALK_THREADS);
+}
+
+typedef void (*gsva_walk_launch_t)(gsva_device_t *, int, int, dim3, int,
+                                   int, int, gsva_float_t, int);
+
+struct gsva_walk_cfg_t {
+  int items;
+  int threads;
+  gsva_walk_launch_t launch;
+};
+
+#define GSVA_DENSE_WALK_CFG(cap, items, threads)                               \
+  {                                                                            \
+    (items), (threads), &gsva_dense_walk_launch<(items), (threads)>            \
+  }
+
+#define GSVA_SPARSE_WALK_CFG(cap, items, threads)                              \
+  {                                                                            \
+    (items), (threads), &gsva_sparse_walk_launch<(items), (threads)>           \
+  }
+
+// Same lists as the tables above, so the launchers cannot disagree with them.
+static constexpr gsva_walk_cfg_t DENSE_WALK_LADDER[] = {
+    GSVA_DENSE_WALK(GSVA_DENSE_WALK_CFG)};
+static constexpr gsva_walk_cfg_t SPARSE_WALK_LADDER[] = {
+    GSVA_SPARSE_WALK(GSVA_SPARSE_WALK_CFG)};
+
 static void gsva_rnd_walk_gpu_dispatch(gsva_float_t *h_es, int S, int G, int C,
                                        gsva_float_t tau, int score_type,
                                        int sparse_mode,
@@ -198,64 +298,11 @@ static void gsva_rnd_walk_gpu_dispatch(gsva_float_t *h_es, int S, int G, int C,
     dim3 numBlocks(C, cat_s);
 
     if (sparse_mode != 0) {
-      if (cat == 0) {
-        gsea_sparse_walk_kernel<5, 32><<<numBlocks, 32, 0, stream>>>(
-            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-            device->symrnkstat[stream_idx], device->es[stream_idx],
-            device->cat_gset[cat], S, G, C, tau, score_type,
-            device->nnzpercell[stream_idx]);
-      } else if (cat == 1) {
-        gsea_sparse_walk_kernel<2, 128><<<numBlocks, 128, 0, stream>>>(
-            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-            device->symrnkstat[stream_idx], device->es[stream_idx],
-            device->cat_gset[cat], S, G, C, tau, score_type,
-            device->nnzpercell[stream_idx]);
-      } else if (cat == 2) {
-        gsea_sparse_walk_kernel<3, 256><<<numBlocks, 256, 0, stream>>>(
-            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-            device->symrnkstat[stream_idx], device->es[stream_idx],
-            device->cat_gset[cat], S, G, C, tau, score_type,
-            device->nnzpercell[stream_idx]);
-      } else if (cat == 3) {
-        gsea_sparse_walk_kernel<8, 256><<<numBlocks, 256, 0, stream>>>(
-            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-            device->symrnkstat[stream_idx], device->es[stream_idx],
-            device->cat_gset[cat], S, G, C, tau, score_type,
-            device->nnzpercell[stream_idx]);
-      } else {
-        gsea_sparse_walk_kernel<8, 512><<<numBlocks, 512, 0, stream>>>(
-            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-            device->symrnkstat[stream_idx], device->es[stream_idx],
-            device->cat_gset[cat], S, G, C, tau, score_type,
-            device->nnzpercell[stream_idx]);
-      }
+      SPARSE_WALK_LADDER[cat].launch(device, stream_idx, cat, numBlocks, S, G,
+                                     C, tau, score_type);
     } else {
-      if (cat == 0) {
-        gsea_dense_walk_kernel<5, 32><<<numBlocks, 32, 0, stream>>>(
-            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-            device->symrnkstat[stream_idx], device->es[stream_idx],
-            device->cat_gset[cat], S, G, C, tau, score_type);
-      } else if (cat == 1) {
-        gsea_dense_walk_kernel<2, 128><<<numBlocks, 128, 0, stream>>>(
-            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-            device->symrnkstat[stream_idx], device->es[stream_idx],
-            device->cat_gset[cat], S, G, C, tau, score_type);
-      } else if (cat == 2) {
-        gsea_dense_walk_kernel<3, 256><<<numBlocks, 256, 0, stream>>>(
-            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-            device->symrnkstat[stream_idx], device->es[stream_idx],
-            device->cat_gset[cat], S, G, C, tau, score_type);
-      } else if (cat == 3) {
-        gsea_dense_walk_kernel<8, 256><<<numBlocks, 256, 0, stream>>>(
-            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-            device->symrnkstat[stream_idx], device->es[stream_idx],
-            device->cat_gset[cat], S, G, C, tau, score_type);
-      } else {
-        gsea_dense_walk_kernel<8, 512><<<numBlocks, 512, 0, stream>>>(
-            device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],
-            device->symrnkstat[stream_idx], device->es[stream_idx],
-            device->cat_gset[cat], S, G, C, tau, score_type);
-      }
+      DENSE_WALK_LADDER[cat].launch(device, stream_idx, cat, numBlocks, S, G,
+                                    C, tau, score_type);
     }
 
     cudaError_t err = cudaGetLastError();
