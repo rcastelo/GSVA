@@ -144,6 +144,7 @@ __global__ void gsea_dense_walk_kernel(
     const gsva_float_t* __restrict__ symrnkstat_block,
     gsva_float_t* __restrict__ out_es,
     const int* __restrict__ cat_gset,
+    int cat_s,
     int S,
     int G,
     int C,
@@ -166,12 +167,17 @@ __global__ void gsea_dense_walk_kernel(
     int c = blockIdx.x;
     int gset_local = blockIdx.y;
     int tid = threadIdx.x;
+    if (c >= C || gset_local >= cat_s) return;
 
     int gset = cat_gset[gset_local];
-    if (c >= C || gset_local >= S) return;
-
     int offset = gsetofft[gset];
     int k = gsetofft[gset + 1] - offset;
+
+    // Oversized gene set: report as undefined rather than truncate it silently.
+    if (k > GSVA_WALK_ITEMS * GSVA_WALK_THREADS) {
+        if (tid == 0) out_es[c * S + gset] = GSVA_NAN;
+        return;
+    }
 
     int keys[GSVA_WALK_ITEMS];
     gsva_float_t vals[GSVA_WALK_ITEMS];
@@ -258,6 +264,7 @@ __global__ void gsea_sparse_walk_kernel(
     const gsva_float_t* __restrict__ symrnkstat_block,
     gsva_float_t* __restrict__ out_es,
     const int* __restrict__ cat_gset,
+    int cat_s,
     int S, int G, int C,
     gsva_float_t tau, int score_type,
     const int* __restrict__ nnzpercell
@@ -287,11 +294,17 @@ __global__ void gsea_sparse_walk_kernel(
     int c = blockIdx.x;
     int gset_local = blockIdx.y;
     int tid = threadIdx.x;
-    if (c >= C || gset_local >= S) return;
+    if (c >= C || gset_local >= cat_s) return;
 
     int gset = cat_gset[gset_local];
     int offset = gsetofft[gset];
     int k = gsetofft[gset + 1] - offset;
+
+    // Oversized gene set: report as undefined rather than truncate it silently.
+    if (k > GSVA_WALK_ITEMS * GSVA_WALK_THREADS) {
+        if (tid == 0) out_es[c * S + gset] = GSVA_NAN;
+        return;
+    }
 
     int nnz = nnzpercell[c];
     int nzeros = G - nnz;
