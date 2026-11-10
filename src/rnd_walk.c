@@ -117,7 +117,8 @@ sort_positions(rndwalk_ctx_t* ctx, int m, int p) {
  * right before (current_valley) and right after (current_peak) its step up.
  * walking through the 'k' positions instead of the 'p' ones reduces the
  * computational cost from O(p) to O(k). the caller should check beforehand
- * that the walk is defined, i.e., 0 < k < p and total_pos_sum > 0.
+ * that the walk is defined, i.e., 0 < k < p and the sum of the weights is
+ * finite and positive.
  */
 static void
 rnd_walk_extremes(const int* ranks, const int* idx, const double* weights,
@@ -148,11 +149,14 @@ rnd_walk_extremes(const int* ranks, const int* idx, const double* weights,
 }
 
 /* the random walk is undefined, and its maximum deviations are set to NA,
- * when its in-gene-set or its out-gene-set steps sum up to zero. the latter
- * happens when the gene set contains all (nonmissing) genes and the former
- * when all genes in the gene set have a zero symmetric rank statistic, e.g.,
- * a single gene at the middle rank p/2 of a dense column with p even, or only
- * zero-expressed genes in a sparse column with a single nonzero value.
+ * when its in-gene-set or its out-gene-set steps sum up to zero, or when the
+ * in-gene-set steps do not sum up to a finite value. the out-gene-set sum is
+ * zero when the gene set contains all (nonmissing) genes, the in-gene-set sum
+ * is zero when all genes in the gene set have a zero symmetric rank
+ * statistic, e.g., a single gene at the middle rank p/2 of a dense column
+ * with p even, or only zero-expressed genes in a sparse column with a single
+ * nonzero value, and it is not finite when pow(symrnkstat, tau) overflows
+ * for large tau.
  *
  * the positions of the genes of the gene set are sorted with sort_positions(),
  * which also permutes the indices of the genes to read their weights in that
@@ -189,7 +193,8 @@ gsva_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
     total_pos_sum += weights[i];
   }
 
-  if (total_pos_sum == 0.0) /* in-gene-set steps sum up to zero */
+  /* in-gene-set steps sum up to zero or to a non-finite value */
+  if (!(total_pos_sum > 0.0 && isfinite(total_pos_sum)))
     return 1;
 
   sort_positions(ctx, k, p);
@@ -278,7 +283,9 @@ gsva_sparse_rnd_walk(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
     }
   }
 
-  if (total_pos_sum == 0.0) /* in-gene-set steps sum up to zero */
+  /* as in gsva_rnd_walk(): undefined when the in-gene-set steps sum up to
+   * zero or to a non-finite value */
+  if (!(total_pos_sum > 0.0 && isfinite(total_pos_sum)))
     return 1;
 
   rnd_walk_extremes(ranks, idx, weights, k, p, total_pos_sum, walkstatpos,
@@ -335,9 +342,10 @@ gsva_rnd_walk_nas(rndwalk_ctx_t* ctx, int* gsetidx, int k, int* decordstat,
     return 0;
   }
 
-  /* no in-gene-set or no out-gene-set steps, or in-gene-set steps sum up
-   * to zero */
-  if (k_notna == 0 || k_notna == p || total_pos_sum == 0.0)
+  /* no in-gene-set or no out-gene-set steps, or the in-gene-set steps sum
+   * up to zero or to a non-finite value */
+  if (k_notna == 0 || k_notna == p ||
+      !(total_pos_sum > 0.0 && isfinite(total_pos_sum)))
     return 1;
 
   sort_positions(ctx, k_notna, p);
