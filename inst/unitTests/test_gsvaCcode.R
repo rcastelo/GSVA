@@ -410,3 +410,56 @@ test_gsvaCcode_radix <- function() {
     sco <- scoreRandC(y, gsets)
     checkEqualsNumeric(sco$R, sco$C)
 }
+
+test_gsvaCcodeUndefWalkOverflow <- function() {
+    message("Running unit tests for random walks with overflowing steps.")
+
+    ## the walk accumulates the symmetric rank statistics raised to tau.
+    ## when such exponent is large, the sum might overflow to infinity, and
+    ## the normalized walk would silently collapse to zeros and NaNs.
+    ## the C entry point is called directly on hand-crafted rank matrices,
+    ## exposing this issue.
+    tau <- 200
+    p <- 200
+
+    ## dense columns with controlled ranks
+    Rd <- cbind(1:p, p:1)
+    storage.mode(Rd) <- "integer"
+    gsets <- list(ovf=1:100, ctl=96:105, bnd=68:77)
+    sco <- .Call("gsva_score_genesets_R", Rd, gsets, TRUE, FALSE, TRUE,
+                 FALSE, as.double(tau), FALSE, 1L, 1L, FALSE,
+                 PACKAGE="GSVA")
+    checkTrue(all(is.na(sco[1, ])))                ## overflow -> undefined walks
+    checkTrue(all(is.finite(sco[2, ])))            ## small weights are unaffected
+    checkTrue(all(is.finite(sco[3, ])))            ## large finite sums stay defined
+    checkIdentical(attr(sco, "attrUndefWalks"), 2) ## one per overflowing column
+
+    ## without overflowing gene sets no walk is reported as undefined
+    sco <- .Call("gsva_score_genesets_R", Rd, list(ctl=96:105), TRUE, FALSE,
+                 TRUE, FALSE, as.double(tau), FALSE, 1L, 1L, FALSE,
+                 PACKAGE="GSVA")
+    checkTrue(is.null(attr(sco, "attrUndefWalks")))
+
+    ## sparse column with 150 nonzero genes and 50 zero genes
+    library(Matrix)
+    Rs <- new("dgCMatrix", i=as.integer(0:149), p=c(0L, 150L),
+              x=as.double(1:150), Dim=c(200L, 1L))
+    gsets <- list(ovf=151:200, ctl=61:90)
+    sco <- .Call("gsva_score_genesets_R", Rs, gsets, FALSE, TRUE, TRUE,
+                 FALSE, as.double(tau), FALSE, 1L, 1L, FALSE,
+                 PACKAGE="GSVA")
+    checkTrue(is.na(sco[1, 1]))
+    checkTrue(is.finite(sco[2, 1]))
+    checkIdentical(attr(sco, "attrUndefWalks"), 1)
+
+    ## column with 20 missing genes
+    Rn <- matrix(as.double(1:200), ncol=1)
+    Rn[181:200, 1] <- NA
+    gsets <- list(ovf=1:60, ctl=81:100)
+    sco <- .Call("gsva_score_genesets_R", Rn, gsets, FALSE, FALSE, TRUE,
+                 FALSE, as.double(tau), TRUE, 3L, 1L, FALSE,
+                 PACKAGE="GSVA")
+    checkTrue(is.na(sco[1, 1]))
+    checkTrue(is.finite(sco[2, 1]))
+    checkIdentical(attr(sco, "attrUndefWalks"), 1)
+}
