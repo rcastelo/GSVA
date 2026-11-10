@@ -461,8 +461,13 @@ loadHDF5GSVA <- function(file, assay="auto", verbose=TRUE) {
         cli_alert_info(paste("Restored a {cls} object with {nrow(X)} rows",
                              "and {ncol(X)} columns"))
     }
-    dimnames(X) <- dimnames(gsvacontainer)
-    assay(gsvacontainer, assayname) <- X
+    ## the dimension names are kept once, by the container, instead of also
+    ## by the assay, because binding many outputs, such as the chunks of
+    ## gsvaMap() in gsvaReduce(), would otherwise keep a copy of the names
+    ## along the other dimension for each of them, e.g., of a million cells
+    ## for each chunk of rows, which then also takes memory and time each
+    ## time the bound output is serialized, e.g., for each job of gsvaMap()
+    assay(gsvacontainer, assayname, withDimnames=FALSE) <- X
 
     assay <- .check_assay_ranks_rnorm(assayNames(gsvacontainer), assay)
 
@@ -653,8 +658,8 @@ loadParquetGSVA <- function(file, assay="auto", verbose=TRUE) {
                              "and {ncol(seed)} columns from {sze} of metadata"))
     }
     X <- DelayedArray(seed)
-    dimnames(X) <- dimnames(gsvacontainer)
-    assay(gsvacontainer, md$gsva_assay) <- X
+    ## the dimension names are kept once, by the container, see loadHDF5GSVA()
+    assay(gsvacontainer, md$gsva_assay, withDimnames=FALSE) <- X
 
     assay <- .check_assay_ranks_rnorm(assayNames(gsvacontainer), assay)
 

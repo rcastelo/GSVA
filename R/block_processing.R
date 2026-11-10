@@ -881,12 +881,19 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
 ## write the nonzero values left in the buffer, the column pointers and the
 ## dimensions 'dims' of the CSC layout, given the state of the appending 'st',
 ## see .h5_csc_append()
-#' @importFrom rhdf5 h5write
+#' @importFrom rhdf5 h5createDataset h5write
+#' @importFrom HDF5Array getHDF5DumpCompressionLevel
 .h5_csc_close <- function(st, dims) {
     st <- .h5_csc_flush(st, length(st$x))
     indptr <- st$indptr
     if (max(indptr) <= .Machine$integer.max)
         indptr <- as.integer(indptr)
+    ## created in chunks, as the other datasets, because rhdf5 creates it
+    ## otherwise as a single chunk, and warns about it with many columns
+    h5createDataset(st$fname, paste0(st$group, "/indptr"), length(indptr),
+                    storage.mode=storage.mode(indptr),
+                    chunk=min(length(indptr), st$chunk),
+                    level=getHDF5DumpCompressionLevel())
     h5write(indptr, st$fname, paste0(st$group, "/indptr"))
     h5write(as.integer(dims), st$fname, paste0(st$group, "/shape"))
 }

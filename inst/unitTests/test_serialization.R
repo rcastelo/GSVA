@@ -58,6 +58,13 @@ test_ranksserialization <- function() {
                                                
     ## load the GSVA ranks from disk               
     loaded_gsvacolranks <- loadHDF5GSVA(savedranksdir)      
+
+    ## the dimension names are kept by the container and not also by the
+    ## assay, while the assay still gives them
+    checkTrue(is.null(dimnames(assay(loaded_gsvarownorm, "gsvarnorm",
+                                     withDimnames=FALSE))))
+    checkIdentical(dimnames(assay(loaded_gsvarownorm, "gsvarnorm")),
+                   dimnames(gsvarownorm))
                                                
     ## check that the loaded row-normalized values provide the
     ## same ranks as the ones calculated from the original values
