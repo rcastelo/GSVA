@@ -144,7 +144,8 @@ importFrom(HDF5Array,
   getHDF5DumpCompressionLevel,
   getHDF5DumpDir,
   loadHDF5SummarizedExperiment,
-  saveHDF5SummarizedExperiment
+  saveHDF5SummarizedExperiment,
+  setHDF5DumpDir
 )
 importFrom(IRanges,
   CharacterList,

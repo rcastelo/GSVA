@@ -617,7 +617,9 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     ## path that is reachable by all compute nodes, instead of the default
     ## tempdir() path, which is local to each compute node. this also means
     ## that, at least by now, the user must manually delete those HDF5 files
-    ## after the GSVA calculations are finished
+    ## after the GSVA calculations are finished. jobs saving their results to
+    ## files, with gsvaMap(output="HDF5") or "Parquet", create them instead in
+    ## a directory of their own, see MAP_FUN_WRAPPER()
     con <- file(file.path(dir, "gsvainit.R"))
     hdf5_dump_dir <- file.path(dir, "HDF5Array_dump")
     writeLines(c("library(HDF5Array)",
@@ -906,6 +908,7 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
 
 #' @importFrom BiocParallel SerialParam MulticoreParam SnowParam
 #' @importFrom IRanges IRanges start end
+#' @importFrom HDF5Array getHDF5DumpDir setHDF5DumpDir
 MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     fname <- NULL
     if (is(X, "gsvaMapChunk")) { ## output is saved to the file 'fname'
@@ -916,6 +919,21 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         ## replaced by the one of this job
         if (.valid_map_result(fname, output))
             return(fname)
+    }
+    if (output != "object") {
+        ## the HDF5 datasets created by this job, such as those of its
+        ## result, are only read by this job, which saves a copy of its result
+        ## to the file 'fname', see below, so they are created in a directory
+        ## of its own, under tempdir(), usually local to the compute node,
+        ## instead of the one shared by the jobs, see
+        ## gsvaBatchtoolsSlurmParam(), and removed when the job ends
+        olddumpdir <- getHDF5DumpDir()
+        jobdumpdir <- tempfile("HDF5Array_dump")
+        setHDF5DumpDir(jobdumpdir)
+        on.exit({
+            setHDF5DumpDir(olddumpdir)
+            unlink(jobdumpdir, recursive=TRUE)
+        }, add=TRUE)
     }
     rng <- X
     res <- whdim <- NULL

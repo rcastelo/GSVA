@@ -681,6 +681,33 @@ test_mapReduceRedo <- function() {
         checkEqualsNumeric(gsvaranks, gsvaReduce(mapout, verbose=FALSE))
     }
 
+    ## jobs saving their results to files create their HDF5 datasets in a
+    ## directory of their own, removed when the job ends, instead of the HDF5
+    ## dump directory of the R session, which is restored. The tracer records
+    ## the dump directory of each job and the files in it when saving
+    sessiondumpdir <- HDF5Array::getHDF5DumpDir()
+    jobdumps <- new.env()
+    jobdumps$dirs <- jobdumps$nfiles <- c()
+    tracer <- substitute({
+        d <- HDF5Array::getHDF5DumpDir()
+        assign("dirs", c(E$dirs, d), envir=E)
+        assign("nfiles", c(E$nfiles, length(list.files(d))), envir=E)
+    }, list(E=jobdumps))
+    gsvarnormdisk <- gsvaRowNorm(gsvaParam(y, gsets, ondisk="yes",
+                                           verbose=FALSE), verbose=FALSE)
+    suppressMessages(trace("saveHDF5GSVA", where=asNamespace("GSVA"),
+                           print=FALSE, tracer=tracer))
+    mapout <- tryCatch(gsvaMap(gsvaColRanks, gsvarnormdisk, output="HDF5",
+                               verbose=FALSE, BTPARAM=newbtpar()),
+                       finally=suppressMessages(untrace("saveHDF5GSVA",
+                                                where=asNamespace("GSVA"))))
+    checkIdentical(length(jobdumps$dirs), length(mapout))
+    checkTrue(!any(jobdumps$dirs == sessiondumpdir))
+    checkTrue(all(jobdumps$nfiles > 0))
+    checkTrue(!any(dir.exists(jobdumps$dirs)))
+    checkIdentical(HDF5Array::getHDF5DumpDir(), sessiondumpdir)
+    checkEqualsNumeric(gsvaranks, gsvaReduce(mapout, verbose=FALSE))
+
     ## a job killed by the workload manager, simulated by a batchtools job
     ## killing its own process, in a call to gsvaMap() whose registry
     ## directory was left by a previous call whose R session ended
