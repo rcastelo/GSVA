@@ -209,7 +209,9 @@
                              parworkermem=workermem, forked=TRUE) {
     nunits <- dim(X)[whdim]
     inmemory <- !is(X, "DelayedArray")
-    eltbytes <- if (type(X) == "integer") 4 else 8
+    ## type() of a DelayedArray object binding HDF5 files opens each of them
+    xtype <- type(X)
+    eltbytes <- if (xtype == "integer") 4 else 8
     denseunitbytes <- as.numeric(dim(X)[-whdim]) * eltbytes
     if (inmemory)
         inunitbytes <- as.numeric(object.size(X)) / max(1, nunits)
@@ -246,7 +248,7 @@
     nperblock <- floor(avail / ((workfactor + outfactor) * unitbytes +
                                 outextra + sendbytes))
     otherdim <- max(1, as.numeric(dim(X)[-whdim]))
-    nperblock <- max(nperblock, floor(getAutoBlockLength(type(X)) / nsharing /
+    nperblock <- max(nperblock, floor(getAutoBlockLength(xtype) / nsharing /
                                       otherdim))
     ## the DelayedArray package does not support blocks with more than
     ## .Machine$integer.max values

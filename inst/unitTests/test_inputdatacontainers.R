@@ -125,4 +125,42 @@ test_inputdatacontainers <- function() {
     gsets.ov.list <- computeGeneSetsOverlap(gsets.sce, rownames(sce))
     gsets.ov.gsc <- computeGeneSetsOverlap(gsc, rownames(sce))
     checkTrue(identical(gsets.ov.list, gsets.ov.gsc))
+
+    ## unwrapping an assay gives it as assays() does, with the dimension names
+    ## of the container, but without setting them on the other assays, which
+    ## for assays binding HDF5 files, as gsvaReduce() does, opens each file
+    suppressPackageStartupMessages(library(HDF5Array))
+    h5sm <- function(x) {
+        T <- writeTENxMatrix(x)
+        H5SparseMatrix(path(T), seed(T)@group)
+    }
+    T1 <- cbind(h5sm(yMatSp[, 1:10]), h5sm(yMatSp[, 11:ncol(y)]))
+    T2 <- cbind(h5sm(yMatSp[, 1:10]), h5sm(yMatSp[, 11:ncol(y)]))
+    dimnames(T2) <- list(paste0("r", 1:nrow(y)), NULL)
+    sceh <- SingleCellExperiment(assays=list(a=T1, b=T2, c=y2),
+                                 colData=DataFrame(dummy=1:ncol(y),
+                                                   row.names=colnames(y)))
+    for (a in c("a", "b", "c"))
+        checkIdentical(GSVA:::unwrapData(sceh, a), assays(sceh)[[a]])
+    checkIdentical(GSVA:::unwrapData(sceh, NA), assays(sceh)[["a"]])
+    rownames(sceh) <- rownames(y)
+    for (a in c("a", "b", "c"))
+        checkIdentical(GSVA:::unwrapData(sceh, a), assays(sceh)[[a]])
+    seh <- SummarizedExperiment(assays=list(a=T1, b=T2))
+    checkIdentical(GSVA:::unwrapData(seh, "a"), assays(seh)[["a"]])
+    checkException(GSVA:::unwrapData(seh, "d"), silent=TRUE)
+    reads <- new.env()
+    suppressMessages(trace("h5mread", where=asNamespace("h5mread"),
+                           print=FALSE,
+                           tracer=substitute(assign("n", E$n + 1, envir=E),
+                                             list(E=reads))))
+    tryCatch({
+        reads$n <- 0
+        Xa <- GSVA:::unwrapData(sceh, "a")
+        unwrapreads <- reads$n
+        reads$n <- 0
+        Xa <- assays(sceh)[["a"]]
+    }, finally=suppressMessages(untrace("h5mread",
+                                        where=asNamespace("h5mread"))))
+    checkTrue(unwrapreads < reads$n)
 }

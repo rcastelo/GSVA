@@ -32,7 +32,7 @@ setMethod("unwrapData", signature("SummarizedExperiment"),
               assay <- .check_unwrapping_assay(container,
                                                "SummarizedExperiment", assay)
 
-              return(assays(container)[[assay]])
+              return(.unwrap_assay(container, assay))
           })
 
 #' @importFrom cli cli_abort
@@ -41,7 +41,7 @@ setMethod("unwrapData", signature("SingleCellExperiment"),
               assay <- .check_unwrapping_assay(container,
                                                "SingleCellExperiment", assay)
 
-              return(assays(container)[[assay]])
+              return(.unwrap_assay(container, assay))
           })
 
 setMethod("unwrapData", signature("SpatialExperiment"),
@@ -49,8 +49,28 @@ setMethod("unwrapData", signature("SpatialExperiment"),
               assay <- .check_unwrapping_assay(container,
                                                "SpatialExperiment", assay)
 
-              return(assays(container)[[assay]])
+              return(.unwrap_assay(container, assay))
           })
+
+## the assay 'assay' of the SummarizedExperiment object 'container', with
+## the dimension names of 'container', as assays(container)[[assay]] returns
+## it, but without setting the dimension names of the other assays, since
+## setting them on a DelayedArray object validates it by extracting an empty
+## array from its seeds, which opens every HDF5 file bound by gsvaReduce(),
+## and this can take seconds on the shared filesystems of clusters
+.unwrap_assay <- function(container, assay) {
+    a <- assays(container, withDimnames=FALSE)[[assay]]
+    x_dimnames <- dimnames(container)
+    if (is.null(x_dimnames))
+        x_dimnames <- list(NULL, NULL)
+    a_dimnames <- dimnames(a)
+    a_dimnames[1:2] <- x_dimnames
+    if (all(vapply(a_dimnames, is.null, logical(1))))
+        a_dimnames <- NULL
+    if (!identical(dimnames(a), a_dimnames))
+        dimnames(a) <- a_dimnames
+    a
+}
 
 
 ## metadata recorded in every GSVA output object: the version of GSVA that
@@ -822,21 +842,26 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     return(assay)
 }
 
+## the assays are taken without their dimension names, because assays()
+## sets them on every assay, and setting them on a DelayedArray object
+## validates it by extracting an empty array from its seeds, which opens
+## every HDF5 file bound by gsvaReduce()
 #' @importFrom cli cli_abort
 .check_unwrapping_assay <- function(container, container_class, assay) {
 
-    if (length(assays(container)) == 0L) {
+    anames <- names(assays(container, withDimnames=FALSE))
+    if (length(assays(container, withDimnames=FALSE)) == 0L) {
         msg <- "The input {container_class} object has no assay data."
         cli_abort(c("x"=msg))
     }
 
     if (missing(assay) || is.na(assay)) {
-        assay <- names(assays(container))[1]
+        assay <- anames[1]
     } else {
         if (!is.character(assay))
             cli_abort(c("x"="The 'assay' argument must be a character string."))
         assay <- assay[1]
-        if (!assay %in% names(assays(container)))
+        if (!assay %in% anames)
             cli_abort(c("x"=paste("assay {assay} not found in the input",
                                   "{container_class} object.")))
     }

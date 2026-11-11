@@ -375,7 +375,7 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         cli_abort(c("x"="Internal error, invalid FUN argument."))
 
     X <- inputData
-    chunks <- density <- NULL
+    chunks <- density <- Xd <- NULL
     if (!is.list(X)) {
         if (is.null(mapinfo)) {
             ## each job has its own memory 'maxmem', not shared with the
@@ -416,14 +416,14 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
                               "same {.arg inputData}.")))
 
     ## before submitting any job, or writing its manifest, check the memory
-    ## that each job requires, with the density used to size the chunks, if
-    ## any, which takes time to estimate on data stored on disk
+    ## that each job requires, with the matrix and the density used to size
+    ## the chunks, if any, which take time to obtain from data stored on disk
     chunkwidth <- if (is.null(chunks)) NA_real_ else
                       max(chunks$last - chunks$first + 1)
     .check_map_mem(funname, inputData, assay,
                    whdim=if (funname == "gsvaRowNorm") 1L else 2L,
                    chunkwidth=chunkwidth, ncpus=ncpus, maxmem=maxmem,
-                   density=density)
+                   density=density, X=Xd)
 
     ## results saved to disk get file names that depend only on the input
     ## and the chunk boundaries, and a manifest that allows MAPREDO to find
@@ -828,17 +828,18 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
 }
 
 ## fraction of nonzero values of the matrix 'X' of the assay 'assay' of the
-## input data 'inputData' of gsvaMap(), counted when 'X' is in main memory and
-## otherwise estimated, see .estimate_nzcount(), or NA when 'X' is not sparse
+## input data 'inputData' of gsvaMap(), counted when 'X' is in main memory or
+## binds seeds that store it, see .seeds_nzcount(), and otherwise estimated,
+## see .estimate_nzcount(), or NA when 'X' is not sparse
 #' @importFrom S4Arrays is_sparse
 #' @importFrom SparseArray nzcount
 .map_density <- function(inputData, assay, X) {
     if (!is_sparse(X))
         return(NA_real_)
-    nzc <- if (is(X, "DelayedArray"))
-               .estimate_nzcount(get_exprData(inputData), assay, FALSE)
-           else
-               as.numeric(nzcount(X))
+    nzc <- if (is(X, "DelayedArray")) .seeds_nzcount(X)
+           else as.numeric(nzcount(X))
+    if (is.na(nzc))
+        nzc <- .estimate_nzcount(get_exprData(inputData), assay, FALSE)
 
     min(1, nzc / max(1, prod(as.numeric(dim(X)))))
 }
@@ -853,22 +854,28 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
 ## see .step_mem_need(). for a list input, whose chunks are not loaded to
 ## know their size, only the former is checked. the fraction of nonzero values
 ## of sparse input data is given in 'density', or computed when NULL, see
-## .map_density(). it is skipped with the option 'GSVA.check_memory=FALSE'
+## .map_density(), and the matrix of the assay 'assay' of 'inputData' is
+## given in 'X', or obtained from 'inputData' when NULL, since gsvaMap() has
+## already obtained both to size the chunks. it is skipped with the option
+## 'GSVA.check_memory=FALSE'
 #' @importFrom cli cli_abort
 #' @importFrom memuse mu
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
 .check_map_mem <- function(funname, inputData, assay, whdim, chunkwidth, ncpus,
-                           maxmem, density=NULL) {
+                           maxmem, density=NULL, X=NULL) {
     if (!getOption("GSVA.check_memory", TRUE) || !is.finite(maxmem))
         return(invisible(FALSE))
 
     hint <- paste("Consider using fewer CPU cores per job, or more memory per",
                   "job, e.g., with the arguments {.arg ncpus_per_task} and",
                   "{.arg mem} of {.fn gsvaBatchtoolsSlurmParam}.")
-    X <- dims <- NULL
-    if (!is.list(inputData)) {
-        X <- unwrapData(get_exprData(inputData), assay)
+    dims <- NULL
+    if (is.list(inputData))
+        X <- NULL
+    else {
+        if (is.null(X))
+            X <- unwrapData(get_exprData(inputData), assay)
         dims <- dim(X)
         dims[whdim] <- chunkwidth
     }
