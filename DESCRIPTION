@@ -30,7 +30,8 @@ VignetteBuilder: knitr
 URL: https://github.com/rcastelo/GSVA
 BugReports: https://github.com/rcastelo/GSVA/issues
 Encoding: UTF-8
-biocViews: FunctionalGenomics, Microarray, RNASeq, Pathways, GeneSetEnrichment
+biocViews: FunctionalGenomics, Microarray, RNASeq, Pathways, GeneSetEnrichment,
+           GPU
 Roxygen: list(markdown = TRUE)
 Config/roxygen2/version: 8.1.1
 SystemRequirements: CUDA toolkit (optional)
