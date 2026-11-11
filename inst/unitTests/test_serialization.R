@@ -92,6 +92,29 @@ test_ranksserialization <- function() {
     loaded_gsvacolranks <- loadHDF5GSVA(savedranksdir)
     es_from_loaded_gsvaranks <- gsvaColScores(loaded_gsvacolranks, verbose=FALSE)
     checkEqualsNumeric(assay(es), es_from_loaded_gsvaranks)
+
+    ## sparse values are given the dimensions and layout that the
+    ## H5SparseMatrixSeed() constructor would otherwise read from the file,
+    ## and loading or checking a file leaves no HDF5 handle open, also when
+    ## the file does not contain GSVA output
+    suppressPackageStartupMessages(library(HDF5Array))
+    checkIdentical(as.character(rhdf5::h5read(savedranksdir, "gsva/layout")),
+                   "csc")
+    checkIdentical(seed(loaded_gsvacolranks),
+                   H5SparseMatrixSeed(savedranksdir, "gsva/assay"))
+    rhdf5::h5closeAll()
+    checkTrue(GSVA:::.is_gsva_h5_file(savedranksdir))
+    txtfile <- tempfile()
+    writeLines("not HDF5", txtfile)
+    h5file <- tempfile(fileext=".h5")
+    rhdf5::h5write(1:3, h5file, "x")
+    for (f in c(txtfile, h5file)) {
+        checkTrue(!GSVA:::.is_gsva_h5_file(f))
+        checkException(loadHDF5GSVA(f), silent=TRUE)
+        checkException(GSVA:::.load_gsva_path(f, "auto", "x", FALSE),
+                       silent=TRUE)
+    }
+    checkIdentical(length(rhdf5::h5validObjects()), 0L)
 }
 
 test_parquetserialization <- function() {

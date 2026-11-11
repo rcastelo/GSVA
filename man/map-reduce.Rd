@@ -159,8 +159,8 @@ parallel workers, and each of these R processes takes about 0.9 GB
 (1.05 GB on macOS) by itself for loading GSVA and the packages it depends
 on, so that \code{mem} should be at least \code{(1 + ncpus_per_task)} times 0.9 GB,
 plus the memory needed by the calculations on each chunk of data.
-\code{gsvaBatchtoolsSlurmParam()}
-gives a warning when \code{mem} is smaller than the former, while \code{gsvaMap()},
+\code{gsvaBatchtoolsSlurmParam()} gives a warning when \code{mem} is smaller than
+the former, while \code{gsvaMap()},
 before submitting any job, gives an error in that case, because such jobs
 would be killed by the workload manager, and a warning when \code{mem} is smaller
 than the memory it estimates that the calculations on each chunk of data
