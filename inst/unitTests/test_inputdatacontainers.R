@@ -159,8 +159,12 @@ test_inputdatacontainers <- function() {
         Xa <- GSVA:::unwrapData(sceh, "a")
         unwrapreads <- reads$n
         reads$n <- 0
-        Xa <- assays(sceh)[["a"]]
+        Xa <- assay(sceh, "a", withDimnames=FALSE)
+        dimnames(Xa) <- dimnames(sceh)
     }, finally=suppressMessages(untrace("h5mread",
                                         where=asNamespace("h5mread"))))
-    checkTrue(unwrapreads < reads$n)
+    ## as many reads as setting the dimension names of that assay alone,
+    ## which are none when HDF5Array records the type of the data of its
+    ## sparse seeds
+    checkIdentical(unwrapreads, reads$n)
 }
