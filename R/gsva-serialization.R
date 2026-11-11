@@ -483,8 +483,13 @@ loadHDF5GSVA <- function(file, assay="auto", verbose=TRUE) {
                                     sparse.layout="CSC")
              else
                  H5SparseMatrixSeed(file, "gsva/assay")
-    } else
+    } else {
+        ## HDF5Array() opens the file by its path with functions of rhdf5
+        ## that warn when the file is already open, so it is closed before
+        H5Fclose(fid)
+        on.exit()
         X <- HDF5Array(file, "gsva/assay")
+    }
     X <- DelayedArray(X)
     if (verbose) {
         cls <- class(gsvacontainer)[1]

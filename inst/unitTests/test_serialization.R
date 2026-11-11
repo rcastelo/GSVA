@@ -115,6 +115,19 @@ test_ranksserialization <- function() {
                        silent=TRUE)
     }
     checkIdentical(length(rhdf5::h5validObjects()), 0L)
+
+    ## loading dense values gives no warning about the file being open
+    densefile <- saveHDF5GSVA(es, tempfile())
+    checkIdentical(as.character(rhdf5::h5read(densefile, "gsva/layout")),
+                   "dense")
+    warns <- character(0)
+    withCallingHandlers(loadHDF5GSVA(densefile, verbose=FALSE),
+                        warning=function(w) {
+                            warns <<- c(warns, conditionMessage(w))
+                            invokeRestart("muffleWarning")
+                        })
+    checkIdentical(warns, character(0))
+    checkIdentical(length(rhdf5::h5validObjects()), 0L)
 }
 
 test_parquetserialization <- function() {
