@@ -4,6 +4,7 @@
 ^docs$
 ^\.covrignore
 ^\.codecov.yml
+^\.BBSoptions$
 ^src/Makeconf$
 ^src/.*\.o$
 ^src/.*\.so$
