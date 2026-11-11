@@ -1,9 +1,37 @@
-.gsva_cuda_available <- function() {
-    GSVA:::.gsva_cuda_available()
+## GPU test support. GPU blocks are skipped with a visible message when the
+## device is unusable; export GSVA_REQUIRE_GPU=1 on GPU-designated runners to
+## turn any such skip into a hard failure.
+
+.gsva_gpu_skip_note <- new.env(parent = emptyenv())
+
+.gsva_gpu_reason <- function(state) {
+    switch(state,
+           unbuilt = "GSVA was built without CUDA support",
+           driver = "the CUDA driver is missing or too old",
+           nodev = "no CUDA-capable device is detected",
+           "the CUDA runtime reported an error")
+}
+
+.skip_if_no_gpu <- function() {
+    state <- GSVA:::.gsva_cuda_state()
+    if (identical(state, "ok"))
+        return(FALSE)
+
+    msg <- paste0("Skipping GPU assertions: ", .gsva_gpu_reason(state), ".")
+    if (!isTRUE(.gsva_gpu_skip_note$notified)) {
+        message(msg)
+        .gsva_gpu_skip_note$notified <- TRUE
+    }
+
+    if (nzchar(Sys.getenv("GSVA_REQUIRE_GPU")))
+        stop(msg, call. = FALSE)
+
+    TRUE
 }
 
 .run_with_gpu <- function(expr) {
-    if (!.gsva_cuda_available()) return(invisible(NULL))
+    if (.skip_if_no_gpu())
+        return(invisible(NULL))
     expr
 }
 

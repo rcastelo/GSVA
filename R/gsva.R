@@ -195,7 +195,7 @@ setMethod("gsva", signature(param="gsvaParam"),
 
               device <- match.arg(device)
               if (device == "auto") {
-                  if (.gsva_cuda_available()) {
+                  if (.gsva_cuda_state() == "ok") {
                       device <- "gpu"
                   } else {
                       device <- "cpu"
@@ -1315,7 +1315,7 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
 
     device <- match.arg(device)
     if (device == "auto") {
-        if (.gsva_cuda_available()) {
+        if (.gsva_cuda_state() == "ok") {
             device <- "gpu"
         } else {
             device <- "cpu"
@@ -2537,14 +2537,28 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     na_use <- as.integer(factor(na_use, levels=c("everything", "all.obs",
                                                  "na.rm")))
 
-    if (device == "gpu" && !.gsva_cuda_available()) {
-        cli_abort(c(
-            "x" = "GPU mode requested (device = \"gpu\") but this package was ",
-                "built without CUDA support.",
-            "i" = "To use GPU acceleration, reinstall the package with the ",
-                "CUDA toolkit available.",
-            "i" = "Alternatively, use device = \"cpu\"."
-        ))
+    if (device == "gpu") {
+        cuda_state <- .gsva_cuda_state()
+        if (cuda_state == "unbuilt") {
+            cli_abort(c(
+                "x" = "GPU mode requested (device = \"gpu\") but this package was ",
+                    "built without CUDA support.",
+                "i" = "To use GPU acceleration, reinstall the package with the ",
+                    "CUDA toolkit available.",
+                "i" = "Alternatively, use device = \"cpu\"."
+            ))
+        }
+        if (cuda_state != "ok") {
+            reason <- switch(cuda_state,
+                             nodev = "no CUDA-capable device is detected",
+                             driver = "the CUDA driver is missing or too old",
+                             "the CUDA runtime reported an error")
+            cli_abort(c(
+                "x" = "GPU mode requested (device = \"gpu\") but {reason}.",
+                "i" = "Check the GPU and CUDA_VISIBLE_DEVICES, or use ",
+                      "device = \"cpu\"."
+            ))
+        }
     }
 
     n_gsets <- length(geneSetsIdx)

@@ -446,6 +446,24 @@ SEXP gsva_cuda_max_gset_size_R(void) {
   return res;
 }
 
+SEXP gsva_cuda_state_R(void) {
+  int ndev = 0;
+  cudaError_t err = cudaGetDeviceCount(&ndev);
+  (void) cudaGetLastError();
+
+  const char *state;
+  if (err == cudaSuccess && ndev > 0)
+    state = "ok";
+  else if (err == cudaErrorInsufficientDriver)
+    state = "driver";
+  else if (err == cudaErrorNoDevice || err == cudaSuccess)
+    state = "nodev";
+  else
+    state = "error";
+
+  return mkString(state);
+}
+
 // safety of the GPU walk: the walk is safe when the largest possible weight,
 // (G/2)^tau, fits in gsva_float_t
 SEXP gsva_cuda_walk_safe_R(SEXP GR, SEXP ksR, SEXP tauR) {

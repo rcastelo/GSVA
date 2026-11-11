@@ -161,10 +161,8 @@ test_gsvaWalkDivert <- function() {
         message("Walk weights are doubles; FLT_MAX-bound assertions skipped.")
     }
 
-    if (!GSVA:::.gsva_cuda_available()) {
-        message("CUDA not available; skipping GPU diversion assertions.")
+    if (.skip_if_no_gpu())
         return(invisible(NULL))
-    }
 
     p <- 20000
     n <- 10
@@ -302,10 +300,8 @@ test_gsvaColRanksSparseGpu <- function() {
     checkTrue(all(is.finite(es_cpu["set1", ])))
     checkTrue(all(is.finite(es_cpu[-1, -1])))
 
-    if (!GSVA:::.gsva_cuda_available()) {
-        message("CUDA not available; skipping GPU assertions.")
+    if (.skip_if_no_gpu())
         return(invisible(NULL))
-    }
 
     es_gpu <- gsva(spar, device="gpu", verbose=FALSE)
     checkTrue(is.na(es_gpu["set2", 1]))
