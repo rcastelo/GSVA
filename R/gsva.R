@@ -194,8 +194,10 @@ setMethod("gsva", signature(param="gsvaParam"),
               .check_bpparam(BPPARAM)
 
               device <- match.arg(device)
-              if (device == "auto") {
-                  if (.gsva_cuda_available()) {
+              if (device == "gpu") {
+                  .check_gpu_device()
+              } else if (device == "auto") {
+                  if (.gsva_cuda_state() == "ok") {
                       device <- "gpu"
                   } else {
                       device <- "cpu"
@@ -1314,8 +1316,10 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
     .check_bpparam(BPPARAM)
 
     device <- match.arg(device)
-    if (device == "auto") {
-        if (.gsva_cuda_available()) {
+    if (device == "gpu") {
+        .check_gpu_device()
+    } else if (device == "auto") {
+        if (.gsva_cuda_state() == "ok") {
             device <- "gpu"
         } else {
             device <- "cpu"
@@ -2552,14 +2556,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     na_use <- as.integer(factor(na_use, levels=c("everything", "all.obs",
                                                  "na.rm")))
 
-    if (device == "gpu" && !.gsva_cuda_available()) {
-        cli_abort(c(
-            "x" = "GPU mode requested (device = \"gpu\") but this package was ",
-                "built without CUDA support.",
-            "i" = "To use GPU acceleration, reinstall the package with the ",
-                "CUDA toolkit available.",
-            "i" = "Alternatively, use device = \"cpu\"."
-        ))
+    if (device == "gpu") {
+        .check_gpu_device()
     }
 
     n_gsets <- length(geneSetsIdx)
