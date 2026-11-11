@@ -708,6 +708,30 @@ test_mapReduceRedo <- function() {
     checkIdentical(HDF5Array::getHDF5DumpDir(), sessiondumpdir)
     checkEqualsNumeric(gsvaranks, gsvaReduce(mapout, verbose=FALSE))
 
+    ## the back-end started by gsvaMap() removes its registry without the wait
+    ## of five seconds of BiocParallel, unless the user sets it, and the option
+    ## is restored afterwards. The tracer records the wait of each removal
+    waitopt <- "BIOCPARALLEL_BATCHTOOLS_REMOVE_REGISTRY_WAIT"
+    waits <- new.env()
+    waits$w <- c()
+    suppressMessages(trace("removeRegistry", where=asNamespace("batchtools"),
+                           print=FALSE,
+                           tracer=substitute(assign("w", c(E$w, wait),
+                                                    envir=E),
+                                             list(E=waits))))
+    tryCatch(for (w in list(NULL, 0.5)) {
+        options(structure(list(w), names=waitopt))
+        mapout <- gsvaMap(gsvaColRanks, gsvarnorm, verbose=FALSE,
+                          BTPARAM=newbtpar(workers=2, memory="10G"))
+        checkIdentical(getOption(waitopt), w)
+        checkEqualsNumeric(gsvaranks, gsvaReduce(mapout, verbose=FALSE))
+    }, finally={
+        options(structure(list(0), names=waitopt))
+        suppressMessages(untrace("removeRegistry",
+                                 where=asNamespace("batchtools")))
+    })
+    checkEqualsNumeric(waits$w, c(0, 0.5))
+
     ## a job killed by the workload manager, simulated by a batchtools job
     ## killing its own process, in a call to gsvaMap() whose registry
     ## directory was left by a previous call whose R session ended
@@ -783,12 +807,12 @@ test_batchtoolsConf <- function() {
     checkIdentical(conffile, file.path(dir, "gsvabatchtools.conf.R"))
 
     ## without a configuration file of the user, the interval between checks
-    ## grows from 7 seconds up to 30 seconds
+    ## grows from 7 seconds up to 10 seconds
     if (is.na(batchtools::findConfFile())) {
         env <- sourceconf(conffile)
         checkIdentical(sort(ls(env, all.names=TRUE)), "sleep")
-        checkEqualsNumeric(vapply(c(1, 5, 12, 13, 100), env$sleep, numeric(1)),
-                           c(7, 15, 29, 30, 30))
+        checkEqualsNumeric(vapply(c(1, 2, 3, 100), env$sleep, numeric(1)),
+                           c(7, 9, 10, 10))
     }
 
     ## the settings of the configuration file of the user are kept, also the
@@ -799,7 +823,7 @@ test_batchtoolsConf <- function() {
     writeLines("default.resources <- list(walltime=60)", userconf)
     env <- sourceconf(conffile, searchpath=userdir)
     checkIdentical(env$default.resources, list(walltime=60))
-    checkEqualsNumeric(env$sleep(100), 30)
+    checkEqualsNumeric(env$sleep(100), 10)
     writeLines(c("default.resources <- list(walltime=60)", "sleep <- 1"),
                userconf)
     env <- sourceconf(conffile, searchpath=userdir)

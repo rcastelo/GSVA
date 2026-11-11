@@ -113,10 +113,11 @@ output of the GSVA calculations will be saved. In this directory,
 run at the start of each job, and a configuration file for the package
 \href{https://cran.r-project.org/package=batchtools}{batchtools},
 \code{gsvabatchtools.conf.R}, which makes \code{gsvaMap()} check the state of the
-jobs at most every 30 seconds, instead of up to every two minutes, to notice
-sooner jobs killed by the workload manager. This file also loads the
-batchtools configuration file of the user, if any, whose settings,
-including the interval between checks, take precedence. Default:
+jobs at most every 10 seconds, instead of up to every two minutes, to notice
+sooner the end of the jobs, including those killed by the workload
+manager. This file also loads the batchtools configuration file of the
+user, if any, whose settings, including the interval between checks, take
+precedence. Default:
 "GSVAOUTPUT" in the current working directory.}
 
 \item{partition}{In \code{gsvaBatchtoolsSlurmParam()}, name of the Slurm partition

@@ -538,6 +538,22 @@ test_ondisk_mem_factors <- function() {
     checkEqualsNumeric(GSVA:::.sample_nonzero_fraction(DelayedArray(as(x, "dgCMatrix")),
                                                        maxvalues=400), 1/4)
 
+    ## the number of nonzero values of sparse HDF5 files and sparse matrices
+    ## in main memory bound together, as gsvaReduce() binds the outputs of
+    ## gsvaMap(), is read from them, also after setting dimension names, but
+    ## not after subsetting them or operating on their values, nor from other
+    ## seeds, such as an HDF5 dataset storing zeros
+    T1 <- writeTENxMatrix(as(x[, 1:150], "dgCMatrix"))
+    T2 <- writeTENxMatrix(as(x[, 151:400], "dgCMatrix"))
+    B <- cbind(T1, T2, DelayedArray(as(x[, 1:10], "dgCMatrix")))
+    dimnames(B) <- list(paste0("g", 1:40), paste0("s", 1:410))
+    checkEqualsNumeric(GSVA:::.seeds_nzcount(B), 4100)
+    checkEqualsNumeric(GSVA:::.seeds_nzcount(rbind(T1, T1)), 3000)
+    checkTrue(is.na(GSVA:::.seeds_nzcount(B[, 1:10])))
+    checkTrue(is.na(GSVA:::.seeds_nzcount(2 * B)))
+    checkTrue(is.na(GSVA:::.seeds_nzcount(cbind(T1, H))))
+    checkEqualsNumeric(GSVA:::.estimate_nzcount(B, NA, FALSE), 4100)
+
     ## the factors of ranking columns relative to the sparse size of blocks
     ## read from disk are scaled by the ratio of that size to their dense
     ## size, 3/8 with doubles, value and row index, and 1/2 with integers,

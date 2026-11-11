@@ -90,10 +90,11 @@
 #' run at the start of each job, and a configuration file for the package
 #' [batchtools](https://cran.r-project.org/package=batchtools),
 #' `gsvabatchtools.conf.R`, which makes `gsvaMap()` check the state of the
-#' jobs at most every 30 seconds, instead of up to every two minutes, to notice
-#' sooner jobs killed by the workload manager. This file also loads the
-#' batchtools configuration file of the user, if any, whose settings,
-#' including the interval between checks, take precedence. Default:
+#' jobs at most every 10 seconds, instead of up to every two minutes, to notice
+#' sooner the end of the jobs, including those killed by the workload
+#' manager. This file also loads the batchtools configuration file of the
+#' user, if any, whose settings, including the interval between checks, take
+#' precedence. Default:
 #' "GSVAOUTPUT" in the current working directory.
 #'
 #' @param partition In `gsvaBatchtoolsSlurmParam()`, name of the Slurm partition
@@ -374,7 +375,7 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         cli_abort(c("x"="Internal error, invalid FUN argument."))
 
     X <- inputData
-    chunks <- NULL
+    chunks <- density <- NULL
     if (!is.list(X)) {
         if (is.null(mapinfo)) {
             ## each job has its own memory 'maxmem', not shared with the
@@ -384,9 +385,10 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
             ## sparse data read from disk take it by their sparse size, see
             ## .ondisk_mem_factors()
             Xd <- unwrapData(get_exprData(inputData), assay)
+            density <- .map_density(inputData, assay, Xd)
             mf <- .ondisk_mem_factors(.map_step_factors(funname, inputData,
                                                         Xd),
-                                      Xd, .map_density(inputData, assay, Xd))
+                                      Xd, density)
             container <- .map_container_mem(inputData, assay)
             grid <- gridsizefun(Xd, nworkers, maxmem, mf$workfactor,
                                 mf$outfactor, mf$outextra, workermem=0,
@@ -414,12 +416,14 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
                               "same {.arg inputData}.")))
 
     ## before submitting any job, or writing its manifest, check the memory
-    ## that each job requires
+    ## that each job requires, with the density used to size the chunks, if
+    ## any, which takes time to estimate on data stored on disk
     chunkwidth <- if (is.null(chunks)) NA_real_ else
                       max(chunks$last - chunks$first + 1)
     .check_map_mem(funname, inputData, assay,
                    whdim=if (funname == "gsvaRowNorm") 1L else 2L,
-                   chunkwidth=chunkwidth, ncpus=ncpus, maxmem=maxmem)
+                   chunkwidth=chunkwidth, ncpus=ncpus, maxmem=maxmem,
+                   density=density)
 
     ## results saved to disk get file names that depend only on the input
     ## and the chunk boundaries, and a manifest that allows MAPREDO to find
@@ -655,8 +659,9 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
 ## minutes, and considers that a job without results has ended only after not
 ## finding it in the queue in more than three consecutive checks, which can
 ## delay by several minutes noticing the end of jobs killed by the workload
-## manager. write in 'dir' a batchtools configuration file that caps that
-## interval to 30 seconds, after loading the batchtools configuration file of
+## manager, and by up to the interval the end of the other jobs, i.e., of each
+## step of GSVA. write in 'dir' a batchtools configuration file that caps that
+## interval to 10 seconds, after loading the batchtools configuration file of
 ## the user, if any, which batchtools does not load anymore when a registry is
 ## given a configuration file, and keeping the interval set in it, if any. its
 ## name differs from 'batchtools.conf.R' because findConfFile() would find it
@@ -669,7 +674,7 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
                  "    sys.source(.userconf, envir=environment(), keep.source=FALSE)",
                  "rm(.userconf)",
                  "if (!exists(\"sleep\", inherits=FALSE))",
-                 "    sleep <- function(i) min(5 + 2 * i, 30)"),
+                 "    sleep <- function(i) min(5 + 2 * i, 10)"),
                conffile)
 
     conffile
@@ -846,14 +851,15 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
 ## 'maxmem', because such jobs would be killed by the workload manager, and
 ## otherwise it warns when the memory estimated for the step exceeds 'maxmem',
 ## see .step_mem_need(). for a list input, whose chunks are not loaded to
-## know their size, only the former is checked. it is skipped with the option
-## 'GSVA.check_memory=FALSE'
+## know their size, only the former is checked. the fraction of nonzero values
+## of sparse input data is given in 'density', or computed when NULL, see
+## .map_density(). it is skipped with the option 'GSVA.check_memory=FALSE'
 #' @importFrom cli cli_abort
 #' @importFrom memuse mu
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
 .check_map_mem <- function(funname, inputData, assay, whdim, chunkwidth, ncpus,
-                           maxmem) {
+                           maxmem, density=NULL) {
     if (!getOption("GSVA.check_memory", TRUE) || !is.finite(maxmem))
         return(invisible(FALSE))
 
@@ -887,9 +893,11 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     sparse <- is_sparse(X)
     eltbytes <- if (type(X) == "integer") 4 else 8
     insize <- prod(as.numeric(dims)) * eltbytes
-    if (sparse)
-        insize <- .map_density(inputData, assay, X) *
-                  prod(as.numeric(dims)) * (eltbytes + 4)
+    if (sparse) {
+        if (is.null(density))
+            density <- .map_density(inputData, assay, X)
+        insize <- density * prod(as.numeric(dims)) * (eltbytes + 4)
+    }
     mf <- .map_step_factors(funname, inputData, X)
     ## each job receives the whole input data, whose assays in main memory
     ## remain allocated while it processes its chunk, see .step_held_input()
@@ -1299,6 +1307,16 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         if (!bpisup(BTPARAM)) {
             BTPARAM <- bpstart(BTPARAM)
             on.exit(bpstop(BTPARAM), add=TRUE)
+            ## BiocParallel waits by default five seconds before removing the
+            ## registry when stopping the back-end, which only gives time to
+            ## interrupt it, so that, unless set by the user, it does not wait
+            ## at the end of each call, i.e., of each step. the option is
+            ## restored after stopping the back-end, which uses it
+            waitopt <- "BIOCPARALLEL_BATCHTOOLS_REMOVE_REGISTRY_WAIT"
+            if (is.null(getOption(waitopt))) {
+                oldopt <- options(structure(list(0), names=waitopt))
+                on.exit(options(oldopt), add=TRUE)
+            }
         }
         res <- tryCatch(bptry(do.call("bplapply",
                                       args=c(list(X=X, FUN=MAP_FUN_WRAPPER,

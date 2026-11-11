@@ -931,9 +931,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 }
 
 ## number of nonzero values of the assay 'assay' of the expression data
-## 'exprData', counted when it is in main memory or has fewer than 2000
-## columns, and otherwise estimated from a sample of its blocks, see
-## .sample_nonzero_fraction()
+## 'exprData', counted when it is in main memory, when its seeds store it, see
+## .seeds_nzcount(), or when it has fewer than 2000 columns, and otherwise
+## estimated from a sample of its blocks, see .sample_nonzero_fraction()
 #' @importFrom S4Arrays is_sparse
 #' @importFrom SparseArray nzcount
 #' @importFrom cli cli_alert_info cli_abort
@@ -948,7 +948,10 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         if (is(X, "dgCMatrix") || is(X, "SVT_SparseMatrix"))
             nzc <- as.numeric(nzcount(X))
         else if (is(X, "DelayedMatrix")) {
-            if (nc < 2000)
+            seedsnzc <- .seeds_nzcount(X)
+            if (!is.na(seedsnzc))
+                nzc <- seedsnzc
+            else if (nc < 2000)
                 nzc <- as.numeric(nzcount(as(X, "dgCMatrix")))
             else {
                 nzc <- ceiling(tot * .sample_nonzero_fraction(X))
@@ -968,6 +971,32 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     }
 
     return(nzc)
+}
+
+## number of nonzero values of the DelayedArray object 'x', read from its
+## seeds without reading their values, when 'x' only binds seeds that store
+## it, such as the HDF5 files of the outputs of gsvaMap() bound by
+## gsvaReduce(), possibly setting their dimension names, and NA otherwise,
+## e.g., when 'x' subsets its seeds or operates on their values. sampling the
+## values of such bound outputs instead opens many of their files for each
+## sampled block, which can take minutes on the shared filesystems of clusters
+#' @importClassesFrom DelayedArray DelayedArray DelayedSetDimnames DelayedAbind
+#' @importClassesFrom HDF5Array H5SparseMatrixSeed
+#' @importClassesFrom Matrix dgCMatrix
+#' @importClassesFrom SparseArray SVT_SparseMatrix
+#' @importFrom SparseArray nzcount
+.seeds_nzcount <- function(x) {
+    if (is(x, "DelayedArray"))
+        x <- x@seed
+    if (is(x, "DelayedSetDimnames"))
+        return(.seeds_nzcount(x@seed))
+    if (is(x, "DelayedAbind"))
+        return(sum(vapply(x@seeds, .seeds_nzcount, numeric(1))))
+    if (is(x, "H5SparseMatrixSeed") || is(x, "dgCMatrix") ||
+        is(x, "SVT_SparseMatrix"))
+        return(as.numeric(nzcount(x)))
+
+    NA_real_
 }
 
 ## fraction of nonzero values of the matrix 'X' stored on disk, estimated
