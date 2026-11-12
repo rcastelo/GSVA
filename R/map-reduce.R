@@ -197,7 +197,10 @@
 #' When results are saved to disk, chunks of jobs that did not deliver any
 #' result, such as jobs killed by the workload manager, are also reported as
 #' failed, unless no chunk was completed, in which case `gsvaMap()` gives an
-#' error. The `gsvaReduce()` function returns a single
+#' error. When the results are chunks of rows of a `SummarizedExperiment`
+#' object, as with `FUN=gsvaRowNorm`, only the first chunk stores the column
+#' data of the input, which the other chunks share in the result of
+#' `gsvaReduce()`. The `gsvaReduce()` function returns a single
 #' object that combines the results from all compute nodes. The
 #' `gsvaBatchtoolsSlurmParam()` function returns a `BatchtoolsParam` object with
 #' some sensible defaults for running GSVA calculations on a SLURM cluster.
@@ -573,6 +576,8 @@ gsvaReduce <- function(mapOutput, verbose=TRUE) {
     bfun <- "rbind"
     if (rmdata[[1]]$whdim == 2)
         bfun <- "cbind"
+    else
+        mapOutput <- .share_col_data(mapOutput, ord[1])
     res <- do.call(bfun, mapOutput[ord])
     res <- .add_metadata(res, param, nrmdata)
 
@@ -838,6 +843,11 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
         return(NA_real_)
     nzc <- if (is(X, "DelayedArray")) .seeds_nzcount(X)
            else as.numeric(nzcount(X))
+    ## a parameter object records the number of nonzero values of its assay,
+    ## which its constructor may have estimated from a sample of its blocks
+    if (is.na(nzc) && is(inputData, "GsvaMethodParam") &&
+        identical(assay, get_assay(inputData)))
+        nzc <- nzcount(inputData)
     if (is.na(nzc))
         nzc <- .estimate_nzcount(get_exprData(inputData), assay, FALSE)
 
@@ -1000,6 +1010,7 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
                                              whdim=whdim)
         } ## if X is a path, restrict metadata is in the loaded object
     }
+    res <- .drop_chunk_col_data(res)
     if (output != "object") {
         ## save to a temporary name and rename it when complete, so that a
         ## job killed while saving does not leave a result that looks complete.
@@ -1139,6 +1150,38 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         for (i in seq_along(xs))
             assay(xs[[i]], a, withDimnames=FALSE) <- ms[[i]]
     }
+    xs
+}
+
+## the chunks of rows of a SummarizedExperiment object output by a job of
+## gsvaMap(), 'x', share the column data of its input data, including the
+## names of the columns, e.g., of a million cells, which each chunk would
+## otherwise store, and gsvaReduce() read back, in its file or in the
+## registry of batchtools. the first chunk keeps them, and the others leave
+## them out, see .share_col_data(), as far as the class of 'x' allows it,
+## e.g., the column "sample_id" of a SpatialExperiment object is kept
+#' @importFrom S4Vectors metadata make_zero_col_DFrame
+#' @importFrom SummarizedExperiment "colData<-"
+.drop_chunk_col_data <- function(x) {
+    if (!is(x, "SummarizedExperiment"))
+        return(x)
+    rmdt <- metadata(x)$restrict
+    if (is.null(rmdt) || !isTRUE(rmdt$whdim == 1) || isTRUE(rmdt$first == 1))
+        return(x)
+    colData(x) <- make_zero_col_DFrame(ncol(x))
+    x
+}
+
+## give the chunks of rows in the list 'xs' of SummarizedExperiment objects
+## the column data of the chunk 'i', the first one, which the others may have
+## left out, see .drop_chunk_col_data(), so that they can be bound
+#' @importFrom SummarizedExperiment colData "colData<-"
+.share_col_data <- function(xs, i) {
+    if (!is(xs[[i]], "SummarizedExperiment"))
+        return(xs)
+    cd <- colData(xs[[i]])
+    for (j in seq_along(xs)[-i])
+        colData(xs[[j]]) <- cd
     xs
 }
 

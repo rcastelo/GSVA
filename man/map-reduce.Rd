@@ -205,7 +205,10 @@ only the failed chunks, but not to \code{gsvaReduce()}, which gives an error.
 When results are saved to disk, chunks of jobs that did not deliver any
 result, such as jobs killed by the workload manager, are also reported as
 failed, unless no chunk was completed, in which case \code{gsvaMap()} gives an
-error. The \code{gsvaReduce()} function returns a single
+error. When the results are chunks of rows of a \code{SummarizedExperiment}
+object, as with \code{FUN=gsvaRowNorm}, only the first chunk stores the column
+data of the input, which the other chunks share in the result of
+\code{gsvaReduce()}. The \code{gsvaReduce()} function returns a single
 object that combines the results from all compute nodes. The
 \code{gsvaBatchtoolsSlurmParam()} function returns a \code{BatchtoolsParam} object with
 some sensible defaults for running GSVA calculations on a SLURM cluster.

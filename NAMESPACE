@@ -177,6 +177,7 @@ importFrom(S4Vectors,
   "metadata<-",
   DataFrame,
   SimpleList,
+  make_zero_col_DFrame,
   metadata
 )
 importFrom(SingleCellExperiment,
@@ -194,9 +195,11 @@ importFrom(SparseArray,
 importFrom(SpatialExperiment,SpatialExperiment)
 importFrom(SummarizedExperiment,
   "assay<-",
+  "colData<-",
   SummarizedExperiment,
   assay,
-  assayNames
+  assayNames,
+  colData
 )
 importFrom(cli,
   cli_abort,

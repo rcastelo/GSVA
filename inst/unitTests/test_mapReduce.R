@@ -162,6 +162,30 @@ test_mapReduce <- function() {
     checkEqualsNumeric(assay(gsvaes, "es"),
                        assay(gsvaesmaprnkflsredfls, "es"))
 
+    ## chunks of rows of a SingleCellExperiment object leave out the column
+    ## data of the input, except the first one, from which gsvaReduce() takes
+    ## it, both when they are returned and when they are saved to disk
+    gsvapar <- gsvaParam(sce, gsets, verbose=FALSE)
+    gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
+    for (output in c("object", "HDF5")) {
+        mapnorm <- gsvaMap(gsvaRowNorm, gsvapar, output=output, verbose=FALSE,
+                           BTPARAM=btpar)
+        checkTrue(length(mapnorm) > 1)
+        chunks <- mapnorm
+        if (output == "HDF5")
+            chunks <- lapply(mapnorm, loadHDF5GSVA, verbose=FALSE)
+        for (x in chunks) {
+            checkIdentical(ncol(colData(x)) == 0L,
+                           metadata(x)$restrict$first != 1)
+            checkIdentical(is.null(colnames(x)),
+                           metadata(x)$restrict$first != 1)
+        }
+        rednorm <- gsvaReduce(mapnorm, verbose=FALSE)
+        checkIdentical(colData(rednorm), colData(gsvarnorm))
+        checkEqualsNumeric(assay(rednorm, "gsvarnorm"),
+                           assay(gsvarnorm, "gsvarnorm"))
+    }
+
     ## check with input expression data stored in a matrix
     expr <- as(logcounts(sce), "matrix")
     gsvapar <- gsvaParam(expr, gsets, verbose=FALSE)
@@ -939,6 +963,17 @@ test_mapChunkFactors <- function() {
                                                               par, H),
                                      H, GSVA:::.map_density(par, "counts", H))
     checkEqualsNumeric(mf$workfactor, 14.3 * 3/8)
+
+    ## the number of nonzero values recorded by the parameter object for its
+    ## assay is used when it cannot be counted from the data, instead of
+    ## estimating it again
+    par2 <- gsvaParam(SummarizedExperiment(assays=list(counts=H, other=H)),
+                      gsets, assay="counts", verbose=FALSE)
+    par2@nzcount <- 1000
+    checkEqualsNumeric(GSVA:::.map_density(par2, "counts", H), 1000 / 16000)
+    checkEqualsNumeric(GSVA:::.map_density(par2, "counts",
+                                           as(x, "dgCMatrix")), 1/4)
+    checkEqualsNumeric(GSVA:::.map_density(par2, "other", H), 1/4)
 
     ## data in main memory and dense data keep the factors of the step
     S <- as(x, "dgCMatrix")
