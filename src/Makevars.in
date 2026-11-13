@@ -1,0 +1,21 @@
+# Generated from src/Makevars.in by configure; do not edit.
+
+# CUDA compiler and its host compiler (empty NVCC: CPU-only build)
+NVCC = @NVCC@
+NVCC_CCBIN = @NVCC_CCBIN@
+NVCC_FLAGS = -std=c++17 -O3
+GPU_ARCH_FLAGS = @GPU_ARCH_FLAGS@
+
+PKG_CPPFLAGS = @HAVE_CUDA_DEF@ -DUSE_FP32
+
+override SHLIB_LD = @SHLIB_LD@
+PKG_LIBS = @CU_OBJS@ @CUDA_LINK@
+
+$(SHLIB): @CU_OBJS@
+
+cuda/%.o: cuda/%.cu
+	$(NVCC) $(NVCC_FLAGS) $(GPU_ARCH_FLAGS) -ccbin $(NVCC_CCBIN) -MMD -MP -c $< -o $@ \
+	  -I"$(R_INCLUDE_DIR)" -DNDEBUG $(PKG_CPPFLAGS) $(NVCC_CPPFLAGS) -I. \
+	  -Xcompiler "$(CXXPICFLAGS) $(filter-out -flto% -ffat-lto-objects,$(CXXFLAGS))"
+
+-include cuda/*.d
