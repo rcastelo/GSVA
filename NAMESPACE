@@ -230,7 +230,8 @@ importFrom(methods,
   getClass,
   is,
   isClass,
-  new
+  new,
+  selectMethod
 )
 importFrom(rhdf5,
   H5Fclose,

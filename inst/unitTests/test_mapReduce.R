@@ -209,6 +209,111 @@ test_mapReduce <- function() {
     unlink(wd, recursive=TRUE)
 }
 
+test_mapReduceContainers <- function() {
+
+    message("Running unit tests for map reduce on different containers")
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldcheckmem), add=TRUE)
+
+    oldopt <- options(BIOCPARALLEL_BATCHTOOLS_REMOVE_REGISTRY_WAIT=0)
+    on.exit(options(oldopt), add=TRUE)
+
+    suppressPackageStartupMessages({
+        library(DelayedArray)
+        library(Matrix)
+        library(BiocParallel)
+        library(SingleCellExperiment)
+        library(SpatialExperiment)
+    })
+
+    p <- 40 ## number of genes
+    n <- 60 ## number of samples
+    gsets <- list(gset1=paste0("g", 1:10),
+                  gset2=paste0("g", 11:25),
+                  gset3=paste0("g", 26:40))
+
+    ## sparse positive values
+    set.seed(123)
+    cnt <- matrix(0, nrow=p, ncol=n,
+                  dimnames=list(paste0("g", 1:p), paste0("s", 1:n)))
+    idx <- sample(length(cnt), size=round(length(cnt)*0.3))
+    cnt[idx] <- rgamma(length(idx), shape=2) + 0.1
+    cnt <- as(cnt, "dgCMatrix")
+
+    wd <- tempfile("gsvamapwd")
+    dir.create(wd)
+    on.exit(unlink(wd, recursive=TRUE), add=TRUE)
+    oldautoblocksize <- getAutoBlockSize()
+    setAutoBlockSize(p * 8 * 7) ## blocks of 7 columns
+    on.exit(setAutoBlockSize(oldautoblocksize), add=TRUE)
+    btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="1K"),
+                             registryargs=fastRegistryargs(work.dir=wd))
+
+    ## the CLR of sparse data in main memory gives an SVT_SparseMatrix
+    ## object, whose GSVA attributes are set and removed when saving it to
+    ## disk and when binding its chunks
+    gsvapar <- gsvaParam(cnt, gsets, rowNorm="clr", ondisk="no",
+                         verbose=FALSE)
+    gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
+    checkTrue(is(gsvarnorm, "SVT_SparseMatrix"))
+    fname <- file.path(wd, "rnorm.h5")
+    saveHDF5GSVA(gsvarnorm, fname)
+    checkEqualsNumeric(as.matrix(loadHDF5GSVA(fname, verbose=FALSE)),
+                       as.matrix(gsvarnorm))
+    for (output in c("object", "HDF5")) {
+        mapnorm <- gsvaMap(gsvaRowNorm, gsvapar, output=output,
+                           verbose=FALSE, BTPARAM=btpar)
+        checkTrue(length(mapnorm) > 1)
+        rednorm <- gsvaReduce(mapnorm, verbose=FALSE)
+        checkEqualsNumeric(as.matrix(rednorm), as.matrix(gsvarnorm))
+        checkIdentical(dimnames(rednorm), dimnames(gsvarnorm))
+    }
+
+    ## chunks of columns of a SingleCellExperiment object with reduced
+    ## dimensions, and of a SpatialExperiment object with an image, take the
+    ## column data, reduced dimensions and spatial coordinates of their
+    ## columns, and the chunks of a SpatialExperiment object, which share the
+    ## 'sample_id' of their input, are bound keeping it and its image data
+    sce <- SingleCellExperiment(assays=list(logcounts=cnt),
+                                colData=DataFrame(grp=rep(1:3, n/3)),
+                                reducedDims=list(PCA=matrix(rnorm(n*2), n, 2)))
+    spe <- SpatialExperiment(assays=list(logcounts=cnt),
+                             colData=DataFrame(grp=rep(1:3, n/3)),
+                             spatialCoords=matrix(runif(n*2), n, 2,
+                                                  dimnames=list(NULL,
+                                                                c("x", "y"))),
+                             sample_id="sample01")
+    reducedDim(spe, "PCA") <- matrix(rnorm(n*2), n, 2)
+    img <- system.file("extdata", "10xVisium", "section1", "outs", "spatial",
+                       "tissue_lowres_image.png", package="SpatialExperiment")
+    spe <- addImg(spe, imageSource=img, scaleFactor=1, sample_id="sample01",
+                  image_id="lowres")
+    for (x in list(sce, spe)) {
+        gsvarnorm <- gsvaRowNorm(gsvaParam(x, gsets, verbose=FALSE),
+                                 verbose=FALSE)
+        gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
+        gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+        redranks <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm,
+                                       verbose=FALSE, BTPARAM=btpar),
+                               verbose=FALSE)
+        redes <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, verbose=FALSE,
+                                    BTPARAM=btpar),
+                            verbose=FALSE)
+        checkEqualsNumeric(as.matrix(assay(redranks, "gsvaranks")),
+                           as.matrix(assay(gsvaranks, "gsvaranks")))
+        checkEqualsNumeric(assay(redes, "es"), assay(gsvaes, "es"))
+        for (pair in list(list(redranks, gsvaranks), list(redes, gsvaes))) {
+            checkIdentical(colData(pair[[1]]), colData(pair[[2]]))
+            checkIdentical(reducedDims(pair[[1]]), reducedDims(pair[[2]]))
+            if (is(x, "SpatialExperiment")) {
+                checkIdentical(spatialCoords(pair[[1]]),
+                               spatialCoords(pair[[2]]))
+                checkIdentical(imgData(pair[[1]]), imgData(pair[[2]]))
+            }
+        }
+    }
+}
+
 test_mapReduceParquet <- function() {
 
     if (!requireNamespace("arrow", quietly=TRUE)) {

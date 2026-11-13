@@ -268,23 +268,24 @@ setMethod("wrapData", signature(container="SingleCellExperiment"),
                   stopifnot(all(rownames(dataMatrix) %in% rownames(container)))
                   mask <- rownames(container) %in% rownames(dataMatrix)
                   if (!dropAssays) {
-                      if (!is.na(first) && !is.na(last) && whdim == 2) {
-                          first_to_last <- seq.int(first, last, 1)
-                          adata <- c(assays(container[mask, first_to_last]), adata)
-                          rdimdata <- lapply(rdimdata,
-                                             function(x)
-                                                 x[first_to_last, , drop=FALSE])
-                          aexpsdata <- lapply(aexpsdata,
-                                              function(x)
-                                                  x[, first_to_last, , drop=FALSE])
-                      } else
+                      if (!is.na(first) && !is.na(last) && whdim == 2)
+                          adata <- c(assays(container[mask, seq.int(first, last, 1)]), adata)
+                      else
                           adata <- c(assays(container[mask, ]), adata)
                   }
                   rdata <- rowData(container)[mask, ]
               }
+              ## the column data, reduced dimensions and alternative
+              ## experiments of a chunk of columns are those of its columns
               cdata <- colData(container)
-              if (!is.na(first) && !is.na(last) && whdim == 2)
-                  cdata <- cdata[seq.int(first, last, 1), , drop=FALSE]
+              if (!is.na(first) && !is.na(last) && whdim == 2) {
+                  first_to_last <- seq.int(first, last, 1)
+                  cdata <- cdata[first_to_last, , drop=FALSE]
+                  rdimdata <- lapply(rdimdata,
+                                     function(x) x[first_to_last, , drop=FALSE])
+                  aexpsdata <- lapply(aexpsdata,
+                                      function(x) x[, first_to_last])
+              }
               rval <- SingleCellExperiment(assays=adata, colData=cdata,
                                            rowData=rdata, reducedDims=rdimdata,
                                            altExps=aexpsdata,
@@ -336,18 +337,31 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                   }
                   rdata <- rowData(container)[mask, ]
               }
+              ## the column data, reduced dimensions, alternative experiments
+              ## and spatial coordinates of a chunk of columns are those of
+              ## its columns
               cdata <- colData(container)
-              if (!is.na(first) && !is.na(last) && whdim == 2)
-                  cdata <- cdata[seq.int(first, last, 1), , drop=FALSE]
+              rdimdata <- reducedDims(container)
+              aexpsdata <- altExps(container)
+              coords <- spatialCoords(container)
+              if (!is.na(first) && !is.na(last) && whdim == 2) {
+                  first_to_last <- seq.int(first, last, 1)
+                  cdata <- cdata[first_to_last, , drop=FALSE]
+                  rdimdata <- lapply(rdimdata,
+                                     function(x) x[first_to_last, , drop=FALSE])
+                  aexpsdata <- lapply(aexpsdata,
+                                      function(x) x[, first_to_last])
+                  coords <- coords[first_to_last, , drop=FALSE]
+              }
               rval <- SpatialExperiment(
                   assays=adata,
                   colData=cdata,
                   rowData=rdata,
-                  reducedDims=reducedDims(container),
-                  altExps=altExps(container),
+                  reducedDims=rdimdata,
+                  altExps=aexpsdata,
                   metadata=metadata(container),
                   imgData=imgData(container),
-                  spatialCoords=spatialCoords(container))
+                  spatialCoords=coords)
               metadata(rval)$gsvaParam <- .gsvaParam_as_list(param)
               omd <- .gsva_output_metadata(dataMatrix, assay)
               metadata(rval)$gsvaVersion <- omd$gsvaVersion

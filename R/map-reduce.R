@@ -575,7 +575,7 @@ gsvaReduce <- function(mapOutput, verbose=TRUE) {
 
     bfun <- "rbind"
     if (rmdata[[1]]$whdim == 2)
-        bfun <- "cbind"
+        bfun <- .cbind_chunks_fun(mapOutput[[1]])
     else
         mapOutput <- .share_col_data(mapOutput, ord[1])
     res <- do.call(bfun, mapOutput[ord])
@@ -1004,10 +1004,10 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
                                            rem=rem,
                                            whdim=whdim)
         } else if (is(X, "GsvaExprData")) {
-            attributes(res)$restrict <- list(first=start(rng),
-                                             last=end(rng),
-                                             rem=rem,
-                                             whdim=whdim)
+            attr(res, "restrict") <- list(first=start(rng),
+                                          last=end(rng),
+                                          rem=rem,
+                                          whdim=whdim)
         } ## if X is a path, restrict metadata is in the loaded object
     }
     res <- .drop_chunk_col_data(res)
@@ -1075,14 +1075,19 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     nrmdata
 }
 
+## the attributes of matrices are set with attr(), which, unlike
+## attributes(), also sets them in S4 objects that are not vectors, such as
+## SVT_SparseMatrix objects, e.g., from the CLR on sparse data, see
+## .rownorm_clr()
 #' @importFrom S4Vectors "metadata<-"
 .add_metadata <- function(x, param, mdata) {
     if (is(x, "SummarizedExperiment")) {
         metadata(x) <- mdata
         metadata(x)$gsvaParam <- .gsvaParam_as_list(param)
     } else {
-        attributes(x) <- c(attributes(x), mdata)
-        attributes(x)$gsvaParam <- .gsvaParam_as_list(param)
+        for (nm in names(mdata))
+            attr(x, nm) <- mdata[[nm]]
+        attr(x, "gsvaParam") <- .gsvaParam_as_list(param)
     }
 
     return(x)
@@ -1185,6 +1190,20 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     xs
 }
 
+## function binding the chunks of columns of the output of gsvaMap(), of the
+## class of 'x': cbind(), except for SpatialExperiment objects, whose cbind()
+## method takes their inputs for different samples, and when they share a
+## 'sample_id', as the chunks of the same sample do, it changes it in each of
+## them and repeats their image data. the method of SingleCellExperiment
+## objects binds instead their columns, including the spatial coordinates,
+## and keeps the 'sample_id' and image data of the input
+#' @importFrom methods selectMethod
+.cbind_chunks_fun <- function(x) {
+    if (is(x, "SpatialExperiment"))
+        return(selectMethod("cbind", "SingleCellExperiment"))
+    "cbind"
+}
+
 .strip_metadata <- function(inputargs) {
     outputargs <- NULL
     if (is(inputargs[[1]], "SummarizedExperiment")) {
@@ -1193,13 +1212,11 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
 	    x
         })
     } else {
+        ## see .add_metadata() about setting attributes with attr()
         outputargs <- lapply(inputargs, function(x) {
-            attributes(x)$assay <- NULL
-            attributes(x)$geneSets <- NULL
-            attributes(x)$gsvaParam <- NULL
-            attributes(x)$restrict <- NULL
-            attributes(x)$gsvaVersion <- NULL
-            attributes(x)$ranksNrow <- NULL
+            for (nm in c("assay", "geneSets", "gsvaParam", "restrict",
+                         "gsvaVersion", "ranksNrow"))
+                attr(x, nm) <- NULL
             x
         })
     }
