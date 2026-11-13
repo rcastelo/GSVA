@@ -101,6 +101,8 @@ NVCC_FLAGS = -O3
 FP32_FLAG = -DUSE_FP32
 # HAVE_CUDA preprocessor define (empty if no CUDA)
 HAVE_CUDA_DEF = ${HAVE_CUDA_DEF}
+# Common flags
+PKG_CPPFLAGS += \$(HAVE_CUDA_DEF) \$(FP32_FLAG)
 MC
 if [ $? -ne 0 ]; then
     echo "*** Failed to write src/Makeconf" >&2

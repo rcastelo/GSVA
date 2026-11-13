@@ -8,8 +8,11 @@ all: $(SHLIB)
 $(SHLIB): $(OBJECTS)
 	$(SHLIB_LINK) -o $@ $(OBJECTS) $(ALL_LIBS)
 
+cuda_params.o: cuda_params.c cuda/config.h
+	$(CC) $(ALL_CPPFLAGS) $(ALL_CFLAGS) $(FP32_FLAG) -c $< -o $@
+
 cuda/%.o: cuda/%.cu
-	$(NVCC) -std=c++17 $(FP32_FLAG) $(GPU_ARCH_FLAGS) $(NVCC_FLAGS) -MMD -MP -c $< -o $@ $(HAVE_CUDA_DEF) $(ALL_CPPFLAGS) -I. -Xcompiler "$(CPICFLAGS) $(CFLAGS)"
+	$(NVCC) -std=c++17 $(GPU_ARCH_FLAGS) $(NVCC_FLAGS) -MMD -MP -c $< -o $@ $(ALL_CPPFLAGS) -I. -Xcompiler "$(CPICFLAGS) $(CFLAGS)"
 
 -include cuda/*.d
 
