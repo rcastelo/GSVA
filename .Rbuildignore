@@ -4,3 +4,8 @@
 ^docs$
 ^\.covrignore
 ^\.codecov.yml
+^\.BBSoptions$
+^src/Makeconf$
+^src/.*\.o$
+^src/.*\.so$
+^src/cuda/.*\.d$

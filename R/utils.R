@@ -1953,3 +1953,29 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     ap <- c(ap, paste0(ap, ".db"))
     return(any(ap %in% rownames(installed.packages())))
 }
+
+## Check CUDA device availability:
+##   "unbuilt" -- package was compiled without CUDA support
+##   "ok"      -- at least one CUDA-capable device is usable
+##   "driver"  -- CUDA driver missing or too old for this build
+##   "nodev"   -- runtime and driver fine, but no device is visible
+##   "error"   -- any other CUDA runtime failure
+.gsva_cuda_state <- function() {
+    built <- tryCatch({
+        getNativeSymbolInfo("gsva_score_genesets_gpu_R", PACKAGE = "GSVA")
+        TRUE
+    }, error = function(e) FALSE)
+    if (!built)
+        return("unbuilt")
+
+    .Call("gsva_cuda_state_R", PACKAGE = "GSVA")
+}
+
+.gsva_cuda_max_gset_size <- function() {
+    .Call("gsva_cuda_max_gset_size_R", PACKAGE = "GSVA")
+}
+
+.gsva_cuda_walk_safe <- function(G, gset_sizes, tau) {
+    .Call("gsva_cuda_walk_safe_R", as.integer(G), as.integer(gset_sizes),
+          as.double(tau), PACKAGE = "GSVA")
+}

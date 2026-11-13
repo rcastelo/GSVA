@@ -1,3 +1,5 @@
+source(system.file("unitTests", "test_helpers.R", package = "GSVA"))
+
 ## GSVA ranks out of range, e.g., after removing rows from the output of
 ## gsvaColRanks(), give an error instead of reading and writing out of the
 ## bounds of the arrays used to calculate GSVA scores
@@ -11,14 +13,15 @@ test_rankbounds <- function() {
         library(SummarizedExperiment)
     })
 
-    scores <- function(R, any_na=FALSE)
+    scores <- function(R, any_na=FALSE, device="cpu")
         GSVA:::.gsva_score_genesets(R, list(1:5, 6:12),
                                     intrnks=is.integer(R[1, 1]),
                                     sparse=is(R, "sparseMatrix") ||
                                            is(R, "SVT_SparseMatrix"),
                                     maxDiff=TRUE, absRanking=FALSE, tau=1,
                                     any_na=any_na, na_use="na.rm", minSize=1L,
-                                    wna_env=new.env(), verbose=FALSE)
+                                    wna_env=new.env(), verbose=FALSE,
+                                    device=device)
 
     p <- 20 ## number of genes
     n <- 8 ## number of samples
@@ -28,6 +31,13 @@ test_rankbounds <- function() {
     R <- vapply(seq_len(n), function(j) sample.int(p), integer(p))
     checkTrue(is.matrix(scores(R)))
     checkTrue(is.matrix(scores(1 * R)))
+
+    ## CPU vs GPU
+    .run_with_gpu({
+        .check_gpu_equiv(scores(R), scores(R, device="gpu"))
+        .check_gpu_equiv(scores(1 * R), scores(1 * R, device="gpu"))
+    })
+
     Rbad <- R
     Rbad[3, 2] <- p + 5L
     checkException(scores(Rbad), silent=TRUE)
@@ -50,6 +60,11 @@ test_rankbounds <- function() {
                    function(x) as(1 * x, "SVT_SparseMatrix"))) {
         checkTrue(is.matrix(scores(f(S))))
         checkException(scores(f(Sbad)), silent=TRUE)
+
+        ## CPU vs GPU
+        .run_with_gpu({
+            .check_gpu_equiv(scores(f(S)), scores(f(S), device="gpu"))
+        })
     }
 
     ## ranks with missing values, whose nonmissing values range between 1
@@ -77,7 +92,7 @@ test_rankbounds <- function() {
                                      verbose=FALSE)
         subranks <- gsvacolranks[1:15, ]
         metadata(subranks)$ranksNrow <- NULL
-        msg <- tryCatch(gsvaColScores(subranks, verbose=FALSE),
+        msg <- tryCatch(gsvaColScores(subranks, verbose=FALSE, device="cpu"),
                         error=conditionMessage)
         checkTrue(is.character(msg) && grepl("out of range", msg))
         ## a column with ranks out of range
@@ -111,7 +126,8 @@ test_rankmissing <- function() {
                                     sparse=is(R, "SVT_SparseMatrix"),
                                     maxDiff=TRUE, absRanking=FALSE, tau=1,
                                     any_na=any_na, na_use="na.rm", minSize=1L,
-                                    wna_env=new.env(), verbose=FALSE)
+                                    wna_env=new.env(), verbose=FALSE,
+                                    device="cpu")
 
     p <- 20 ## number of genes
     n <- 8 ## number of samples

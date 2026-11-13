@@ -1,3 +1,5 @@
+source(system.file("unitTests", "test_helpers.R", package = "GSVA"))
+
 test_spatial <- function() {
 
     message("Running unit tests for spatial input")
@@ -31,14 +33,20 @@ test_spatial <- function() {
 
     ## calculate GSVA enrichment scores and check output
     gsvapar <- gsvaParam(spe, gsets, verbose=TRUE)
-    es <- gsva(gsvapar, verbose=TRUE)
+    es <- gsva(gsvapar, verbose=TRUE, device="cpu")
     checkTrue(is(es, "SpatialExperiment"))
     checkTrue(all(dim(es) == c(length(gsets), ncol(spe))))
     checkTrue(all(colnames(es) == colnames(spe)))
     checkTrue(is(geneSets(es), "list"))
-    out <- cli_fmt(es <- gsva(gsvapar, verbose=FALSE, maxmem="100K"))
+    out <- cli_fmt(es <- gsva(gsvapar, verbose=FALSE, device="cpu", maxmem="100K"))
     checkTrue(is(assay(es), "DelayedMatrix"))
     checkTrue(grepl("on-disk", out))
+
+    ## CPU vs GPU
+    .run_with_gpu({
+        es_gpu <- gsva(gsvapar, verbose=FALSE, device="gpu", maxmem="100K")
+        .check_gpu_equiv(assay(es), assay(es_gpu))
+    })
 
     ## comment until GSVAdata 1.49.1 is available on the Bioconductor build system
     ## calculate spatial autocorrelation on the GSVA enrichment scores

@@ -1,7 +1,3 @@
-rm -f config.*
+rm -f src/Makeconf
 
-rm -f src/Makevars
-
-rm -f src/*.o src/*.so
-
-rm -rf autom4te.cache
+rm -f src/*.o src/cuda/*.o src/*.so

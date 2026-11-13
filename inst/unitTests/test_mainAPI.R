@@ -3,6 +3,8 @@
 ### unit tests for the main API
 ###
 
+source(system.file("unitTests", "test_helpers.R", package = "GSVA"))
+
 test_mainAPI <- function() {
     message("Running unit tests for the main API")
     
@@ -26,48 +28,70 @@ test_mainAPI <- function() {
     library(cli)
     xf2 <- rbind(rep(1, 30), xf)
     gsvapar <- gsvaParam(xf2, gs)
-    out <- cli_fmt(g1 <- gsva(gsvapar, verbose=TRUE))
+    out <- cli_fmt(g1 <- gsva(gsvapar, verbose=TRUE, device="cpu"))
     checkTrue(grepl("1 row with constant values throughout the columns", out[3]))
 
-    g1 <- gsva(gsvaParam(exprData=xf, geneSets=gs), verbose=FALSE)
+    g1 <- gsva(gsvaParam(exprData=xf, geneSets=gs), verbose=FALSE, device="cpu")
     checkIdentical(class(xf), class(g1))
     checkEquals(names(gs), rownames(g1))
     checkEquals(colnames(xf), colnames(g1))
     checkTrue(min(g1) >= -1 && (max(g1) <= 1))
     checkTrue(!any(is.na(g1)))
+    .run_with_gpu({
+        g1_gpu <- gsva(gsvaParam(exprData=xf, geneSets=gs), verbose=FALSE, device="gpu")
+        .check_gpu_equiv(g1, g1_gpu)
+    })
 
-    g2 <- gsva(gsvaParam(exprData=xi, geneSets=gs, kcdf="Poisson"), verbose=FALSE)
+    g2 <- gsva(gsvaParam(exprData=xi, geneSets=gs, kcdf="Poisson"), verbose=FALSE, device="cpu")
     checkIdentical(class(xi), class(g2))
     checkEquals(names(gs), rownames(g2))
     checkEquals(colnames(xi), colnames(g2))
     checkTrue(min(g2) >= -1 && (max(g2) <= 1))
     checkTrue(!any(is.na(g2)))
+    .run_with_gpu({
+        g2_gpu <- gsva(gsvaParam(exprData=xi, geneSets=gs, kcdf="Poisson"), verbose=FALSE, device="gpu")
+        .check_gpu_equiv(g2, g2_gpu)
+    })
 
-    g3 <- gsva(gsvaParam(exprData=xf, geneSets=gs, kcdf="none"), verbose=FALSE)
+    g3 <- gsva(gsvaParam(exprData=xf, geneSets=gs, kcdf="none"), verbose=FALSE, device="cpu")
     checkIdentical(class(xf), class(g3))
     checkEquals(names(gs), rownames(g3))
     checkEquals(colnames(xf), colnames(g3))
     checkTrue(min(g3) >= -1 && (max(g3) <= 1))
     checkTrue(!any(is.na(g3)))
+    .run_with_gpu({
+        g3_gpu <- gsva(gsvaParam(exprData=xf, geneSets=gs, kcdf="none"), verbose=FALSE, device="gpu")
+        .check_gpu_equiv(g3, g3_gpu)
+    })
 
     ## CLR cannot be applied to nonpositive values
     checkException(g4 <- gsva(gsvaParam(exprData=xf, geneSets=gs,
                                         rowNorm="clr"), verbose=FALSE))
     g4 <- gsva(gsvaParam(exprData=abs(xf), geneSets=gs,
-                         rowNorm="clr"), verbose=FALSE)
+                         rowNorm="clr"), verbose=FALSE, device="cpu")
     checkIdentical(class(xf), class(g4))
     checkEquals(names(gs), rownames(g4))
     checkEquals(colnames(xf), colnames(g4))
     checkTrue(min(g4) >= -1 && (max(g4) <= 1))
     checkTrue(!any(is.na(g4)))
+    .run_with_gpu({
+        g4_gpu <- gsva(gsvaParam(exprData=abs(xf), geneSets=gs,
+                                 rowNorm="clr"), verbose=FALSE, device="gpu")
+        .check_gpu_equiv(g4, g4_gpu)
+    })
 
     g5 <- gsva(gsvaParam(exprData=abs(xf), geneSets=gs,
-                         rowNorm="none"), verbose=FALSE)
+                         rowNorm="none"), verbose=FALSE, device="cpu")
     checkIdentical(class(xf), class(g5))
     checkEquals(names(gs), rownames(g5))
     checkEquals(colnames(xf), colnames(g5))
     checkTrue(min(g5) >= -1 && (max(g5) <= 1))
     checkTrue(!any(is.na(g5)))
+    .run_with_gpu({
+        g5_gpu <- gsva(gsvaParam(exprData=abs(xf), geneSets=gs,
+                                 rowNorm="none"), verbose=FALSE, device="gpu")
+        .check_gpu_equiv(g5, g5_gpu)
+    })
 
     p1 <- gsva(plageParam(exprData=xf, geneSets=gs), verbose=FALSE)
     checkIdentical(class(xf), class(p1))

@@ -65,6 +65,10 @@
 #' can be set with the option `GSVA.workermem`, in bytes, and this check can be
 #' disabled with `options(GSVA.check_memory=FALSE)`.
 #'
+#' @param device The computational device to use. Options are "auto" (default),
+#' "cpu", or "gpu". When set to "auto", the function attempts to use the GPU,
+#' falling back to the CPU if no GPU is detected.
+#'
 #' @return A gene-set by sample matrix of GSVA enrichment scores stored in a
 #' container object of the same type as the input expression data container,
 #' except for the fact that enrichment scores are always dense, irrespective of
@@ -174,7 +178,8 @@ setMethod("gsva", signature(param="gsvaParam"),
           function(param,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose),
-                   maxmem="auto") {
+                   maxmem="auto",
+                   device=c("auto", "cpu", "gpu")) {
 
               if (verbose) {
                   pkgversion <- packageDescription("GSVA")[["Version"]]
@@ -187,6 +192,15 @@ setMethod("gsva", signature(param="gsvaParam"),
               }
 
               .check_bpparam(BPPARAM)
+
+              device <- match.arg(device)
+              if (device == "auto") {
+                  if (.gsva_cuda_state() == "ok") {
+                      device <- "gpu"
+                  } else {
+                      device <- "cpu"
+                  }
+              }
 
               ## the memory required by the three steps is checked before
               ## running them, and not again by each of them
@@ -233,7 +247,8 @@ setMethod("gsva", signature(param="gsvaParam"),
                   invisible(gc())
 
               es <- gsvaColScores(rankExprData=gsvaranks, verbose=verbose,
-                                  BPPARAM=BPPARAM, maxmem=maxmem)
+                                  BPPARAM=BPPARAM, maxmem=maxmem,
+                                  device=device)
               .end_chunk_blocks(oldcb)
               cbdone <- TRUE
 
@@ -585,9 +600,8 @@ setValidity("gsvaParam", function(object) {
     }
     if(length(object@tau) != 1) {
         inv <- c(inv, "@tau must be of length 1")
-    }
-    if(is.na(object@tau)) {
-        inv <- c(inv, "@tau must not be NA")
+    } else if(!is.finite(object@tau) || object@tau < 0) {
+        inv <- c(inv, "@tau must be a finite non-negative number")
     }
     if(length(object@maxDiff) != 1) {
         inv <- c(inv, "@maxDiff must be of length 1")
@@ -1249,6 +1263,10 @@ gsvaColRanks <- function(rowNormExprData,
 #' even if they would fit in main memory, unless `ondisk="no"` was set in the
 #' original [`gsvaParam`] object.
 #'
+#' @param device The device to use for the calculation. Possible values
+#' are "auto" (default), "cpu", and "gpu". When set to "auto", the function
+#' attempts to use the GPU, falling back to the CPU if no GPU is detected.
+#'
 #' @return In the case of 'gsvaColScores()', an object of the same class as the
 #' input expression data given in the argument `exprData` of the `gsvaParam`
 #' object, containing the enrichment scores for the given gene sets. Note that
@@ -1264,7 +1282,8 @@ gsvaColRanks <- function(rowNormExprData,
 gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                           first=NA_real_, last=NA_real_, recompute_nzcount=FALSE,
                           BPPARAM=SerialParam(progressbar=verbose),
-                          maxmem="auto") {
+                          maxmem="auto",
+                          device=c("auto", "cpu", "gpu")) {
 
     if (!is(rankExprData, "GsvaExprData") &&
         !is.character(rankExprData))
@@ -1293,6 +1312,15 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
     }
 
     .check_bpparam(BPPARAM)
+
+    device <- match.arg(device)
+    if (device == "auto") {
+        if (.gsva_cuda_state() == "ok") {
+            device <- "gpu"
+        } else {
+            device <- "cpu"
+        }
+    }
 
     ## assuming rows in the rank data have been already filtered
     filtDataMatrix <- unwrapData(rankExprData, "gsvaranks")
@@ -1373,6 +1401,7 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                   sparse=sparse, any_na=anyNA(param),
                                   na_use=.get_NAuse(param),
                                   minSize=get_minSize(param),
+                                  device=device,
                                   verbose=verbose,
                                   minparrows=100, minparcols=100,
                                   BPPARAM=BPPARAM, maxmem=maxmem,
@@ -2204,7 +2233,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 #' @importFrom cli cli_alert_warning
 #' @importFrom S4Arrays is_sparse
 .compute_gsva_scores <- function(R, geneSetsIdx, tau, maxDiff, absRanking,
-                                 sparse, any_na, na_use, minSize, verbose) {
+                                 sparse, any_na, na_use, minSize, verbose,
+                                 device) {
     if (sparse && !is_sparse(R))
         sparse <- FALSE
     intrnks <- type(R) == "integer"
@@ -2214,7 +2244,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     assign("u", 0, envir=wna_env)     ## number of undefined random walks
     es <- .gsva_score_genesets(R, geneSetsIdx, intrnks, sparse, maxDiff,
                                absRanking, tau, any_na, na_use, minSize,
-                               wna_env, verbose)
+                               wna_env, verbose, device)
 
     if (any_na && na_use == "na.rm")
         if (get("w", envir=wna_env)) {
@@ -2490,7 +2520,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 #' @importFrom cli cli_abort
 .gsva_score_genesets <- function(R, geneSetsIdx, intrnks, sparse, maxDiff,
                                  absRanking, tau, any_na, na_use, minSize,
-                                 wna_env, verbose) {
+                                 wna_env, verbose, device) {
     minSize <- as.integer(minSize)
     stopifnot(is.list(geneSetsIdx)) ## QC
     stopifnot(length(geneSetsIdx) > 0) ## QC
@@ -2506,24 +2536,107 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     stopifnot(is.logical(verbose)) ## QC
     na_use <- as.integer(factor(na_use, levels=c("everything", "all.obs",
                                                  "na.rm")))
-    sco <- .Call("gsva_score_genesets_R", R, geneSetsIdx, intrnks, sparse,
-                 maxDiff, absRanking, as.double(tau), any_na, na_use, minSize,
-                 verbose)
 
-    if (any_na) {
-      if (na_use == 2 && !is.null(attr(sco, "attrNAs")))
-          cli_abort(c("x"="Input GSVA ranks have NA values."))
-
-      if (na_use == 3 && !is.null(attr(sco, "attrNAs")))
-          assign("w", TRUE, envir=wna_env)
-
-      attr(sco, "attrNAs") <- NULL ## clean up the NA informing attribute
+    if (device == "gpu") {
+        cuda_state <- .gsva_cuda_state()
+        if (cuda_state == "unbuilt") {
+            cli_abort(c(
+                "x" = "GPU mode requested (device = \"gpu\") but this package was ",
+                    "built without CUDA support.",
+                "i" = "To use GPU acceleration, reinstall the package with the ",
+                    "CUDA toolkit available.",
+                "i" = "Alternatively, use device = \"cpu\"."
+            ))
+        }
+        if (cuda_state != "ok") {
+            reason <- switch(cuda_state,
+                             nodev = "no CUDA-capable device is detected",
+                             driver = "the CUDA driver is missing or too old",
+                             "the CUDA runtime reported an error")
+            cli_abort(c(
+                "x" = "GPU mode requested (device = \"gpu\") but {reason}.",
+                "i" = "Check the GPU and CUDA_VISIBLE_DEVICES, or use ",
+                      "device = \"cpu\"."
+            ))
+        }
     }
 
-    nundef <- attr(sco, "attrUndefWalks")
-    if (!is.null(nundef)) {
-        assign("u", get("u", envir=wna_env) + nundef, envir=wna_env)
-        attr(sco, "attrUndefWalks") <- NULL ## clean up informing attribute
+    n_gsets <- length(geneSetsIdx)
+    n_cols  <- ncol(R)
+
+    if (!any_na && device == "gpu") {
+        gset_sizes  <- lengths(geneSetsIdx)
+        max_gpu_sz  <- .gsva_cuda_max_gset_size()
+        walk_safe   <- .gsva_cuda_walk_safe(nrow(R), gset_sizes, tau)
+        full_set    <- gset_sizes == nrow(R)
+
+        gpu_idxs    <- which(gset_sizes <= max_gpu_sz & walk_safe & !full_set)
+        cpu_idxs    <- which(gset_sizes > max_gpu_sz | !walk_safe | full_set)
+
+        if (length(cpu_idxs) > 0 && verbose) {
+            n_gpu_gsets <- length(gpu_idxs)
+            n_cpu_gsets <- length(cpu_idxs)
+            max_csize   <- max(gset_sizes[cpu_idxs])
+            n_unsafe    <- sum(!walk_safe)
+            n_full      <- sum(full_set)
+            cli_alert_info(
+                c("Hybrid GPU/CPU dispatch: {n_gpu_gsets} gene sets at most {max_gpu_sz} genes on GPU",
+                  "{n_cpu_gsets} gene sets max {max_csize} genes on CPU",
+                  if (n_unsafe > 0)
+                    c("i" = "{n_unsafe} gene sets at risk of float overflow at tau={tau} scored on CPU"),
+                  if (n_full > 0)
+                    c("i" = "{n_full} gene sets containing all genes scored on CPU")
+              )
+            )
+        }
+    } else {
+        gpu_idxs <- integer(0)
+        cpu_idxs <- seq_len(n_gsets)
+    }
+
+    if (length(gpu_idxs) > 0) {
+        sco_gpu <- .Call("gsva_score_genesets_gpu_R", R,
+                         geneSetsIdx[gpu_idxs], intrnks, sparse,
+                         maxDiff, absRanking, as.double(tau),
+                         minSize, verbose)
+
+        nundef_gpu <- attr(sco_gpu, "attrUndefWalks")
+        if (!is.null(nundef_gpu))
+            assign("u", get("u", envir=wna_env) + nundef_gpu, envir=wna_env)
+        attr(sco_gpu, "attrUndefWalks") <- NULL
+
+        # fast path for the GPU-only computation
+        if (length(cpu_idxs) == 0)
+            return(sco_gpu)
+    }
+
+    sco <- matrix(NA_real_, nrow = n_gsets, ncol = n_cols)
+
+    if (length(gpu_idxs) > 0)
+        sco[gpu_idxs, ] <- sco_gpu
+
+    if (length(cpu_idxs) > 0) {
+        sco_cpu <- .Call("gsva_score_genesets_R", R, geneSetsIdx[cpu_idxs],
+                         intrnks, sparse, maxDiff, absRanking,
+                         as.double(tau), any_na, na_use, minSize, verbose)
+
+        if (any_na) {
+            if (na_use == 2 && !is.null(attr(sco_cpu, "attrNAs")))
+                cli_abort(c("x" = "Input GSVA ranks have NA values."))
+
+            if (na_use == 3 && !is.null(attr(sco_cpu, "attrNAs")))
+                assign("w", TRUE, envir = wna_env)
+
+            attr(sco_cpu, "attrNAs") <- NULL ## clean up the NA informing attribute
+        }
+
+        nundef <- attr(sco_cpu, "attrUndefWalks")
+        if (!is.null(nundef)) {
+            assign("u", get("u", envir=wna_env) + nundef, envir=wna_env)
+            attr(sco_cpu, "attrUndefWalks") <- NULL ## clean up informing attribute
+        }
+
+        sco[cpu_idxs, ] <- sco_cpu
     }
 
     sco

@@ -6,6 +6,9 @@
 .Rproj.user
 src/*.o
 src/*.so
+src/cuda/*.o
+src/cuda/*.d
+Makeconf
 *~
 *.swp
 *.swo

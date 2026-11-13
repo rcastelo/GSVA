@@ -10,6 +10,8 @@ fastRegistryargs <- function(...) {
     batchtoolsRegistryargs(conf.file=conf, ...)
 }
 
+source(system.file("unitTests", "test_helpers.R", package = "GSVA"))
+
 test_mapReduce <- function() {
 
     message("Running unit tests for map reduce")
@@ -120,7 +122,13 @@ test_mapReduce <- function() {
                        assay(gsvaredranksfls, "gsvaranks"))
 
     ## calculate column GSVA scores without map-reduce
-    gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+    gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE, device="cpu")
+
+    ## CPU vs GPU
+    .run_with_gpu({
+        gsvaes_gpu <- gsvaColScores(gsvaranks, verbose=FALSE, device="gpu")
+        .check_gpu_equiv(gsvaes, gsvaes_gpu)
+    })
 
     ## calculate column GSVA scores with map-reduce
     gsvaesmapred <- gsvaReduce(gsvaMap(gsvaColScores, gsvaranks, verbose=FALSE,
@@ -189,7 +197,14 @@ test_mapReduce <- function() {
     ## check with input expression data stored in a matrix
     expr <- as(logcounts(sce), "matrix")
     gsvapar <- gsvaParam(expr, gsets, verbose=FALSE)
-    gsvaes <- gsva(gsvapar, verbose=FALSE)
+    gsvaes <- gsva(gsvapar, verbose=FALSE, device="cpu")
+
+    ## CPU vs GPU
+    .run_with_gpu({
+        gsvaes_gpu <- gsva(gsvapar, verbose=FALSE, device="gpu")
+        .check_gpu_equiv(gsvaes, gsvaes_gpu)
+    })
+
     ## set output="HDF5" once to test stripping of attributes and wrapping into an SE for saving
     gsvarnorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, output="HDF5", verbose=FALSE, BTPARAM=btpar),
                             verbose=FALSE)
@@ -269,7 +284,13 @@ test_mapReduceParquet <- function() {
         gsvapar <- gsvaParam(input, gsets, verbose=FALSE)
         gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
         gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
-        gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+        gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE, device="cpu")
+
+        ## CPU vs GPU
+        .run_with_gpu({
+            gsvaes_gpu <- gsvaColScores(gsvaranks, verbose=FALSE, device="gpu")
+            .check_gpu_equiv(gsvaes, gsvaes_gpu)
+        })
 
         ## row-normalized values mapped by rows
         rnormpaths <- gsvaMap(gsvaRowNorm, gsvapar, output="Parquet",
@@ -294,7 +315,14 @@ test_mapReduceParquet <- function() {
 
         ## scores from reduced ranks read from the Parquet files, and from
         ## the Parquet files given as input to gsvaMap()
-        gsvaes2 <- gsvaColScores(gsvaranks2, verbose=FALSE)
+        gsvaes2 <- gsvaColScores(gsvaranks2, verbose=FALSE, device="cpu")
+
+        ## CPU vs GPU
+        .run_with_gpu({
+            gsvaes2_gpu <- gsvaColScores(gsvaranks2, verbose=FALSE, device="gpu")
+            .check_gpu_equiv(gsvaes2, gsvaes2_gpu)
+        })
+
         checkEqualsNumeric(getvals(gsvaes, "es"), getvals(gsvaes2, "es"))
         gsvaes3 <- gsvaReduce(gsvaMap(gsvaColScores, rankspaths,
                                       verbose=FALSE, BTPARAM=btpar),
@@ -354,7 +382,13 @@ test_mapReduceScoresOutput <- function() {
                                                         verbose=FALSE),
                                               verbose=FALSE),
                                   verbose=FALSE)
-        gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+        gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE, device="cpu")
+
+        ## CPU vs GPU
+        .run_with_gpu({
+            gsvaes_gpu <- gsvaColScores(gsvaranks, verbose=FALSE, device="gpu")
+            .check_gpu_equiv(gsvaes, gsvaes_gpu)
+        })
 
         for (fmt in formats) {
             espaths <- gsvaMap(gsvaColScores, gsvaranks, output=fmt,
@@ -442,7 +476,14 @@ test_mapReduceRedo <- function() {
     gsvapar <- gsvaParam(y, gsets, verbose=FALSE)
     gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
     gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
-    gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+    gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE, device="cpu")
+
+    ## CPU vs GPU
+    .run_with_gpu({
+        gsvaes_gpu <- gsvaColScores(gsvaranks, verbose=FALSE, device="gpu")
+        .check_gpu_equiv(gsvaes, gsvaes_gpu)
+    })
+
     btparranks <- newbtpar()
     rankspaths <- gsvaMap(gsvaColRanks, gsvarnorm, output="HDF5",
                           verbose=FALSE, BTPARAM=btparranks)

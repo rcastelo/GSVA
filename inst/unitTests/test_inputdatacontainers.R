@@ -1,3 +1,5 @@
+source(system.file("unitTests", "test_helpers.R", package = "GSVA"))
+
 test_inputdatacontainers <- function() {
     message("Running unit tests for input data containers")
 
@@ -16,8 +18,12 @@ test_inputdatacontainers <- function() {
                 dimnames=list(paste("g", 1:p, sep="") , paste("s", 1:n, sep="")))
 
     ## estimate GSVA enrichment scores with input as a matrix
-    es.mat <- gsva(gsvaParam(y, gsets, verbose=FALSE), verbose=FALSE)
+    es.mat <- gsva(gsvaParam(y, gsets, verbose = FALSE), verbose = FALSE, device = "cpu")
     gsets.mat <- geneSets(es.mat)
+    .run_with_gpu({
+        es.mat_gpu <- gsva(gsvaParam(y, gsets, verbose = FALSE), verbose = FALSE, device = "gpu")
+        .check_gpu_equiv(es.mat, es.mat_gpu)
+    })
 
     library(cli)
     out <- cli_fmt(gsvaParam(y, gsets, assay="dummy"))
@@ -35,8 +41,12 @@ test_inputdatacontainers <- function() {
                           featureData=as(data.frame(dummy=1:nrow(y),
                                                     row.names=rownames(y)),
                                          "AnnotatedDataFrame"))
-    es.eset <- gsva(gsvaParam(eset, gsets, verbose=FALSE), verbose=FALSE)
+    es.eset <- gsva(gsvaParam(eset, gsets, verbose = FALSE), verbose = FALSE, device = "cpu")
     gsets.eSet <- geneSets(es.eset)
+    .run_with_gpu({
+        es.eset_gpu <- gsva(gsvaParam(eset, gsets, verbose = FALSE), verbose = FALSE, device = "gpu")
+        .check_gpu_equiv(es.eset, es.eset_gpu)
+    })
 
     es.mat2 <- es.mat
     checkEqualsNumeric(es.mat2, exprs(es.eset))
@@ -54,8 +64,12 @@ test_inputdatacontainers <- function() {
                                colData=DataFrame(data.frame(dummy=1:ncol(y),
                                                             row.names=colnames(y))))
     gsvapar <- gsvaParam(se, gsets, verbose=FALSE)
-    es.se <- gsva(gsvapar, verbose=FALSE)
+    es.se <- gsva(gsvapar, verbose=FALSE, device="cpu")
     gsets.se <- geneSets(es.se)
+    .run_with_gpu({
+        es.se_gpu <- gsva(gsvapar, verbose=FALSE, device="gpu")
+        .check_gpu_equiv(es.se, es.se_gpu)
+    })
 
     checkEqualsNumeric(es.mat2, assay(es.se))
     checkTrue(identical(gsets.mat, gsets.se))
@@ -66,7 +80,11 @@ test_inputdatacontainers <- function() {
 
     gsvarownr <- gsvaRowNorm(gsvapar, dropExistingAssays=TRUE, verbose=FALSE)
     gsvaranks <- gsvaColRanks(gsvarownr, dropExistingAssays=TRUE, verbose=FALSE)
-    es.se2 <- gsvaColScores(gsvaranks, verbose=FALSE)
+    es.se2 <- gsvaColScores(gsvaranks, verbose=FALSE, device="cpu")
+    .run_with_gpu({
+        es.se2_gpu <- gsvaColScores(gsvaranks, verbose=FALSE, device="gpu")
+        .check_gpu_equiv(es.se2, es.se2_gpu)
+    })
     checkEqualsNumeric(assay(es.se), assay(es.se2))
 
     ## estimate GSVA enrichment scores with input as a dgCMatrix object
@@ -83,8 +101,12 @@ test_inputdatacontainers <- function() {
     checkTrue(length(out) > 0 && sum(nchar(out)) > 0,
 	      "gsvaParam object details method output is empty")
 
-    es.dgCMat <- gsva(param, verbose=FALSE)
+    es.dgCMat <- gsva(param, verbose=FALSE, device="cpu")
     gsets.dgCMat <- geneSets(es.dgCMat)
+    .run_with_gpu({
+        es.dgCMat_gpu <- gsva(param, verbose=FALSE, device="gpu")
+        .check_gpu_equiv(es.dgCMat, es.dgCMat_gpu)
+    })
 
     checkEqualsNumeric(es.mat2, es.dgCMat)
     checkTrue(identical(gsets.mat, gsets.dgCMat))
@@ -102,7 +124,11 @@ test_inputdatacontainers <- function() {
     yMatSp <- Matrix(ysp, nrow=nrow(yMat), ncol=ncol(yMat),
 		     dimnames=dimnames(yMat), sparse=TRUE)
     paramSp <- gsvaParam(yMatSp, gsets, verbose=FALSE)
-    es.dgCMatSp <- gsva(paramSp, verbose=FALSE)
+    es.dgCMatSp <- gsva(paramSp, verbose=FALSE, device="cpu")
+    .run_with_gpu({
+        es.dgCMatSp_gpu <- gsva(paramSp, verbose=FALSE, device="gpu")
+        .check_gpu_equiv(es.dgCMatSp, es.dgCMatSp_gpu)
+    })
     
     ## estimate GSVA enrichment scores with input as a SingleCellExperiment object
     suppressPackageStartupMessages(library(SingleCellExperiment))
@@ -116,8 +142,13 @@ test_inputdatacontainers <- function() {
     out <- gsvaAnnotation(sce)
     param <- gsvaParam(sce, gsets, verbose=FALSE)
     show(param)
-    es.sce <- gsva(param, verbose=FALSE)
+    es.sce <- gsva(param, verbose=FALSE, device="cpu")
     gsets.sce <- geneSets(es.sce)
+
+    .run_with_gpu({
+        es.sce_gpu <- gsva(param, verbose=FALSE, device="gpu")
+        .check_gpu_equiv(es.sce, es.sce_gpu)
+    })
 
     checkEqualsNumeric(es.dgCMatSp, assay(es.sce))
     checkTrue(identical(gsets.mat, gsets.sce))

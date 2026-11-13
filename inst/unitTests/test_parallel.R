@@ -1,3 +1,5 @@
+source(system.file("unitTests", "test_helpers.R", package = "GSVA"))
+
 test_parallel <- function() {
     message("Running unit tests for parallel execution.")
 
@@ -29,14 +31,23 @@ test_parallel <- function() {
 
     ## estimate GSVA enrichment scores with and without parallel execution
     ## and check that they are identical
-    es_serial <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE)
+    es_serial <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE, device="cpu")
     es_parallel <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE,
-                        BPPARAM=MulticoreParam(workers=2))
+                        BPPARAM=MulticoreParam(workers=2), device="cpu")
     checkIdentical(es_serial, es_parallel)
+
+    ## CPU vs GPU.  only the serial call is paired: the GPU code path is
+    ## incompatible with the forked CPU multiprocess workers of a
+    ## MulticoreParam, see the similar pin in gsvaMap()
+    .run_with_gpu({
+        es_serial_gpu <- gsva(gsvaParam(M, gsets, verbose=FALSE),
+                              verbose=FALSE, device="gpu")
+        .check_gpu_equiv(es_serial, es_serial_gpu)
+    })
 
     M[1, 2] <- NA
     checkException(gsva(gsvaParam(M, gsets, kcdf="Gaussian", verbose=FALSE),
-			verbose=FALSE, BPPARAM=MulticoreParam(workers=2)))
+			verbose=FALSE, BPPARAM=MulticoreParam(workers=2), device="cpu"))
 }
 
 test_parallel_bpparam_unchanged <- function() {

@@ -1,0 +1,456 @@
+#include "cuda/cbind.h"
+#include "cuda/kernels.cuh"
+#include "cuda/memory.h"
+#include "cuda/types.h"
+#include "ranks.h"
+#include "rnd_walk.h"
+#include <R.h>
+#include <Rdefines.h>
+#include <math.h>
+#include <cuda_runtime.h>
+#include <time.h>
+
+extern SEXP GSVA_attrUndefWalksSym;
+
+static inline int min2(int a, int b) { return a < b ? a : b; }
+static inline int max2(int a, int b) { return a > b ? a : b; }
+
+/* Pack sparse DGCMatrix columns into COO-style (gene_offset, value) arrays.
+ * Returns total_nnz across the block. */
+static int pack_ranks_dgc(ranks_ctx_t *ctx, gsva_host_t *host,
+                          int stream_idx, int block_c, int block_size) {
+  const int *dgc_i = ctx->u.dgc.i;
+  const int *dgc_p = ctx->u.dgc.p;
+  const double *dgc_x = ctx->u.dgc.x;
+  int *out_offt = host->sparse_offt[stream_idx];
+  int *out_vals = host->sparse_vals[stream_idx];
+  int *out_cell_offt = host->cell_offt[stream_idx];
+  int *out_nnzpercell = host->nnzpercell[stream_idx];
+
+  int offset = 0;
+  for (int c = 0; c < block_size; c++) {
+    int col = block_c + c;
+    out_cell_offt[c] = offset;
+    out_nnzpercell[c] = dgc_p[col + 1] - dgc_p[col];
+    for (int idx = dgc_p[col]; idx < dgc_p[col + 1]; idx++) {
+      out_offt[offset] = dgc_i[idx];
+      out_vals[offset] = (int)dgc_x[idx];
+      offset++;
+    }
+  }
+  out_cell_offt[block_size] = offset;
+  return offset;
+}
+
+/* Pack sparse SVT columns into COO-style (gene_offset, value) arrays.
+ * Returns total_nnz across the block. Whether vals come from REAL (double)
+ * or INTEGER is inferred from ctx->type. */
+static int pack_ranks_svt(ranks_ctx_t *ctx, gsva_host_t *host,
+                          int stream_idx, int block_c, int block_size) {
+  SEXP svt = ctx->u.svt;
+  Rboolean is_dbl = (Rboolean)(ctx->type == RANKSTYPE_SVT_DBL);
+  int *out_offt = host->sparse_offt[stream_idx];
+  int *out_vals = host->sparse_vals[stream_idx];
+  int *out_cell_offt = host->cell_offt[stream_idx];
+  int *out_nnzpercell = host->nnzpercell[stream_idx];
+
+  int offset = 0;
+  for (int c = 0; c < block_size; c++) {
+    int col = block_c + c;
+    SEXP leaf = VECTOR_ELT(svt, col);
+    out_cell_offt[c] = offset;
+    if (leaf == R_NilValue) {
+      out_nnzpercell[c] = 0;
+    } else {
+      SEXP valsR = VECTOR_ELT(leaf, 0);
+      SEXP offsetsR = VECTOR_ELT(leaf, 1);
+      int nvals = length(valsR);
+      int noffsets = length(offsetsR);
+      int *offsets = INTEGER(offsetsR);
+      if (nvals > 0) {
+        if (is_dbl) {
+          double *vals_dbl = REAL(valsR);
+          for (int k = 0; k < nvals; k++) {
+            out_offt[offset] = offsets[k];
+            out_vals[offset] = (int)vals_dbl[k];
+            offset++;
+          }
+        } else {
+          int *vals = INTEGER(valsR);
+          for (int k = 0; k < nvals; k++) {
+            out_offt[offset] = offsets[k];
+            out_vals[offset] = vals[k];
+            offset++;
+          }
+        }
+      } else {
+        /* lacunar: all values = 1 */
+        for (int k = 0; k < noffsets; k++) {
+          out_offt[offset] = offsets[k];
+          out_vals[offset] = 1;
+          offset++;
+        }
+      }
+      out_nnzpercell[c] = noffsets;
+    }
+  }
+  out_cell_offt[block_size] = offset;
+  return offset;
+}
+
+static void ranks2stats_gpu(ranks_ctx_t *ctx, int G, int block_c,
+                            int block_size, int sparse_mode,
+                            gsva_device_t *device, gsva_host_t *host,
+                            int stream_idx, SEXP ranksR) {
+  cudaStream_t stream = device->stream[stream_idx];
+  r2s_fetch_type_t fetch_type;
+
+  int *h_offt = host->sparse_offt[stream_idx];
+  int *h_vals = host->sparse_vals[stream_idx];
+  int *h_cofft = host->cell_offt[stream_idx];
+  int *h_nnzc = host->nnzpercell[stream_idx];
+
+  size_t sz_cofft = (size_t)(block_size + 1) * sizeof(int);
+  size_t sz_nnzc = (size_t)block_size * sizeof(int);
+
+  if (ctx->type == RANKSTYPE_MATRIX_INT) {
+    /* Dense integer matrix: transfer from column-major R to row-major device */
+    fetch_type = R2S_DENSE;
+    const int *ranks_data = INTEGER(ranksR);
+    for (int c = 0; c < block_size; c++) {
+      GSVA_CUDA_CALL(cudaMemcpyAsync(device->dense_ranks[stream_idx] + c * G,
+                                     ranks_data + (block_c + c) * G,
+                                     (size_t)G * sizeof(int),
+                                     cudaMemcpyHostToDevice, stream));
+    }
+  } else if (ctx->type == RANKSTYPE_MATRIX_DBL) {
+    /* Dense double matrix: cast double to int for all cells */
+    fetch_type = R2S_DENSE;
+    const double *ranks_data_dbl = REAL(ranksR);
+    int *h_cast = host->dense_cast[stream_idx];  // [G * block_size]
+    for (int c = 0; c < block_size; c++) {
+      const double *src = ranks_data_dbl + (block_c + c) * G;
+      for (int g = 0; g < G; g++) {
+        h_cast[c * G + g] = (int)src[g];
+      }
+    }
+    GSVA_CUDA_CALL(cudaMemcpyAsync(device->dense_ranks[stream_idx], h_cast,
+                                   (size_t)block_size * G * sizeof(int),
+                                   cudaMemcpyHostToDevice, stream));
+  } else if (ctx->type == RANKSTYPE_DGC) {
+    fetch_type = R2S_SPARSE;
+    int total_nnz =
+        pack_ranks_dgc(ctx, host, stream_idx, block_c, block_size);
+    GSVA_CUDA_CALL(cudaMemcpyAsync(device->sparse_offt[stream_idx], h_offt,
+                                   (size_t)total_nnz * sizeof(int),
+                                   cudaMemcpyHostToDevice, stream));
+    GSVA_CUDA_CALL(cudaMemcpyAsync(device->sparse_vals[stream_idx], h_vals,
+                                   (size_t)total_nnz * sizeof(int),
+                                   cudaMemcpyHostToDevice, stream));
+    GSVA_CUDA_CALL(cudaMemcpyAsync(device->cell_offt[stream_idx], h_cofft,
+                                   sz_cofft, cudaMemcpyHostToDevice, stream));
+    GSVA_CUDA_CALL(cudaMemcpyAsync(device->nnzpercell[stream_idx], h_nnzc,
+                                   sz_nnzc, cudaMemcpyHostToDevice, stream));
+  } else if (ctx->type == RANKSTYPE_SVT_INT || ctx->type == RANKSTYPE_SVT_DBL) {
+    fetch_type = R2S_SPARSE;
+    int total_nnz = pack_ranks_svt(ctx, host, stream_idx, block_c, block_size);
+    GSVA_CUDA_CALL(cudaMemcpyAsync(device->sparse_offt[stream_idx], h_offt,
+                                   (size_t)total_nnz * sizeof(int),
+                                   cudaMemcpyHostToDevice, stream));
+    GSVA_CUDA_CALL(cudaMemcpyAsync(device->sparse_vals[stream_idx], h_vals,
+                                   (size_t)total_nnz * sizeof(int),
+                                   cudaMemcpyHostToDevice, stream));
+    GSVA_CUDA_CALL(cudaMemcpyAsync(device->cell_offt[stream_idx], h_cofft,
+                                   sz_cofft, cudaMemcpyHostToDevice, stream));
+    GSVA_CUDA_CALL(cudaMemcpyAsync(device->nnzpercell[stream_idx], h_nnzc,
+                                   sz_nnzc, cudaMemcpyHostToDevice, stream));
+  } else {
+    error("Unknown ranks_ctx type: %d", ctx->type);
+  }
+
+  int threads = (fetch_type == R2S_SPARSE) ? GSVA_R2S_THREADS : min2(G, GSVA_R2S_THREADS);
+  ranks2stats_gpu<<<block_size, threads, 0, stream>>>(
+      fetch_type, device->dense_ranks[stream_idx],
+      device->sparse_offt[stream_idx], device->sparse_vals[stream_idx],
+      device->cell_offt[stream_idx], device->nnzpercell[stream_idx],
+      device->r_scratch[stream_idx], device->decordstat[stream_idx],
+      device->symrnkstat[stream_idx], G, block_size, (int)(sparse_mode != 0));
+
+  cudaError_t err = cudaGetLastError();
+  if (err != cudaSuccess) {
+    error("ranks2stats_gpu launch error at %s:%d: %s", __FILE__, __LINE__,
+          cudaGetErrorString(err));
+  }
+}
+
+// Static checks for the gene-set walk ladders.
+static constexpr int DENSE_CAT_CAP[] = { GSVA_DENSE_WALK(GSVA_CAT_CAP_ENTRY) };
+static constexpr int DENSE_ITEMS[] = { GSVA_DENSE_WALK(GSVA_CAT_ITEMS_ENTRY) };
+static constexpr int DENSE_THREADS[] = {
+    GSVA_DENSE_WALK(GSVA_CAT_THREADS_ENTRY) };
+static constexpr int SPARSE_CAT_CAP[] = {
+    GSVA_SPARSE_WALK(GSVA_CAT_CAP_ENTRY) };
+static constexpr int SPARSE_ITEMS[] = { GSVA_SPARSE_WALK(GSVA_CAT_ITEMS_ENTRY) };
+static constexpr int SPARSE_THREADS[] = {
+    GSVA_SPARSE_WALK(GSVA_CAT_THREADS_ENTRY) };
+
+constexpr bool gsva_cat_fits(int items, int threads, int bin_edge) {
+  return items >= 1 && threads >= 32 && threads <= 1024 &&
+         (threads & 31) == 0 && items * threads >= bin_edge;
+}
+
+constexpr bool gsva_table_fits(const int *caps, const int *items,
+                               const int *threads, int num_cats) {
+  for (int cat = 0; cat < num_cats; cat++) {
+    if (!gsva_cat_fits(items[cat], threads[cat], caps[cat]))
+      return false;
+  }
+  return true;
+}
+
+static_assert(sizeof(DENSE_CAT_CAP) / sizeof(*DENSE_CAT_CAP) == GSVA_NUM_CATS,
+              "the dense walk list must carry one entry per category");
+static_assert(sizeof(SPARSE_CAT_CAP) / sizeof(*SPARSE_CAT_CAP) == GSVA_NUM_CATS,
+              "the sparse walk list must carry one entry per category");
+
+static_assert(gsva_table_fits(DENSE_CAT_CAP, DENSE_ITEMS, DENSE_THREADS,
+                              GSVA_NUM_CATS),
+              "every dense walk shape needs items >= 1, a warp-sized block "
+              "size in [32, 1024], and items * threads covering its bin edge");
+static_assert(gsva_table_fits(SPARSE_CAT_CAP, SPARSE_ITEMS, SPARSE_THREADS,
+                              GSVA_NUM_CATS),
+              "every sparse walk shape needs items >= 1, a warp-sized block "
+              "size in [32, 1024], and items * threads covering its bin edge");
+
+static_assert(GSVA_MAX_GPU_GSET_SIZE == DENSE_CAT_CAP[GSVA_NUM_CATS - 1],
+              "CPU fallback threshold must match the largest dense bin");
+static_assert(GSVA_MAX_GPU_GSET_SIZE == SPARSE_CAT_CAP[GSVA_NUM_CATS - 1],
+              "CPU fallback threshold must match the largest sparse bin");
+
+#define GSVA_WALK_DENSE(cat, ITEMS, THREADS)                                   \
+  gsea_dense_walk_kernel<ITEMS, THREADS>                                       \
+      <<<numBlocks, THREADS, 0, stream>>>(                                     \
+          device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],  \
+          device->symrnkstat[stream_idx], device->es[stream_idx],              \
+          device->cat_gset[cat], S, G, C, tau, score_type)
+
+#define GSVA_WALK_SPARSE(cat, ITEMS, THREADS)                                  \
+  gsea_sparse_walk_kernel<ITEMS, THREADS>                                      \
+      <<<numBlocks, THREADS, 0, stream>>>(                                     \
+          device->gsetofft, device->gsetidxs, device->decordstat[stream_idx],  \
+          device->symrnkstat[stream_idx], device->es[stream_idx],              \
+          device->cat_gset[cat], S, G, C, tau, score_type,                     \
+          device->nnzpercell[stream_idx])
+
+template<int GSVA_WALK_ITEMS, int GSVA_WALK_THREADS>
+static void gsva_dense_walk_launch(gsva_device_t *device, int stream_idx,
+                                   int cat, dim3 numBlocks, int S, int G,
+                                   int C, gsva_float_t tau, int score_type) {
+  cudaStream_t stream = device->stream[stream_idx];
+  GSVA_WALK_DENSE(cat, GSVA_WALK_ITEMS, GSVA_WALK_THREADS);
+}
+
+template<int GSVA_WALK_ITEMS, int GSVA_WALK_THREADS>
+static void gsva_sparse_walk_launch(gsva_device_t *device, int stream_idx,
+                                    int cat, dim3 numBlocks, int S, int G,
+                                    int C, gsva_float_t tau, int score_type) {
+  cudaStream_t stream = device->stream[stream_idx];
+  GSVA_WALK_SPARSE(cat, GSVA_WALK_ITEMS, GSVA_WALK_THREADS);
+}
+
+typedef void (*gsva_walk_launch_t)(gsva_device_t *, int, int, dim3, int,
+                                   int, int, gsva_float_t, int);
+
+struct gsva_walk_cfg_t {
+  int items;
+  int threads;
+  gsva_walk_launch_t launch;
+};
+
+#define GSVA_DENSE_WALK_CFG(cap, items, threads)                               \
+  {                                                                            \
+    (items), (threads), &gsva_dense_walk_launch<(items), (threads)>            \
+  }
+
+#define GSVA_SPARSE_WALK_CFG(cap, items, threads)                              \
+  {                                                                            \
+    (items), (threads), &gsva_sparse_walk_launch<(items), (threads)>           \
+  }
+
+// Same lists as the tables above, so the launchers cannot disagree with them.
+static constexpr gsva_walk_cfg_t DENSE_WALK_LADDER[] = {
+    GSVA_DENSE_WALK(GSVA_DENSE_WALK_CFG)};
+static constexpr gsva_walk_cfg_t SPARSE_WALK_LADDER[] = {
+    GSVA_SPARSE_WALK(GSVA_SPARSE_WALK_CFG)};
+
+static void gsva_rnd_walk_gpu_dispatch(gsva_float_t *h_es, int S, int G, int C,
+                                       gsva_float_t tau, int score_type,
+                                       int sparse_mode,
+                                       gsva_device_t *device, int stream_idx) {
+  cudaStream_t stream = device->stream[stream_idx];
+  size_t es_size = (size_t)S * C * sizeof(gsva_float_t);
+
+  for (int cat = 0; cat < GSVA_NUM_CATS; cat++) {
+    int cat_s = device->cat_count[cat];
+    if (cat_s == 0) continue;
+
+    dim3 numBlocks(C, cat_s);
+
+    if (sparse_mode != 0) {
+      SPARSE_WALK_LADDER[cat].launch(device, stream_idx, cat, numBlocks, S, G,
+                                     C, tau, score_type);
+    } else {
+      DENSE_WALK_LADDER[cat].launch(device, stream_idx, cat, numBlocks, S, G,
+                                    C, tau, score_type);
+    }
+
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      error("walk kernel launch error at %s:%d: %s", __FILE__, __LINE__,
+            cudaGetErrorString(err));
+    }
+  }
+
+  GSVA_CUDA_CALL(cudaMemcpyAsync(h_es, device->es[stream_idx], es_size,
+                                 cudaMemcpyDeviceToHost, stream));
+}
+
+typedef struct {
+  SEXP ranksR;
+  SEXP genesetsidxR;
+  Rboolean intrnks;
+  Rboolean sparse;
+  gsva_float_t tau;
+  int score_type;
+  gsva_device_t device;
+  gsva_host_t host;
+} gsva_job_t;
+
+static SEXP gsva_score_body(void *data) {
+  gsva_job_t *job = (gsva_job_t *)data;
+
+  ranks_ctx_t *ctx = ranks_ctx_create(job->ranksR, job->intrnks, job->sparse);
+  int G = ctx->p;
+  int C = ctx->n;
+
+  gsva_device_init(&job->device, job->genesetsidxR, G, job->sparse);
+  int S = job->device.S;
+  gsva_host_init(&job->host, G, S, job->sparse);
+
+  SEXP esR;
+  PROTECT(esR = allocMatrix(REALSXP, S, C));
+  double *es = REAL(esR);
+  double nundefwalks = 0;
+
+  int total_blocks = (C + GSVA_BLOCK_C - 1) / GSVA_BLOCK_C;
+  for (int block_id = 0; block_id < total_blocks; block_id++) {
+    int stream_idx = block_id % GSVA_CUDA_STREAMS;
+    int block_c = block_id * GSVA_BLOCK_C;
+    int block_c_end = min2(block_c + GSVA_BLOCK_C, C);
+    int block_size = block_c_end - block_c;
+
+    GSVA_CUDA_CALL(cudaStreamSynchronize(job->device.stream[stream_idx]));
+
+    if (block_id >= GSVA_CUDA_STREAMS) {
+      int prev_block = block_id - GSVA_CUDA_STREAMS;
+      int prev_c = prev_block * GSVA_BLOCK_C;
+      int prev_end = min2(prev_c + GSVA_BLOCK_C, C);
+      int prev_size = prev_end - prev_c;
+
+      gsva_float_t *prev_es = job->host.es[stream_idx];
+      for (int c = 0; c < prev_size; c++) {
+        for (int s = 0; s < S; s++) {
+          double v = (double)prev_es[c * S + s];
+          if (isnan(v)) {
+            // Convert to a R-level NA
+            es[(prev_c + c) * S + s] = NA_REAL;
+            nundefwalks++;
+          } else {
+            es[(prev_c + c) * S + s] = v;
+          }
+        }
+      }
+    }
+
+    ranks2stats_gpu(ctx, G, block_c, block_size, (int)job->sparse, &job->device,
+                    &job->host, stream_idx, job->ranksR);
+    gsva_rnd_walk_gpu_dispatch(job->host.es[stream_idx], S, G, block_size,
+                               job->tau, job->score_type,
+                               (int)(job->sparse != 0), &job->device,
+                               stream_idx);
+  }
+
+  cudaDeviceSynchronize();
+  for (int block_id = max2(0, total_blocks - GSVA_CUDA_STREAMS);
+       block_id < total_blocks; block_id++) {
+    int stream_idx = block_id % GSVA_CUDA_STREAMS;
+    int block_c = block_id * GSVA_BLOCK_C;
+    int block_c_end = min2(block_c + GSVA_BLOCK_C, C);
+    int block_size = block_c_end - block_c;
+
+    gsva_float_t *h_es = job->host.es[stream_idx];
+    for (int c = 0; c < block_size; c++) {
+      for (int s = 0; s < S; s++) {
+        double v = (double)h_es[c * S + s];
+        if (isnan(v)) {
+          // Convert to a R-level NA
+          es[(block_c + c) * S + s] = NA_REAL;
+          nundefwalks++;
+        } else {
+          es[(block_c + c) * S + s] = v;
+        }
+      }
+    }
+  }
+
+  if (nundefwalks > 0) {
+    SEXP attr;
+    PROTECT(attr = ScalarReal(nundefwalks));
+    Rf_setAttrib(esR, GSVA_attrUndefWalksSym, attr);
+    UNPROTECT(1);
+  }
+
+  UNPROTECT(1);
+  return esR;
+}
+
+static void gsva_score_cleanup(void *data) {
+  gsva_job_t *job = (gsva_job_t *)data;
+  gsva_host_deinit(&job->host);
+  gsva_device_deinit(&job->device);
+}
+
+SEXP gsva_score_genesets_gpu_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
+                               SEXP sparseR, SEXP maxdiffR, SEXP absrnkR,
+                               SEXP tauR, SEXP minsizeR, SEXP verboseR) {
+  gsva_job_t job = {
+      .ranksR = ranksR,
+      .genesetsidxR = genesetsidxR,
+      .intrnks = (Rboolean)asLogical(intrnksR),
+      .sparse = (Rboolean)asLogical(sparseR),
+      .tau = (gsva_float_t)REAL(tauR)[0],
+      .score_type = (Rboolean)asLogical(maxdiffR)
+                        ? ((Rboolean)asLogical(absrnkR) ? 1 : 0)
+                        : 2
+  };
+
+  return R_ExecWithCleanup(gsva_score_body, &job, gsva_score_cleanup, &job);
+}
+
+SEXP gsva_cuda_state_R(void) {
+  int ndev = 0;
+  cudaError_t err = cudaGetDeviceCount(&ndev);
+  (void) cudaGetLastError();
+
+  const char *state;
+  if (err == cudaSuccess && ndev > 0)
+    state = "ok";
+  else if (err == cudaErrorInsufficientDriver)
+    state = "driver";
+  else if (err == cudaErrorNoDevice || err == cudaSuccess)
+    state = "nodev";
+  else
+    state = "error";
+
+  return mkString(state);
+}
