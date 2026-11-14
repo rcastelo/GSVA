@@ -60,7 +60,9 @@ also writes in that directory a manifest file, ending in \verb{_manifest.rds},
 which allows the \code{MAPREDO} argument to find them. For this reason,
 \code{gsvaMap()} gives an error when that directory already has results of a
 previous call with the same \code{FUN}, \code{inputData} and \code{output} arguments,
-unless \code{MAPREDO} is given.}
+unless \code{MAPREDO} is given. With \code{FUN=gsvaRowNorm} and \code{rowNorm="clr"},
+\code{gsvaMap()} returns an object instead of saving it, see the 'Value'
+section.}
 
 \item{verbose}{Gives information about the progress of the calculations.
 Default: \code{TRUE}.}
@@ -208,7 +210,18 @@ failed, unless no chunk was completed, in which case \code{gsvaMap()} gives an
 error. When the results are chunks of rows of a \code{SummarizedExperiment}
 object, as with \code{FUN=gsvaRowNorm}, only the first chunk stores the column
 data of the input, which the other chunks share in the result of
-\code{gsvaReduce()}. The \code{gsvaReduce()} function returns a single
+\code{gsvaReduce()}. With \code{FUN=gsvaRowNorm} and a \code{gsvaParam} object with
+\code{rowNorm="clr"}, the jobs only calculate, by chunks of columns, the
+geometric mean of each row across all columns, and \code{gsvaMap()} returns a
+list with a single object, whatever the value of \code{output}, in which the
+division of each row by its geometric mean is a delayed operation on the
+input data, as \code{gsvaRowNorm()} does on data stored on disk. This object
+stores no values of its own, and reads them from the input data, which must
+remain in place, when the next step, e.g., \code{gsvaMap()} with
+\code{FUN=gsvaColRanks}, processes it by chunks of columns. If the calculation
+of the geometric means fails in some chunk, \code{gsvaMap()} gives an error,
+and \code{MAPREDO} has no effect on its result, which has no failed chunks.
+The \code{gsvaReduce()} function returns a single
 object that combines the results from all compute nodes. The
 \code{gsvaBatchtoolsSlurmParam()} function returns a \code{BatchtoolsParam} object with
 some sensible defaults for running GSVA calculations on a SLURM cluster.

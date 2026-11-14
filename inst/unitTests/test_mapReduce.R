@@ -251,7 +251,8 @@ test_mapReduceContainers <- function() {
 
     ## the CLR of sparse data in main memory gives an SVT_SparseMatrix
     ## object, whose GSVA attributes are set and removed when saving it to
-    ## disk and when binding its chunks
+    ## disk, and those of the DelayedMatrix object of the CLR by gsvaMap(),
+    ## see test_mapReduceClr(), when reducing it
     gsvapar <- gsvaParam(cnt, gsets, rowNorm="clr", ondisk="no",
                          verbose=FALSE)
     gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
@@ -260,14 +261,10 @@ test_mapReduceContainers <- function() {
     saveHDF5GSVA(gsvarnorm, fname)
     checkEqualsNumeric(as.matrix(loadHDF5GSVA(fname, verbose=FALSE)),
                        as.matrix(gsvarnorm))
-    for (output in c("object", "HDF5")) {
-        mapnorm <- gsvaMap(gsvaRowNorm, gsvapar, output=output,
-                           verbose=FALSE, BTPARAM=btpar)
-        checkTrue(length(mapnorm) > 1)
-        rednorm <- gsvaReduce(mapnorm, verbose=FALSE)
-        checkEqualsNumeric(as.matrix(rednorm), as.matrix(gsvarnorm))
-        checkIdentical(dimnames(rednorm), dimnames(gsvarnorm))
-    }
+    mapnorm <- gsvaMap(gsvaRowNorm, gsvapar, verbose=FALSE, BTPARAM=btpar)
+    rednorm <- gsvaReduce(mapnorm, verbose=FALSE)
+    checkEqualsNumeric(as.matrix(rednorm), as.matrix(gsvarnorm))
+    checkIdentical(dimnames(rednorm), dimnames(gsvarnorm))
 
     ## chunks of columns of a SingleCellExperiment object with reduced
     ## dimensions, and of a SpatialExperiment object with an image, take the
@@ -312,6 +309,158 @@ test_mapReduceContainers <- function() {
             }
         }
     }
+}
+
+test_mapReduceClr <- function() {
+
+    message("Running unit tests for map reduce of the CLR row normalization")
+    oldcheckmem <- options(GSVA.check_memory=FALSE)
+    on.exit(options(oldcheckmem), add=TRUE)
+
+    oldopt <- options(BIOCPARALLEL_BATCHTOOLS_REMOVE_REGISTRY_WAIT=0)
+    on.exit(options(oldopt), add=TRUE)
+
+    suppressPackageStartupMessages({
+        library(DelayedArray)
+        library(HDF5Array)
+        library(Matrix)
+        library(BiocParallel)
+        library(SingleCellExperiment)
+        library(SpatialExperiment)
+    })
+
+    p <- 40 ## number of genes
+    n <- 60 ## number of samples
+    gsets <- list(gset1=paste0("g", 1:10),
+                  gset2=paste0("g", 11:25),
+                  gset3=paste0("g", 26:40))
+
+    ## sparse positive values, with a row of zeros and a row with constant
+    ## nonzero values, which the filtering of rows removes
+    set.seed(123)
+    cnt <- matrix(0, nrow=p, ncol=n,
+                  dimnames=list(paste0("g", 1:p), paste0("s", 1:n)))
+    idx <- sample(length(cnt), size=round(length(cnt)*0.3))
+    cnt[idx] <- rgamma(length(idx), shape=2) + 0.1
+    cnt[3, ] <- 0
+    cnt[5, ] <- 0
+    cnt[5, c(2, 9)] <- 4
+    cnt <- as(cnt, "dgCMatrix")
+
+    wd <- tempfile("gsvamapwd")
+    dir.create(wd)
+    on.exit(unlink(wd, recursive=TRUE), add=TRUE)
+    oldautoblocksize <- getAutoBlockSize()
+    setAutoBlockSize(p * 8 * 7) ## blocks of 7 columns
+    on.exit(setAutoBlockSize(oldautoblocksize), add=TRUE)
+    btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="1K"),
+                             registryargs=fastRegistryargs(work.dir=wd))
+
+    ## messages given while evaluating 'expr', which are not shown
+    msgs <- function(expr) {
+        m <- character(0)
+        withCallingHandlers(expr, message=function(e) {
+            m <<- c(m, conditionMessage(e))
+            invokeRestart("muffleMessage")
+        })
+        m
+    }
+
+    ## inputs in main memory and on disk, dense and sparse, and containers
+    ## whose column data, reduced dimensions and spatial coordinates are kept
+    h5 <- writeHDF5Array(cnt, file.path(wd, "cnt.h5"), "cnt", as.sparse=TRUE)
+    sce <- SingleCellExperiment(assays=list(logcounts=cnt),
+                                colData=DataFrame(grp=rep(1:3, n/3)),
+                                reducedDims=list(PCA=matrix(rnorm(n*2), n, 2)))
+    spe <- SpatialExperiment(assays=list(logcounts=cnt),
+                             spatialCoords=matrix(runif(n*2), n, 2,
+                                                  dimnames=list(NULL,
+                                                                c("x", "y"))),
+                             sample_id="sample01")
+    inputs <- list(dense=as.matrix(cnt[-c(3, 5), ]) + 1, dgc=cnt, sce=sce,
+                   h5=SingleCellExperiment(assays=list(logcounts=h5)),
+                   spe=spe)
+    for (nm in names(inputs)) for (sparse in c(TRUE, FALSE)) {
+        gsvapar <- gsvaParam(inputs[[nm]], gsets, rowNorm="clr",
+                             sparse=sparse, verbose=FALSE)
+        gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
+        ## a single chunk of all columns, whose division by the geometric
+        ## means of the rows is delayed, even when results should be saved
+        ## to disk, which is reported
+        m <- msgs(mapnorm <- gsvaMap(gsvaRowNorm, gsvapar, output="HDF5",
+                                     verbose=FALSE, BTPARAM=btpar))
+        checkTrue(any(grepl("delayed", m)))
+        checkIdentical(length(mapnorm), 1L)
+        x <- mapnorm[[1]]
+        checkTrue(is(if (is(x, "SummarizedExperiment"))
+                         assay(x, "gsvarnorm") else x, "DelayedMatrix"))
+        rmdt <- GSVA:::.pull_restrict_metadata(x)
+        checkEquals(rmdt[c("first", "last", "whdim")],
+                    list(first=1, last=n, whdim=2))
+        checkEquals(rmdt$rem, if (nm == "dense") 0 else 2)
+        checkIdentical(attributes(mapnorm)$mapInfo$output, "object")
+        checkIdentical(length(list.files(wd, pattern="_rnorm_")), 0L)
+
+        rednorm <- gsvaReduce(mapnorm, verbose=FALSE)
+        if (is(gsvarnorm, "SummarizedExperiment")) {
+            checkEqualsNumeric(as.matrix(assay(rednorm, "gsvarnorm")),
+                               as.matrix(assay(gsvarnorm, "gsvarnorm")))
+            checkIdentical(dimnames(rednorm), dimnames(gsvarnorm))
+            checkIdentical(colData(rednorm), colData(gsvarnorm))
+            if (is(gsvarnorm, "SingleCellExperiment"))
+                checkIdentical(reducedDims(rednorm), reducedDims(gsvarnorm))
+            if (is(gsvarnorm, "SpatialExperiment")) {
+                checkIdentical(spatialCoords(rednorm),
+                               spatialCoords(gsvarnorm))
+                checkIdentical(imgData(rednorm), imgData(gsvarnorm))
+            }
+        } else {
+            checkEqualsNumeric(as.matrix(rednorm), as.matrix(gsvarnorm))
+            checkIdentical(dimnames(rednorm), dimnames(gsvarnorm))
+        }
+
+        ## the next step reads the input data through the delayed division,
+        ## by chunks of columns saved to disk
+        gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
+        mapranks <- gsvaMap(gsvaColRanks, rednorm, output="HDF5",
+                            verbose=FALSE, BTPARAM=btpar)
+        checkTrue(length(mapranks) > 1)
+        redranks <- gsvaReduce(mapranks, verbose=FALSE)
+        if (is(gsvaranks, "SummarizedExperiment"))
+            checkEqualsNumeric(as.matrix(assay(redranks, "gsvaranks")),
+                               as.matrix(assay(gsvaranks, "gsvaranks")))
+        else
+            checkEqualsNumeric(as.matrix(redranks), as.matrix(gsvaranks))
+        ## the results and manifest of the ranks, whose input fingerprint is
+        ## the same for inputs that differ only in their values
+        unlink(list.files(wd, pattern="_ranks_", full.names=TRUE))
+    }
+
+    ## nothing to compute again from a previous result, which has no failed
+    ## chunks
+    redo <- gsvaMap(gsvaRowNorm, gsvapar, verbose=FALSE, BTPARAM=btpar,
+                    MAPREDO=mapnorm)
+    checkIdentical(redo, mapnorm)
+
+    ## using batchtools with two workers, to test the parallel route
+    gsvapar <- gsvaParam(sce, gsets, rowNorm="clr", verbose=FALSE)
+    rednorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, verbose=FALSE,
+                                  BTPARAM=BatchtoolsParam(workers=2,
+                                      registryargs=fastRegistryargs())),
+                          verbose=FALSE)
+    checkEqualsNumeric(as.matrix(assay(rednorm, "gsvarnorm")),
+                       as.matrix(assay(gsvaRowNorm(gsvapar, verbose=FALSE),
+                                       "gsvarnorm")))
+
+    ## input data that the CLR cannot normalize gives an error from the
+    ## statistics of the rows
+    cnt2 <- cnt
+    cnt2[1, which(cnt2[1, ] != 0)[1]] <- -1
+    gsvapar <- gsvaParam(cnt2, gsets, rowNorm="clr", verbose=FALSE)
+    err <- tryCatch(gsvaMap(gsvaRowNorm, gsvapar, verbose=FALSE,
+                            BTPARAM=btpar),
+                    error=conditionMessage)
+    checkTrue(grepl("nonpositive", err))
 }
 
 test_mapReduceParquet <- function() {

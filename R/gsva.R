@@ -1627,37 +1627,8 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
                          ondisk=FALSE, verbose=FALSE, BPPARAM=NULL,
                          maxmem=Inf) {
     na_use <- match.arg(na_use)
-
-    if (any_na && na_use == "all.obs") {
-        msg <- paste("missing values present in the input expression data and",
-                     "'use=\"all.obs\".")
-        cli_abort(c("x"=msg))
-    }
-
-    sparseinput <- colnames(rowstats)[1] == "nzmin"
-    sparseclr <- sparseinput && sparse
-    lsum <- rowstats[, "lsum"]
-    n <- rowstats[, "n"]
-    nna <- rowstats[, "nna"]
-    if (sparseinput && !sparse) { ## zeros enter the calculations, log(0)=-Inf
-        zeros <- ncol(expr) - n - nna
-        lsum[zeros > 0] <- -Inf + lsum[zeros > 0]
-        n <- n + zeros
-    }
-    m <- lsum / n
-    ## missing values are ignored in sparse input, as zeros are
-    if (!sparseclr && !(any_na && na_use == "na.rm"))
-        m[nna > 0] <- NA
-    g <- exp(m) ## geometric mean of each row
-
-    if (sparseclr) {
-        g[n == 0] <- 1 ## rows without nonzero values remain zero
-        if (anyNA(g)) {
-            msg <- paste("Cannot apply row normalization method 'clr' to",
-                         "expression data with nonzero nonpositive values")
-            cli_abort(c("x"=msg))
-        }
-    }
+    g <- .clr_gmeans(rowstats, ncol(expr), sparse=sparse, any_na=any_na,
+                     na_use=na_use)
 
     if (is(expr, "DelayedMatrix")) ## delayed and sparse when 'expr' is sparse
         return(expr / g)           ## and 'sparse=TRUE'
@@ -1678,6 +1649,50 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
     }
 
     .clr_scale(expr, g, sparse)
+}
+
+## geometric mean of each row of a matrix with 'ncolX' columns, from the
+## statistics of its rows in 'rowstats', see .rowStats(), by which the CLR
+## row normalization divides each row, see .rownorm_clr(); the statistics can
+## also be accumulated across chunks of columns processed by different jobs,
+## see .map_clr_stats()
+#' @importFrom cli cli_abort
+.clr_gmeans <- function(rowstats, ncolX, sparse=FALSE, any_na=FALSE,
+                        na_use=c("everything", "all.obs", "na.rm")) {
+    na_use <- match.arg(na_use)
+
+    if (any_na && na_use == "all.obs") {
+        msg <- paste("missing values present in the input expression data and",
+                     "'use=\"all.obs\".")
+        cli_abort(c("x"=msg))
+    }
+
+    sparseinput <- colnames(rowstats)[1] == "nzmin"
+    sparseclr <- sparseinput && sparse
+    lsum <- rowstats[, "lsum"]
+    n <- rowstats[, "n"]
+    nna <- rowstats[, "nna"]
+    if (sparseinput && !sparse) { ## zeros enter the calculations, log(0)=-Inf
+        zeros <- ncolX - n - nna
+        lsum[zeros > 0] <- -Inf + lsum[zeros > 0]
+        n <- n + zeros
+    }
+    m <- lsum / n
+    ## missing values are ignored in sparse input, as zeros are
+    if (!sparseclr && !(any_na && na_use == "na.rm"))
+        m[nna > 0] <- NA
+    g <- exp(m) ## geometric mean of each row
+
+    if (sparseclr) {
+        g[n == 0] <- 1 ## rows without nonzero values remain zero
+        if (anyNA(g)) {
+            msg <- paste("Cannot apply row normalization method 'clr' to",
+                         "expression data with nonzero nonpositive values")
+            cli_abort(c("x"=msg))
+        }
+    }
+
+    g
 }
 
 ## divide each row of 'expr', or of a block of its columns, in main memory, by
