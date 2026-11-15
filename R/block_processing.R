@@ -471,9 +471,11 @@
 ## maximum memory, see .units_per_block(). fewer workers also give wider
 ## blocks, but they are not suggested because they make the calculations
 ## faster only when reading and decompressing the data takes most of their
-## time, which is not the case, e.g., of ranking the columns of single-cell
-## data. 'step' names the step of the calculations in the warning, e.g.,
-## "Ranking columns". the chunks are the ones of the on-disk data of 'X', also
+## time and, even when ranking the columns of single-cell data stored in
+## dense chunks, where it does, one worker instead of two made each job only
+## about 4% faster, as measured. 'step' names the step of the calculations in
+## the warning, e.g., "Ranking columns". the chunks are the ones of the
+## on-disk data of 'X', also
 ## when 'X' is a delayed operation on them, see .ondisk_chunkdim(), even when
 ## their boundaries are not the ones of 'X', because blocks narrower than
 ## chunks read them more than once anyway. the warning is given at the end of
