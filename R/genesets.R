@@ -1010,12 +1010,21 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 ## nonzero non-missing values ('n'), the number of missing values ('nna') and,
 ## if 'logsums=TRUE', the sum of the logarithm of the nonzero non-missing
 ## values ('lsum'). when 'X' is dense, they are the same but on all values,
-## where the minimum and maximum are 'min' and 'max'
+## where the minimum and maximum are 'min' and 'max'. when 'X' is stored on
+## disk, it is read in bands of 'nrowband' rows, if given, see .rowStats()
 
 #' @importFrom S4Arrays is_sparse DummyArrayGrid read_block
 #' @importFrom MatrixGenerics rowSums
 #' @importFrom cli cli_abort
-.rowStats_block <- function(X, logsums=FALSE, verbose=FALSE) {
+.rowStats_block <- function(X, logsums=FALSE, nrowband=NULL, verbose=FALSE) {
+    if (is(X, "DelayedArray") && !is.null(nrowband) && nrowband < nrow(X)) {
+        starts <- seq(1L, nrow(X), by=nrowband)
+        st <- lapply(starts, function(i) {
+            rows <- i:min(nrow(X), i + nrowband - 1L)
+            .rowStats_block(X[rows, , drop=FALSE], logsums=logsums)
+        })
+        return(do.call("rbind", st))
+    }
     if (is(X, "DelayedArray")) ## input HDF5 may be sparse or not
         X <- read_block(X, DummyArrayGrid(dim(X))[[1L]])
 
@@ -1061,7 +1070,11 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 
 ## statistics of the rows of 'X', see .rowStats_block(), calculated through
 ## blocks of columns, which fits the column-wise layout of HDF5 files storing
-## single-cell and spatial transcriptomics data
+## single-cell and spatial transcriptomics data. when 'X' is stored on disk in
+## chunks wider than the blocks of columns that fit in memory, the blocks take
+## whole chunks instead, read in bands of rows of the same size as the
+## narrower blocks, so that each chunk is read and decompressed once, see
+## .colgridsize()
 .rowStats <- function(X, logsums=FALSE, verbose=FALSE, BPPARAM=NULL,
                       maxmem=Inf) {
     mf <- .step_mem_factors("rowstats", X)
@@ -1069,7 +1082,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
                        BPPARAM=BPPARAM, maxmem=maxmem,
                        workfactor=mf$workfactor, outfactor=mf$outfactor,
                        outextra=mf$outextra, combine=.combine_rowstats,
-                       step="Calculating row statistics")
+                       step="Calculating row statistics", rowbands=TRUE)
 }
 
 ## matrix with as many rows as 'X' and 2 columns if 'X' is dense, and 4

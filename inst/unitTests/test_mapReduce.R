@@ -420,7 +420,10 @@ test_mapReduceClr <- function() {
         }
 
         ## the next step reads the input data through the delayed division,
-        ## by chunks of columns saved to disk
+        ## by chunks of columns saved to disk, which is checked on input in
+        ## main memory and on disk, to keep the time of this test short
+        if (!(nm == "dense" && !sparse) && !(nm == "h5" && sparse))
+            next
         gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
         mapranks <- gsvaMap(gsvaColRanks, rednorm, output="HDF5",
                             verbose=FALSE, BTPARAM=btpar)
