@@ -147,13 +147,47 @@ limit, does not prevent the next tasks from processing their chunks. In both
 cases, at most `nodes` jobs or tasks run at the same time, and the chunks of
 those ended by SLURM can be resubmitted as described below.
 
-The next step is to run the function `gsvaMap()`, which will submit the jobs to the
-SLURM workload manager, and return a list object, where each of its elements will be
-the path to the intermediate results of one chunk of the input data, saved in the
-`GSVAOUTPUT` directory with the function `saveHDF5GSVA()`. Saving these results
-to disk is the default behavior of `gsvaMap()` when jobs are sent to a workload
-manager, such as SLURM, and can be changed with the `output` argument of
-`gsvaMap()`.
+How `gsvaMap()` splits the input data into chunks depends on the step of the
+calculations. The column ranks and the enrichment scores of each column only
+depend on the values of that column, and `gsvaMap()` splits the data into
+chunks of columns. The row normalization with `rowNorm="ecdf"` needs all the
+values of each row, and `gsvaMap()` splits the data into chunks of rows, whose
+results `gsvaReduce()` binds into a single object. With `rowNorm="clr"`, the
+jobs only calculate, by chunks of columns, the geometric mean of each row, and
+the division of each row by its geometric mean is a delayed operation on the
+input data, which the next step, the calculation of the column ranks, reads
+again by chunks of columns. In this case, `gsvaMap()` saves no normalized
+values to disk, and the input data must remain in place until the column ranks
+are calculated.
+
+Since every step with `rowNorm="clr"` reads the input data by blocks of columns,
+how fast it does so depends on how the data are stored on disk. Single-cell
+data stored in the compressed sparse column (CSC) layout of 10x Genomics,
+written with the function `writeTENxMatrix()` of the `r Biocpkg("HDF5Array")`
+package and loaded with `TENxMatrix()`, store only the nonzero values, column
+after column, and are read by blocks of columns several times faster than a
+dense HDF5 dataset, such as the one written by `saveHDF5SummarizedExperiment()`.
+A dense HDF5 dataset is stored and compressed in chunks of rows and columns,
+each of which has to be read and decompressed completely to obtain any of its
+values. GSVA aligns the blocks of columns it reads with these chunks but, when
+the memory available to each parallel worker only fits blocks narrower than a
+chunk, each chunk is read and decompressed several times, and GSVA gives a
+warning with the memory for which the blocks would take whole chunks, which
+can then be requested for each job with the `mem` argument of
+`gsvaBatchtoolsSlurmParam()`. Therefore, single-cell data stored only in a
+dense HDF5 dataset can be saved once in the CSC layout before running GSVA
+with `rowNorm="clr"`, for instance, with
+`writeTENxMatrix(logcounts(sce), "logcounts.h5", group="matrix")`, where `sce`
+is a `SingleCellExperiment` object with log-normalized values in its assay
+`logcounts`.
+
+The next step is to run the function `gsvaMap()`, which will submit the jobs to
+the SLURM workload manager, and return a list object, where each of its elements
+will be the path to the intermediate results of one chunk of the input data,
+saved in the `GSVAOUTPUT` directory with the function `saveHDF5GSVA()`. Saving
+these results to disk is the default behavior of `gsvaMap()` when jobs are sent
+to a workload manager, such as SLURM, and can be changed with the `output`
+argument of `gsvaMap()`.
 
 ```{r, eval=FALSE}
 gsvamaprnorm <- gsvaMap(gsvaRowNorm, gsvapar, BTPARAM=gsvabtpar)

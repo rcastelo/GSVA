@@ -55,7 +55,9 @@
 #' which allows the `MAPREDO` argument to find them. For this reason,
 #' `gsvaMap()` gives an error when that directory already has results of a
 #' previous call with the same `FUN`, `inputData` and `output` arguments,
-#' unless `MAPREDO` is given.
+#' unless `MAPREDO` is given. With `FUN=gsvaRowNorm` and `rowNorm="clr"`,
+#' `gsvaMap()` returns an object instead of saving it, see the 'Value'
+#' section.
 #'
 #' @param MAPREDO In `gsvaMap()`, the output of a previous call to `gsvaMap()`
 #' with the same `FUN` and `inputData` arguments, in which some of the chunks
@@ -200,7 +202,18 @@
 #' error. When the results are chunks of rows of a `SummarizedExperiment`
 #' object, as with `FUN=gsvaRowNorm`, only the first chunk stores the column
 #' data of the input, which the other chunks share in the result of
-#' `gsvaReduce()`. The `gsvaReduce()` function returns a single
+#' `gsvaReduce()`. With `FUN=gsvaRowNorm` and a `gsvaParam` object with
+#' `rowNorm="clr"`, the jobs only calculate, by chunks of columns, the
+#' geometric mean of each row across all columns, and `gsvaMap()` returns a
+#' list with a single object, whatever the value of `output`, in which the
+#' division of each row by its geometric mean is a delayed operation on the
+#' input data, as `gsvaRowNorm()` does on data stored on disk. This object
+#' stores no values of its own, and reads them from the input data, which must
+#' remain in place, when the next step, e.g., `gsvaMap()` with
+#' `FUN=gsvaColRanks`, processes it by chunks of columns. If the calculation
+#' of the geometric means fails in some chunk, `gsvaMap()` gives an error,
+#' and `MAPREDO` has no effect on its result, which has no failed chunks.
+#' The `gsvaReduce()` function returns a single
 #' object that combines the results from all compute nodes. The
 #' `gsvaBatchtoolsSlurmParam()` function returns a `BatchtoolsParam` object with
 #' some sensible defaults for running GSVA calculations on a SLURM cluster.
@@ -318,6 +331,20 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
             output <- mapinfo$output
     } else
         output <- match.arg(output)
+    ## the CLR divides each row by its geometric mean across all columns,
+    ## which jobs calculate by chunks of columns, and the division is a
+    ## delayed operation on the input data, which nothing writes, see
+    ## .map_rownorm_clr(), so its result is a single object in any case
+    clr <- identical(FUN, gsvaRowNorm) && .get_rowNorm(inputData) == "clr"
+    if (clr && output != "object") {
+        if (verbose || !missing(output))
+            cli_alert_info(paste("With rowNorm=\"clr\", {.fn gsvaMap}",
+                                 "returns an object whose division of each",
+                                 "row by its geometric mean is delayed,",
+                                 "instead of saving it with",
+                                 "output=\"{output}\"."))
+        output <- "object"
+    }
     if (!is.null(mapinfo) && output != mapinfo$output)
         cli_abort(c("x"=paste("{.arg MAPREDO} was produced with",
                               "output=\"{mapinfo$output}\", which differs",
@@ -348,8 +375,16 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         funargs <- c(funargs, list(param=inputData,
                                    dropExistingAssays=TRUE,
                                    errorOnTooFewRows=FALSE))
-        gridsizefun <- .rowgridsize
-        splitinrangesfun <- .splitRowsInRanges
+        if (!clr) {
+            gridsizefun <- .rowgridsize
+            splitinrangesfun <- .splitRowsInRanges
+        } else
+            ## the jobs calculating the statistics of the rows for the CLR
+            ## take whole chunks of the input data on disk, instead of
+            ## narrower chunks of columns, which would be read and
+            ## decompressed by several jobs, and process them in bands of
+            ## rows that fit in their memory, see .rowStats()
+            gridsizefun <- function(...) .colgridsize(..., rowbands=TRUE)
         assay <- get_assay(inputData)
 
     } else if (identical(FUN, gsvaColRanks)) {
@@ -378,7 +413,7 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         cli_abort(c("x"="Internal error, invalid FUN argument."))
 
     X <- inputData
-    chunks <- density <- Xd <- NULL
+    chunks <- density <- Xd <- nrowband <- NULL
     if (!is.list(X)) {
         if (is.null(mapinfo)) {
             ## each job has its own memory 'maxmem', not shared with the
@@ -398,6 +433,7 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
                                 dense=mf$densify,
                                 heldmem=max(0, container - .inmem_size(Xd)),
                                 sharedmem=FALSE)
+            nrowband <- attr(grid, "nrowband")
             X <- splitinrangesfun(grid)
             chunks <- data.frame(first=vapply(X, start, integer(1)),
                                  last=vapply(X, end, integer(1)))
@@ -423,10 +459,18 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     ## the chunks, if any, which take time to obtain from data stored on disk
     chunkwidth <- if (is.null(chunks)) NA_real_ else
                       max(chunks$last - chunks$first + 1)
-    .check_map_mem(funname, inputData, assay,
-                   whdim=if (funname == "gsvaRowNorm") 1L else 2L,
-                   chunkwidth=chunkwidth, ncpus=ncpus, maxmem=maxmem,
-                   density=density, X=Xd)
+    ## jobs taking whole chunks in bands of rows, see above, take the memory
+    ## of a band, which holds as many values as the narrower chunks of
+    ## columns that fit in the memory of each job
+    if (!is.null(nrowband))
+        chunkwidth <- ceiling(nrowband * chunkwidth / nrow(Xd))
+    ## the CLR has no failed chunks to resubmit, see below, and its result
+    ## records a single chunk of all columns, which no job processes
+    if (!(clr && !is.null(mapinfo)))
+        .check_map_mem(funname, inputData, assay,
+                       whdim=if (funname == "gsvaRowNorm" && !clr) 1L else 2L,
+                       chunkwidth=chunkwidth, ncpus=ncpus, maxmem=maxmem,
+                       density=density, X=Xd)
 
     ## results saved to disk get file names that depend only on the input
     ## and the chunk boundaries, and a manifest that allows MAPREDO to find
@@ -485,6 +529,14 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         regdir <- .free_registry_dir(BTPARAM, verbose)
         if (!is.null(regdir))
             on.exit(BTPARAM$registryargs$file.dir <- regdir, add=TRUE)
+    }
+
+    if (clr) {
+        res <- list(.map_rownorm_clr(inputData, X, BTPARAM, ncpus, maxmem,
+                                     verbose))
+        mapinfo$chunks <- data.frame(first=1L, last=totalInputDim[2])
+        attributes(res) <- list(totalInputDim=totalInputDim, mapInfo=mapinfo)
+        return(res)
     }
 
     res[idx] <- .map_chunks(X[idx], BTPARAM,
@@ -575,14 +627,20 @@ gsvaReduce <- function(mapOutput, verbose=TRUE) {
 
     bfun <- "rbind"
     if (rmdata[[1]]$whdim == 2)
-        bfun <- "cbind"
+        bfun <- .cbind_chunks_fun(mapOutput[[1]])
     else
         mapOutput <- .share_col_data(mapOutput, ord[1])
     res <- do.call(bfun, mapOutput[ord])
     res <- .add_metadata(res, param, nrmdata)
 
+    ## the rows removed by the normalization of rows, 'rem', are those of
+    ## each chunk of rows, while chunks of columns, such as the single one of
+    ## the CLR, see .map_rownorm_clr(), keep all columns
+    whdim <- rmdata[[1]]$whdim
     rem <- vapply(rmdata, function(x) x$rem, numeric(1))
-    if (dim(res)[rmdata[[1]]$whdim]+sum(rem) != totalInputDim[rmdata[[1]]$whdim])
+    if (whdim == 2)
+        rem <- 0
+    if (dim(res)[whdim] + sum(rem) != totalInputDim[whdim])
         cli_abort(c("x"=paste("The combined output object does not match the",
                               "expected dimensions of the input data.")))
 
@@ -854,6 +912,90 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     min(1, nzc / max(1, prod(as.numeric(dim(X)))))
 }
 
+## CLR row normalization of the input data of the parameter object 'param' by
+## gsvaMap(), as gsvaRowNorm() does: the jobs of 'BTPARAM' calculate the
+## statistics of the rows of the chunks of columns in 'X', a list of IRanges
+## objects, see .map_clr_stats(), and the division of each row by its
+## geometric mean is a delayed operation on the input data, as gsvaRowNorm()
+## does on input stored on disk, see .rownorm_clr(), which is realized when
+## the next step, e.g., gsvaMap() with FUN=gsvaColRanks, reads the input data
+## by chunks of columns. the result is a single chunk, of all columns, which
+## stores no values of its own and needs the input data to remain in place
+#' @importFrom DelayedArray DelayedArray
+#' @importFrom cli cli_alert_info
+.map_rownorm_clr <- function(param, X, BTPARAM, ncpus, maxmem, verbose) {
+    clrstats <- .map_clr_stats(param, X, BTPARAM, ncpus, maxmem, verbose)
+
+    exprData <- get_exprData(param)
+    dataMatrix <- unwrapData(exprData, get_assay(param))
+    if (!is(dataMatrix, "DelayedArray"))
+        dataMatrix <- DelayedArray(dataMatrix)
+    keep <- clrstats$keep
+    if (!all(keep))
+        dataMatrix <- dataMatrix[keep, , drop=FALSE]
+    if (verbose)
+        cli_alert_info("Normalizing rows with a delayed division")
+    gsvarnorm <- dataMatrix / clrstats$gmeans
+
+    wrapData(exprData, gsvarnorm, param, "gsvarnorm", first=1,
+             last=ncol(gsvarnorm), rem=sum(!keep), whdim=2,
+             dropAssays=TRUE)
+}
+
+## statistics of the rows of the input data of the parameter object 'param'
+## that the CLR row normalization needs, see .map_rownorm_clr(): the rows kept
+## by the filtering of rows ('keep'), as gsvaRowNorm() does, and the geometric
+## mean of each of them across all columns ('gmeans'). the statistics of the
+## rows of each chunk of columns in 'X', a list of IRanges objects, are
+## calculated by the jobs of 'BTPARAM', which read their chunk once, and
+## accumulated here
+#' @importFrom cli cli_abort cli_alert_info cli_alert_warning
+.map_clr_stats <- function(param, X, BTPARAM, ncpus, maxmem, verbose) {
+    if (verbose)
+        cli_alert_info(paste("Calculating the statistics of the rows in",
+                             "{length(X)} chunk{?s} of columns"))
+    res <- .map_chunks(X, BTPARAM,
+                       list(WRAPPED_FUN=.map_rowstats_chunk, output="object",
+                            ncpus=ncpus, maxmem=maxmem, param=param))
+    failed <- .map_failed(res)
+    if (any(failed)) {
+        firsterr <- conditionMessage(res[[which(failed)[1]]])
+        cli_abort(c("x"=paste("{sum(failed)} out of {length(res)} chunk{?s}",
+                              "failed calculating the statistics of the rows",
+                              "for the CLR."),
+                    "i"="First error: {firsterr}"))
+    }
+    rowstats <- Reduce(.combine_rowstats, res)
+
+    ncolX <- ncol(unwrapData(get_exprData(param), get_assay(param)))
+    keep <- rep(TRUE, nrow(rowstats))
+    if (.get_filterRows(param))
+        keep <- !.filter_rows_mask(rowstats, ncolX, rowNorm="clr",
+                                   verbose=verbose)
+    else if (verbose)
+        cli_alert_warning(paste("Skipping filtering of constant rows",
+                                "(filterRows=FALSE)"))
+    gmeans <- .clr_gmeans(rowstats[keep, , drop=FALSE], ncolX,
+                          sparse=.get_sparse(param), any_na=anyNA(param),
+                          na_use=.get_NAuse(param))
+
+    list(keep=keep, gmeans=gmeans)
+}
+
+## statistics of the rows of the columns 'first' to 'last' of the input data
+## of the parameter object 'param', for a job of gsvaMap(), see
+## .map_clr_stats()
+.map_rowstats_chunk <- function(param, first, last, verbose=FALSE,
+                                BPPARAM=NULL, maxmem=Inf) {
+    X <- unwrapData(get_exprData(param), get_assay(param))
+    X <- X[, seq.int(first, last), drop=FALSE]
+    BPPARAM <- .check_open_parallelism(X, BPPARAM, minparrows=100,
+                                       minparcols=100, verbose)
+
+    .rowStats(X, logsums=TRUE, verbose=verbose, BPPARAM=BPPARAM,
+              maxmem=maxmem)
+}
+
 ## check, before gsvaMap() submits any job, the memory required by the step
 ## 'funname' in each job, on the input data 'inputData', of which each job
 ## processes a chunk of at most 'chunkwidth' rows (whdim=1) or columns
@@ -1004,10 +1146,10 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
                                            rem=rem,
                                            whdim=whdim)
         } else if (is(X, "GsvaExprData")) {
-            attributes(res)$restrict <- list(first=start(rng),
-                                             last=end(rng),
-                                             rem=rem,
-                                             whdim=whdim)
+            attr(res, "restrict") <- list(first=start(rng),
+                                          last=end(rng),
+                                          rem=rem,
+                                          whdim=whdim)
         } ## if X is a path, restrict metadata is in the loaded object
     }
     res <- .drop_chunk_col_data(res)
@@ -1075,14 +1217,19 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     nrmdata
 }
 
+## the attributes of matrices are set with attr(), which, unlike
+## attributes(), also sets them in S4 objects that are not vectors, such as
+## SVT_SparseMatrix objects, e.g., from the CLR on sparse data, see
+## .rownorm_clr()
 #' @importFrom S4Vectors "metadata<-"
 .add_metadata <- function(x, param, mdata) {
     if (is(x, "SummarizedExperiment")) {
         metadata(x) <- mdata
         metadata(x)$gsvaParam <- .gsvaParam_as_list(param)
     } else {
-        attributes(x) <- c(attributes(x), mdata)
-        attributes(x)$gsvaParam <- .gsvaParam_as_list(param)
+        for (nm in names(mdata))
+            attr(x, nm) <- mdata[[nm]]
+        attr(x, "gsvaParam") <- .gsvaParam_as_list(param)
     }
 
     return(x)
@@ -1185,6 +1332,20 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     xs
 }
 
+## function binding the chunks of columns of the output of gsvaMap(), of the
+## class of 'x': cbind(), except for SpatialExperiment objects, whose cbind()
+## method takes their inputs for different samples, and when they share a
+## 'sample_id', as the chunks of the same sample do, it changes it in each of
+## them and repeats their image data. the method of SingleCellExperiment
+## objects binds instead their columns, including the spatial coordinates,
+## and keeps the 'sample_id' and image data of the input
+#' @importFrom methods selectMethod
+.cbind_chunks_fun <- function(x) {
+    if (is(x, "SpatialExperiment"))
+        return(selectMethod("cbind", "SingleCellExperiment"))
+    "cbind"
+}
+
 .strip_metadata <- function(inputargs) {
     outputargs <- NULL
     if (is(inputargs[[1]], "SummarizedExperiment")) {
@@ -1193,13 +1354,11 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
 	    x
         })
     } else {
+        ## see .add_metadata() about setting attributes with attr()
         outputargs <- lapply(inputargs, function(x) {
-            attributes(x)$assay <- NULL
-            attributes(x)$geneSets <- NULL
-            attributes(x)$gsvaParam <- NULL
-            attributes(x)$restrict <- NULL
-            attributes(x)$gsvaVersion <- NULL
-            attributes(x)$ranksNrow <- NULL
+            for (nm in c("assay", "geneSets", "gsvaParam", "restrict",
+                         "gsvaVersion", "ranksNrow"))
+                attr(x, nm) <- NULL
             x
         })
     }

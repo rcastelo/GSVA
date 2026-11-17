@@ -370,7 +370,7 @@ saveHDF5GSVA <- function(gsvaExprData, file, assay="auto", replace=FALSE,
         if (!is.null(attributes(gsvaExprData)$annotation) &&
             is(attributes(gsvaExprData)$annotation, "GeneIdentifierType")) {
             annot <- attributes(gsvaExprData)$annotation
-            attributes(gsvaExprData)$annotation <- NULL
+            attr(gsvaExprData, "annotation") <- NULL
         }
         if (!is.null(attributes(gsvaExprData)$restrict)) {
             first <- attributes(gsvaExprData)$restrict$first
@@ -378,10 +378,12 @@ saveHDF5GSVA <- function(gsvaExprData, file, assay="auto", replace=FALSE,
             whdim <- attributes(gsvaExprData)$restrict$whdim
             if (!is.null(attributes(gsvaExprData)$restrict$rem))
                 rem <- attributes(gsvaExprData)$restrict$rem
-            attributes(gsvaExprData)$restrict <- NULL
+            attr(gsvaExprData, "restrict") <- NULL
         }
         geneSets <- attributes(gsvaExprData)$geneSets
-        attributes(gsvaExprData)$geneSets <- NULL
+        ## attr() also removes attributes from S4 objects that are not
+        ## vectors, such as SVT_SparseMatrix objects, see .add_metadata()
+        attr(gsvaExprData, "geneSets") <- NULL
         se <- SummarizedExperiment(assays=list(dummy=gsvaExprData))
         if (!is.null(annot))
             gsvaAnnotation(se) <- annot

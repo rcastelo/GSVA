@@ -353,13 +353,19 @@
 ## it, see .units_per_block(), and otherwise the default block length of the
 ## DelayedArray package, when there are several workers or 'X' is stored on
 ## disk, or form a single block. blocks narrower than the chunks of 'X' on disk
-## give a warning naming the calculations in 'step', see .check_chunk_blocks()
+## give a warning naming the calculations in 'step', see .check_chunk_blocks().
+## with 'rowbands=TRUE', for calculations that process each block of columns
+## in bands of rows, such blocks take instead whole chunks, processed in bands
+## of rows that fit in the memory of the narrower blocks, see .rowband_height(),
+## whose height the grid gives in its attribute "nrowband"
 #' @importFrom BiocGenerics type
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .colgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
                          outextra=0, workermem=NULL, dense=FALSE,
                          heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE,
-                         sendblocks=FALSE, step=NULL, forked=TRUE) {
+                         sendblocks=FALSE, step=NULL, forked=TRUE,
+                         rowbands=FALSE) {
+  nrowband <- NULL
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
       ## the memory of the processes is measured once, for the width of
@@ -379,10 +385,15 @@
                            sinkout=sinkout, sharedmem=sharedmem,
                            sendblocks=sendblocks, copiedmem=copiedmem,
                            parworkermem=parworkermem)
-      ncolblock <- .balance_blocks(.align_to_chunks(upb(nworkers), X, 2L),
-                                X, 2L, nworkers)
+      ncolblock <- upb(nworkers)
+      if (rowbands)
+          nrowband <- .rowband_height(X, ncolblock)
+      if (!is.null(nrowband))
+          ncolblock <- .ondisk_chunkdim(X)[2L]
+      ncolblock <- .balance_blocks(.align_to_chunks(ncolblock, X, 2L),
+                                   X, 2L, nworkers)
       grid <- colAutoGrid(X, ncol=ncolblock)
-      if (sharedmem)
+      if (sharedmem && is.null(nrowband))
           .check_chunk_blocks(X, 2L, ncolblock, nworkers, maxmem, upb, step)
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
@@ -394,11 +405,41 @@
       block.length <- min(max.block.length, expected.block.length)
       ## number of columns per block, as calculated by colAutoGrid()
       ncolblock <- min(max(1, floor(block.length / max(1, nrow(X)))), ncol(X))
+      if (rowbands)
+          nrowband <- .rowband_height(X, ncolblock)
+      if (!is.null(nrowband))
+          ncolblock <- .ondisk_chunkdim(X)[2L]
       grid <- colAutoGrid(X, ncol=.balance_blocks(.align_to_chunks(ncolblock,
                                                                    X, 2L),
                                                   X, 2L, nworkers))
   }
+  if (!is.null(nrowband))
+      attr(grid, "nrowband") <- nrowband
   grid
+}
+
+## height of the bands of rows in which blocks of columns of 'X' that take
+## whole chunks of its data on disk can be processed within the memory of
+## blocks of 'n' columns, narrower than those chunks, which would otherwise be
+## read and decompressed once for each block that they overlap, see
+## .check_chunk_blocks(). the bands take as many values as the blocks of 'n'
+## columns, and their height is rounded down to a multiple of the height of
+## the chunks, so that each chunk is read once. it gives NULL when 'X' is not
+## stored in chunks, when the boundaries of its chunks along the columns are
+## not the ones of 'X', see .ondisk_chunkdim(), or when blocks of 'n' columns
+## already take whole chunks
+.rowband_height <- function(X, n) {
+    cd <- .ondisk_chunkdim(X, aligned=TRUE)
+    if (is.null(cd) || is.na(cd[2L]) || n >= cd[2L])
+        return(NULL)
+    ## the chunks along the rows are also read once by bands of rows whose
+    ## boundaries are not the ones of 'X', e.g., of a subset of its rows,
+    ## except those of the rows at the boundary of two bands
+    cdrows <- .ondisk_chunkdim(X)[1L]
+    h <- floor(as.numeric(n) * nrow(X) / cd[2L])
+    if (h >= cdrows)
+        h <- (h %/% cdrows) * cdrows
+    as.integer(max(1, min(h, nrow(X))))
 }
 
 ## when the data in 'X' is stored in chunks, such as in HDF5 or Parquet files,
@@ -430,9 +471,11 @@
 ## maximum memory, see .units_per_block(). fewer workers also give wider
 ## blocks, but they are not suggested because they make the calculations
 ## faster only when reading and decompressing the data takes most of their
-## time, which is not the case, e.g., of ranking the columns of single-cell
-## data. 'step' names the step of the calculations in the warning, e.g.,
-## "Ranking columns". the chunks are the ones of the on-disk data of 'X', also
+## time and, even when ranking the columns of single-cell data stored in
+## dense chunks, where it does, one worker instead of two made each job only
+## about 4% faster, as measured. 'step' names the step of the calculations in
+## the warning, e.g., "Ranking columns". the chunks are the ones of the
+## on-disk data of 'X', also
 ## when 'X' is a delayed operation on them, see .ondisk_chunkdim(), even when
 ## their boundaries are not the ones of 'X', because blocks narrower than
 ## chunks read them more than once anyway. the warning is given at the end of
@@ -1435,6 +1478,9 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
 ## the result of the block in process
 ## with 'sinkout=TRUE', FUN processes each block in main memory and the
 ## output is written into on-disk data structures, see .ondisk_blocks()
+## with 'rowbands=TRUE', FUN takes an argument 'nrowband' with which it
+## processes each block in bands of that many rows, given when blocks take
+## whole chunks of 'X' on disk instead of narrower blocks, see .colgridsize()
 #' @importFrom BiocGenerics type
 #' @importFrom cli cli_abort cli_progress_bar cli_progress_update
 #' @importFrom cli cli_progress_done
@@ -1449,7 +1495,7 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
                                maxmem=Inf, workfactor=2, outfactor=1,
                                outextra=0, dense=FALSE,
                                heldmem=.held_mem(), combine=NULL,
-                               sinkout=FALSE, step=NULL) {
+                               sinkout=FALSE, step=NULL, rowbands=FALSE) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
@@ -1464,14 +1510,23 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
     grid <- .colgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra,
                          dense=dense, heldmem=heldmem, sinkout=sinkout,
                          sendblocks=.sends_blocks(X, BPPARAM, nworkers),
-                         step=step, forked=.forked_workers(BPPARAM))
+                         step=step, forked=.forked_workers(BPPARAM),
+                         rowbands=rowbands)
     cir <- .splitColsInRanges(grid)
+    nrowband <- attr(grid, "nrowband")
+    if (!is.null(nrowband)) {
+        FUN0 <- FUN
+        FUN <- function(...) FUN0(..., nrowband=nrowband)
+    }
 
     if (length(cir) > 1 && verbose) {
         sze <- howbig(as.numeric(nrow(X)), as.numeric(width(cir[[1]])),
                       representation="dense", type=type(X))
         cli_alert_info(sprintf("Splitting calculations in %d chunks of [%d, %d] and %s",
                                length(cir), nrow(X), width(cir[[1]]), as.character(sze)))
+        if (!is.null(nrowband))
+            cli_alert_info(sprintf("Processing each chunk in bands of %d rows",
+                                   nrowband))
     } else if (length(cir) == 1 && !sinkout) ## serial execution in one call
         return(FUN(X, ..., verbose=verbose))
 

@@ -1010,12 +1010,21 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 ## nonzero non-missing values ('n'), the number of missing values ('nna') and,
 ## if 'logsums=TRUE', the sum of the logarithm of the nonzero non-missing
 ## values ('lsum'). when 'X' is dense, they are the same but on all values,
-## where the minimum and maximum are 'min' and 'max'
+## where the minimum and maximum are 'min' and 'max'. when 'X' is stored on
+## disk, it is read in bands of 'nrowband' rows, if given, see .rowStats()
 
 #' @importFrom S4Arrays is_sparse DummyArrayGrid read_block
 #' @importFrom MatrixGenerics rowSums
 #' @importFrom cli cli_abort
-.rowStats_block <- function(X, logsums=FALSE, verbose=FALSE) {
+.rowStats_block <- function(X, logsums=FALSE, nrowband=NULL, verbose=FALSE) {
+    if (is(X, "DelayedArray") && !is.null(nrowband) && nrowband < nrow(X)) {
+        starts <- seq(1L, nrow(X), by=nrowband)
+        st <- lapply(starts, function(i) {
+            rows <- i:min(nrow(X), i + nrowband - 1L)
+            .rowStats_block(X[rows, , drop=FALSE], logsums=logsums)
+        })
+        return(do.call("rbind", st))
+    }
     if (is(X, "DelayedArray")) ## input HDF5 may be sparse or not
         X <- read_block(X, DummyArrayGrid(dim(X))[[1L]])
 
@@ -1061,7 +1070,11 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 
 ## statistics of the rows of 'X', see .rowStats_block(), calculated through
 ## blocks of columns, which fits the column-wise layout of HDF5 files storing
-## single-cell and spatial transcriptomics data
+## single-cell and spatial transcriptomics data. when 'X' is stored on disk in
+## chunks wider than the blocks of columns that fit in memory, the blocks take
+## whole chunks instead, read in bands of rows of the same size as the
+## narrower blocks, so that each chunk is read and decompressed once, see
+## .colgridsize()
 .rowStats <- function(X, logsums=FALSE, verbose=FALSE, BPPARAM=NULL,
                       maxmem=Inf) {
     mf <- .step_mem_factors("rowstats", X)
@@ -1069,7 +1082,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
                        BPPARAM=BPPARAM, maxmem=maxmem,
                        workfactor=mf$workfactor, outfactor=mf$outfactor,
                        outextra=mf$outextra, combine=.combine_rowstats,
-                       step="Calculating row statistics")
+                       step="Calculating row statistics", rowbands=TRUE)
 }
 
 ## matrix with as many rows as 'X' and 2 columns if 'X' is dense, and 4
@@ -1103,8 +1116,6 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
                          removeNzConstant=TRUE, errorOnTooFewRows=TRUE,
 			 verbose=TRUE, BPPARAM=NULL, maxmem=Inf,
                          logsums=FALSE) {
-    rowrngs <- NULL
-
     if (verbose) {
         if (!is_sparse(expr))
             cli_alert_info("Searching for rows with constant values")
@@ -1112,11 +1123,35 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
             cli_alert_info("Searching for rows with constant (nonzero) values")
     }
 
-    ## the statistics of the rows are calculated through blocks of columns,
-    ## see .rowStats_ranges() for the ranges of values in 'rowrngs'
+    ## the statistics of the rows are calculated through blocks of columns
     rowstats <- .rowStats(expr, logsums=logsums, verbose=verbose,
                           BPPARAM=BPPARAM, maxmem=maxmem)
-    rowrngs <- .rowStats_ranges(rowstats, ncol(expr))
+    removemask <- .filter_rows_mask(rowstats, ncol(expr), rowNorm=rowNorm,
+                                    removeConstant=removeConstant,
+                                    removeNzConstant=removeNzConstant,
+                                    errorOnTooFewRows=errorOnTooFewRows,
+                                    verbose=verbose)
+
+    if (any(removemask))
+        expr <- expr[!removemask, , drop=FALSE]
+
+    if (logsums)
+        return(list(expr=expr, rowstats=rowstats[!removemask, , drop=FALSE]))
+
+    return(expr)
+}
+
+## rows to remove, as a logical mask, from a matrix with 'ncolX' columns whose
+## rows have the statistics 'rowstats', see .rowStats(), which can also be
+## accumulated across chunks of columns processed by different jobs, see
+## .map_clr_stats(); see .filterGenes() for the other arguments
+#' @importFrom cli cli_alert_warning cli_abort qty
+.filter_rows_mask <- function(rowstats, ncolX, rowNorm=NA, removeConstant=TRUE,
+                              removeNzConstant=TRUE, errorOnTooFewRows=TRUE,
+                              verbose=TRUE) {
+    nrowX <- nrow(rowstats)
+    ## see .rowStats_ranges() for the ranges of values in 'rowrngs'
+    rowrngs <- .rowStats_ranges(rowstats, ncolX)
 
     constantRows <- (rowrngs[, 1] == rowrngs[, 2])
     mask <- is.na(constantRows)
@@ -1125,9 +1160,9 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 
     ## rows with only missing values, which have no minimum and maximum, are
     ## discarded as constant rows, but reported separately
-    allNaRows <- rep(FALSE, nrow(expr))
-    if (ncol(expr) > 0)
-        allNaRows <- rowstats[, "nna"] == ncol(expr)
+    allNaRows <- rep(FALSE, nrowX)
+    if (ncolX > 0)
+        allNaRows <- rowstats[, "nna"] == ncolX
     if (verbose && any(allNaRows)) {
         n <- sum(allNaRows)
         cli_alert_warning("{n} row{?s} with only missing values")
@@ -1136,7 +1171,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
                                    "{?is/are} discarded"))
     }
 
-    constantNzRows <- rep(FALSE, nrow(expr))
+    constantNzRows <- rep(FALSE, nrowX)
     if (ncol(rowrngs) > 2) { ## sparse input
         constantNzRows <- (rowrngs[, 3] == rowrngs[, 4])
         mask <- is.na(constantNzRows)
@@ -1163,14 +1198,14 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
                                    "values {?is/are} discarded"))
     }
 
-    removemask <- rep(FALSE, nrow(expr))
+    removemask <- rep(FALSE, nrowX)
     if (removeConstant)
          removemask <- constantRows
 
     if (removeNzConstant && any(nzmask))
          removemask <- removemask | nzmask
 
-    if (any(removemask) && (nrow(expr) - sum(removemask)) < 2) {
+    if (any(removemask) && (nrowX - sum(removemask)) < 2) {
         msg <- "Less than two rows left in the input assay object."
         if (errorOnTooFewRows)
             cli_abort(c("x"=msg))
@@ -1196,13 +1231,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
         }
     }
 
-    if (any(removemask))
-        expr <- expr[!removemask, , drop=FALSE]
-
-    if (logsums)
-        return(list(expr=expr, rowstats=rowstats[!removemask, , drop=FALSE]))
-
-    return(expr)
+    removemask
 }
 
 

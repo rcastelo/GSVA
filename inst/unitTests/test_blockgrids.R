@@ -527,6 +527,73 @@ test_balanced_blocks <- function() {
     checkIdentical(GSVA:::.balance_blocks(200L, H, 2L, 10L), 100L)
 }
 
+## the statistics of the rows of data stored in chunks wider than the blocks
+## of columns that fit in memory are calculated through blocks of whole chunks
+## read in bands of rows of the same size as the narrower blocks, rounded down
+## to whole chunks, giving the same statistics as through blocks of columns
+test_rowband_blocks <- function() {
+
+    message("Running unit tests for row statistics in bands of rows")
+
+    suppressPackageStartupMessages({
+        library(Matrix)
+        library(DelayedArray)
+        library(HDF5Array)
+        library(BiocParallel)
+    })
+
+    set.seed(123)
+    m <- matrix(rpois(600 * 400, 0.5) * 1.5, nrow=600, ncol=400)
+    m[sample(length(m), 50)] <- NA
+    H <- writeHDF5Array(m, chunkdim=c(37L, 150L))
+    Hs <- HDF5Array(path(H), name=seed(H)@name, as.sparse=TRUE)
+
+    ## blocks of 20 columns take as many values as bands of 80 rows of chunks
+    ## of 150 columns, rounded down to 74 rows, two chunks of 37 rows, while
+    ## blocks of whole chunks, data not stored in chunks and blocks whose
+    ## boundaries are not the ones of the chunks are not processed in bands.
+    ## bands lower than a chunk, e.g., of 4 rows with blocks of 1 column, are
+    ## not rounded, to stay within the memory of the narrower blocks
+    checkIdentical(GSVA:::.rowband_height(H, 20L), 74L)
+    checkIdentical(GSVA:::.rowband_height(H, 1L), 4L)
+    checkIdentical(GSVA:::.rowband_height(H[, 151:400], 20L), 74L)
+    checkIdentical(GSVA:::.rowband_height(H[sort(sample(600, 450)), ], 20L),
+                   37L)
+    checkTrue(is.null(GSVA:::.rowband_height(H, 150L)))
+    checkTrue(is.null(GSVA:::.rowband_height(m, 20L)))
+    checkTrue(is.null(GSVA:::.rowband_height(H[, 2:400], 20L)))
+
+    ## with an automatic block size of 20 columns of doubles, blocks take
+    ## whole chunks in bands of 74 rows, or of 37 rows with two workers
+    oldautoblocksize <- getAutoBlockSize()
+    on.exit(setAutoBlockSize(oldautoblocksize))
+    setAutoBlockSize(8 * 600 * 20)
+    g <- GSVA:::.colgridsize(H, 1L, rowbands=TRUE)
+    checkIdentical(ncol(g[[1L]]), 150L)
+    checkIdentical(attr(g, "nrowband"), 74L)
+    checkIdentical(attr(GSVA:::.colgridsize(H, 2L, rowbands=TRUE),
+                        "nrowband"), 37L)
+    checkTrue(is.null(attr(GSVA:::.colgridsize(H, 1L), "nrowband")))
+    checkIdentical(ncol(GSVA:::.colgridsize(H, 1L)[[1L]]), 20L)
+
+    ## giving the same statistics as in main memory
+    ref <- GSVA:::.rowStats_block(m, logsums=TRUE)
+    refs <- GSVA:::.rowStats_block(as(m, "CsparseMatrix"), logsums=TRUE)
+    rows <- sort(sample(600, 450))
+    bps <- list(NULL)
+    if (.Platform$OS.type == "unix")
+        bps <- c(bps, list(MulticoreParam(workers=2)))
+    for (bp in bps) {
+        st <- GSVA:::.rowStats(H, logsums=TRUE, verbose=FALSE, BPPARAM=bp)
+        checkEquals(unname(st), unname(ref))
+        st <- GSVA:::.rowStats(Hs, logsums=TRUE, verbose=FALSE, BPPARAM=bp)
+        checkEquals(unname(st), unname(refs))
+        st <- GSVA:::.rowStats(H[rows, ], logsums=TRUE, verbose=FALSE,
+                               BPPARAM=bp)
+        checkEquals(unname(st), unname(ref[rows, ]))
+    }
+}
+
 test_ondisk_mem_factors <- function() {
     ## a sparse matrix with a quarter of nonzero values, in every chunk and in
     ## every column, sampled through its chunks or, without them, through
