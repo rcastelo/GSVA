@@ -304,7 +304,7 @@ test_mapReduceContainers <- function() {
         gsvarnorm <- gsvaRowNorm(gsvaParam(x, gsets, verbose=FALSE),
                                  verbose=FALSE)
         gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
-        gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+        gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE, device="cpu")
         redranks <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm,
                                        verbose=FALSE, BTPARAM=btpar),
                                verbose=FALSE)

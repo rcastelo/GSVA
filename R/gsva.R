@@ -1332,6 +1332,13 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
         }
     }
 
+    ## forked processes cannot use CUDA
+    nworkers <- 1L
+    if (device == "gpu" && !is(BPPARAM, "SerialParam")) {
+        nworkers <- bpnworkers(BPPARAM)
+        BPPARAM <- SerialParam(progressbar=bpprogressbar(BPPARAM))
+    }
+
     ## assuming rows in the rank data have been already filtered
     filtDataMatrix <- unwrapData(rankExprData, "gsvaranks")
 
@@ -1393,10 +1400,14 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                        verbose)
 
     if (verbose) {
-        n <- length(filtMappedGeneSets)
-        if (device == "gpu") {
-            cli_alert_info("Calculating GSVA scores for {n} gene sets on the GPU")
-        }
+      n <- length(filtMappedGeneSets)
+      if (device == "gpu") {
+          msg <- "Calculating GSVA scores for {n} gene sets on the GPU"
+          if (nworkers > 1L)
+              msg <- paste(msg, "in this R process, without the",
+                           "{nworkers} workers of BPPARAM")
+          cli_alert_info(msg)
+      }
     }
 
     ## blocks of sparse ranks read from disk take their memory by their
