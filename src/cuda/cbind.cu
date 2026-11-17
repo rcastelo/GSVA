@@ -17,6 +17,13 @@ SEXP GSVA_attrUndefWalksSym;
 static inline int min2(int a, int b) { return a < b ? a : b; }
 static inline int max2(int a, int b) { return a > b ? a : b; }
 
+static inline void check_rank(int r, int p, int nnz) {
+  if (r == NA_INTEGER)
+    ranks_invalid_raise(2, p);
+  else if (ranks_invalid_rank(r, p, nnz, 0))
+    ranks_invalid_raise(1, p);
+}
+
 /* Pack sparse DGCMatrix columns into COO-style (gene_offset, value) arrays.
  * Returns total_nnz across the block. */
 static int pack_ranks_dgc(ranks_ctx_t *ctx, gsva_host_t *host,
@@ -35,8 +42,10 @@ static int pack_ranks_dgc(ranks_ctx_t *ctx, gsva_host_t *host,
     out_cell_offt[c] = offset;
     out_nnzpercell[c] = dgc_p[col + 1] - dgc_p[col];
     for (int idx = dgc_p[col]; idx < dgc_p[col + 1]; idx++) {
+      int r = rank_from_double(dgc_x[idx]);
+      check_rank(r, ctx->p, out_nnzpercell[c]);
       out_offt[offset] = dgc_i[idx];
-      out_vals[offset] = (int)dgc_x[idx];
+      out_vals[offset] = r;
       offset++;
     }
   }
@@ -73,13 +82,16 @@ static int pack_ranks_svt(ranks_ctx_t *ctx, gsva_host_t *host,
         if (is_dbl) {
           double *vals_dbl = REAL(valsR);
           for (int k = 0; k < nvals; k++) {
+            int r = rank_from_double(vals_dbl[k]);
+            check_rank(r, ctx->p, noffsets);
             out_offt[offset] = offsets[k];
-            out_vals[offset] = (int)vals_dbl[k];
+            out_vals[offset] = r;
             offset++;
           }
         } else {
           int *vals = INTEGER(valsR);
           for (int k = 0; k < nvals; k++) {
+            check_rank(vals[k], ctx->p, noffsets);
             out_offt[offset] = offsets[k];
             out_vals[offset] = vals[k];
             offset++;
@@ -120,8 +132,12 @@ static void ranks2stats_gpu(ranks_ctx_t *ctx, int G, int block_c,
     fetch_type = R2S_DENSE;
     const int *ranks_data = INTEGER(ranksR);
     for (int c = 0; c < block_size; c++) {
+      const int *src = ranks_data + (size_t)(block_c + c) * G;
+      for (int g = 0; g < G; g++) {
+        check_rank(src[g], G, G);
+      }
       GSVA_CUDA_CALL(cudaMemcpyAsync(device->dense_ranks[stream_idx] + (size_t)c * G,
-                                     ranks_data + (size_t)(block_c + c) * G,
+                                     src,
                                      (size_t)G * sizeof(int),
                                      cudaMemcpyHostToDevice, stream));
     }
@@ -133,7 +149,9 @@ static void ranks2stats_gpu(ranks_ctx_t *ctx, int G, int block_c,
     for (int c = 0; c < block_size; c++) {
       const double *src = ranks_data_dbl + (size_t)(block_c + c) * G;
       for (int g = 0; g < G; g++) {
-        h_cast[(size_t)c * G + g] = (int)src[g];
+        int r = rank_from_double(src[g]);
+        check_rank(r, G, G);
+        h_cast[(size_t)c * G + g] = r;
       }
     }
     GSVA_CUDA_CALL(cudaMemcpyAsync(device->dense_ranks[stream_idx], h_cast,

@@ -42,7 +42,7 @@ fetch_intcol_dblmatrix(ranks_ctx_t* ctx, int j) {
 #endif
 
   for (int i=0; i < ctx->p; i++)
-    ctx->r[i] = ISNAN(X[offset+i]) ? NA_INTEGER : (int) X[offset+i];
+    ctx->r[i] = rank_from_double(X[offset+i]);
 
   return ctx->p;
 }
@@ -60,7 +60,7 @@ fetch_intcol_dgCMatrix(ranks_ctx_t* ctx, int j) {
   /* put the sparse column into a dense vector */
   Memzero(ctx->r, (size_t) ctx->p);
   for (int i=XCsp_p[j]; i < XCsp_p[j+1]; i++)
-    ctx->r[XCsp_i[i]] = ISNAN(XCsp_x[i]) ? NA_INTEGER : (int) XCsp_x[i];
+    ctx->r[XCsp_i[i]] = rank_from_double(XCsp_x[i]);
 
   return XCsp_p[j+1]-XCsp_p[j];
 }
@@ -120,7 +120,7 @@ fetch_intcol_dblSVT_SparseMatrix(ranks_ctx_t* ctx, int j) {
     if (nvals > 0) {
       vals = REAL(valsR);
       for (int i=0; i < nvals; i++)
-        ctx->r[offsets[i]] = ISNAN(vals[i]) ? NA_INTEGER : (int) vals[i];
+        ctx->r[offsets[i]] = rank_from_double(vals[i]);
     } else { /* lacunar */
       for (int i=0; i < noffsets; i++)
         ctx->r[offsets[i]] = 1;
@@ -189,8 +189,8 @@ ranks_ctx_create(SEXP XR, Rboolean intrnks, Rboolean sparse) {
  * it into a decreasing order statistic between 1 and 'p' minus 'nnas'.
  * returned value - 1 if the rank is out of range, 0 otherwise
  */
-static Rboolean
-invalid_rank(int r, int p, int nnz, int nnas) {
+Rboolean
+ranks_invalid_rank(int r, int p, int nnz, int nnas) {
   int maxrank = nnz - nnas;
 
   if (r != NA_INTEGER) {
@@ -202,6 +202,20 @@ invalid_rank(int r, int p, int nnz, int nnas) {
   }
 
   return FALSE;
+}
+
+/* report why a column of ranks could not be turned into statistics */
+void
+ranks_invalid_raise(int flag, int p) {
+  if (flag == 2)
+    error("GSVA ranks have missing values, but the GSVA parameters "
+          "indicate that the input data has none, e.g., because "
+          "'checkNA=\"no\"' was used in 'gsvaParam()'.");
+  else
+    error("GSVA ranks are out of range for the %d rows of the input "
+          "data. This may happen when rows are removed after "
+          "calculating the ranks with 'gsvaColRanks()'; remove them "
+          "before calling 'gsvaRowNorm()' instead.", p);
 }
 
 /* j is a 0-based column index on the rank matrix; the ranks of the column are
@@ -223,7 +237,7 @@ ranks2stats(ranks_ctx_t* ctx, int j, int* decordstat, double* symrnkstat,
 
   for (int i=0; i < p && !irankflag; i++)
     /* missing ranks are not expected when calling this function */
-    irankflag = r[i] == NA_INTEGER ? 2 : invalid_rank(r[i], p, nnz, 0);
+    irankflag = r[i] == NA_INTEGER ? 2 : ranks_invalid_rank(r[i], p, nnz, 0);
 
   if (irankflag)
     return irankflag;
@@ -283,7 +297,7 @@ ranks2stats_nas(ranks_ctx_t* ctx, int j, int* decordstat, double* symrnkstat,
   nzs = p - nnz;
 
   for (int i=0; i < p && !irankflag; i++)
-    irankflag = invalid_rank(r[i], p, nnz, *nnas);
+    irankflag = ranks_invalid_rank(r[i], p, nnz, *nnas);
 
   if (irankflag)
     return 1;

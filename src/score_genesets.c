@@ -91,15 +91,7 @@ gsva_score_genesets_R(SEXP ranksR, SEXP genesetsidxR, SEXP intrnksR,
       if (verbose)
         cli_progress_done(pb);
       UNPROTECT(nunprotect); /* esR pb */
-      if (invalidranks == 2)
-        error("GSVA ranks have missing values, but the GSVA parameters "
-              "indicate that the input data has none, e.g., because "
-              "'checkNA=\"no\"' was used in 'gsvaParam()'.");
-      else
-        error("GSVA ranks are out of range for the %d rows of the input "
-              "data. This may happen when rows are removed after "
-              "calculating the ranks with 'gsvaColRanks()'; remove them "
-              "before calling 'gsvaRowNorm()' instead.", p);
+      ranks_invalid_raise(invalidranks, p);
     }
 
     for (int j=0; j < m; j++) {
