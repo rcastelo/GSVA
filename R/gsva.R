@@ -67,7 +67,10 @@
 #'
 #' @param device The computational device to use. Options are "auto" (default),
 #' "cpu", or "gpu". When set to "auto", the function attempts to use the GPU,
-#' falling back to the CPU if no GPU is detected.
+#' falling back to the CPU if no GPU is detected. The GPU calculates the
+#' enrichment scores in single precision. The scores of the two devices then
+#' differ in about the seventh significant digit. Gene sets whose weights would
+#' not survive single precision are calculated on the CPU.
 #'
 #' @return A gene-set by sample matrix of GSVA enrichment scores stored in a
 #' container object of the same type as the input expression data container,
@@ -1265,9 +1268,12 @@ gsvaColRanks <- function(rowNormExprData,
 #' even if they would fit in main memory, unless `ondisk="no"` was set in the
 #' original [`gsvaParam`] object.
 #'
-#' @param device The device to use for the calculation. Possible values
-#' are "auto" (default), "cpu", and "gpu". When set to "auto", the function
-#' attempts to use the GPU, falling back to the CPU if no GPU is detected.
+#' @param device The computational device to use. Options are "auto" (default),
+#' "cpu", or "gpu". When set to "auto", the function attempts to use the GPU,
+#' falling back to the CPU if no GPU is detected. The GPU calculates the
+#' enrichment scores in single precision. The scores of the two devices then
+#' differ in about the seventh significant digit. Gene sets whose weights would
+#' not survive single precision are calculated on the CPU.
 #'
 #' @return In the case of 'gsvaColScores()', an object of the same class as the
 #' input expression data given in the argument `exprData` of the `gsvaParam`

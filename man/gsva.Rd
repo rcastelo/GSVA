@@ -114,7 +114,10 @@ disabled with \code{options(GSVA.check_memory=FALSE)}.}
 
 \item{device}{The computational device to use. Options are "auto" (default),
 "cpu", or "gpu". When set to "auto", the function attempts to use the GPU,
-falling back to the CPU if no GPU is detected.}
+falling back to the CPU if no GPU is detected. The GPU calculates the
+enrichment scores in single precision. The scores of the two devices then
+differ in about the seventh significant digit. Gene sets whose weights would
+not survive single precision are calculated on the CPU.}
 }
 \value{
 A gene-set by sample matrix of GSVA enrichment scores stored in a

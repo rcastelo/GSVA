@@ -141,9 +141,12 @@ object or a \code{list} object.}
 of non-zero rows in the input expression data will be recomputed, internally
 used only.}
 
-\item{device}{The device to use for the calculation. Possible values
-are "auto" (default), "cpu", and "gpu". When set to "auto", the function
-attempts to use the GPU, falling back to the CPU if no GPU is detected.}
+\item{device}{The computational device to use. Options are "auto" (default),
+"cpu", or "gpu". When set to "auto", the function attempts to use the GPU,
+falling back to the CPU if no GPU is detected. The GPU calculates the
+enrichment scores in single precision. The scores of the two devices then
+differ in about the seventh significant digit. Gene sets whose weights would
+not survive single precision are calculated on the CPU.}
 }
 \value{
 In the case of 'gsvaRowNorm()', an object of the same class as the
