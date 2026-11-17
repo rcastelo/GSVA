@@ -2591,7 +2591,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
                                  "{n_cpu_gsets} gene sets max {max_csize} genes on CPU"))
             if (n_unsafe > 0)
                 cli_alert_info(paste("{n_unsafe} gene sets at risk of float overflow",
-                                     "at tau={tau} scored on CPU"))
+                                     "or underflow at tau={tau} scored on CPU"))
             if (n_full > 0)
                 cli_alert_info(paste("{n_full} gene sets containing all genes",
                                      "scored on CPU"))

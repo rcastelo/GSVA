@@ -140,7 +140,10 @@ test_gsvaWalkDivert <- function() {
     ## ~1.5e39 and does not; the device side of this case is the tau=9 run below
     checkTrue(safe(20000L, 1500L, 9))
     checkTrue(safe(20000L, 1500L, 0))
-    checkTrue(safe(2L, 2L, 1e6))
+    ## at G=2 the largest statistic is 1 and cannot overflow at any tau, but a
+    ## column of zero counts puts both genes at 1/2, whose power can underflow
+    checkTrue(safe(2L, 2L, 100))
+    checkTrue(!safe(2L, 2L, 1e6))
     checkTrue(!safe(10L, 1L, Inf))
     checkTrue(!safe(10L, 1L, NaN))
     checkTrue(!safe(10L, 1L, -1))
@@ -306,5 +309,47 @@ test_gsvaColRanksSparseGpu <- function() {
     es_gpu <- gsva(spar, device="gpu", verbose=FALSE)
     checkTrue(is.na(es_gpu["set2", 1]))
     checkTrue(is.na(es_gpu["zeroset", 1]))
+    .check_gpu_equiv(es_cpu, es_gpu)
+}
+
+test_gsvaWalkUnderflow <- function() {
+    message("Running unit tests for the CPU diversion of underflow-prone walks.")
+
+    safe <- GSVA:::.gsva_cuda_walk_safe
+
+    narrowWalk <- !safe(10L, 1L, 100L)
+    if (narrowWalk) {
+        ## at G=3 the statistics are 1/2, 1/2 and 3/2: (3/2)^150 is 2.6e26,
+        ## which float holds, while (1/2)^150 is 7e-46, which it does not
+        checkTrue(!safe(3L, 1L, 150))
+        ## at tau=126 the smallest non-zero weight is (1/2)^126 = 2^-126 =
+        ## FLT_MIN, the smallest normal float, still rejected by the headroom
+        checkTrue(!safe(3L, 1L, 126))
+        checkTrue(safe(3L, 1L, 125))
+    } else {
+        message("Walk weights are doubles; underflow bound assertions skipped.")
+    }
+
+    if (.skip_if_no_gpu())
+        return(invisible(NULL))
+
+    ## three genes at tau=150: the statistic of 'lowest' is 1/2, whose weight
+    ## underflows to zero on the GPU while the CPU, in double, computes it
+    ## correctly
+    p <- 3
+    n <- 6
+    genes <- paste0("g", 1:p)
+    y <- matrix(0, nrow=p, ncol=n, dimnames=list(genes, paste0("s", 1:n)))
+    for (j in 1:n)
+        y[, j] <- c(0.1 * j, j + 1, j + 2)   ## 'g1' is the lowest in every column
+    gsets <- list(lowest="g1", higher=c("g2", "g3"))
+    upar <- gsvaParam(y, gsets, tau=150, rowNorm="none", kcdf="none")
+
+    es_cpu <- gsva(upar, device="cpu", verbose=FALSE)
+    checkTrue(all(is.finite(es_cpu)))
+
+    es_gpu <- gsva(upar, device="gpu", verbose=FALSE)
+    checkTrue(all(is.finite(es_gpu)),
+              msg="the underflow of the walk weights leaks NA on the GPU")
     .check_gpu_equiv(es_cpu, es_gpu)
 }
