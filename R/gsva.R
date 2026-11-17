@@ -1394,7 +1394,9 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
 
     if (verbose) {
         n <- length(filtMappedGeneSets)
-        cli_alert_info("Calculating GSVA scores for {n} gene sets")
+        if (device == "gpu") {
+            cli_alert_info("Calculating GSVA scores for {n} gene sets on the GPU")
+        }
     }
 
     ## blocks of sparse ranks read from disk take their memory by their
