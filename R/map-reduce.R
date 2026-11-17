@@ -378,7 +378,13 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         if (!clr) {
             gridsizefun <- .rowgridsize
             splitinrangesfun <- .splitRowsInRanges
-        }
+        } else
+            ## the jobs calculating the statistics of the rows for the CLR
+            ## take whole chunks of the input data on disk, instead of
+            ## narrower chunks of columns, which would be read and
+            ## decompressed by several jobs, and process them in bands of
+            ## rows that fit in their memory, see .rowStats()
+            gridsizefun <- function(...) .colgridsize(..., rowbands=TRUE)
         assay <- get_assay(inputData)
 
     } else if (identical(FUN, gsvaColRanks)) {
@@ -407,7 +413,7 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         cli_abort(c("x"="Internal error, invalid FUN argument."))
 
     X <- inputData
-    chunks <- density <- Xd <- NULL
+    chunks <- density <- Xd <- nrowband <- NULL
     if (!is.list(X)) {
         if (is.null(mapinfo)) {
             ## each job has its own memory 'maxmem', not shared with the
@@ -427,6 +433,7 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
                                 dense=mf$densify,
                                 heldmem=max(0, container - .inmem_size(Xd)),
                                 sharedmem=FALSE)
+            nrowband <- attr(grid, "nrowband")
             X <- splitinrangesfun(grid)
             chunks <- data.frame(first=vapply(X, start, integer(1)),
                                  last=vapply(X, end, integer(1)))
@@ -452,10 +459,18 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     ## the chunks, if any, which take time to obtain from data stored on disk
     chunkwidth <- if (is.null(chunks)) NA_real_ else
                       max(chunks$last - chunks$first + 1)
-    .check_map_mem(funname, inputData, assay,
-                   whdim=if (funname == "gsvaRowNorm" && !clr) 1L else 2L,
-                   chunkwidth=chunkwidth, ncpus=ncpus, maxmem=maxmem,
-                   density=density, X=Xd)
+    ## jobs taking whole chunks in bands of rows, see above, take the memory
+    ## of a band, which holds as many values as the narrower chunks of
+    ## columns that fit in the memory of each job
+    if (!is.null(nrowband))
+        chunkwidth <- ceiling(nrowband * chunkwidth / nrow(Xd))
+    ## the CLR has no failed chunks to resubmit, see below, and its result
+    ## records a single chunk of all columns, which no job processes
+    if (!(clr && !is.null(mapinfo)))
+        .check_map_mem(funname, inputData, assay,
+                       whdim=if (funname == "gsvaRowNorm" && !clr) 1L else 2L,
+                       chunkwidth=chunkwidth, ncpus=ncpus, maxmem=maxmem,
+                       density=density, X=Xd)
 
     ## results saved to disk get file names that depend only on the input
     ## and the chunk boundaries, and a manifest that allows MAPREDO to find
