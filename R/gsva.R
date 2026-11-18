@@ -1853,8 +1853,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
         }
     }
 
-    if (ncol(expr) > 10000) ## free up ASAP memory we need not anymore and was
-        invisible(gc())     ## allocated during ECDF calculations on a big expr
+    .release_block_mem(ncol(expr)) ## allocated by the ECDF calculations
 
     return(gene.cdf)	
 }
@@ -2013,8 +2012,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
         R <- colRanks(Z, ties.method=ties.method, preserveShape=TRUE)
     }
 
-    if (ncol(Z) > 10000) ## free up ASAP memory we need not anymore and was
-        invisible(gc())  ## allocated during rank calculations on a big Z
+    .release_block_mem(ncol(Z)) ## allocated by the rank calculations
 
     return(R)
 }
@@ -2310,8 +2308,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
         cli_alert_warning(msg)
     }
 
-    if (ncol(R) > 10000) ## free up ASAP memory we need not anymore and was
-        invisible(gc())  ## allocated during score calculations on a big R
+    .release_block_mem(ncol(R)) ## allocated by the score calculations
 
     return(es)
 }

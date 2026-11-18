@@ -1423,6 +1423,20 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     used
 }
 
+## release, with a full collection of garbage, the memory that the
+## calculations on a block of 'ncols' columns, more than 10000, have allocated
+## and no longer need, only in an R process that is not a worker forked from
+## the one that loaded GSVA, such as those of a MulticoreParam object: a full
+## collection in a forked worker writes to the memory pages of every object
+## that it shares with the main R process, which the worker then copies, e.g.,
+## about the whole 4.5 GB of an R session holding the ranks of 100,000 cells,
+## in each of 4 workers scoring them, while the memory it would release goes
+## back to the system anyway when the worker ends
+.release_block_mem <- function(ncols) {
+    if (ncols > 10000 && identical(Sys.getpid(), gsva_global$pid))
+        invisible(gc())
+}
+
 ## open, in a step, the scope where the memory allocated by R is measured
 ## with a full collection of garbage only once, see .r_mem_used(), unless
 ## another step running this one has opened it; it returns whether it opened
