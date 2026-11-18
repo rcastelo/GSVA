@@ -9,6 +9,7 @@
            unbuilt = "GSVA was built without CUDA support",
            driver = "the CUDA driver is missing or too old",
            nodev = "no CUDA-capable device is detected",
+           init = "CUDA cannot be initialized in this R process",
            "the CUDA runtime reported an error")
 }
 

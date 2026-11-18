@@ -36,18 +36,124 @@ test_parallel <- function() {
                         BPPARAM=MulticoreParam(workers=2), device="cpu")
     checkIdentical(es_serial, es_parallel)
 
-    ## CPU vs GPU.  only the serial call is paired: the GPU code path is
-    ## incompatible with the forked CPU multiprocess workers of a
-    ## MulticoreParam, see the similar pin in gsvaMap()
+    ## CPU vs GPU. the GPU scores the gene sets in this R process, without
+    ## the workers of a MulticoreParam, which are forked from it after it has
+    ## initialized CUDA, and calculate the row normalization and the ranks
     .run_with_gpu({
         es_serial_gpu <- gsva(gsvaParam(M, gsets, verbose=FALSE),
                               verbose=FALSE, device="gpu")
         .check_gpu_equiv(es_serial, es_serial_gpu)
+        es_parallel_gpu <- gsva(gsvaParam(M, gsets, verbose=FALSE),
+                                verbose=FALSE,
+                                BPPARAM=MulticoreParam(workers=2),
+                                device="gpu")
+        checkIdentical(es_serial_gpu, es_parallel_gpu)
+
+        ## a process forked from this one cannot use CUDA, which this one
+        ## has initialized: device="auto" selects the CPU there, and
+        ## device="gpu" gives an error
+        if (.Platform$OS.type == "unix") {
+            res <- bplapply(1:2, function(i)
+                list(state=GSVA:::.gsva_cuda_state(),
+                     auto=gsva(gsvaParam(M, gsets, verbose=FALSE),
+                               verbose=FALSE),
+                     gpu=tryCatch(gsva(gsvaParam(M, gsets, verbose=FALSE),
+                                       verbose=FALSE, device="gpu"),
+                                  error=function(e) e)),
+                BPPARAM=MulticoreParam(workers=2))
+            checkIdentical(res[[1]]$state, "init")
+            checkIdentical(res[[1]]$auto, es_serial)
+            checkTrue(is(res[[1]]$gpu, "error"))
+        }
+
+        ## the CPU scores all gene sets of data with missing values, with
+        ## the workers of BPPARAM, also with device="gpu"
+        yna <- y
+        yna[1, 2] <- NA
+        es_na_cpu <- gsva(gsvaParam(yna, gsets, verbose=FALSE),
+                          verbose=FALSE, device="cpu")
+        msgs <- character(0)
+        es_na_gpu <- withCallingHandlers(
+            gsva(gsvaParam(yna, gsets, verbose=FALSE), verbose=TRUE,
+                 BPPARAM=MulticoreParam(workers=2, progressbar=FALSE),
+                 device="gpu"),
+            message=function(m) {
+                msgs <<- c(msgs, conditionMessage(m))
+                invokeRestart("muffleMessage")
+            })
+        checkIdentical(es_na_cpu, es_na_gpu)
+        checkTrue(any(grepl("scores on the CPU", msgs)))
+        checkTrue(!any(grepl("on the GPU", msgs)))
     })
 
     M[1, 2] <- NA
     checkException(gsva(gsvaParam(M, gsets, kcdf="Gaussian", verbose=FALSE),
 			verbose=FALSE, BPPARAM=MulticoreParam(workers=2), device="cpu"))
+}
+
+test_device_selection <- function() {
+    message("Running unit tests for the selection of the GPU or the CPU")
+
+    ## data with missing values are scored on the CPU
+    checkIdentical(GSVA:::.resolve_device("auto", TRUE), "cpu")
+    checkIdentical(GSVA:::.resolve_device("cpu", FALSE), "cpu")
+
+    ## the jobs of gsvaMap() can use the GPU only when they are not processes
+    ## forked from this R session; the fields of BatchtoolsParam objects that
+    ## these functions use are taken from lists, to avoid needing Slurm
+    mc <- list(cluster="multicore", resources=list())
+    sl <- list(cluster="slurm", resources=list())
+    slgpu <- list(cluster="slurm", resources=list(gres="gpu:1"))
+    checkIdentical(GSVA:::.map_device("cpu", mc), "cpu")
+    checkIdentical(GSVA:::.map_device("gpu", sl), "gpu")
+    checkIdentical(GSVA:::.map_device("gpu", list(cluster="socket")), "gpu")
+    checkException(GSVA:::.map_device("gpu", mc), silent=TRUE)
+
+    ## jobs of Slurm using the GPU without requesting it give a warning, and
+    ## those requesting it without using it, a message
+    .conds <- function(expr) {
+        conds <- character(0)
+        withCallingHandlers(expr,
+            warning=function(w) {
+                conds <<- c(conds, "warning")
+                invokeRestart("muffleWarning")
+            },
+            message=function(m) {
+                conds <<- c(conds, "message")
+                invokeRestart("muffleMessage")
+            })
+        conds
+    }
+    checkIdentical(.conds(GSVA:::.check_map_gres(TRUE, sl, TRUE)), "warning")
+    checkIdentical(.conds(GSVA:::.check_map_gres(TRUE, slgpu, TRUE)),
+                   character(0))
+    checkIdentical(.conds(GSVA:::.check_map_gres(FALSE, slgpu, TRUE)),
+                   "message")
+    checkIdentical(.conds(GSVA:::.check_map_gres(FALSE, slgpu, FALSE)),
+                   character(0))
+    checkIdentical(.conds(GSVA:::.check_map_gres(FALSE, sl, TRUE)),
+                   character(0))
+    checkIdentical(.conds(GSVA:::.check_map_gres(TRUE, mc, TRUE)),
+                   character(0))
+
+    ## gsvaMap() gives the error before sending any job, and has no "auto"
+    ## device
+    if (.Platform$OS.type == "unix") {
+        set.seed(123)
+        y <- matrix(rnorm(200 * 20), nrow=200, ncol=20,
+                    dimnames=list(paste0("g", 1:200), paste0("s", 1:20)))
+        gsets <- list(gs1=paste0("g", 1:20), gs2=paste0("g", 21:60))
+        rnk <- gsvaColRanks(gsvaRowNorm(gsvaParam(y, gsets), verbose=FALSE),
+                            verbose=FALSE)
+        btmc <- BiocParallel::BatchtoolsParam(workers=1, cluster="multicore",
+                                              progressbar=FALSE,
+                                              resources=list(ncpus=1,
+                                                             memory="2G"))
+        checkException(gsvaMap(gsvaColScores, rnk, verbose=FALSE,
+                               BTPARAM=btmc, device="gpu"), silent=TRUE)
+        checkException(gsvaMap(gsvaColScores, rnk, verbose=FALSE,
+                               BTPARAM=btmc, device="auto"), silent=TRUE)
+    }
 }
 
 test_parallel_bpparam_unchanged <- function() {

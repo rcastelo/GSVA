@@ -117,7 +117,13 @@ disabled with \code{options(GSVA.check_memory=FALSE)}.}
 falling back to the CPU if no GPU is detected. The GPU calculates the
 enrichment scores in single precision. The scores of the two devices then
 differ in about the seventh significant digit. Gene sets whose weights would
-not survive single precision are calculated on the CPU.}
+not survive single precision are calculated on the CPU, as well as all gene
+sets when the data have missing values, and "auto" then selects the CPU.
+The GPU calculates the scores in the main R process, without the parallel
+workers of \code{BPPARAM}, which are used by the other calculations; a process
+forked from an R session that has already used the GPU, such as a worker of
+a \code{\link[BiocParallel:MulticoreParam-class]{MulticoreParam}} object, cannot use
+it, and "auto" then selects the CPU.}
 }
 \value{
 A gene-set by sample matrix of GSVA enrichment scores stored in a
