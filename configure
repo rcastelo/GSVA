@@ -72,14 +72,35 @@ if [ -n "$NVCC" ]; then
             */bin/nvcc) CUDA_HOME_RESOLVED="${NVCC%/bin/nvcc}" ;;
         esac
     fi
+    # the first directory with the CUDA runtime, rather than the first one
+    # that exists: e.g., an nvcc in /usr/bin gives /usr/lib64, which may hold
+    # no CUDA runtime, and the linker then takes it from its search path
     if [ -n "$CUDA_HOME_RESOLVED" ]; then
-        for cuda_lib in "$CUDA_HOME_RESOLVED/lib64" "$CUDA_HOME_RESOLVED/lib"; do
-            if [ -d "$cuda_lib" ]; then
+        for cuda_lib in "$CUDA_HOME_RESOLVED/lib64" "$CUDA_HOME_RESOLVED/lib" \
+                        "$CUDA_HOME_RESOLVED/targets/x86_64-linux/lib"; do
+            if ls "$cuda_lib"/libcudart.so* "$cuda_lib"/libcudart_static.a \
+                  >/dev/null 2>&1; then
                 CUDA_LIBDIR="$cuda_lib"
                 break
             fi
         done
     fi
+fi
+
+# ---- CUDA runtime: static, when available ----
+# GSVA.so linked to the static CUDA runtime, as nvcc does by default, does
+# not depend on libcudart.so, which is often installed only on the machines
+# with a GPU, e.g., the GPU nodes of an HPC cluster, so that GSVA can be
+# loaded on any machine and uses the CPU on those without a GPU driver, see
+# gsva_cuda_state_R(); the static runtime loads the driver (libcuda.so) only
+# when CUDA is first used. the shared runtime is used when the static one is
+# not found, or does not link, see the probe below
+CUDA_RT_SHARED="-lcudart"
+CUDA_RT_STATIC="-lcudart_static -ldl -lrt -lpthread"
+CUDA_RT="$CUDA_RT_SHARED"
+if [ -n "$NVCC" ] && [ -n "$CUDA_LIBDIR" ] && \
+       [ -f "$CUDA_LIBDIR/libcudart_static.a" ]; then
+    CUDA_RT="$CUDA_RT_STATIC"
 fi
 
 # ---- R's C++ toolchain: nvcc host compiler and GSVA.so link driver ----
@@ -121,6 +142,23 @@ extern "C" int gsva_probe(void) {
 }
 PROBE_CU
         PROBE_LOG="$PROBE_DIR/probe.log"
+        # link the probe with the CUDA runtime in CUDA_RT, and with the
+        # shared one when the static one does not link
+        probe_link() {
+            if $R_CXX -shared $R_LDFLAGS -o "$PROBE_DIR/probe.so" \
+                   "$PROBE_DIR/probe.o" \
+                   ${CUDA_LIBDIR:+-L"$CUDA_LIBDIR"} $CUDA_RT \
+                   >"$PROBE_LOG" 2>&1; then
+                return 0
+            fi
+            [ "$CUDA_RT" = "$CUDA_RT_SHARED" ] && return 1
+            echo "*** CUDA static runtime did not link: trying the shared one" >&2
+            CUDA_RT="$CUDA_RT_SHARED"
+            $R_CXX -shared $R_LDFLAGS -o "$PROBE_DIR/probe.so" \
+                "$PROBE_DIR/probe.o" \
+                ${CUDA_LIBDIR:+-L"$CUDA_LIBDIR"} $CUDA_RT \
+                >"$PROBE_LOG" 2>&1
+        }
         if ! "$NVCC" -std=c++17 -O3 $GPU_ARCH_FLAGS -ccbin "$NVCC_CCBIN" \
                 -c "$PROBE_DIR/probe.cu" -o "$PROBE_DIR/probe.o" \
                 $R_CPPFLAGS -DNDEBUG -DHAVE_CUDA -DUSE_FP32 \
@@ -131,10 +169,7 @@ PROBE_CU
             echo "*** Check the CUDA toolkit or override detection with" >&2
             echo "*** NVCC/CUDA_HOME/GPU_ARCH and reinstall." >&2
             NVCC=""
-        elif ! $R_CXX -shared $R_LDFLAGS -o "$PROBE_DIR/probe.so" \
-                "$PROBE_DIR/probe.o" \
-                ${CUDA_LIBDIR:+-L"$CUDA_LIBDIR"} -lcudart \
-                >"$PROBE_LOG" 2>&1; then
+        elif ! probe_link; then
             echo "*** CUDA test link failed: building CPU only" >&2
             sed -n '1,6p' "$PROBE_LOG" | sed 's/^/> /' >&2
             echo "*** The CUDA runtime (libcudart) was not usable from" >&2
@@ -143,6 +178,11 @@ PROBE_CU
             NVCC=""
         else
             echo "CUDA toolchain probe passed (host compiler: $NVCC_CCBIN, CUDA libs: ${CUDA_LIBDIR:-default search path})"
+            if [ "$CUDA_RT" = "$CUDA_RT_STATIC" ]; then
+                echo "CUDA runtime: static (libcudart_static.a)"
+            else
+                echo "CUDA runtime: shared (libcudart.so), which must also be found where GSVA is loaded"
+            fi
         fi
         rm -rf "$PROBE_DIR"
     fi
@@ -165,7 +205,7 @@ fi
 if [ -n "$NVCC" ]; then
     HAVE_CUDA_DEF="-DHAVE_CUDA"
     SHLIB_LD_TOOL='$(CXX)'
-    CUDA_LINK="-L${CUDA_LIBDIR} -lcudart"
+    CUDA_LINK="${CUDA_LIBDIR:+-L${CUDA_LIBDIR}} ${CUDA_RT}"
 else
     HAVE_CUDA_DEF=""
     SHLIB_LD_TOOL='$(CC)'
