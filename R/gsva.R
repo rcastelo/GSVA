@@ -70,7 +70,13 @@
 #' falling back to the CPU if no GPU is detected. The GPU calculates the
 #' enrichment scores in single precision. The scores of the two devices then
 #' differ in about the seventh significant digit. Gene sets whose weights would
-#' not survive single precision are calculated on the CPU.
+#' not survive single precision are calculated on the CPU, as well as all gene
+#' sets when the data have missing values, and "auto" then selects the CPU.
+#' The GPU calculates the scores in the main R process, without the parallel
+#' workers of `BPPARAM`, which are used by the other calculations; a process
+#' forked from an R session that has already used the GPU, such as a worker of
+#' a [`MulticoreParam`][BiocParallel::MulticoreParam-class] object, cannot use
+#' it, and "auto" then selects the CPU.
 #'
 #' @return A gene-set by sample matrix of GSVA enrichment scores stored in a
 #' container object of the same type as the input expression data container,
@@ -196,16 +202,7 @@ setMethod("gsva", signature(param="gsvaParam"),
 
               .check_bpparam(BPPARAM)
 
-              device <- match.arg(device)
-              if (device == "gpu") {
-                  .check_gpu_device()
-              } else if (device == "auto") {
-                  if (.gsva_cuda_state() == "ok") {
-                      device <- "gpu"
-                  } else {
-                      device <- "cpu"
-                  }
-              }
+              device <- .resolve_device(match.arg(device), anyNA(param))
 
               ## the memory required by the three steps is checked before
               ## running them, and not again by each of them
@@ -1273,7 +1270,13 @@ gsvaColRanks <- function(rowNormExprData,
 #' falling back to the CPU if no GPU is detected. The GPU calculates the
 #' enrichment scores in single precision. The scores of the two devices then
 #' differ in about the seventh significant digit. Gene sets whose weights would
-#' not survive single precision are calculated on the CPU.
+#' not survive single precision are calculated on the CPU, as well as all gene
+#' sets when the data have missing values, and "auto" then selects the CPU.
+#' The GPU calculates the scores in the main R process, without the parallel
+#' workers of `BPPARAM`, which are used by the other calculations; a process
+#' forked from an R session that has already used the GPU, such as a worker of
+#' a [`MulticoreParam`][BiocParallel::MulticoreParam-class] object, cannot use
+#' it, and "auto" then selects the CPU.
 #'
 #' @return In the case of 'gsvaColScores()', an object of the same class as the
 #' input expression data given in the argument `exprData` of the `gsvaParam`
@@ -1321,18 +1324,16 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
 
     .check_bpparam(BPPARAM)
 
-    device <- match.arg(device)
-    if (device == "gpu") {
-        .check_gpu_device()
-    } else if (device == "auto") {
-        if (.gsva_cuda_state() == "ok") {
-            device <- "gpu"
-        } else {
-            device <- "cpu"
-        }
-    }
+    device <- .resolve_device(match.arg(device), anyNA(param))
+    ## with missing values, all gene sets are scored on the CPU, see
+    ## .gsva_score_genesets(), with the parallel workers of BPPARAM
+    nagpu <- device == "gpu" && anyNA(param)
+    if (nagpu)
+        device <- "cpu"
 
-    ## forked processes cannot use CUDA
+    ## the GPU scores the gene sets in this R process, without the parallel
+    ## workers of BPPARAM, because processes forked from it, such as those of
+    ## a MulticoreParam, cannot use CUDA once this one has initialized it
     nworkers <- 1L
     if (device == "gpu" && !is(BPPARAM, "SerialParam")) {
         nworkers <- bpnworkers(BPPARAM)
@@ -1400,14 +1401,17 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                        verbose)
 
     if (verbose) {
-      n <- length(filtMappedGeneSets)
-      if (device == "gpu") {
-          msg <- "Calculating GSVA scores for {n} gene sets on the GPU"
-          if (nworkers > 1L)
-              msg <- paste(msg, "in this R process, without the",
-                           "{nworkers} workers of BPPARAM")
-          cli_alert_info(msg)
-      }
+        n <- length(filtMappedGeneSets)
+        if (device == "gpu") {
+            msg <- "Calculating GSVA scores for {n} gene sets on the GPU"
+            if (nworkers > 1L)
+                msg <- paste(msg, "in this R process, without the",
+                             "{nworkers} workers of BPPARAM")
+            cli_alert_info(msg)
+        } else if (nagpu)
+            cli_alert_info(paste("Calculating GSVA scores on the CPU, which",
+                                 "handles the missing values of the data,",
+                                 "instead of the GPU"))
     }
 
     ## blocks of sparse ranks read from disk take their memory by their

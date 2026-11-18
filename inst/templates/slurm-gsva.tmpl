@@ -19,6 +19,8 @@
 ## partition [character(1)]:  Slurm partition to which the job is sent.
 ## array.throttle [integer(1)]: Maximum number of tasks of an array job
 ##                            running at the same time. Optional.
+## gres [character(1)]:       Generic resources of each job, e.g., "gpu:1".
+##                            Optional.
 
 <%
 # relative paths are not handled well by Slurm
@@ -34,6 +36,7 @@ log.file = fs::path_expand(log.file)
 #SBATCH --cpus-per-task=<%= resources$ncpus %>
 #SBATCH --mem=<%= resources$memory %>
 <%= if (!is.null(resources$partition)) sprintf(paste0("#SBATCH --partition='", resources$partition, "'")) %>
+<%= if (!is.null(resources$gres)) sprintf("#SBATCH --gres=%s", resources$gres) %>
 <%= if (array.jobs) sprintf("#SBATCH --array=1-%i%s", nrow(jobs), if (!is.null(resources$array.throttle)) sprintf("%%%i", as.integer(resources$array.throttle)) else "") else "" %>
 
 ## Export the value of the DEBUGME environment variable to the job

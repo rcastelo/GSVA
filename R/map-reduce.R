@@ -78,6 +78,24 @@
 #' names and GSVA parameters, but not by its values. Default: `NULL`, which
 #' computes all chunks.
 #'
+#' @param device In `gsvaMap()` with `FUN=gsvaColScores`, the device on which
+#' each job calculates the scores, given to the `device` argument of
+#' [`gsvaColScores`]: either "cpu" (default) or "gpu". Unlike in
+#' [`gsvaColScores`], the device is not selected automatically, because the
+#' jobs of a workload manager, such as Slurm, must request a GPU in advance,
+#' e.g., with the `gres` argument of `gsvaBatchtoolsSlurmParam()`, and
+#' `gsvaMap()` gives a warning when `device="gpu"` and the jobs of Slurm do
+#' not request it with that argument, which the template of the job scripts
+#' or the partition may still do. A job that cannot use a GPU gives an error,
+#' and its chunk can be resubmitted with the `MAPREDO` argument. The GPU
+#' calculates the scores without the parallel workers of each job, so that
+#' one CPU core per job suffices for this step. The jobs of the `"socket"`
+#' cluster of `BTPARAM`, which run on the machine where `gsvaMap()` is
+#' called, share its GPU. The jobs of the `"multicore"` cluster of `BTPARAM`,
+#' which is the default one on Unix-like systems, are processes forked from
+#' the R session, which cannot use the GPU, and `device="gpu"` gives an error
+#' with them. This argument is ignored with the other values of `FUN`.
+#'
 #' @param mapOutput In `gsvaReduce()`, the output of `gsvaMap()`, which can be
 #' a list of objects or a list of paths to GSVA output saved with
 #' [`saveHDF5GSVA`] or [`saveParquetGSVA`], such as the one returned by
@@ -154,6 +172,17 @@
 #' next tasks from processing their chunks. At most `nodes` tasks run at the
 #' same time. Default: `FALSE`.
 #'
+#' @param gres In `gsvaBatchtoolsSlurmParam()`, either `NULL` or a character
+#' string with the generic resources that each job requests from Slurm, as in
+#' the `--gres` option of the Slurm command `sbatch`, e.g., `"gpu:1"` for one
+#' GPU, or `"gpu:a100:1"` for one GPU of a given type, for `gsvaMap()` with
+#' `FUN=gsvaColScores` and `device="gpu"`, which uses one GPU per job, so
+#' that further GPUs of a job would be idle. The jobs of the other steps,
+#' which do not use the GPU, should not request it, and `gsvaMap()` says so
+#' when they do; e.g., a separate `BatchtoolsParam` object, with this argument
+#' and `ncpus_per_task=1`, can be created for the scores. When `NULL`, no
+#' generic resources are requested. Default: `NULL`.
+#'
 #' @param template In `gsvaBatchtoolsSlurmParam()`, path to the template of
 #' the Slurm job scripts, see [batchtools::makeClusterFunctionsSlurm()].
 #' By default, the template provided by GSVA, which requests `mem` for the
@@ -167,8 +196,9 @@
 #' element only when it is given, which is either a number of seconds, as in
 #' the templates of batchtools, or the character string `"UNLIMITED"`, and in
 #' array jobs, at most as many tasks at
-#' the same time as given in the `array.throttle` element, see the template
-#' provided by GSVA. Default:
+#' the same time as given in the `array.throttle` element, and to support the
+#' argument `gres`, the generic resources in the `gres` element only when it is
+#' given, see the template provided by GSVA. Default:
 #' `system.file("templates", "slurm-gsva.tmpl", package="GSVA")`.
 #'
 #' @param BTPARAM In `gsvaMap()`, an object of class
@@ -290,9 +320,10 @@
 gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
                     verbose=TRUE,
                     BTPARAM=BatchtoolsParam(workers=2, progressbar=verbose),
-                    MAPREDO=NULL) {
+                    MAPREDO=NULL, device=c("cpu", "gpu")) {
 
     FUN <- match.fun(FUN)
+    device <- match.arg(device)
     .check_FUN_inputData(FUN, inputData)
     funname <- .map_fun_name(FUN)
 
@@ -409,13 +440,12 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
             funargs <- c(funargs, list(recompute_nzcount=TRUE))
 
         assay <- "gsvaranks"
-
-        device <- .map_device(BTPARAM$cluster)
-        if (!is.null(device))
-            funargs <- c(funargs, list(device=device))
+        funargs <- c(funargs, list(device=.map_device(device, BTPARAM)))
 
     } else
         cli_abort(c("x"="Internal error, invalid FUN argument."))
+    .check_map_gres(identical(FUN, gsvaColScores) && device == "gpu",
+                    BTPARAM, verbose)
 
     X <- inputData
     chunks <- density <- Xd <- nrowband <- NULL
@@ -661,7 +691,8 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
                                      mem="10G", arrayjobs=FALSE,
                                      template=system.file("templates",
                                                           "slurm-gsva.tmpl",
-                                                          package="GSVA")) { # nocov start
+                                                          package="GSVA"),
+                                     gres=NULL) { # nocov start
 
     if (dir.exists(dir))
         cli_alert_warning("The directory {dir} already exists.")
@@ -682,6 +713,11 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     if (!.isCharLength1(template) || !file.exists(template))
         cli_abort(c("x"=paste("'template' must be the path to an existing",
                               "template file of Slurm job scripts.")))
+
+    if (!is.null(gres) && !.isCharLength1(gres))
+        cli_abort(c("x"=paste("'gres' must be either NULL or a character",
+                              "string with the generic resources of each",
+                              "job, e.g., \"gpu:1\".")))
 
     .check_job_mem(ncpus_per_task, .memtext2bytes(mem))
 
@@ -707,6 +743,8 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     resources <- list(ncpus=ncpus_per_task, partition=partition, memory=mem)
     if (!is.null(walltime))
         resources$walltime <- walltime
+    if (!is.null(gres))
+        resources$gres <- gres
     ## each of the 'nodes' jobs of BiocParallel is an array job whose tasks
     ## run one at a time, so that at most 'nodes' tasks run at the same time
     if (arrayjobs)
@@ -797,6 +835,10 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     secs
 }
 
+## number of parallel workers of the R process of each job of gsvaMap() using
+## 'ncpus' CPU cores, see MAP_FUN_WRAPPER(), on a chunk with dimensions 'dims',
+## see .n_par_workers(); when 'dims' is not given, such as with a list input,
+## calculations are assumed to be parallelized
 .map_job_workers <- function(ncpus, dims=NULL) {
     if (ncpus <= 1 || (!is.null(dims) && (dims[1] <= 100 || dims[2] <= 100)))
         return(0L)
@@ -804,6 +846,8 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     as.integer(ncpus)
 }
 
+## parallel back-end of the R process of each job of gsvaMap() using 'ncpus'
+## CPU cores, see MAP_FUN_WRAPPER()
 .map_job_backend <- function(ncpus) {
     if (ncpus <= 1)
         return(SerialParam())
@@ -814,15 +858,51 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     SnowParam(workers=as.integer(ncpus))
 }
 
-.map_device <- function(cluster) {
-    ## the CUDA runtime cannot be used in processes forked from or sharing
-    ## this session
-    allow_list <- c("socket", "sge", "slurm", "lsf", "openlava",
-                    "torque")
-    if (!cluster %in% allow_list)
-        return("cpu")
+## device of the jobs of gsvaMap() calculating the GSVA scores, from its
+## argument 'device' and the cluster of BTPARAM. the jobs of the "multicore"
+## cluster are processes forked from this R session, which cannot use the GPU
+## once this session has initialized CUDA, see .gsva_cuda_state(), so that
+## device="gpu" gives an error before sending any job; the jobs of the other
+## clusters are new R processes, or this R session with the "interactive"
+## cluster, and a job that cannot use the GPU gives an error, see
+## .check_gpu_device()
+#' @importFrom cli cli_abort
+.map_device <- function(device, BTPARAM) {
+    if (device == "gpu" && BTPARAM$cluster == "multicore")
+        cli_abort(c("x"=paste("{.arg device}=\"gpu\" cannot be used with",
+                              "the \"multicore\" cluster of {.arg BTPARAM},",
+                              "whose jobs are processes forked from this R",
+                              "session, which cannot use the GPU once this",
+                              "session has used it."),
+                    "i"=paste("Use a {.cls BatchtoolsParam} object with",
+                              "another cluster, such as \"socket\" or",
+                              "\"slurm\", or {.arg device}=\"cpu\".")))
 
-    NULL
+    device
+}
+
+## the jobs of gsvaMap() using the GPU, those of FUN=gsvaColScores with
+## device="gpu" ('usegpu'), should request it from Slurm, through the 'gres'
+## element of the resources of BTPARAM, see gsvaBatchtoolsSlurmParam(), which
+## gives a warning when it is missing, although the template of the job
+## scripts or the partition may still request the GPU; the other jobs should
+## not reserve generic resources, such as GPUs, which they do not use
+#' @importFrom cli cli_alert_info cli_warn
+.check_map_gres <- function(usegpu, BTPARAM, verbose) {
+    gres <- BTPARAM$resources$gres
+    if (usegpu && BTPARAM$cluster == "slurm" && is.null(gres))
+        cli_warn(c("!"=paste("The jobs calculate the scores on the GPU",
+                             "with {.arg device}=\"gpu\", but {.arg BTPARAM}",
+                             "does not request it from Slurm."),
+                   "i"=paste("Unless the template of the job scripts or the",
+                             "partition requests it, use the {.arg gres}",
+                             "argument of {.fn gsvaBatchtoolsSlurmParam},",
+                             "e.g., gres=\"gpu:1\".")))
+    else if (!usegpu && !is.null(gres) && verbose)
+        cli_alert_info(paste("The jobs request the generic resources",
+                             "gres=\"{gres}\", but only those calculating",
+                             "the scores with {.arg device}=\"gpu\" use a",
+                             "GPU."))
 }
 
 ## warn, when creating the parameters of jobs with 'ncpus' CPU cores and 'mem'

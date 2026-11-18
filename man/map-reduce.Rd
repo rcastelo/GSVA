@@ -12,7 +12,8 @@ gsvaMap(
   output = c("object", "HDF5", "Parquet"),
   verbose = TRUE,
   BTPARAM = BatchtoolsParam(workers = 2, progressbar = verbose),
-  MAPREDO = NULL
+  MAPREDO = NULL,
+  device = c("cpu", "gpu")
 )
 
 gsvaReduce(mapOutput, verbose = TRUE)
@@ -25,7 +26,8 @@ gsvaBatchtoolsSlurmParam(
   ncpus_per_task = 2,
   mem = "10G",
   arrayjobs = FALSE,
-  template = system.file("templates", "slurm-gsva.tmpl", package = "GSVA")
+  template = system.file("templates", "slurm-gsva.tmpl", package = "GSVA"),
+  gres = NULL
 )
 }
 \arguments{
@@ -103,6 +105,24 @@ ended. If that directory has results of several calls matching \code{FUN} and
 one of them. Note that \code{inputData} is matched by its dimensions, dimension
 names and GSVA parameters, but not by its values. Default: \code{NULL}, which
 computes all chunks.}
+
+\item{device}{In \code{gsvaMap()} with \code{FUN=gsvaColScores}, the device on which
+each job calculates the scores, given to the \code{device} argument of
+\code{\link{gsvaColScores}}: either "cpu" (default) or "gpu". Unlike in
+\code{\link{gsvaColScores}}, the device is not selected automatically, because the
+jobs of a workload manager, such as Slurm, must request a GPU in advance,
+e.g., with the \code{gres} argument of \code{gsvaBatchtoolsSlurmParam()}, and
+\code{gsvaMap()} gives a warning when \code{device="gpu"} and the jobs of Slurm do
+not request it with that argument, which the template of the job scripts
+or the partition may still do. A job that cannot use a GPU gives an error,
+and its chunk can be resubmitted with the \code{MAPREDO} argument. The GPU
+calculates the scores without the parallel workers of each job, so that
+one CPU core per job suffices for this step. The jobs of the \code{"socket"}
+cluster of \code{BTPARAM}, which run on the machine where \code{gsvaMap()} is
+called, share its GPU. The jobs of the \code{"multicore"} cluster of \code{BTPARAM},
+which is the default one on Unix-like systems, are processes forked from
+the R session, which cannot use the GPU, and \code{device="gpu"} gives an error
+with them. This argument is ignored with the other values of \code{FUN}.}
 
 \item{mapOutput}{In \code{gsvaReduce()}, the output of \code{gsvaMap()}, which can be
 a list of objects or a list of paths to GSVA output saved with
@@ -192,9 +212,21 @@ arguments \code{walltime} and \code{arrayjobs}, the time limit in the \code{wall
 element only when it is given, which is either a number of seconds, as in
 the templates of batchtools, or the character string \code{"UNLIMITED"}, and in
 array jobs, at most as many tasks at
-the same time as given in the \code{array.throttle} element, see the template
-provided by GSVA. Default:
+the same time as given in the \code{array.throttle} element, and to support the
+argument \code{gres}, the generic resources in the \code{gres} element only when it is
+given, see the template provided by GSVA. Default:
 \code{system.file("templates", "slurm-gsva.tmpl", package="GSVA")}.}
+
+\item{gres}{In \code{gsvaBatchtoolsSlurmParam()}, either \code{NULL} or a character
+string with the generic resources that each job requests from Slurm, as in
+the \code{--gres} option of the Slurm command \code{sbatch}, e.g., \code{"gpu:1"} for one
+GPU, or \code{"gpu:a100:1"} for one GPU of a given type, for \code{gsvaMap()} with
+\code{FUN=gsvaColScores} and \code{device="gpu"}, which uses one GPU per job, so
+that further GPUs of a job would be idle. The jobs of the other steps,
+which do not use the GPU, should not request it, and \code{gsvaMap()} says so
+when they do; e.g., a separate \code{BatchtoolsParam} object, with this argument
+and \code{ncpus_per_task=1}, can be created for the scores. When \code{NULL}, no
+generic resources are requested. Default: \code{NULL}.}
 }
 \value{
 The \code{gsvaMap()} function returns either a list of objects with the

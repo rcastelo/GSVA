@@ -472,9 +472,21 @@ SEXP gsva_cuda_state_R(void) {
   (void) cudaGetLastError();
 
   const char *state;
-  if (err == cudaSuccess && ndev > 0)
-    state = "ok";
-  else if (err == cudaErrorInsufficientDriver)
+  if (err == cudaSuccess && ndev > 0) {
+    /* a process forked from one that has already initialized CUDA, such as
+       a worker of a MulticoreParam, inherits its device count, while no
+       other CUDA call succeeds in it; cudaFree(0) initializes CUDA in this
+       process, if not done yet, and fails in that case, as it does when
+       the device cannot be used, e.g., in exclusive-process mode */
+    err = cudaFree(0);
+    (void) cudaGetLastError();
+    if (err == cudaSuccess)
+      state = "ok";
+    else if (err == cudaErrorInitializationError)
+      state = "init";
+    else
+      state = "error";
+  } else if (err == cudaErrorInsufficientDriver)
     state = "driver";
   else if (err == cudaErrorNoDevice || err == cudaSuccess)
     state = "nodev";

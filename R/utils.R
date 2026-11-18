@@ -1973,6 +1973,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ##   "ok"      -- at least one CUDA-capable device is usable
 ##   "driver"  -- CUDA driver missing or too old for this build
 ##   "nodev"   -- runtime and driver fine, but no device is visible
+##   "init"    -- CUDA cannot be initialized in this R process, which is the
+##                case of a process forked from one that has already
+##                initialized it, such as a worker of a MulticoreParam
 ##   "error"   -- any other CUDA runtime failure
 .gsva_cuda_state <- function() {
     built <- tryCatch({
@@ -1996,6 +1999,17 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                         "with the CUDA toolkit available."),
             "i" = "Alternatively, use device = \"cpu\"."
         ))
+    } else if (cuda_state == "init") {
+        cli_abort(c(
+            "x" = paste("GPU mode requested (device = \"gpu\") but CUDA",
+                        "cannot be initialized in this R process."),
+            "i" = paste("This happens in a process forked from an R session",
+                        "that has already used the GPU, such as a worker of",
+                        "a MulticoreParam."),
+            "i" = paste("Use device = \"cpu\" in forked processes, or",
+                        "parallel workers that are new R processes, such",
+                        "as those of a SnowParam.")
+        ))
     } else if (cuda_state != "ok") {
         reason <- switch(cuda_state,
                          nodev = "no CUDA-capable device is detected",
@@ -2007,6 +2021,20 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                         "device = \"cpu\".")
         ))
     }
+}
+
+## the device calculating the GSVA scores, from the 'device' argument of
+## gsva() or gsvaColScores(): "auto" selects the GPU when CUDA can be used in
+## this R process, and the data have no missing values, which only the CPU
+## handles, see .gsva_score_genesets(); "gpu" gives an error when CUDA cannot
+## be used, before any calculation starts
+.resolve_device <- function(device, anyna) {
+    if (device == "gpu")
+        .check_gpu_device()
+    else if (device == "auto")
+        device <- if (!anyna && .gsva_cuda_state() == "ok") "gpu" else "cpu"
+
+    device
 }
 
 .gsva_cuda_max_gset_size <- function() {
