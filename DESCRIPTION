@@ -1,5 +1,5 @@
 Package: GSVA
-Version: 2.7.34
+Version: 2.7.35
 Title: Gene Set Variation Analysis for Microarray and RNA-Seq Data
 Authors@R: c(person("Robert", "Castelo", role=c("aut", "cre"),
                     comment=c(ORCID="0000-0003-2229-4508"),
@@ -8,6 +8,9 @@ Authors@R: c(person("Robert", "Castelo", role=c("aut", "cre"),
              person("Alexey", "Sergushichev", role="ctb", email="alsergbox@gmail.com"),
              person("Pablo Sebastian", "Rodriguez", role="ctb", email="pablo.rodriguez.bio2@gmail.com"),
              person("Axel", "Klenk", role="ctb", email="axel.klenk@gmail.com"),
+             person("Gabriele", "Sales", role="ctb",
+                    comment=c(ORCID="0000-0003-2078-5661"),
+                    email="gabriele.sales@unipd.it"),
              person("Chan Zuckerberg Initiative (CZI)", role="fnd"),
              person("Spanish Ministry of Science, Innovation and Universities (MCIU)", role="fnd"))
 Depends: R (>= 4.0.0)
