@@ -76,6 +76,10 @@ importClassesFrom(SingleCellExperiment,SingleCellExperiment)
 importClassesFrom(SparseArray,SVT_SparseMatrix)
 importClassesFrom(SpatialExperiment,SpatialExperiment)
 importClassesFrom(SummarizedExperiment,SummarizedExperiment)
+importFrom(AnnotationDbi,
+  mget,
+  revmap
+)
 importFrom(Biobase,selectSome)
 importFrom(BiocGenerics,
   "annotation<-",
@@ -201,6 +205,7 @@ importFrom(SummarizedExperiment,
   assayNames,
   colData
 )
+importFrom(annotate,getAnnMap)
 importFrom(cli,
   cli_abort,
   cli_alert_danger,

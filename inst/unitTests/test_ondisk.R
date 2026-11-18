@@ -426,6 +426,8 @@ test_scores_ondisk <- function() {
     checkTrue(is(esdisk, "DelayedMatrix"))
     checkTrue(any(grepl("on-disk", out)))
     checkEqualsNumeric(es, as.matrix(esdisk))
+    ## the step closes on exit the scope where it measures the memory of R
+    checkTrue(is.null(GSVA:::gsva_global$rmemfull))
 }
 
 test_h5file_seeds <- function() {

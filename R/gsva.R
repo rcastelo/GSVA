@@ -1035,6 +1035,8 @@ gsvaRowNorm <- function(param,
     }
 
     .check_bpparam(BPPARAM)
+    memscope <- .open_mem_scope()
+    on.exit(.close_mem_scope(memscope), add=TRUE)
 
     exprData <- get_exprData(param)
     dataMatrix <- unwrapData(exprData, get_assay(param))
@@ -1193,6 +1195,8 @@ gsvaColRanks <- function(rowNormExprData,
     }
 
     .check_bpparam(BPPARAM)
+    memscope <- .open_mem_scope()
+    on.exit(.close_mem_scope(memscope), add=TRUE)
 
     dataMatrix <- unwrapData(rowNormExprData, "gsvarnorm")
 
@@ -1323,6 +1327,8 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
     }
 
     .check_bpparam(BPPARAM)
+    memscope <- .open_mem_scope()
+    on.exit(.close_mem_scope(memscope), add=TRUE)
 
     device <- .resolve_device(match.arg(device), anyNA(param))
     ## with missing values, all gene sets are scored on the CPU, see

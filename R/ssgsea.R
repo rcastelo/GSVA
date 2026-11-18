@@ -22,6 +22,8 @@ setMethod("gsva", signature(param="ssgseaParam"),
               }
 
               .check_bpparam(BPPARAM)
+              memscope <- .open_mem_scope()
+              on.exit(.close_mem_scope(memscope), add=TRUE)
 
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=FALSE,
