@@ -78,8 +78,8 @@ if [ -n "$NVCC" ]; then
     if [ -n "$CUDA_HOME_RESOLVED" ]; then
         for cuda_lib in "$CUDA_HOME_RESOLVED/lib64" "$CUDA_HOME_RESOLVED/lib" \
                         "$CUDA_HOME_RESOLVED/targets/x86_64-linux/lib"; do
-            if ls "$cuda_lib"/libcudart.so* "$cuda_lib"/libcudart_static.a \
-                  >/dev/null 2>&1; then
+            if [ -f "$cuda_lib/libcudart_static.a" ] || \
+                   ls "$cuda_lib"/libcudart.so* >/dev/null 2>&1; then
                 CUDA_LIBDIR="$cuda_lib"
                 break
             fi
