@@ -1,6 +1,10 @@
 #ifndef RANKS_H
 #define RANKS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <R.h>
 #include <Rdefines.h>
 
@@ -10,6 +14,13 @@
 #define RANKSTYPE_DGC          3
 #define RANKSTYPE_SVT_INT      4
 #define RANKSTYPE_SVT_DBL      5
+
+/* convert a stored double rank into its integer counterpart, mapping
+ * missing values to NA_INTEGER */
+static inline int
+rank_from_double(double x) {
+  return ISNAN(x) ? NA_INTEGER : (int) x;
+}
 
 /* context for fetching the columns of a rank matrix, which is created once
  * per call to gsva_score_genesets_R() and holds a pointer to the data of the
@@ -42,5 +53,15 @@ ranks2stats(ranks_ctx_t* ctx, int j, int* decordstat, double* symrnkstat,
 int
 ranks2stats_nas(ranks_ctx_t* ctx, int j, int* decordstat, double* symrnkstat,
                 int* nzeros_col, double* zerosymrnkstat, int* nnas);
+
+Rboolean
+ranks_invalid_rank(int r, int p, int nnz, int nnas);
+
+void
+ranks_invalid_raise(int flag, int p);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

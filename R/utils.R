@@ -1967,3 +1967,53 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     ap <- c(ap, paste0(ap, ".db"))
     return(any(ap %in% rownames(installed.packages())))
 }
+
+## Check CUDA device availability:
+##   "unbuilt" -- package was compiled without CUDA support
+##   "ok"      -- at least one CUDA-capable device is usable
+##   "driver"  -- CUDA driver missing or too old for this build
+##   "nodev"   -- runtime and driver fine, but no device is visible
+##   "error"   -- any other CUDA runtime failure
+.gsva_cuda_state <- function() {
+    built <- tryCatch({
+        getNativeSymbolInfo("gsva_score_genesets_gpu_R", PACKAGE = "GSVA")
+        TRUE
+    }, error = function(e) FALSE)
+    if (!built)
+        return("unbuilt")
+
+    .Call("gsva_cuda_state_R", PACKAGE = "GSVA")
+}
+
+#' @importFrom cli cli_abort
+.check_gpu_device <- function() {
+    cuda_state <- .gsva_cuda_state()
+    if (cuda_state == "unbuilt") {
+        cli_abort(c(
+            "x" = paste("GPU mode requested (device = \"gpu\") but this",
+                        "package was built without CUDA support."),
+            "i" = paste("To use GPU acceleration, reinstall the package",
+                        "with the CUDA toolkit available."),
+            "i" = "Alternatively, use device = \"cpu\"."
+        ))
+    } else if (cuda_state != "ok") {
+        reason <- switch(cuda_state,
+                         nodev = "no CUDA-capable device is detected",
+                         driver = "the CUDA driver is missing or too old",
+                         "the CUDA runtime reported an error")
+        cli_abort(c(
+            "x" = "GPU mode requested (device = \"gpu\") but {reason}.",
+            "i" = paste("Check the GPU and CUDA_VISIBLE_DEVICES, or use",
+                        "device = \"cpu\".")
+        ))
+    }
+}
+
+.gsva_cuda_max_gset_size <- function() {
+    .Call("gsva_cuda_max_gset_size_R", PACKAGE = "GSVA")
+}
+
+.gsva_cuda_walk_safe <- function(G, gset_sizes, tau) {
+    .Call("gsva_cuda_walk_safe_R", as.integer(G), as.integer(gset_sizes),
+          as.double(tau), PACKAGE = "GSVA")
+}

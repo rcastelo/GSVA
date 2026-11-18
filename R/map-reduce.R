@@ -407,7 +407,12 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
             funargs <- c(funargs, list(rankExprData=inputData))
         } else
             funargs <- c(funargs, list(recompute_nzcount=TRUE))
+
         assay <- "gsvaranks"
+
+        device <- .map_device(BTPARAM$cluster)
+        if (!is.null(device))
+            funargs <- c(funargs, list(device=device))
 
     } else
         cli_abort(c("x"="Internal error, invalid FUN argument."))
@@ -792,15 +797,32 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     secs
 }
 
-## number of parallel workers of the R process of each job of gsvaMap() using
-## 'ncpus' CPU cores, see MAP_FUN_WRAPPER(), on a chunk with dimensions 'dims',
-## see .n_par_workers(); when 'dims' is not given, such as with a list input,
-## calculations are assumed to be parallelized
 .map_job_workers <- function(ncpus, dims=NULL) {
     if (ncpus <= 1 || (!is.null(dims) && (dims[1] <= 100 || dims[2] <= 100)))
         return(0L)
 
     as.integer(ncpus)
+}
+
+.map_job_backend <- function(ncpus) {
+    if (ncpus <= 1)
+        return(SerialParam())
+
+    if (.Platform$OS.type == "unix")
+        return(MulticoreParam(workers=as.integer(ncpus)))
+
+    SnowParam(workers=as.integer(ncpus))
+}
+
+.map_device <- function(cluster) {
+    ## the CUDA runtime cannot be used in processes forked from or sharing
+    ## this session
+    allow_list <- c("socket", "sge", "slurm", "lsf", "openlava",
+                    "torque")
+    if (!cluster %in% allow_list)
+        return("cpu")
+
+    NULL
 }
 
 ## warn, when creating the parameters of jobs with 'ncpus' CPU cores and 'mem'
@@ -1104,12 +1126,7 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     }
     rng <- X
     res <- whdim <- NULL
-    parallelbackend <- SerialParam()
-    if (ncpus > 1) {
-        parallelbackend <- MulticoreParam(workers=ncpus)
-        if (.Platform$OS.type != "unix")
-            parallelbackend <- SnowParam(workers=ncpus)
-    }
+    parallelbackend <- .map_job_backend(ncpus)
 
     if (is(X, "IRanges")) { ## input is splitted in chunks
         res <- WRAPPED_FUN(..., first=start(rng), last=end(rng),

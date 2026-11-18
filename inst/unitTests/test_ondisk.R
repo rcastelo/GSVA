@@ -1,3 +1,5 @@
+source(system.file("unitTests", "test_helpers.R", package = "GSVA"))
+
 test_ondisk <- function() {
 
     message("Running unit tests for ondisk input.")
@@ -31,14 +33,26 @@ test_ondisk <- function() {
     H5 <- as(M, "HDF5Matrix")
 
     ## estimate GSVA enrichment scores with and without HDF5 input and check that they are identical
-    es_noh5 <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE)
-    es_h5 <- gsva(gsvaParam(H5, gsets, verbose=FALSE), verbose=FALSE)
+    es_noh5 <- gsva(gsvaParam(M, gsets, verbose = FALSE), verbose = FALSE, device = "cpu")
+    es_h5 <- gsva(gsvaParam(H5, gsets, verbose = FALSE), verbose = FALSE, device = "cpu")
     checkIdentical(es_noh5, es_h5)
 
     ## estimate GSVA enrichment scores with HDF5 input and output and check that they are identical
-    es_h5ondisk <- gsva(gsvaParam(H5, gsets, ondisk="yes", verbose=FALSE), verbose=FALSE)
+    es_h5ondisk <- gsva(gsvaParam(H5, gsets, ondisk = "yes", verbose = FALSE), verbose = FALSE, device = "cpu")
     es_h5ondiskmat <- as.matrix(es_h5ondisk)
     checkEqualsNumeric(es_noh5, es_h5ondiskmat)
+
+    ## CPU vs GPU
+    .run_with_gpu({
+        es_noh5_gpu <- gsva(gsvaParam(M, gsets, verbose = FALSE), verbose = FALSE, device = "gpu")
+        .check_gpu_equiv(es_noh5, es_noh5_gpu)
+
+        es_h5_gpu <- gsva(gsvaParam(H5, gsets, verbose = FALSE), verbose = FALSE, device = "gpu")
+        .check_gpu_equiv(es_h5, es_h5_gpu)
+
+        es_h5ondisk_gpu <- gsva(gsvaParam(H5, gsets, ondisk = "yes", verbose = FALSE), verbose = FALSE, device = "gpu")
+        .check_gpu_equiv(es_h5ondisk, es_h5ondisk_gpu)
+    })
 
     ## estimate ssGSEA enrichment scores with and without HDF5 input and check that they are identical
     es_noh5 <- gsva(ssgseaParam(M, gsets, verbose=FALSE), verbose=FALSE)

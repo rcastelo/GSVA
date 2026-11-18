@@ -35,7 +35,8 @@ gsvaColScores(
   last = NA_real_,
   recompute_nzcount = FALSE,
   BPPARAM = SerialParam(progressbar = verbose),
-  maxmem = "auto"
+  maxmem = "auto",
+  device = c("auto", "cpu", "gpu")
 )
 }
 \arguments{
@@ -139,6 +140,13 @@ object or a \code{list} object.}
 \item{recompute_nzcount}{Logical vector of length 1. When \code{TRUE}, the number
 of non-zero rows in the input expression data will be recomputed, internally
 used only.}
+
+\item{device}{The computational device to use. Options are "auto" (default),
+"cpu", or "gpu". When set to "auto", the function attempts to use the GPU,
+falling back to the CPU if no GPU is detected. The GPU calculates the
+enrichment scores in single precision. The scores of the two devices then
+differ in about the seventh significant digit. Gene sets whose weights would
+not survive single precision are calculated on the CPU.}
 }
 \value{
 In the case of 'gsvaRowNorm()', an object of the same class as the
