@@ -970,8 +970,10 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
 ## 'inputData', whose matrix 'X' is processed, see .step_mem_factors(), and
 ## whether the step gives a dense output from a sparse input ('densify'), as
 ## the classical algorithm of GSVA normalizing rows of sparse data does, see
-## gsvaRowNorm(); the same factors size the chunks of the jobs and check
-## their memory, see .check_map_mem()
+## gsvaRowNorm(), where the copy of the sparse input by the workers forked in
+## each job depends on the input itself, see .step_mem_factors(); the same
+## factors size the chunks of the jobs and check their memory, see
+## .check_map_mem()
 #' @importFrom S4Arrays is_sparse
 .map_step_factors <- function(funname, inputData, X) {
     step <- c(gsvaRowNorm="rownorm", gsvaColRanks="colranks",
@@ -985,7 +987,7 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     densify <- rownorm && is_sparse(X) && !.get_sparse(inputData) &&
                .get_rowNorm(inputData) != "none"
     mf <- .step_mem_factors(step, X, ngs=ngs, sparse=is_sparse(X) && !densify,
-                            clr=clr)
+                            clr=clr, insparse=is_sparse(X))
     if (densify && clr) ## dense CLR, see gsvaRowNorm()
         mf$assembly <- 2
 
@@ -1168,11 +1170,15 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
                                mf, held, densify=mf$densify) <=
                 .mem_fraction_R * maxmem
     held <- .step_held_input(X, dims, whdim, !inmemory, container)
+    ## the workers of each job are forked from its R process on Unix-like
+    ## systems, see .map_job_backend()
+    forked <- .Platform$OS.type == "unix"
     need <- .step_mem_need(dims, insize, whdim, eltbytes, sparse, inmemory,
                            mf, nworkers, held, densify=mf$densify,
-                           permem=permem)
+                           permem=permem, forked=forked)
 
-    .check_mem_need(need, maxmem, nworkers, hint=hint, permem=permem)
+    .check_mem_need(need, maxmem, nworkers, hint=hint, permem=permem,
+                    forked=forked, forkedmem=attr(need, "workermem"))
 }
 
 #' @importFrom BiocParallel SerialParam MulticoreParam SnowParam
