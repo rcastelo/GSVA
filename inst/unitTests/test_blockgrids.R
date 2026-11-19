@@ -1,7 +1,8 @@
 ## the blocks of rows and columns in which GSVA processes data stored in
 ## chunks, such as in HDF5 or Parquet files, are aligned with those chunks,
 ## without growing beyond the blocks calculated without alignment, while the
-## blocks of data not stored in chunks are the same as without alignment
+## blocks of data not stored in chunks are the same as without alignment,
+## balanced among the workers, see test_balanced_blocks()
 test_blockgrids <- function() {
 
     message("Running unit tests for block grids aligned with chunks")
@@ -14,20 +15,23 @@ test_blockgrids <- function() {
 
     ## blocks calculated without alignment, as before aligning them: with a
     ## finite maximum memory, as many rows or columns as fit in it and,
-    ## otherwise, the default block length, split among the workers
+    ## otherwise, the default block length, split among the workers, and then
+    ## balanced among them
     unaligned <- function(X, nworkers, maxmem, whdim) {
-        autogrid <- if (whdim == 1) rowAutoGrid else colAutoGrid
-        if (is.finite(maxmem)) {
+        if (is.finite(maxmem))
             n <- GSVA:::.units_per_block(X, whdim, nworkers, maxmem)
-            return(if (whdim == 1) rowAutoGrid(X, nrow=n)
-                   else colAutoGrid(X, ncol=n))
+        else {
+            if (nworkers == 1 && !is(X, "DelayedMatrix"))
+                return(DummyArrayGrid(dim(X)))
+            mbl <- min(.Machine$integer.max,
+                       getAutoBlockLength(type(X)) / nworkers)
+            ebl <- max(1, ceiling(dim(X)[whdim] / nworkers) *
+                          as.numeric(dim(X)[-whdim]))
+            n <- min(max(1, floor(min(mbl, ebl) / max(1, dim(X)[-whdim]))),
+                     dim(X)[whdim])
         }
-        if (nworkers == 1 && !is(X, "DelayedMatrix"))
-            return(DummyArrayGrid(dim(X)))
-        mbl <- min(.Machine$integer.max, getAutoBlockLength(type(X)) / nworkers)
-        ebl <- max(1, ceiling(dim(X)[whdim] / nworkers) *
-                      as.numeric(dim(X)[-whdim]))
-        autogrid(X, block.length=min(mbl, ebl))
+        n <- GSVA:::.balance_blocks(n, X, whdim, nworkers)
+        if (whdim == 1) rowAutoGrid(X, nrow=n) else colAutoGrid(X, ncol=n)
     }
 
     set.seed(123)
@@ -63,6 +67,97 @@ test_blockgrids <- function() {
     checkIdentical(124L, ncol(GSVA:::.colgridsize(H)[[1L]]))
     checkIdentical(31L, ncol(GSVA:::.colgridsize(H, 3)[[1L]]))
     checkIdentical(25L, ncol(GSVA:::.colgridsize(H, 5)[[1L]]))
+
+    ## blocks narrower than half a chunk, within a maximum memory of 1e9 bytes
+    ## that fits blocks of 120 columns for all the workers together, give a
+    ## warning suggesting the smallest maximum memory, in whole GiB, whose
+    ## blocks with the same workers take whole chunks: 40 columns for each of
+    ## 8 workers fit in 8/3 * 1e9 bytes, 2.48 GiB
+    H <- writeHDF5Array(m, chunkdim=c(37L, 40L))
+    upb <- function(nw, mm) as.integer(floor(120 * mm / 1e9 / nw))
+    checkEquals(GSVA:::.chunk_maxmem(40L, 8L, 1e9, upb), 3 * 1024^3)
+    checkIdentical(GSVA:::.maxmem_text(3 * 1024^3), "3G")
+    ## or MiB, below 1 GiB: 8/3 * 1e8 bytes, 254.3 MiB
+    upbm <- function(nw, mm) as.integer(floor(120 * mm / 1e8 / nw))
+    checkEquals(GSVA:::.chunk_maxmem(40L, 8L, 1e8, upbm), 255 * 1024^2)
+    checkIdentical(GSVA:::.maxmem_text(255 * 1024^2), "255M")
+    ## a text that 'maxmem' takes
+    checkEquals(GSVA:::.memtext2bytes(GSVA:::.maxmem_text(3 * 1024^3)),
+                3 * 1024^3)
+    chunkwarning <- function(n, nworkers, upb, step=NULL)
+        tryCatch(GSVA:::.check_chunk_blocks(H, 2L, n, nworkers, 1e9, upb,
+                                            step),
+                 warning=conditionMessage)
+    w <- chunkwarning(15L, 8L, upb)
+    checkTrue(is.character(w) && grepl("blocks of 15 columns", w) &&
+              grepl("The calculations process", w) &&
+              grepl('maxmem="3G"', w, fixed=TRUE) &&
+              grepl("with\\s+the\\s+8\\s+parallel\\s+workers", w) &&
+              grepl("Fewer parallel workers", w))
+    ## naming the step of the calculations
+    w <- chunkwarning(15L, 8L, upb, step="Ranking columns")
+    checkTrue(is.character(w) && grepl("Ranking columns processes", w))
+    ## or a larger maximum memory, when none gives whole chunks
+    w <- chunkwarning(15L, 8L, function(nw, mm) 15L)
+    checkTrue(is.character(w) && grepl("larger", w))
+    checkTrue(is.na(GSVA:::.chunk_maxmem(40L, 8L, 1e9, function(nw, mm) 15L)))
+    ## while blocks of at least half a chunk, or a single block, do not
+    checkTrue(!chunkwarning(20L, 6L, upb))
+    checkTrue(!chunkwarning(ncol(H), 1L, upb))
+    checkTrue(!GSVA:::.check_chunk_blocks(m, 2L, 15L, 8L, 1e9, upb))
+    ## the warnings of several steps collected, as gsva() does, give a single
+    ## warning with the largest of their maximum memory, here for 12 workers
+    ## with blocks of 10 columns, 4 GiB, or none when no step warns
+    w <- tryCatch(GSVA:::.with_chunk_blocks({
+                      GSVA:::.check_chunk_blocks(H, 2L, 15L, 8L, 1e9, upb,
+                                                 "Normalizing rows")
+                      GSVA:::.check_chunk_blocks(H, 2L, 10L, 12L, 1e9, upb,
+                                                 "Ranking columns")
+                  }), warning=conditionMessage)
+    checkTrue(is.character(w) && grepl("Some steps", w) &&
+              grepl("Normalizing rows: blocks of 15 columns", w) &&
+              grepl("Ranking columns: blocks of 10 columns", w) &&
+              grepl('maxmem="4G"', w, fixed=TRUE) &&
+              grepl("blocks of all of them", w))
+    checkIdentical(GSVA:::.with_chunk_blocks(1L), 1L)
+    checkTrue(is.null(GSVA:::gsva_global$chunkblocks))
+    ## and a single step collected gives its own warning
+    w <- tryCatch(GSVA:::.with_chunk_blocks(
+                      GSVA:::.check_chunk_blocks(H, 2L, 15L, 8L, 1e9, upb,
+                                                 "Ranking columns")),
+                  warning=conditionMessage)
+    checkTrue(is.character(w) && grepl("Ranking columns processes", w))
+    ## also for a subset of the on-disk data, with the chunks of its seed
+    checkTrue(is.null(chunkdim(H[, 1:2000])))
+    checkIdentical(as.integer(GSVA:::.ondisk_chunkdim(H[, 1:2000])),
+                   c(37L, 40L))
+    w <- tryCatch(GSVA:::.check_chunk_blocks(H[, 1:2000], 2L, 15L, 8L, 1e9,
+                                             upb),
+                  warning=conditionMessage)
+    checkTrue(is.character(w) && grepl("chunks of 40 columns", w))
+    ## whose blocks are aligned to the chunks when their boundaries are the
+    ## ones of the subset: consecutive columns from the start of a chunk,
+    ## also after operations on each value, or transposing it, while rows
+    ## that are not consecutive leave the alignment of the columns
+    checkIdentical(GSVA:::.align_to_chunks(100L, H[, 1:2000], 2L), 80L)
+    checkIdentical(GSVA:::.align_to_chunks(100L, H[, 41:2000], 2L), 80L)
+    checkIdentical(GSVA:::.align_to_chunks(100L, H[, 2:2000], 2L), 100L)
+    checkIdentical(GSVA:::.align_to_chunks(100L, H[, c(1:40, 81:200)], 2L),
+                   100L)
+    checkIdentical(GSVA:::.align_to_chunks(100L, log1p(H)[, 1:2000], 2L), 80L)
+    checkIdentical(GSVA:::.align_to_chunks(100L, t(H)[1:2000, ], 1L), 80L)
+    checkIdentical(GSVA:::.align_to_chunks(100L, H[c(3, 1, 2), 1:2000], 2L),
+                   80L)
+    checkIdentical(GSVA:::.align_to_chunks(50L, H[c(3, 1, 2), ], 1L), 50L)
+    checkTrue(is.na(GSVA:::.ondisk_chunkdim(H[, 2:2000], aligned=TRUE)[2]))
+    ## the number of blocks of a subset is balanced in whole chunks, see
+    ## .balance_blocks(): the 1960 columns, 49 chunks, in blocks of 2 chunks
+    ## take three rounds of 10 workers, while blocks of 1 chunk take five
+    ## rounds, five sixths of their time, and blocks of 20 chunks take two
+    ## rounds of 2 workers, which blocks of 13 chunks also take, while blocks
+    ## of 5 chunks would take five rounds to save only 1/26 of their time
+    checkIdentical(GSVA:::.balance_blocks(80L, H[, 41:2000], 2L, 10L), 40L)
+    checkIdentical(GSVA:::.balance_blocks(800L, H[, 41:2000], 2L, 2L), 520L)
 }
 
 ## the number of rows or columns of a block is the one that fits in the memory
@@ -98,10 +193,41 @@ test_units_per_block <- function() {
     checkIdentical(upb(1, maxmem), 50L)
     ## shared by two workers
     checkIdentical(upb(2, maxmem), 25L)
-    ## which take, with more than one worker, the memory of their R processes
+    ## which take, with the main R process, the memory of their R processes
     wm <- 1e6
-    checkIdentical(GSVA:::.units_per_block(X, 2L, 2, maxmem / frac + 2 * wm,
+    checkIdentical(GSVA:::.units_per_block(X, 2L, 2, maxmem / frac + 3 * wm,
                                            workermem=wm), 25L)
+    checkIdentical(GSVA:::.units_per_block(X, 2L, 1, maxmem / frac + wm,
+                                           workermem=wm), 50L)
+    ## which, by default, is the memory of this process besides the data of
+    ## the calculations, see .worker_mem(), and forked workers take a copy of
+    ## one third of sparse data, unless they are stored in a dgCMatrix object
+    oldopt <- options(GSVA.workermem=NULL)
+    on.exit(options(oldopt), add=TRUE)
+    extra <- GSVA:::.proc_extra_mem()
+    checkEqualsNumeric(GSVA:::.worker_mem(Inf), extra)
+    checkTrue(GSVA:::.worker_mem() > GSVA:::.worker_mem(insize))
+    checkEqualsNumeric(GSVA:::.worker_mem(session=FALSE),
+                       0.6 * 1024^3 + extra)
+    checkTrue(GSVA:::.worker_mem(full=TRUE) <= GSVA:::.worker_mem())
+    ## measured with a full collection of garbage only for large data
+    checkTrue(!GSVA:::.large_data(dim(X)))
+    checkTrue(GSVA:::.large_data(c(1e4, 1e6), 4))
+    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, sparse=TRUE), 1e6)
+    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, sparse=TRUE, dgc=TRUE), 0)
+    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, sparse=FALSE), 0)
+    ## the data shared with forked workers are the matrices of the assays of
+    ## the input data, not the rest of its data, such as the names of cells
+    se <- SummarizedExperiment::SummarizedExperiment(
+              assays=list(counts=X, logcounts=DelayedArray(X)),
+              colData=S4Vectors::DataFrame(barcode=sprintf("cell%04d", 1:500)))
+    checkEqualsNumeric(GSVA:::.container_shared_mem(se, "counts"), insize)
+    checkTrue(GSVA:::.container_held_mem(se, "counts") > insize)
+    ## up to the small changes of the memory of this process between calls
+    wm <- GSVA:::.worker_mem(insize)
+    upbdef <- GSVA:::.units_per_block(X, 2L, 2, maxmem / frac + 3 * wm)
+    checkTrue(upbdef >= 24L && upbdef <= 26L)
+    options(oldopt)
     ## unless they leave no memory for the blocks, which are then as large as
     ## without them
     checkIdentical(GSVA:::.units_per_block(X, 2L, 2, maxmem / frac,
@@ -339,4 +465,206 @@ test_blockprocessing_dopar_workers <- function() {
                              x11=X[91, 1], BPREDO=res, BPPARAM=bpparam)
     checkTrue(all(bpok(res)))
     checkEqualsNumeric(X * 2, do.call("rbind", res))
+}
+
+## with more than one worker, the number of blocks is a multiple of the number
+## of workers, so that no worker is idle in the last round of blocks, by
+## narrowing the blocks while keeping their number of rounds, and blocks of
+## data stored in chunks keep taking whole chunks
+test_balanced_blocks <- function() {
+
+    message("Running unit tests for blocks balanced among the workers")
+
+    suppressPackageStartupMessages({
+        library(DelayedArray)
+        library(HDF5Array)
+    })
+
+    X <- matrix(0, nrow=2, ncol=1000000)
+    bb <- function(n, nworkers) GSVA:::.balance_blocks(n, X, 2L, nworkers)
+    ## blocks of the scores of 1,000,000 cells with 10 workers, which were 11,
+    ## 23 and 55, in 2, 3 and 6 rounds, become 20, 30 and 60
+    for (x in list(c(93982, 50000, 20), c(43546, 33334, 30),
+                   c(18328, 16667, 60))) {
+        w <- bb(as.integer(x[1]), 10L)
+        checkIdentical(w, as.integer(x[2]))
+        checkEqualsNumeric(ceiling(ncol(X) / w), x[3])
+    }
+    ## blocks already balanced, a single worker or a single block, unchanged
+    checkIdentical(bb(100000L, 10L), 100000L)
+    checkIdentical(bb(93982L, 1L), 93982L)
+    checkIdentical(bb(1000000L, 10L), 1000000L)
+    ## blocks that do not split evenly: 3000 columns in 120 blocks of 25 with
+    ## 7 workers, 18 rounds, become 125 blocks of 24, still 18 rounds
+    X <- matrix(0, nrow=2, ncol=3000)
+    checkIdentical(bb(25L, 7L), 24L)
+
+    ## through the grids of columns and rows: with an automatic block size of
+    ## 100 columns of doubles, 3 workers take blocks of 33 columns or rows,
+    ## 34 blocks, which become 36 blocks of 31
+    oldautoblocksize <- getAutoBlockSize()
+    on.exit(setAutoBlockSize(oldautoblocksize))
+    setAutoBlockSize(8 * 1100 * 100)
+    X <- matrix(0, nrow=1100, ncol=1100)
+    checkIdentical(length(GSVA:::.colgridsize(X, 3L)), 36L)
+    checkIdentical(length(GSVA:::.rowgridsize(X, 3L)), 36L)
+    checkIdentical(ncol(GSVA:::.colgridsize(X, 3L)[[1L]]), 31L)
+    setAutoBlockSize(oldautoblocksize)
+
+    ## data in chunks of 31 columns, 3000 columns in 97 chunks: blocks of 6
+    ## chunks with 10 workers, 17 blocks in 2 rounds, become 20 blocks of 5
+    ## chunks, while blocks of 4 chunks with 3 workers, 25 blocks in 9 rounds,
+    ## are kept, because narrower blocks of whole chunks would save less than
+    ## a tenth of their time, e.g., 33 blocks of 3 chunks in 11 rounds
+    H <- writeHDF5Array(matrix(0, nrow=2, ncol=3000), chunkdim=c(2L, 31L))
+    checkIdentical(GSVA:::.balance_blocks(186L, H, 2L, 10L), 155L)
+    checkIdentical(length(colAutoGrid(H, ncol=155L)), 20L)
+    checkIdentical(GSVA:::.balance_blocks(124L, H, 2L, 3L), 124L)
+    ## 3000 columns in 30 chunks of 100 columns: blocks of 2 chunks, 15 blocks
+    ## in 2 rounds of 10 workers, become 30 blocks of 1 chunk in 3 rounds,
+    ## which take three quarters of their time
+    H <- writeHDF5Array(matrix(0, nrow=2, ncol=3000), chunkdim=c(2L, 100L))
+    checkIdentical(GSVA:::.balance_blocks(200L, H, 2L, 10L), 100L)
+}
+
+## the statistics of the rows of data stored in chunks wider than the blocks
+## of columns that fit in memory are calculated through blocks of whole chunks
+## read in bands of rows of the same size as the narrower blocks, rounded down
+## to whole chunks, giving the same statistics as through blocks of columns
+test_rowband_blocks <- function() {
+
+    message("Running unit tests for row statistics in bands of rows")
+
+    suppressPackageStartupMessages({
+        library(Matrix)
+        library(DelayedArray)
+        library(HDF5Array)
+        library(BiocParallel)
+    })
+
+    set.seed(123)
+    m <- matrix(rpois(600 * 400, 0.5) * 1.5, nrow=600, ncol=400)
+    m[sample(length(m), 50)] <- NA
+    H <- writeHDF5Array(m, chunkdim=c(37L, 150L))
+    Hs <- HDF5Array(path(H), name=seed(H)@name, as.sparse=TRUE)
+
+    ## blocks of 20 columns take as many values as bands of 80 rows of chunks
+    ## of 150 columns, rounded down to 74 rows, two chunks of 37 rows, while
+    ## blocks of whole chunks, data not stored in chunks and blocks whose
+    ## boundaries are not the ones of the chunks are not processed in bands.
+    ## bands lower than a chunk, e.g., of 4 rows with blocks of 1 column, are
+    ## not rounded, to stay within the memory of the narrower blocks
+    checkIdentical(GSVA:::.rowband_height(H, 20L), 74L)
+    checkIdentical(GSVA:::.rowband_height(H, 1L), 4L)
+    checkIdentical(GSVA:::.rowband_height(H[, 151:400], 20L), 74L)
+    checkIdentical(GSVA:::.rowband_height(H[sort(sample(600, 450)), ], 20L),
+                   37L)
+    checkTrue(is.null(GSVA:::.rowband_height(H, 150L)))
+    checkTrue(is.null(GSVA:::.rowband_height(m, 20L)))
+    checkTrue(is.null(GSVA:::.rowband_height(H[, 2:400], 20L)))
+
+    ## with an automatic block size of 20 columns of doubles, blocks take
+    ## whole chunks in bands of 74 rows, or of 37 rows with two workers
+    oldautoblocksize <- getAutoBlockSize()
+    on.exit(setAutoBlockSize(oldautoblocksize))
+    setAutoBlockSize(8 * 600 * 20)
+    g <- GSVA:::.colgridsize(H, 1L, rowbands=TRUE)
+    checkIdentical(ncol(g[[1L]]), 150L)
+    checkIdentical(attr(g, "nrowband"), 74L)
+    checkIdentical(attr(GSVA:::.colgridsize(H, 2L, rowbands=TRUE),
+                        "nrowband"), 37L)
+    checkTrue(is.null(attr(GSVA:::.colgridsize(H, 1L), "nrowband")))
+    checkIdentical(ncol(GSVA:::.colgridsize(H, 1L)[[1L]]), 20L)
+
+    ## giving the same statistics as in main memory
+    ref <- GSVA:::.rowStats_block(m, logsums=TRUE)
+    refs <- GSVA:::.rowStats_block(as(m, "CsparseMatrix"), logsums=TRUE)
+    rows <- sort(sample(600, 450))
+    bps <- list(NULL)
+    if (.Platform$OS.type == "unix")
+        bps <- c(bps, list(MulticoreParam(workers=2)))
+    for (bp in bps) {
+        st <- GSVA:::.rowStats(H, logsums=TRUE, verbose=FALSE, BPPARAM=bp)
+        checkEquals(unname(st), unname(ref))
+        st <- GSVA:::.rowStats(Hs, logsums=TRUE, verbose=FALSE, BPPARAM=bp)
+        checkEquals(unname(st), unname(refs))
+        st <- GSVA:::.rowStats(H[rows, ], logsums=TRUE, verbose=FALSE,
+                               BPPARAM=bp)
+        checkEquals(unname(st), unname(ref[rows, ]))
+    }
+}
+
+test_ondisk_mem_factors <- function() {
+    ## a sparse matrix with a quarter of nonzero values, in every chunk and in
+    ## every column, sampled through its chunks or, without them, through
+    ## blocks of columns
+    x <- matrix(0, nrow=40, ncol=400)
+    x[seq(1L, length(x), by=4L)] <- 1
+    H <- writeHDF5Array(x, chunkdim=c(10L, 50L), as.sparse=TRUE)
+    checkEqualsNumeric(GSVA:::.sample_nonzero_fraction(H), 1/4)
+    checkEqualsNumeric(GSVA:::.sample_nonzero_fraction(DelayedArray(as(x, "dgCMatrix")),
+                                                       maxvalues=400), 1/4)
+
+    ## the number of nonzero values of sparse HDF5 files and sparse matrices
+    ## in main memory bound together, as gsvaReduce() binds the outputs of
+    ## gsvaMap(), is read from them, also after setting dimension names, but
+    ## not after subsetting them or operating on their values, nor from other
+    ## seeds, such as an HDF5 dataset storing zeros
+    T1 <- writeTENxMatrix(as(x[, 1:150], "dgCMatrix"))
+    T2 <- writeTENxMatrix(as(x[, 151:400], "dgCMatrix"))
+    B <- cbind(T1, T2, DelayedArray(as(x[, 1:10], "dgCMatrix")))
+    dimnames(B) <- list(paste0("g", 1:40), paste0("s", 1:410))
+    checkEqualsNumeric(GSVA:::.seeds_nzcount(B), 4100)
+    checkEqualsNumeric(GSVA:::.seeds_nzcount(rbind(T1, T1)), 3000)
+    checkTrue(is.na(GSVA:::.seeds_nzcount(B[, 1:10])))
+    checkTrue(is.na(GSVA:::.seeds_nzcount(2 * B)))
+    checkTrue(is.na(GSVA:::.seeds_nzcount(cbind(T1, H))))
+    checkEqualsNumeric(GSVA:::.estimate_nzcount(B, NA, FALSE), 4100)
+
+    ## the factors of ranking columns relative to the sparse size of blocks
+    ## read from disk are scaled by the ratio of that size to their dense
+    ## size, 3/8 with doubles, value and row index, and 1/2 with integers,
+    ## unlike the ones of dense or in-memory data, of steps without such
+    ## factors or without a fraction of nonzero values
+    mf <- GSVA:::.ondisk_mem_factors(GSVA:::.step_mem_factors("colranks", H),
+                                     H, 1/4)
+    checkEqualsNumeric(mf$workfactor, 14.3 * 3/8)
+    checkEqualsNumeric(mf$outfactor, 0.7 * 3/8)
+    xi <- x
+    storage.mode(xi) <- "integer"
+    Hi <- writeHDF5Array(xi, chunkdim=c(10L, 50L), as.sparse=TRUE)
+    mf <- GSVA:::.ondisk_mem_factors(GSVA:::.step_mem_factors("scores", Hi,
+                                                              ngs=10), Hi, 1/4)
+    checkEqualsNumeric(mf$workfactor, 2.5 * 1/2)
+    checkEqualsNumeric(mf$outextra, 80)
+    mf <- GSVA:::.step_mem_factors("colranks", H)
+    checkIdentical(GSVA:::.ondisk_mem_factors(mf, H)$workfactor, 7)
+    D <- writeHDF5Array(x, chunkdim=c(10L, 50L))
+    mf <- GSVA:::.step_mem_factors("colranks", D)
+    checkIdentical(GSVA:::.ondisk_mem_factors(mf, D, 1/4)$workfactor, 2)
+    S <- as(x, "dgCMatrix")
+    mf <- GSVA:::.step_mem_factors("colranks", S)
+    checkIdentical(GSVA:::.ondisk_mem_factors(mf, S, 1/4)$workfactor, 7)
+    mf <- GSVA:::.step_mem_factors("rowstats", H)
+    checkIdentical(GSVA:::.ondisk_mem_factors(mf, H, 1/4)$workfactor, 2)
+
+    ## the memory required by ranking sparse data read from disk takes the
+    ## blocks by their sparse size, from the ratio of the size of the input to
+    ## its dense size, unless that ratio is NA, and the one of the scores,
+    ## when written to disk, does not take their memory
+    dims <- c(1000, 10000)
+    dense <- prod(dims) * 8
+    need <- function(...)
+        GSVA:::.step_mem_need(dims, 3/8 * dense, 2L, 8, TRUE, FALSE, ...,
+                              nworkers=0, heldmem=0, permem=0)
+    mf <- GSVA:::.step_mem_factors("colranks", sparse=TRUE, int=FALSE)
+    blk <- GSVA:::.step_data_mem(dims, 2L, 3/8 * dense, 8, TRUE, FALSE,
+                                 GSVA:::.sparse_disk_factors(mf, 3/8),
+                                 heldmem=0)
+    checkEqualsNumeric(need(mf), GSVA:::.disk_read_mem() +
+                                 blk / GSVA:::.mem_fraction_R)
+    checkTrue(need(mf) < need(mf, sparseratio=NA))
+    mf <- GSVA:::.step_mem_factors("scores", sparse=TRUE, int=TRUE, ngs=100)
+    checkEqualsNumeric(need(mf) - need(mf, sinkout=TRUE),
+                       2 * 8 * 100 * dims[2] / GSVA:::.mem_fraction_R)
 }

@@ -55,7 +55,9 @@
 #' which allows the `MAPREDO` argument to find them. For this reason,
 #' `gsvaMap()` gives an error when that directory already has results of a
 #' previous call with the same `FUN`, `inputData` and `output` arguments,
-#' unless `MAPREDO` is given.
+#' unless `MAPREDO` is given. With `FUN=gsvaRowNorm` and `rowNorm="clr"`,
+#' `gsvaMap()` returns an object instead of saving it, see the 'Value'
+#' section.
 #'
 #' @param MAPREDO In `gsvaMap()`, the output of a previous call to `gsvaMap()`
 #' with the same `FUN` and `inputData` arguments, in which some of the chunks
@@ -76,6 +78,24 @@
 #' names and GSVA parameters, but not by its values. Default: `NULL`, which
 #' computes all chunks.
 #'
+#' @param device In `gsvaMap()` with `FUN=gsvaColScores`, the device on which
+#' each job calculates the scores, given to the `device` argument of
+#' [`gsvaColScores`]: either "cpu" (default) or "gpu". Unlike in
+#' [`gsvaColScores`], the device is not selected automatically, because the
+#' jobs of a workload manager, such as Slurm, must request a GPU in advance,
+#' e.g., with the `gres` argument of `gsvaBatchtoolsSlurmParam()`, and
+#' `gsvaMap()` gives a warning when `device="gpu"` and the jobs of Slurm do
+#' not request it with that argument, which the template of the job scripts
+#' or the partition may still do. A job that cannot use a GPU gives an error,
+#' and its chunk can be resubmitted with the `MAPREDO` argument. The GPU
+#' calculates the scores without the parallel workers of each job, so that
+#' one CPU core per job suffices for this step. The jobs of the `"socket"`
+#' cluster of `BTPARAM`, which run on the machine where `gsvaMap()` is
+#' called, share its GPU. The jobs of the `"multicore"` cluster of `BTPARAM`,
+#' which is the default one on Unix-like systems, are processes forked from
+#' the R session, which cannot use the GPU, and `device="gpu"` gives an error
+#' with them. This argument is ignored with the other values of `FUN`.
+#'
 #' @param mapOutput In `gsvaReduce()`, the output of `gsvaMap()`, which can be
 #' a list of objects or a list of paths to GSVA output saved with
 #' [`saveHDF5GSVA`] or [`saveParquetGSVA`], such as the one returned by
@@ -90,10 +110,11 @@
 #' run at the start of each job, and a configuration file for the package
 #' [batchtools](https://cran.r-project.org/package=batchtools),
 #' `gsvabatchtools.conf.R`, which makes `gsvaMap()` check the state of the
-#' jobs at most every 30 seconds, instead of up to every two minutes, to notice
-#' sooner jobs killed by the workload manager. This file also loads the
-#' batchtools configuration file of the user, if any, whose settings,
-#' including the interval between checks, take precedence. Default:
+#' jobs at most every 10 seconds, instead of up to every two minutes, to notice
+#' sooner the end of the jobs, including those killed by the workload
+#' manager. This file also loads the batchtools configuration file of the
+#' user, if any, whose settings, including the interval between checks, take
+#' precedence. Default:
 #' "GSVAOUTPUT" in the current working directory.
 #'
 #' @param partition In `gsvaBatchtoolsSlurmParam()`, name of the Slurm partition
@@ -131,11 +152,12 @@
 #' each independent task executed within a compute node, which GSVA uses as its
 #' maximum main memory, see the `maxmem` argument of [`gsva()`][gsva]. Each
 #' task runs one R process and, with more than one CPU core per task, as many
-#' parallel workers, and each of these R processes takes about 0.8 GB by
-#' itself for loading GSVA and the packages it depends on, so that `mem`
-#' should be at least `(1 + ncpus_per_task)` times 0.8 GB, plus the memory
-#' needed by the calculations on each chunk of data. `gsvaBatchtoolsSlurmParam()`
-#' gives a warning when `mem` is smaller than the former, while `gsvaMap()`,
+#' parallel workers, and each of these R processes takes about 0.9 GB
+#' (1.05 GB on macOS) by itself for loading GSVA and the packages it depends
+#' on, so that `mem` should be at least `(1 + ncpus_per_task)` times 0.9 GB,
+#' plus the memory needed by the calculations on each chunk of data.
+#' `gsvaBatchtoolsSlurmParam()` gives a warning when `mem` is smaller than
+#' the former, while `gsvaMap()`,
 #' before submitting any job, gives an error in that case, because such jobs
 #' would be killed by the workload manager, and a warning when `mem` is smaller
 #' than the memory it estimates that the calculations on each chunk of data
@@ -150,6 +172,17 @@
 #' next tasks from processing their chunks. At most `nodes` tasks run at the
 #' same time. Default: `FALSE`.
 #'
+#' @param gres In `gsvaBatchtoolsSlurmParam()`, either `NULL` or a character
+#' string with the generic resources that each job requests from Slurm, as in
+#' the `--gres` option of the Slurm command `sbatch`, e.g., `"gpu:1"` for one
+#' GPU, or `"gpu:a100:1"` for one GPU of a given type, for `gsvaMap()` with
+#' `FUN=gsvaColScores` and `device="gpu"`, which uses one GPU per job, so
+#' that further GPUs of a job would be idle. The jobs of the other steps,
+#' which do not use the GPU, should not request it, and `gsvaMap()` says so
+#' when they do; e.g., a separate `BatchtoolsParam` object, with this argument
+#' and `ncpus_per_task=1`, can be created for the scores. When `NULL`, no
+#' generic resources are requested. Default: `NULL`.
+#'
 #' @param template In `gsvaBatchtoolsSlurmParam()`, path to the template of
 #' the Slurm job scripts, see [batchtools::makeClusterFunctionsSlurm()].
 #' By default, the template provided by GSVA, which requests `mem` for the
@@ -163,8 +196,9 @@
 #' element only when it is given, which is either a number of seconds, as in
 #' the templates of batchtools, or the character string `"UNLIMITED"`, and in
 #' array jobs, at most as many tasks at
-#' the same time as given in the `array.throttle` element, see the template
-#' provided by GSVA. Default:
+#' the same time as given in the `array.throttle` element, and to support the
+#' argument `gres`, the generic resources in the `gres` element only when it is
+#' given, see the template provided by GSVA. Default:
 #' `system.file("templates", "slurm-gsva.tmpl", package="GSVA")`.
 #'
 #' @param BTPARAM In `gsvaMap()`, an object of class
@@ -195,7 +229,21 @@
 #' When results are saved to disk, chunks of jobs that did not deliver any
 #' result, such as jobs killed by the workload manager, are also reported as
 #' failed, unless no chunk was completed, in which case `gsvaMap()` gives an
-#' error. The `gsvaReduce()` function returns a single
+#' error. When the results are chunks of rows of a `SummarizedExperiment`
+#' object, as with `FUN=gsvaRowNorm`, only the first chunk stores the column
+#' data of the input, which the other chunks share in the result of
+#' `gsvaReduce()`. With `FUN=gsvaRowNorm` and a `gsvaParam` object with
+#' `rowNorm="clr"`, the jobs only calculate, by chunks of columns, the
+#' geometric mean of each row across all columns, and `gsvaMap()` returns a
+#' list with a single object, whatever the value of `output`, in which the
+#' division of each row by its geometric mean is a delayed operation on the
+#' input data, as `gsvaRowNorm()` does on data stored on disk. This object
+#' stores no values of its own, and reads them from the input data, which must
+#' remain in place, when the next step, e.g., `gsvaMap()` with
+#' `FUN=gsvaColRanks`, processes it by chunks of columns. If the calculation
+#' of the geometric means fails in some chunk, `gsvaMap()` gives an error,
+#' and `MAPREDO` has no effect on its result, which has no failed chunks.
+#' The `gsvaReduce()` function returns a single
 #' object that combines the results from all compute nodes. The
 #' `gsvaBatchtoolsSlurmParam()` function returns a `BatchtoolsParam` object with
 #' some sensible defaults for running GSVA calculations on a SLURM cluster.
@@ -225,7 +273,7 @@
 #' ## how to distribute them across multiple compute nodes in a
 #' ## high-performance computing (HPC) environment
 #' library(BiocParallel)
-#' btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="1G"))
+#' btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="2G"))
 #'
 #' ## calculate row-normalized expression values
 #' gsvarnorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, BTPARAM=btpar))
@@ -272,9 +320,10 @@
 gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
                     verbose=TRUE,
                     BTPARAM=BatchtoolsParam(workers=2, progressbar=verbose),
-                    MAPREDO=NULL) {
+                    MAPREDO=NULL, device=c("cpu", "gpu")) {
 
     FUN <- match.fun(FUN)
+    device <- match.arg(device)
     .check_FUN_inputData(FUN, inputData)
     funname <- .map_fun_name(FUN)
 
@@ -313,6 +362,20 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
             output <- mapinfo$output
     } else
         output <- match.arg(output)
+    ## the CLR divides each row by its geometric mean across all columns,
+    ## which jobs calculate by chunks of columns, and the division is a
+    ## delayed operation on the input data, which nothing writes, see
+    ## .map_rownorm_clr(), so its result is a single object in any case
+    clr <- identical(FUN, gsvaRowNorm) && .get_rowNorm(inputData) == "clr"
+    if (clr && output != "object") {
+        if (verbose || !missing(output))
+            cli_alert_info(paste("With rowNorm=\"clr\", {.fn gsvaMap}",
+                                 "returns an object whose division of each",
+                                 "row by its geometric mean is delayed,",
+                                 "instead of saving it with",
+                                 "output=\"{output}\"."))
+        output <- "object"
+    }
     if (!is.null(mapinfo) && output != mapinfo$output)
         cli_abort(c("x"=paste("{.arg MAPREDO} was produced with",
                               "output=\"{mapinfo$output}\", which differs",
@@ -343,8 +406,16 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         funargs <- c(funargs, list(param=inputData,
                                    dropExistingAssays=TRUE,
                                    errorOnTooFewRows=FALSE))
-        gridsizefun <- .rowgridsize
-        splitinrangesfun <- .splitRowsInRanges
+        if (!clr) {
+            gridsizefun <- .rowgridsize
+            splitinrangesfun <- .splitRowsInRanges
+        } else
+            ## the jobs calculating the statistics of the rows for the CLR
+            ## take whole chunks of the input data on disk, instead of
+            ## narrower chunks of columns, which would be read and
+            ## decompressed by several jobs, and process them in bands of
+            ## rows that fit in their memory, see .rowStats()
+            gridsizefun <- function(...) .colgridsize(..., rowbands=TRUE)
         assay <- get_assay(inputData)
 
     } else if (identical(FUN, gsvaColRanks)) {
@@ -367,27 +438,37 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
             funargs <- c(funargs, list(rankExprData=inputData))
         } else
             funargs <- c(funargs, list(recompute_nzcount=TRUE))
+
         assay <- "gsvaranks"
+        funargs <- c(funargs, list(device=.map_device(device, BTPARAM)))
 
     } else
         cli_abort(c("x"="Internal error, invalid FUN argument."))
+    .check_map_gres(identical(FUN, gsvaColScores) && device == "gpu",
+                    BTPARAM, verbose)
 
     X <- inputData
-    chunks <- NULL
+    chunks <- density <- Xd <- nrowband <- NULL
     if (!is.list(X)) {
         if (is.null(mapinfo)) {
             ## each job has its own memory 'maxmem', not shared with the
             ## other jobs, and its chunk takes the memory of the selected
             ## step, see .map_step_factors(), besides the memory of the rest
-            ## of the input data that each job receives, see .check_map_mem()
+            ## of the input data that each job receives, see .check_map_mem();
+            ## sparse data read from disk take it by their sparse size, see
+            ## .ondisk_mem_factors()
             Xd <- unwrapData(get_exprData(inputData), assay)
-            mf <- .map_step_factors(funname, inputData, Xd)
+            density <- .map_density(inputData, assay, Xd)
+            mf <- .ondisk_mem_factors(.map_step_factors(funname, inputData,
+                                                        Xd),
+                                      Xd, density)
             container <- .map_container_mem(inputData, assay)
             grid <- gridsizefun(Xd, nworkers, maxmem, mf$workfactor,
                                 mf$outfactor, mf$outextra, workermem=0,
                                 dense=mf$densify,
                                 heldmem=max(0, container - .inmem_size(Xd)),
                                 sharedmem=FALSE)
+            nrowband <- attr(grid, "nrowband")
             X <- splitinrangesfun(grid)
             chunks <- data.frame(first=vapply(X, start, integer(1)),
                                  last=vapply(X, end, integer(1)))
@@ -409,12 +490,22 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
                               "same {.arg inputData}.")))
 
     ## before submitting any job, or writing its manifest, check the memory
-    ## that each job requires
+    ## that each job requires, with the matrix and the density used to size
+    ## the chunks, if any, which take time to obtain from data stored on disk
     chunkwidth <- if (is.null(chunks)) NA_real_ else
                       max(chunks$last - chunks$first + 1)
-    .check_map_mem(funname, inputData, assay,
-                   whdim=if (funname == "gsvaRowNorm") 1L else 2L,
-                   chunkwidth=chunkwidth, ncpus=ncpus, maxmem=maxmem)
+    ## jobs taking whole chunks in bands of rows, see above, take the memory
+    ## of a band, which holds as many values as the narrower chunks of
+    ## columns that fit in the memory of each job
+    if (!is.null(nrowband))
+        chunkwidth <- ceiling(nrowband * chunkwidth / nrow(Xd))
+    ## the CLR has no failed chunks to resubmit, see below, and its result
+    ## records a single chunk of all columns, which no job processes
+    if (!(clr && !is.null(mapinfo)))
+        .check_map_mem(funname, inputData, assay,
+                       whdim=if (funname == "gsvaRowNorm" && !clr) 1L else 2L,
+                       chunkwidth=chunkwidth, ncpus=ncpus, maxmem=maxmem,
+                       density=density, X=Xd)
 
     ## results saved to disk get file names that depend only on the input
     ## and the chunk boundaries, and a manifest that allows MAPREDO to find
@@ -473,6 +564,14 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         regdir <- .free_registry_dir(BTPARAM, verbose)
         if (!is.null(regdir))
             on.exit(BTPARAM$registryargs$file.dir <- regdir, add=TRUE)
+    }
+
+    if (clr) {
+        res <- list(.map_rownorm_clr(inputData, X, BTPARAM, ncpus, maxmem,
+                                     verbose))
+        mapinfo$chunks <- data.frame(first=1L, last=totalInputDim[2])
+        attributes(res) <- list(totalInputDim=totalInputDim, mapInfo=mapinfo)
+        return(res)
     }
 
     res[idx] <- .map_chunks(X[idx], BTPARAM,
@@ -563,12 +662,20 @@ gsvaReduce <- function(mapOutput, verbose=TRUE) {
 
     bfun <- "rbind"
     if (rmdata[[1]]$whdim == 2)
-        bfun <- "cbind"
+        bfun <- .cbind_chunks_fun(mapOutput[[1]])
+    else
+        mapOutput <- .share_col_data(mapOutput, ord[1])
     res <- do.call(bfun, mapOutput[ord])
     res <- .add_metadata(res, param, nrmdata)
 
+    ## the rows removed by the normalization of rows, 'rem', are those of
+    ## each chunk of rows, while chunks of columns, such as the single one of
+    ## the CLR, see .map_rownorm_clr(), keep all columns
+    whdim <- rmdata[[1]]$whdim
     rem <- vapply(rmdata, function(x) x$rem, numeric(1))
-    if (dim(res)[rmdata[[1]]$whdim]+sum(rem) != totalInputDim[rmdata[[1]]$whdim])
+    if (whdim == 2)
+        rem <- 0
+    if (dim(res)[whdim] + sum(rem) != totalInputDim[whdim])
         cli_abort(c("x"=paste("The combined output object does not match the",
                               "expected dimensions of the input data.")))
 
@@ -584,7 +691,8 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
                                      mem="10G", arrayjobs=FALSE,
                                      template=system.file("templates",
                                                           "slurm-gsva.tmpl",
-                                                          package="GSVA")) { # nocov start
+                                                          package="GSVA"),
+                                     gres=NULL) { # nocov start
 
     if (dir.exists(dir))
         cli_alert_warning("The directory {dir} already exists.")
@@ -606,13 +714,20 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
         cli_abort(c("x"=paste("'template' must be the path to an existing",
                               "template file of Slurm job scripts.")))
 
+    if (!is.null(gres) && !.isCharLength1(gres))
+        cli_abort(c("x"=paste("'gres' must be either NULL or a character",
+                              "string with the generic resources of each",
+                              "job, e.g., \"gpu:1\".")))
+
     .check_job_mem(ncpus_per_task, .memtext2bytes(mem))
 
     ## automatically created HDF5 datasets should be stored in a filesystem
     ## path that is reachable by all compute nodes, instead of the default
     ## tempdir() path, which is local to each compute node. this also means
     ## that, at least by now, the user must manually delete those HDF5 files
-    ## after the GSVA calculations are finished
+    ## after the GSVA calculations are finished. jobs saving their results to
+    ## files, with gsvaMap(output="HDF5") or "Parquet", create them instead in
+    ## a directory of their own, see MAP_FUN_WRAPPER()
     con <- file(file.path(dir, "gsvainit.R"))
     hdf5_dump_dir <- file.path(dir, "HDF5Array_dump")
     writeLines(c("library(HDF5Array)",
@@ -628,6 +743,8 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     resources <- list(ncpus=ncpus_per_task, partition=partition, memory=mem)
     if (!is.null(walltime))
         resources$walltime <- walltime
+    if (!is.null(gres))
+        resources$gres <- gres
     ## each of the 'nodes' jobs of BiocParallel is an array job whose tasks
     ## run one at a time, so that at most 'nodes' tasks run at the same time
     if (arrayjobs)
@@ -648,8 +765,9 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
 ## minutes, and considers that a job without results has ended only after not
 ## finding it in the queue in more than three consecutive checks, which can
 ## delay by several minutes noticing the end of jobs killed by the workload
-## manager. write in 'dir' a batchtools configuration file that caps that
-## interval to 30 seconds, after loading the batchtools configuration file of
+## manager, and by up to the interval the end of the other jobs, i.e., of each
+## step of GSVA. write in 'dir' a batchtools configuration file that caps that
+## interval to 10 seconds, after loading the batchtools configuration file of
 ## the user, if any, which batchtools does not load anymore when a registry is
 ## given a configuration file, and keeping the interval set in it, if any. its
 ## name differs from 'batchtools.conf.R' because findConfFile() would find it
@@ -662,7 +780,7 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
                  "    sys.source(.userconf, envir=environment(), keep.source=FALSE)",
                  "rm(.userconf)",
                  "if (!exists(\"sleep\", inherits=FALSE))",
-                 "    sleep <- function(i) min(5 + 2 * i, 30)"),
+                 "    sleep <- function(i) min(5 + 2 * i, 10)"),
                conffile)
 
     conffile
@@ -728,9 +846,69 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     as.integer(ncpus)
 }
 
+## parallel back-end of the R process of each job of gsvaMap() using 'ncpus'
+## CPU cores, see MAP_FUN_WRAPPER()
+.map_job_backend <- function(ncpus) {
+    if (ncpus <= 1)
+        return(SerialParam())
+
+    if (.Platform$OS.type == "unix")
+        return(MulticoreParam(workers=as.integer(ncpus)))
+
+    SnowParam(workers=as.integer(ncpus))
+}
+
+## device of the jobs of gsvaMap() calculating the GSVA scores, from its
+## argument 'device' and the cluster of BTPARAM. the jobs of the "multicore"
+## cluster are processes forked from this R session, which cannot use the GPU
+## once this session has initialized CUDA, see .gsva_cuda_state(), so that
+## device="gpu" gives an error before sending any job; the jobs of the other
+## clusters are new R processes, or this R session with the "interactive"
+## cluster, and a job that cannot use the GPU gives an error, see
+## .check_gpu_device()
+#' @importFrom cli cli_abort
+.map_device <- function(device, BTPARAM) {
+    if (device == "gpu" && BTPARAM$cluster == "multicore")
+        cli_abort(c("x"=paste("{.arg device}=\"gpu\" cannot be used with",
+                              "the \"multicore\" cluster of {.arg BTPARAM},",
+                              "whose jobs are processes forked from this R",
+                              "session, which cannot use the GPU once this",
+                              "session has used it."),
+                    "i"=paste("Use a {.cls BatchtoolsParam} object with",
+                              "another cluster, such as \"socket\" or",
+                              "\"slurm\", or {.arg device}=\"cpu\".")))
+
+    device
+}
+
+## the jobs of gsvaMap() using the GPU, those of FUN=gsvaColScores with
+## device="gpu" ('usegpu'), should request it from Slurm, through the 'gres'
+## element of the resources of BTPARAM, see gsvaBatchtoolsSlurmParam(), which
+## gives a warning when it is missing, although the template of the job
+## scripts or the partition may still request the GPU; the other jobs should
+## not reserve generic resources, such as GPUs, which they do not use
+#' @importFrom cli cli_alert_info cli_warn
+.check_map_gres <- function(usegpu, BTPARAM, verbose) {
+    gres <- BTPARAM$resources$gres
+    if (usegpu && BTPARAM$cluster == "slurm" && is.null(gres))
+        cli_warn(c("!"=paste("The jobs calculate the scores on the GPU",
+                             "with {.arg device}=\"gpu\", but {.arg BTPARAM}",
+                             "does not request it from Slurm."),
+                   "i"=paste("Unless the template of the job scripts or the",
+                             "partition requests it, use the {.arg gres}",
+                             "argument of {.fn gsvaBatchtoolsSlurmParam},",
+                             "e.g., gres=\"gpu:1\".")))
+    else if (!usegpu && !is.null(gres) && verbose)
+        cli_alert_info(paste("The jobs request the generic resources",
+                             "gres=\"{gres}\", but only those calculating",
+                             "the scores with {.arg device}=\"gpu\" use a",
+                             "GPU."))
+}
+
 ## warn, when creating the parameters of jobs with 'ncpus' CPU cores and 'mem'
 ## bytes of memory each, that the R process of a job and its parallel workers
-## may not fit in 'mem', see .worker_mem(), unless the option
+## may not fit in 'mem', see .worker_mem(), where each R process is a new one,
+## unless the option
 ## 'GSVA.check_memory=FALSE' is set
 #' @importFrom cli cli_warn
 #' @importFrom memuse mu
@@ -739,7 +917,7 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
         return(invisible(FALSE))
 
     nworkers <- .map_job_workers(ncpus)
-    need <- (1 + nworkers) * .worker_mem()
+    need <- (1 + nworkers) * .worker_mem(session=FALSE)
     if (need <= mem)
         return(invisible(FALSE))
 
@@ -814,6 +992,112 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     c(mf, densify=densify)
 }
 
+## fraction of nonzero values of the matrix 'X' of the assay 'assay' of the
+## input data 'inputData' of gsvaMap(), counted when 'X' is in main memory or
+## binds seeds that store it, see .seeds_nzcount(), and otherwise estimated,
+## see .estimate_nzcount(), or NA when 'X' is not sparse
+#' @importFrom S4Arrays is_sparse
+#' @importFrom SparseArray nzcount
+.map_density <- function(inputData, assay, X) {
+    if (!is_sparse(X))
+        return(NA_real_)
+    nzc <- if (is(X, "DelayedArray")) .seeds_nzcount(X)
+           else as.numeric(nzcount(X))
+    ## a parameter object records the number of nonzero values of its assay,
+    ## which its constructor may have estimated from a sample of its blocks
+    if (is.na(nzc) && is(inputData, "GsvaMethodParam") &&
+        identical(assay, get_assay(inputData)))
+        nzc <- nzcount(inputData)
+    if (is.na(nzc))
+        nzc <- .estimate_nzcount(get_exprData(inputData), assay, FALSE)
+
+    min(1, nzc / max(1, prod(as.numeric(dim(X)))))
+}
+
+## CLR row normalization of the input data of the parameter object 'param' by
+## gsvaMap(), as gsvaRowNorm() does: the jobs of 'BTPARAM' calculate the
+## statistics of the rows of the chunks of columns in 'X', a list of IRanges
+## objects, see .map_clr_stats(), and the division of each row by its
+## geometric mean is a delayed operation on the input data, as gsvaRowNorm()
+## does on input stored on disk, see .rownorm_clr(), which is realized when
+## the next step, e.g., gsvaMap() with FUN=gsvaColRanks, reads the input data
+## by chunks of columns. the result is a single chunk, of all columns, which
+## stores no values of its own and needs the input data to remain in place
+#' @importFrom DelayedArray DelayedArray
+#' @importFrom cli cli_alert_info
+.map_rownorm_clr <- function(param, X, BTPARAM, ncpus, maxmem, verbose) {
+    clrstats <- .map_clr_stats(param, X, BTPARAM, ncpus, maxmem, verbose)
+
+    exprData <- get_exprData(param)
+    dataMatrix <- unwrapData(exprData, get_assay(param))
+    if (!is(dataMatrix, "DelayedArray"))
+        dataMatrix <- DelayedArray(dataMatrix)
+    keep <- clrstats$keep
+    if (!all(keep))
+        dataMatrix <- dataMatrix[keep, , drop=FALSE]
+    if (verbose)
+        cli_alert_info("Normalizing rows with a delayed division")
+    gsvarnorm <- dataMatrix / clrstats$gmeans
+
+    wrapData(exprData, gsvarnorm, param, "gsvarnorm", first=1,
+             last=ncol(gsvarnorm), rem=sum(!keep), whdim=2,
+             dropAssays=TRUE)
+}
+
+## statistics of the rows of the input data of the parameter object 'param'
+## that the CLR row normalization needs, see .map_rownorm_clr(): the rows kept
+## by the filtering of rows ('keep'), as gsvaRowNorm() does, and the geometric
+## mean of each of them across all columns ('gmeans'). the statistics of the
+## rows of each chunk of columns in 'X', a list of IRanges objects, are
+## calculated by the jobs of 'BTPARAM', which read their chunk once, and
+## accumulated here
+#' @importFrom cli cli_abort cli_alert_info cli_alert_warning
+.map_clr_stats <- function(param, X, BTPARAM, ncpus, maxmem, verbose) {
+    if (verbose)
+        cli_alert_info(paste("Calculating the statistics of the rows in",
+                             "{length(X)} chunk{?s} of columns"))
+    res <- .map_chunks(X, BTPARAM,
+                       list(WRAPPED_FUN=.map_rowstats_chunk, output="object",
+                            ncpus=ncpus, maxmem=maxmem, param=param))
+    failed <- .map_failed(res)
+    if (any(failed)) {
+        firsterr <- conditionMessage(res[[which(failed)[1]]])
+        cli_abort(c("x"=paste("{sum(failed)} out of {length(res)} chunk{?s}",
+                              "failed calculating the statistics of the rows",
+                              "for the CLR."),
+                    "i"="First error: {firsterr}"))
+    }
+    rowstats <- Reduce(.combine_rowstats, res)
+
+    ncolX <- ncol(unwrapData(get_exprData(param), get_assay(param)))
+    keep <- rep(TRUE, nrow(rowstats))
+    if (.get_filterRows(param))
+        keep <- !.filter_rows_mask(rowstats, ncolX, rowNorm="clr",
+                                   verbose=verbose)
+    else if (verbose)
+        cli_alert_warning(paste("Skipping filtering of constant rows",
+                                "(filterRows=FALSE)"))
+    gmeans <- .clr_gmeans(rowstats[keep, , drop=FALSE], ncolX,
+                          sparse=.get_sparse(param), any_na=anyNA(param),
+                          na_use=.get_NAuse(param))
+
+    list(keep=keep, gmeans=gmeans)
+}
+
+## statistics of the rows of the columns 'first' to 'last' of the input data
+## of the parameter object 'param', for a job of gsvaMap(), see
+## .map_clr_stats()
+.map_rowstats_chunk <- function(param, first, last, verbose=FALSE,
+                                BPPARAM=NULL, maxmem=Inf) {
+    X <- unwrapData(get_exprData(param), get_assay(param))
+    X <- X[, seq.int(first, last), drop=FALSE]
+    BPPARAM <- .check_open_parallelism(X, BPPARAM, minparrows=100,
+                                       minparcols=100, verbose)
+
+    .rowStats(X, logsums=TRUE, verbose=verbose, BPPARAM=BPPARAM,
+              maxmem=maxmem)
+}
+
 ## check, before gsvaMap() submits any job, the memory required by the step
 ## 'funname' in each job, on the input data 'inputData', of which each job
 ## processes a chunk of at most 'chunkwidth' rows (whdim=1) or columns
@@ -822,28 +1106,38 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
 ## 'maxmem', because such jobs would be killed by the workload manager, and
 ## otherwise it warns when the memory estimated for the step exceeds 'maxmem',
 ## see .step_mem_need(). for a list input, whose chunks are not loaded to
-## know their size, only the former is checked. it is skipped with the option
+## know their size, only the former is checked. the fraction of nonzero values
+## of sparse input data is given in 'density', or computed when NULL, see
+## .map_density(), and the matrix of the assay 'assay' of 'inputData' is
+## given in 'X', or obtained from 'inputData' when NULL, since gsvaMap() has
+## already obtained both to size the chunks. it is skipped with the option
 ## 'GSVA.check_memory=FALSE'
 #' @importFrom cli cli_abort
 #' @importFrom memuse mu
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
 .check_map_mem <- function(funname, inputData, assay, whdim, chunkwidth, ncpus,
-                           maxmem) {
+                           maxmem, density=NULL, X=NULL) {
     if (!getOption("GSVA.check_memory", TRUE) || !is.finite(maxmem))
         return(invisible(FALSE))
 
     hint <- paste("Consider using fewer CPU cores per job, or more memory per",
                   "job, e.g., with the arguments {.arg ncpus_per_task} and",
                   "{.arg mem} of {.fn gsvaBatchtoolsSlurmParam}.")
-    X <- dims <- NULL
-    if (!is.list(inputData)) {
-        X <- unwrapData(get_exprData(inputData), assay)
+    dims <- NULL
+    if (is.list(inputData))
+        X <- NULL
+    else {
+        if (is.null(X))
+            X <- unwrapData(get_exprData(inputData), assay)
         dims <- dim(X)
         dims[whdim] <- chunkwidth
     }
     nworkers <- .map_job_workers(ncpus, dims)
-    baseline <- (1 + nworkers) * .worker_mem()
+    ## the R process of each job is a new one, which does not take the memory
+    ## of this one, see .worker_mem()
+    permem <- .worker_mem(session=FALSE)
+    baseline <- (1 + nworkers) * permem
     if (baseline > maxmem) {
         bltxt <- as.character(mu(baseline))
         mmtxt <- as.character(mu(maxmem))
@@ -861,11 +1155,8 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     eltbytes <- if (type(X) == "integer") 4 else 8
     insize <- prod(as.numeric(dims)) * eltbytes
     if (sparse) {
-        nzc <- if (is(X, "DelayedArray"))
-                   .estimate_nzcount(get_exprData(inputData), assay, FALSE)
-               else
-                   as.numeric(nzcount(X))
-        density <- min(1, nzc / prod(as.numeric(dim(X))))
+        if (is.null(density))
+            density <- .map_density(inputData, assay, X)
         insize <- density * prod(as.numeric(dims)) * (eltbytes + 4)
     }
     mf <- .map_step_factors(funname, inputData, X)
@@ -878,13 +1169,15 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
                 .mem_fraction_R * maxmem
     held <- .step_held_input(X, dims, whdim, !inmemory, container)
     need <- .step_mem_need(dims, insize, whdim, eltbytes, sparse, inmemory,
-                           mf, nworkers, held, densify=mf$densify)
+                           mf, nworkers, held, densify=mf$densify,
+                           dgc=is(X, "dgCMatrix"), permem=permem)
 
-    .check_mem_need(need, maxmem, nworkers, hint=hint)
+    .check_mem_need(need, maxmem, nworkers, hint=hint, permem=permem)
 }
 
 #' @importFrom BiocParallel SerialParam MulticoreParam SnowParam
 #' @importFrom IRanges IRanges start end
+#' @importFrom HDF5Array getHDF5DumpDir setHDF5DumpDir
 MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     fname <- NULL
     if (is(X, "gsvaMapChunk")) { ## output is saved to the file 'fname'
@@ -896,14 +1189,24 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         if (.valid_map_result(fname, output))
             return(fname)
     }
+    if (output != "object") {
+        ## the HDF5 datasets created by this job, such as those of its
+        ## result, are only read by this job, which saves a copy of its result
+        ## to the file 'fname', see below, so they are created in a directory
+        ## of its own, under tempdir(), usually local to the compute node,
+        ## instead of the one shared by the jobs, see
+        ## gsvaBatchtoolsSlurmParam(), and removed when the job ends
+        olddumpdir <- getHDF5DumpDir()
+        jobdumpdir <- tempfile("HDF5Array_dump")
+        setHDF5DumpDir(jobdumpdir)
+        on.exit({
+            setHDF5DumpDir(olddumpdir)
+            unlink(jobdumpdir, recursive=TRUE)
+        }, add=TRUE)
+    }
     rng <- X
     res <- whdim <- NULL
-    parallelbackend <- SerialParam()
-    if (ncpus > 1) {
-        parallelbackend <- MulticoreParam(workers=ncpus)
-        if (.Platform$OS.type != "unix")
-            parallelbackend <- SnowParam(workers=ncpus)
-    }
+    parallelbackend <- .map_job_backend(ncpus)
 
     if (is(X, "IRanges")) { ## input is splitted in chunks
         res <- WRAPPED_FUN(..., first=start(rng), last=end(rng),
@@ -940,12 +1243,13 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
                                            rem=rem,
                                            whdim=whdim)
         } else if (is(X, "GsvaExprData")) {
-            attributes(res)$restrict <- list(first=start(rng),
-                                             last=end(rng),
-                                             rem=rem,
-                                             whdim=whdim)
+            attr(res, "restrict") <- list(first=start(rng),
+                                          last=end(rng),
+                                          rem=rem,
+                                          whdim=whdim)
         } ## if X is a path, restrict metadata is in the loaded object
     }
+    res <- .drop_chunk_col_data(res)
     if (output != "object") {
         ## save to a temporary name and rename it when complete, so that a
         ## job killed while saving does not leave a result that looks complete.
@@ -1010,14 +1314,19 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     nrmdata
 }
 
+## the attributes of matrices are set with attr(), which, unlike
+## attributes(), also sets them in S4 objects that are not vectors, such as
+## SVT_SparseMatrix objects, e.g., from the CLR on sparse data, see
+## .rownorm_clr()
 #' @importFrom S4Vectors "metadata<-"
 .add_metadata <- function(x, param, mdata) {
     if (is(x, "SummarizedExperiment")) {
         metadata(x) <- mdata
         metadata(x)$gsvaParam <- .gsvaParam_as_list(param)
     } else {
-        attributes(x) <- c(attributes(x), mdata)
-        attributes(x)$gsvaParam <- .gsvaParam_as_list(param)
+        for (nm in names(mdata))
+            attr(x, nm) <- mdata[[nm]]
+        attr(x, "gsvaParam") <- .gsvaParam_as_list(param)
     }
 
     return(x)
@@ -1088,6 +1397,52 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     xs
 }
 
+## the chunks of rows of a SummarizedExperiment object output by a job of
+## gsvaMap(), 'x', share the column data of its input data, including the
+## names of the columns, e.g., of a million cells, which each chunk would
+## otherwise store, and gsvaReduce() read back, in its file or in the
+## registry of batchtools. the first chunk keeps them, and the others leave
+## them out, see .share_col_data(), as far as the class of 'x' allows it,
+## e.g., the column "sample_id" of a SpatialExperiment object is kept
+#' @importFrom S4Vectors metadata make_zero_col_DFrame
+#' @importFrom SummarizedExperiment "colData<-"
+.drop_chunk_col_data <- function(x) {
+    if (!is(x, "SummarizedExperiment"))
+        return(x)
+    rmdt <- metadata(x)$restrict
+    if (is.null(rmdt) || !isTRUE(rmdt$whdim == 1) || isTRUE(rmdt$first == 1))
+        return(x)
+    colData(x) <- make_zero_col_DFrame(ncol(x))
+    x
+}
+
+## give the chunks of rows in the list 'xs' of SummarizedExperiment objects
+## the column data of the chunk 'i', the first one, which the others may have
+## left out, see .drop_chunk_col_data(), so that they can be bound
+#' @importFrom SummarizedExperiment colData "colData<-"
+.share_col_data <- function(xs, i) {
+    if (!is(xs[[i]], "SummarizedExperiment"))
+        return(xs)
+    cd <- colData(xs[[i]])
+    for (j in seq_along(xs)[-i])
+        colData(xs[[j]]) <- cd
+    xs
+}
+
+## function binding the chunks of columns of the output of gsvaMap(), of the
+## class of 'x': cbind(), except for SpatialExperiment objects, whose cbind()
+## method takes their inputs for different samples, and when they share a
+## 'sample_id', as the chunks of the same sample do, it changes it in each of
+## them and repeats their image data. the method of SingleCellExperiment
+## objects binds instead their columns, including the spatial coordinates,
+## and keeps the 'sample_id' and image data of the input
+#' @importFrom methods selectMethod
+.cbind_chunks_fun <- function(x) {
+    if (is(x, "SpatialExperiment"))
+        return(selectMethod("cbind", "SingleCellExperiment"))
+    "cbind"
+}
+
 .strip_metadata <- function(inputargs) {
     outputargs <- NULL
     if (is(inputargs[[1]], "SummarizedExperiment")) {
@@ -1096,13 +1451,11 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
 	    x
         })
     } else {
+        ## see .add_metadata() about setting attributes with attr()
         outputargs <- lapply(inputargs, function(x) {
-            attributes(x)$assay <- NULL
-            attributes(x)$geneSets <- NULL
-            attributes(x)$gsvaParam <- NULL
-            attributes(x)$restrict <- NULL
-            attributes(x)$gsvaVersion <- NULL
-            attributes(x)$ranksNrow <- NULL
+            for (nm in c("assay", "geneSets", "gsvaParam", "restrict",
+                         "gsvaVersion", "ranksNrow"))
+                attr(x, nm) <- NULL
             x
         })
     }
@@ -1260,6 +1613,16 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         if (!bpisup(BTPARAM)) {
             BTPARAM <- bpstart(BTPARAM)
             on.exit(bpstop(BTPARAM), add=TRUE)
+            ## BiocParallel waits by default five seconds before removing the
+            ## registry when stopping the back-end, which only gives time to
+            ## interrupt it, so that, unless set by the user, it does not wait
+            ## at the end of each call, i.e., of each step. the option is
+            ## restored after stopping the back-end, which uses it
+            waitopt <- "BIOCPARALLEL_BATCHTOOLS_REMOVE_REGISTRY_WAIT"
+            if (is.null(getOption(waitopt))) {
+                oldopt <- options(structure(list(0), names=waitopt))
+                on.exit(options(oldopt), add=TRUE)
+            }
         }
         res <- tryCatch(bptry(do.call("bplapply",
                                       args=c(list(X=X, FUN=MAP_FUN_WRAPPER,

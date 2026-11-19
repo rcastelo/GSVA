@@ -370,7 +370,7 @@ saveHDF5GSVA <- function(gsvaExprData, file, assay="auto", replace=FALSE,
         if (!is.null(attributes(gsvaExprData)$annotation) &&
             is(attributes(gsvaExprData)$annotation, "GeneIdentifierType")) {
             annot <- attributes(gsvaExprData)$annotation
-            attributes(gsvaExprData)$annotation <- NULL
+            attr(gsvaExprData, "annotation") <- NULL
         }
         if (!is.null(attributes(gsvaExprData)$restrict)) {
             first <- attributes(gsvaExprData)$restrict$first
@@ -378,10 +378,12 @@ saveHDF5GSVA <- function(gsvaExprData, file, assay="auto", replace=FALSE,
             whdim <- attributes(gsvaExprData)$restrict$whdim
             if (!is.null(attributes(gsvaExprData)$restrict$rem))
                 rem <- attributes(gsvaExprData)$restrict$rem
-            attributes(gsvaExprData)$restrict <- NULL
+            attr(gsvaExprData, "restrict") <- NULL
         }
         geneSets <- attributes(gsvaExprData)$geneSets
-        attributes(gsvaExprData)$geneSets <- NULL
+        ## attr() also removes attributes from S4 objects that are not
+        ## vectors, such as SVT_SparseMatrix objects, see .add_metadata()
+        attr(gsvaExprData, "geneSets") <- NULL
         se <- SummarizedExperiment(assays=list(dummy=gsvaExprData))
         if (!is.null(annot))
             gsvaAnnotation(se) <- annot
@@ -424,11 +426,7 @@ saveHDF5GSVA <- function(gsvaExprData, file, assay="auto", replace=FALSE,
 }
 
 
-#' @importFrom cli cli_abort cli_alert_info
-#' @importFrom rhdf5 H5Fis_hdf5 h5ls h5read
-#' @importFrom HDF5Array HDF5Array H5SparseMatrix
-#' @importFrom DelayedArray DelayedArray
-#' @importFrom SummarizedExperiment assayNames "assay<-"
+#' @importFrom cli cli_abort
 #'
 #' @rdname gsva-serialization
 #'
@@ -441,28 +439,72 @@ loadHDF5GSVA <- function(file, assay="auto", verbose=TRUE) {
                               "with GSVA output saved with 'saveHDF5GSVA()'.")))
     if (!file.exists(file))
         cli_abort(c("x"="The file {.file {file}} does not exist."))
-    if (!.is_gsva_h5_file(file))
+
+    res <- .load_gsva_h5(file, assay, verbose)
+    if (is.null(res))
         cli_abort(c("x"=paste("The file {.file {file}} does not contain GSVA",
                               "output saved with 'saveHDF5GSVA()'.")))
+
+    res
+}
+
+## load the GSVA output saved with saveHDF5GSVA() in the existing file 'file',
+## see loadHDF5GSVA(), or return NULL if 'file' does not contain such output.
+## the GSVA metadata is read opening the file once, and the dimensions and
+## the layout of sparse values are given to the H5SparseMatrixSeed()
+## constructor, which otherwise reads them, because each opening of the file
+## can take tens of milliseconds on the network filesystems of HPC clusters,
+## and gsvaReduce() loads in this way each of the chunks of gsvaMap()
+#' @importFrom cli cli_alert_info
+#' @importFrom rhdf5 H5Fclose h5read
+#' @importFrom HDF5Array HDF5Array H5SparseMatrixSeed
+#' @importFrom DelayedArray DelayedArray
+#' @importFrom SummarizedExperiment assayNames "assay<-"
+.load_gsva_h5 <- function(file, assay, verbose) {
+    fid <- .open_gsva_h5_file(file)
+    if (is.null(fid))
+        return(NULL)
+    on.exit(H5Fclose(fid))
 
     file <- normalizePath(file, winslash="/")
     if (verbose)
         cli_alert_info("Reading the metadata of {.file {file}}")
-    gsvacontainer <- .restore_gsva_shell(unserialize(as.raw(h5read(file,
+    gsvacontainer <- .restore_gsva_shell(unserialize(as.raw(h5read(fid,
                                                        "gsva/shell"))), file)
-    assayname <- as.character(h5read(file, "gsva/assayname"))
-    layout <- as.character(h5read(file, "gsva/layout"))
+    assayname <- as.character(h5read(fid, "gsva/assayname"))
+    layout <- as.character(h5read(fid, "gsva/layout"))
 
-    X <- if (layout == "csc") H5SparseMatrix(file, "gsva/assay") else
-         HDF5Array(file, "gsva/assay")
+    if (layout == "csc") {
+        ## the values are stored as by .h5_csc_close(), with the dataset
+        ## "shape" holding their dimensions, which the H5SparseMatrixSeed()
+        ## constructor reads as those of a matrix in its "CSC" layout
+        shape <- tryCatch(as.vector(h5read(fid, "gsva/assay/shape")),
+                          error=function(e) NULL)
+        X <- if (length(shape) == 2L)
+                 H5SparseMatrixSeed(file, "gsva/assay", dim=shape,
+                                    sparse.layout="CSC")
+             else
+                 H5SparseMatrixSeed(file, "gsva/assay")
+    } else {
+        ## HDF5Array() opens the file by its path with functions of rhdf5
+        ## that warn when the file is already open, so it is closed before
+        H5Fclose(fid)
+        on.exit()
+        X <- HDF5Array(file, "gsva/assay")
+    }
     X <- DelayedArray(X)
     if (verbose) {
         cls <- class(gsvacontainer)[1]
         cli_alert_info(paste("Restored a {cls} object with {nrow(X)} rows",
                              "and {ncol(X)} columns"))
     }
-    dimnames(X) <- dimnames(gsvacontainer)
-    assay(gsvacontainer, assayname) <- X
+    ## the dimension names are kept once, by the container, instead of also
+    ## by the assay, because binding many outputs, such as the chunks of
+    ## gsvaMap() in gsvaReduce(), would otherwise keep a copy of the names
+    ## along the other dimension for each of them, e.g., of a million cells
+    ## for each chunk of rows, which then also takes memory and time each
+    ## time the bound output is serialized, e.g., for each job of gsvaMap()
+    assay(gsvacontainer, assayname, withDimnames=FALSE) <- X
 
     assay <- .check_assay_ranks_rnorm(assayNames(gsvacontainer), assay)
 
@@ -486,14 +528,32 @@ loadHDF5GSVA <- function(file, assay="auto", verbose=TRUE) {
 }
 
 ## whether 'file' is an HDF5 file with GSVA output saved with saveHDF5GSVA()
-#' @importFrom rhdf5 H5Fis_hdf5 h5ls
+#' @importFrom rhdf5 H5Fclose
 .is_gsva_h5_file <- function(file) {
-    if (!isTRUE(suppressWarnings(H5Fis_hdf5(file))))
+    fid <- .open_gsva_h5_file(file)
+    if (is.null(fid))
         return(FALSE)
-    content <- tryCatch(h5ls(file, recursive=2L), error=function(e) NULL)
-    !is.null(content) &&
-        all(c("shell", "assayname", "layout", "assay") %in%
-            content$name[content$group == "/gsva"])
+    H5Fclose(fid)
+    TRUE
+}
+
+## open for reading 'file', if it is an HDF5 file with GSVA output saved with
+## saveHDF5GSVA(), returning its handle, which must be closed with H5Fclose(),
+## and NULL otherwise, opening the file only once
+#' @importFrom rhdf5 H5Fopen H5Fclose h5ls
+.open_gsva_h5_file <- function(file) {
+    fid <- tryCatch(suppressWarnings(H5Fopen(file, flags="H5F_ACC_RDONLY")),
+                    error=function(e) NULL)
+    if (is.null(fid))
+        return(NULL)
+    content <- tryCatch(h5ls(fid, recursive=2L), error=function(e) NULL)
+    if (is.null(content) ||
+        !all(c("shell", "assayname", "layout", "assay") %in%
+             content$name[content$group == "/gsva"])) {
+        H5Fclose(fid)
+        return(NULL)
+    }
+    fid
 }
 
 
@@ -653,8 +713,8 @@ loadParquetGSVA <- function(file, assay="auto", verbose=TRUE) {
                              "and {ncol(seed)} columns from {sze} of metadata"))
     }
     X <- DelayedArray(seed)
-    dimnames(X) <- dimnames(gsvacontainer)
-    assay(gsvacontainer, md$gsva_assay) <- X
+    ## the dimension names are kept once, by the container, see loadHDF5GSVA()
+    assay(gsvacontainer, md$gsva_assay, withDimnames=FALSE) <- X
 
     assay <- .check_assay_ranks_rnorm(assayNames(gsvacontainer), assay)
 
@@ -674,22 +734,20 @@ loadParquetGSVA <- function(file, assay="auto", verbose=TRUE) {
         cli_abort(c("x"="'{argname}' must be a single character string."))
 
     if (.is_uri(path))
-        parquet <- TRUE
-    else if (file.exists(path) && !dir.exists(path)) {
-        if (.is_gsva_h5_file(path))
-            parquet <- FALSE
-        else if (.is_parquet_file(path))
-            parquet <- TRUE
-        else
-            cli_abort(c("x"=paste("{.file {path}} is neither a file with GSVA",
-                                  "output saved with 'saveHDF5GSVA()', nor",
-                                  "with 'saveParquetGSVA()'.")))
-    } else
+        return(loadParquetGSVA(path, assay=assay, verbose=verbose))
+    if (!file.exists(path) || dir.exists(path))
         cli_abort(c("x"="{path} cannot be found in the filesystem"))
 
-    ## both loading functions give their own messages
-    if (parquet)
-        loadParquetGSVA(path, assay=assay, verbose=verbose)
-    else
-        loadHDF5GSVA(path, assay=assay, verbose=verbose)
+    ## both loading functions give their own messages. a file with GSVA
+    ## output saved with saveHDF5GSVA() is loaded checking it as such, see
+    ## .load_gsva_h5(), instead of checking it before loading it
+    res <- .load_gsva_h5(path, assay, verbose)
+    if (!is.null(res))
+        return(res)
+    if (.is_parquet_file(path))
+        return(loadParquetGSVA(path, assay=assay, verbose=verbose))
+
+    cli_abort(c("x"=paste("{.file {path}} is neither a file with GSVA",
+                          "output saved with 'saveHDF5GSVA()', nor",
+                          "with 'saveParquetGSVA()'.")))
 }

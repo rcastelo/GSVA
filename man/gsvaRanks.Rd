@@ -35,7 +35,8 @@ gsvaColScores(
   last = NA_real_,
   recompute_nzcount = FALSE,
   BPPARAM = SerialParam(progressbar = verbose),
-  maxmem = "auto"
+  maxmem = "auto",
+  device = c("auto", "cpu", "gpu")
 )
 }
 \arguments{
@@ -90,16 +91,27 @@ SLURM workload manager. To avoid setting any bound on the maximum memory,
 use \code{maxmem=Inf}. Note that the amount of main memory used in an R session
 or script may depend on other commands and packages used in that same
 session or script. In particular, each R process running GSVA, the main one
-and each of its parallel workers in \code{BPPARAM}, takes about 0.8 GB by itself
-for loading GSVA and the packages it depends on, including forked workers,
-such as those of a \code{\link[BiocParallel:MulticoreParam-class]{MulticoreParam}}
+and each of its parallel workers in \code{BPPARAM}, takes by itself the memory
+allocated by R in the session where GSVA runs, besides the expression data
+given to it, and about 0.3 GB more (0.45 GB on macOS); loading GSVA and the
+packages it depends on takes about 0.6 GB in a new R session. This includes
+forked workers, such
+as those of a \code{\link[BiocParallel:MulticoreParam-class]{MulticoreParam}}
 object, which end up taking most of that memory as their own while they
-run. The memory that GSVA estimates includes the expression data given to
-it, with all the assays of a \code{SummarizedExperiment} object held in main
-memory, but not other objects of the R session, such as other large
-matrices or data sets, which reduce the memory actually available to GSVA;
-when such objects are present, consider setting \code{maxmem} to the memory that
-they leave. Before starting its calculations, GSVA gives a warning when the
+run, together with about one third of sparse expression data held in main
+memory, except when stored in a \code{dgCMatrix} object. Parallel workers not
+forked from the main R process, such as those of a
+\code{\link[BiocParallel:SnowParam-class]{SnowParam}} object, are new R processes,
+which take about 0.9 GB each (1.05 GB on macOS) for loading GSVA and the
+packages it depends on. The memory that GSVA
+estimates includes the expression data given to it, with all the assays of
+a \code{SummarizedExperiment} object held in main memory, and the other objects
+of the R session, once for the main R process and each forked worker, which
+overestimates the memory
+of forked workers when these objects are large matrices, because forked
+workers share their memory with the main R process; when such objects are
+present, consider removing them before running GSVA. Before starting its
+calculations, GSVA gives a warning when the
 memory it estimates they require exceeds \code{maxmem}, suggesting to use fewer
 parallel workers or a larger \code{maxmem}. The memory taken by each R process
 can be set with the option \code{GSVA.workermem}, in bytes, and this check can be
@@ -128,6 +140,19 @@ object or a \code{list} object.}
 \item{recompute_nzcount}{Logical vector of length 1. When \code{TRUE}, the number
 of non-zero rows in the input expression data will be recomputed, internally
 used only.}
+
+\item{device}{The computational device to use. Options are "auto" (default),
+"cpu", or "gpu". When set to "auto", the function attempts to use the GPU,
+falling back to the CPU if no GPU is detected. The GPU calculates the
+enrichment scores in single precision. The scores of the two devices then
+differ in about the seventh significant digit. Gene sets whose weights would
+not survive single precision are calculated on the CPU, as well as all gene
+sets when the data have missing values, and "auto" then selects the CPU.
+The GPU calculates the scores in the main R process, without the parallel
+workers of \code{BPPARAM}, which are used by the other calculations; a process
+forked from an R session that has already used the GPU, such as a worker of
+a \code{\link[BiocParallel:MulticoreParam-class]{MulticoreParam}} object, cannot use
+it, and "auto" then selects the CPU.}
 }
 \value{
 In the case of 'gsvaRowNorm()', an object of the same class as the

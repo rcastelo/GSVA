@@ -39,20 +39,44 @@
 #' use `maxmem=Inf`. Note that the amount of main memory used in an R session
 #' or script may depend on other commands and packages used in that same
 #' session or script. In particular, each R process running GSVA, the main one
-#' and each of its parallel workers in `BPPARAM`, takes about 0.8 GB by itself
-#' for loading GSVA and the packages it depends on, including forked workers,
-#' such as those of a [`MulticoreParam`][BiocParallel::MulticoreParam-class]
+#' and each of its parallel workers in `BPPARAM`, takes by itself the memory
+#' allocated by R in the session where GSVA runs, besides the expression data
+#' given to it, and about 0.3 GB more (0.45 GB on macOS); loading GSVA and the
+#' packages it depends on takes about 0.6 GB in a new R session. This includes
+#' forked workers, such
+#' as those of a [`MulticoreParam`][BiocParallel::MulticoreParam-class]
 #' object, which end up taking most of that memory as their own while they
-#' run. The memory that GSVA estimates includes the expression data given to
-#' it, with all the assays of a `SummarizedExperiment` object held in main
-#' memory, but not other objects of the R session, such as other large
-#' matrices or data sets, which reduce the memory actually available to GSVA;
-#' when such objects are present, consider setting `maxmem` to the memory that
-#' they leave. Before starting its calculations, GSVA gives a warning when the
+#' run, together with about one third of sparse expression data held in main
+#' memory, except when stored in a `dgCMatrix` object. Parallel workers not
+#' forked from the main R process, such as those of a
+#' [`SnowParam`][BiocParallel::SnowParam-class] object, are new R processes,
+#' which take about 0.9 GB each (1.05 GB on macOS) for loading GSVA and the
+#' packages it depends on. The memory that GSVA
+#' estimates includes the expression data given to it, with all the assays of
+#' a `SummarizedExperiment` object held in main memory, and the other objects
+#' of the R session, once for the main R process and each forked worker, which
+#' overestimates the memory
+#' of forked workers when these objects are large matrices, because forked
+#' workers share their memory with the main R process; when such objects are
+#' present, consider removing them before running GSVA. Before starting its
+#' calculations, GSVA gives a warning when the
 #' memory it estimates they require exceeds `maxmem`, suggesting to use fewer
 #' parallel workers or a larger `maxmem`. The memory taken by each R process
 #' can be set with the option `GSVA.workermem`, in bytes, and this check can be
 #' disabled with `options(GSVA.check_memory=FALSE)`.
+#'
+#' @param device The computational device to use. Options are "auto" (default),
+#' "cpu", or "gpu". When set to "auto", the function attempts to use the GPU,
+#' falling back to the CPU if no GPU is detected. The GPU calculates the
+#' enrichment scores in single precision. The scores of the two devices then
+#' differ in about the seventh significant digit. Gene sets whose weights would
+#' not survive single precision are calculated on the CPU, as well as all gene
+#' sets when the data have missing values, and "auto" then selects the CPU.
+#' The GPU calculates the scores in the main R process, without the parallel
+#' workers of `BPPARAM`, which are used by the other calculations; a process
+#' forked from an R session that has already used the GPU, such as a worker of
+#' a [`MulticoreParam`][BiocParallel::MulticoreParam-class] object, cannot use
+#' it, and "auto" then selects the CPU.
 #'
 #' @return A gene-set by sample matrix of GSVA enrichment scores stored in a
 #' container object of the same type as the input expression data container,
@@ -163,7 +187,8 @@ setMethod("gsva", signature(param="gsvaParam"),
           function(param,
                    verbose=TRUE,
                    BPPARAM=SerialParam(progressbar=verbose),
-                   maxmem="auto") {
+                   maxmem="auto",
+                   device=c("auto", "cpu", "gpu")) {
 
               if (verbose) {
                   pkgversion <- packageDescription("GSVA")[["Version"]]
@@ -177,6 +202,8 @@ setMethod("gsva", signature(param="gsvaParam"),
 
               .check_bpparam(BPPARAM)
 
+              device <- .resolve_device(match.arg(device), anyNA(param))
+
               ## the memory required by the three steps is checked before
               ## running them, and not again by each of them
               .check_gsva_mem(param, BPPARAM,
@@ -184,6 +211,14 @@ setMethod("gsva", signature(param="gsvaParam"),
                                             verbose=FALSE))
               gsva_global$check_memory <- FALSE
               on.exit(gsva_global$check_memory <- TRUE, add=TRUE)
+
+              ## the steps whose blocks are narrower than the chunks of the
+              ## input data on disk give one warning for all of them at the
+              ## end, see .check_chunk_blocks()
+              oldcb <- .start_chunk_blocks()
+              cbdone <- FALSE
+              on.exit(if (!cbdone) gsva_global$chunkblocks <- oldcb,
+                      add=TRUE)
 
               gsvarnorm <- gsvaRowNorm(param=param, verbose=verbose,
                                        dropExistingAssays=TRUE,
@@ -193,7 +228,11 @@ setMethod("gsva", signature(param="gsvaParam"),
               ## the input data in main memory remains allocated while the
               ## next steps run, which their blocks cannot take
               gsva_global$heldmem <- .input_held_mem(param)
-              on.exit(gsva_global$heldmem <- 0, add=TRUE)
+              gsva_global$heldshared <- .input_shared_mem(param)
+              on.exit({
+                  gsva_global$heldmem <- 0
+                  gsva_global$heldshared <- 0
+              }, add=TRUE)
 
               gsvaranks <- gsvaColRanks(rowNormExprData=gsvarnorm,
                                         verbose=verbose,
@@ -201,12 +240,19 @@ setMethod("gsva", signature(param="gsvaParam"),
                                         BPPARAM=BPPARAM,
                                         maxmem=maxmem)
               ## the row normalization is not needed by the calculation of
-              ## the scores, and its memory is released before it starts
+              ## the scores, and its memory is released before it starts, on
+              ## big data, where the time of a full collection of garbage is
+              ## small compared to the one of the calculations
+              wasbig <- ncol(gsvarnorm) > 10000
               rm(gsvarnorm)
-              invisible(gc())
+              if (wasbig)
+                  invisible(gc())
 
               es <- gsvaColScores(rankExprData=gsvaranks, verbose=verbose,
-                                  BPPARAM=BPPARAM, maxmem=maxmem)
+                                  BPPARAM=BPPARAM, maxmem=maxmem,
+                                  device=device)
+              .end_chunk_blocks(oldcb)
+              cbdone <- TRUE
 
               if (verbose)
                   cli_alert_success("Calculations finished")
@@ -556,9 +602,8 @@ setValidity("gsvaParam", function(object) {
     }
     if(length(object@tau) != 1) {
         inv <- c(inv, "@tau must be of length 1")
-    }
-    if(is.na(object@tau)) {
-        inv <- c(inv, "@tau must not be NA")
+    } else if(!is.finite(object@tau) || object@tau < 0) {
+        inv <- c(inv, "@tau must be a finite non-negative number")
     }
     if(length(object@maxDiff) != 1) {
         inv <- c(inv, "@maxDiff must be of length 1")
@@ -882,16 +927,27 @@ setMethod("details",
 #' use `maxmem=Inf`. Note that the amount of main memory used in an R session
 #' or script may depend on other commands and packages used in that same
 #' session or script. In particular, each R process running GSVA, the main one
-#' and each of its parallel workers in `BPPARAM`, takes about 0.8 GB by itself
-#' for loading GSVA and the packages it depends on, including forked workers,
-#' such as those of a [`MulticoreParam`][BiocParallel::MulticoreParam-class]
+#' and each of its parallel workers in `BPPARAM`, takes by itself the memory
+#' allocated by R in the session where GSVA runs, besides the expression data
+#' given to it, and about 0.3 GB more (0.45 GB on macOS); loading GSVA and the
+#' packages it depends on takes about 0.6 GB in a new R session. This includes
+#' forked workers, such
+#' as those of a [`MulticoreParam`][BiocParallel::MulticoreParam-class]
 #' object, which end up taking most of that memory as their own while they
-#' run. The memory that GSVA estimates includes the expression data given to
-#' it, with all the assays of a `SummarizedExperiment` object held in main
-#' memory, but not other objects of the R session, such as other large
-#' matrices or data sets, which reduce the memory actually available to GSVA;
-#' when such objects are present, consider setting `maxmem` to the memory that
-#' they leave. Before starting its calculations, GSVA gives a warning when the
+#' run, together with about one third of sparse expression data held in main
+#' memory, except when stored in a `dgCMatrix` object. Parallel workers not
+#' forked from the main R process, such as those of a
+#' [`SnowParam`][BiocParallel::SnowParam-class] object, are new R processes,
+#' which take about 0.9 GB each (1.05 GB on macOS) for loading GSVA and the
+#' packages it depends on. The memory that GSVA
+#' estimates includes the expression data given to it, with all the assays of
+#' a `SummarizedExperiment` object held in main memory, and the other objects
+#' of the R session, once for the main R process and each forked worker, which
+#' overestimates the memory
+#' of forked workers when these objects are large matrices, because forked
+#' workers share their memory with the main R process; when such objects are
+#' present, consider removing them before running GSVA. Before starting its
+#' calculations, GSVA gives a warning when the
 #' memory it estimates they require exceeds `maxmem`, suggesting to use fewer
 #' parallel workers or a larger `maxmem`. The memory taken by each R process
 #' can be set with the option `GSVA.workermem`, in bytes, and this check can be
@@ -979,6 +1035,8 @@ gsvaRowNorm <- function(param,
     }
 
     .check_bpparam(BPPARAM)
+    memscope <- .open_mem_scope()
+    on.exit(.close_mem_scope(memscope), add=TRUE)
 
     exprData <- get_exprData(param)
     dataMatrix <- unwrapData(exprData, get_assay(param))
@@ -1002,15 +1060,18 @@ gsvaRowNorm <- function(param,
         mf$assembly <- 2
     ondisk <- .check_ondisk(param, first=first, last=last, whdim=1,
                             recompute_nzcount=FALSE, maxmem=maxmem,
-                            verbose=verbose, mf=mf, densify=densify)
+                            verbose=verbose, mf=mf, densify=densify,
+                            BPPARAM=BPPARAM)
     container <- .input_held_mem(param)
+    shared <- .input_shared_mem(param)
     .check_step_mem(dataMatrix, 1L, first, last, ondisk, mf, BPPARAM, maxmem,
-                    densify=densify, container=container)
-    .hold_input_mem(dataMatrix, 1L, first, last, container)
+                    densify=densify, container=container, shared=shared)
+    .hold_input_mem(dataMatrix, 1L, first, last, container, shared=shared)
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=1,
-                                                ondisk, verbose)
+                                                ondisk, verbose,
+                                                BPPARAM=BPPARAM)
 
     filtDataMatrix <- dataMatrix
     BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
@@ -1134,6 +1195,8 @@ gsvaColRanks <- function(rowNormExprData,
     }
 
     .check_bpparam(BPPARAM)
+    memscope <- .open_mem_scope()
+    on.exit(.close_mem_scope(memscope), add=TRUE)
 
     dataMatrix <- unwrapData(rowNormExprData, "gsvarnorm")
 
@@ -1149,22 +1212,26 @@ gsvaColRanks <- function(rowNormExprData,
     ondisk <- .check_ondisk(param, assay="gsvarnorm",
                             first=first, last=last, whdim=2,
                             recompute_nzcount=FALSE, maxmem=maxmem,
-                            verbose=verbose, mf=mf)
+                            verbose=verbose, mf=mf, BPPARAM=BPPARAM)
     container <- .input_held_mem(param)
+    shared <- .input_shared_mem(param)
     .check_step_mem(dataMatrix, 2L, first, last, ondisk, mf, BPPARAM, maxmem,
-                    container=container)
-    .hold_input_mem(dataMatrix, 2L, first, last, container)
+                    container=container, shared=shared)
+    .hold_input_mem(dataMatrix, 2L, first, last, container, shared=shared)
 
     dataMatrix <- .check_sparse_load_input_expr(dataMatrix, "GSVA",
                                                 first, last, whdim=2,
-                                                ondisk, verbose)
+                                                ondisk, verbose,
+                                                BPPARAM=BPPARAM)
     sparse <- .get_sparse(param)
     if (sparse && !is_sparse(dataMatrix))
         sparse <- FALSE
 
     gsvarnks <- .compute_gsva_ranks(Z=dataMatrix, sparse=sparse,
                                     verbose=verbose, BPPARAM=BPPARAM,
-                                    maxmem=maxmem, ondisk=ondisk)
+                                    maxmem=maxmem, ondisk=ondisk,
+                                    density=.input_density(param,
+                                                           "gsvarnorm"))
 
     rownames(gsvarnks) <- rownames(dataMatrix)
     colnames(gsvarnks) <- colnames(dataMatrix)
@@ -1202,6 +1269,19 @@ gsvaColRanks <- function(rowNormExprData,
 #' even if they would fit in main memory, unless `ondisk="no"` was set in the
 #' original [`gsvaParam`] object.
 #'
+#' @param device The computational device to use. Options are "auto" (default),
+#' "cpu", or "gpu". When set to "auto", the function attempts to use the GPU,
+#' falling back to the CPU if no GPU is detected. The GPU calculates the
+#' enrichment scores in single precision. The scores of the two devices then
+#' differ in about the seventh significant digit. Gene sets whose weights would
+#' not survive single precision are calculated on the CPU, as well as all gene
+#' sets when the data have missing values, and "auto" then selects the CPU.
+#' The GPU calculates the scores in the main R process, without the parallel
+#' workers of `BPPARAM`, which are used by the other calculations; a process
+#' forked from an R session that has already used the GPU, such as a worker of
+#' a [`MulticoreParam`][BiocParallel::MulticoreParam-class] object, cannot use
+#' it, and "auto" then selects the CPU.
+#'
 #' @return In the case of 'gsvaColScores()', an object of the same class as the
 #' input expression data given in the argument `exprData` of the `gsvaParam`
 #' object, containing the enrichment scores for the given gene sets. Note that
@@ -1217,7 +1297,8 @@ gsvaColRanks <- function(rowNormExprData,
 gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                           first=NA_real_, last=NA_real_, recompute_nzcount=FALSE,
                           BPPARAM=SerialParam(progressbar=verbose),
-                          maxmem="auto") {
+                          maxmem="auto",
+                          device=c("auto", "cpu", "gpu")) {
 
     if (!is(rankExprData, "GsvaExprData") &&
         !is.character(rankExprData))
@@ -1246,6 +1327,24 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
     }
 
     .check_bpparam(BPPARAM)
+    memscope <- .open_mem_scope()
+    on.exit(.close_mem_scope(memscope), add=TRUE)
+
+    device <- .resolve_device(match.arg(device), anyNA(param))
+    ## with missing values, all gene sets are scored on the CPU, see
+    ## .gsva_score_genesets(), with the parallel workers of BPPARAM
+    nagpu <- device == "gpu" && anyNA(param)
+    if (nagpu)
+        device <- "cpu"
+
+    ## the GPU scores the gene sets in this R process, without the parallel
+    ## workers of BPPARAM, because processes forked from it, such as those of
+    ## a MulticoreParam, cannot use CUDA once this one has initialized it
+    nworkers <- 1L
+    if (device == "gpu" && !is(BPPARAM, "SerialParam")) {
+        nworkers <- bpnworkers(BPPARAM)
+        BPPARAM <- SerialParam(progressbar=bpprogressbar(BPPARAM))
+    }
 
     ## assuming rows in the rank data have been already filtered
     filtDataMatrix <- unwrapData(rankExprData, "gsvaranks")
@@ -1287,15 +1386,21 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
         ondisk <- .check_ondisk(param, assay="gsvaranks",
                                 first=first, last=last, whdim=2,
                                 recompute_nzcount=recompute_nzcount,
-                                maxmem=maxmem, verbose=verbose, mf=mf)
+                                maxmem=maxmem, verbose=verbose, mf=mf,
+                                BPPARAM=BPPARAM)
     container <- .input_held_mem(param)
+    shared <- .input_shared_mem(param)
+    ## the scores are written to disk block by block when the ranks are
+    ## processed from disk
     .check_step_mem(filtDataMatrix, 2L, first, last, ondisk, mf, BPPARAM,
-                    maxmem, container=container)
-    .hold_input_mem(filtDataMatrix, 2L, first, last, container)
+                    maxmem, container=container, shared=shared,
+                    ondisksink=TRUE)
+    .hold_input_mem(filtDataMatrix, 2L, first, last, container, shared=shared)
 
     filtDataMatrix <- .check_sparse_load_input_expr(filtDataMatrix, "GSVA",
                                                     first, last, whdim=2,
-                                                    ondisk, verbose)
+                                                    ondisk, verbose,
+                                                    BPPARAM=BPPARAM)
 
     BPPARAM <- .check_open_parallelism(filtDataMatrix, BPPARAM,
                                        minparrows=100, minparcols=100,
@@ -1303,9 +1408,23 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
 
     if (verbose) {
         n <- length(filtMappedGeneSets)
-        cli_alert_info("Calculating GSVA scores for {n} gene sets")
+        if (device == "gpu") {
+            msg <- "Calculating GSVA scores for {n} gene sets on the GPU"
+            if (nworkers > 1L)
+                msg <- paste(msg, "in this R process, without the",
+                             "{nworkers} workers of BPPARAM")
+            cli_alert_info(msg)
+        } else if (nagpu)
+            cli_alert_info(paste("Calculating GSVA scores on the CPU, which",
+                                 "handles the missing values of the data,",
+                                 "instead of the GPU"))
     }
 
+    ## blocks of sparse ranks read from disk take their memory by their
+    ## sparse size, see .ondisk_mem_factors()
+    mf <- .ondisk_mem_factors(mf, filtDataMatrix,
+                              .input_density(param, "gsvaranks",
+                                             recompute_nzcount))
     gsva_es <- .processMatrixCols(filtDataMatrix,
                                   FUN=.compute_gsva_scores,
                                   geneSetsIdx=filtMappedGeneSets,
@@ -1315,6 +1434,7 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                   sparse=sparse, any_na=anyNA(param),
                                   na_use=.get_NAuse(param),
                                   minSize=get_minSize(param),
+                                  device=device,
                                   verbose=verbose,
                                   minparrows=100, minparcols=100,
                                   BPPARAM=BPPARAM, maxmem=maxmem,
@@ -1322,7 +1442,8 @@ gsvaColScores <- function(rankExprData, geneSets, verbose=TRUE,
                                   outfactor=mf$outfactor,
                                   outextra=mf$outextra,
                                   sinkout=(ondisk ||
-                                           is(filtDataMatrix, "DelayedMatrix")))
+                                           is(filtDataMatrix, "DelayedMatrix")),
+                                  step="Calculating GSVA scores")
 
     rownames(gsva_es) <- names(filtMappedGeneSets)
     colnames(gsva_es) <- colnames(filtDataMatrix)
@@ -1568,6 +1689,39 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
                          ondisk=FALSE, verbose=FALSE, BPPARAM=NULL,
                          maxmem=Inf) {
     na_use <- match.arg(na_use)
+    g <- .clr_gmeans(rowstats, ncol(expr), sparse=sparse, any_na=any_na,
+                     na_use=na_use)
+
+    if (is(expr, "DelayedMatrix")) ## delayed and sparse when 'expr' is sparse
+        return(expr / g)           ## and 'sparse=TRUE'
+
+    ## input in main memory whose output does not fit in it is scaled by
+    ## blocks of columns, whose output is written on disk
+    if (ondisk) {
+        ## the classical algorithm on sparse input gives dense blocks
+        densify <- is_sparse(expr) && !sparse
+        mf <- .step_mem_factors("rownorm", expr,
+                                sparse=is_sparse(expr) && sparse, clr=TRUE)
+        return(.processMatrixCols(expr, .clr_scale, gmeans=g, sparse=sparse,
+                                  verbose=verbose, BPPARAM=BPPARAM,
+                                  maxmem=maxmem, workfactor=mf$workfactor,
+                                  outfactor=mf$outfactor,
+                                  outextra=mf$outextra, dense=densify,
+                                  sinkout=TRUE, step="Normalizing rows"))
+    }
+
+    .clr_scale(expr, g, sparse)
+}
+
+## geometric mean of each row of a matrix with 'ncolX' columns, from the
+## statistics of its rows in 'rowstats', see .rowStats(), by which the CLR
+## row normalization divides each row, see .rownorm_clr(); the statistics can
+## also be accumulated across chunks of columns processed by different jobs,
+## see .map_clr_stats()
+#' @importFrom cli cli_abort
+.clr_gmeans <- function(rowstats, ncolX, sparse=FALSE, any_na=FALSE,
+                        na_use=c("everything", "all.obs", "na.rm")) {
+    na_use <- match.arg(na_use)
 
     if (any_na && na_use == "all.obs") {
         msg <- paste("missing values present in the input expression data and",
@@ -1581,7 +1735,7 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
     n <- rowstats[, "n"]
     nna <- rowstats[, "nna"]
     if (sparseinput && !sparse) { ## zeros enter the calculations, log(0)=-Inf
-        zeros <- ncol(expr) - n - nna
+        zeros <- ncolX - n - nna
         lsum[zeros > 0] <- -Inf + lsum[zeros > 0]
         n <- n + zeros
     }
@@ -1600,25 +1754,7 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
         }
     }
 
-    if (is(expr, "DelayedMatrix")) ## delayed and sparse when 'expr' is sparse
-        return(expr / g)           ## and 'sparse=TRUE'
-
-    ## input in main memory whose output does not fit in it is scaled by
-    ## blocks of columns, whose output is written on disk
-    if (ondisk) {
-        ## the classical algorithm on sparse input gives dense blocks
-        densify <- is_sparse(expr) && !sparse
-        mf <- .step_mem_factors("rownorm", expr,
-                                sparse=is_sparse(expr) && sparse, clr=TRUE)
-        return(.processMatrixCols(expr, .clr_scale, gmeans=g, sparse=sparse,
-                                  verbose=verbose, BPPARAM=BPPARAM,
-                                  maxmem=maxmem, workfactor=mf$workfactor,
-                                  outfactor=mf$outfactor,
-                                  outextra=mf$outextra, dense=densify,
-                                  sinkout=TRUE))
-    }
-
-    .clr_scale(expr, g, sparse)
+    g
 }
 
 ## divide each row of 'expr', or of a block of its columns, in main memory, by
@@ -1717,8 +1853,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
         }
     }
 
-    if (ncol(expr) > 10000) ## free up ASAP memory we need not anymore and was
-        out <- gc()         ## allocated during ECDF calculations on a big expr
+    .release_block_mem(ncol(expr)) ## allocated by the ECDF calculations
 
     return(gene.cdf)	
 }
@@ -1835,7 +1970,8 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                                 workfactor=mf$workfactor,
                                 outfactor=mf$outfactor, outextra=mf$outextra,
                                 dense=densify,
-                                sinkout=(ondisk || is(expr, "DelayedMatrix")))
+                                sinkout=(ondisk || is(expr, "DelayedMatrix")),
+                                step="Normalizing rows")
     else if (rowNorm == "clr") {
         ## the statistics of the rows are calculated through blocks of
         ## columns, unless they were already calculated while filtering rows
@@ -1876,8 +2012,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
         R <- colRanks(Z, ties.method=ties.method, preserveShape=TRUE)
     }
 
-    if (ncol(Z) > 10000) ## free up ASAP memory we need not anymore and was
-        out <- gc()      ## allocated during rank calculations on a big Z
+    .release_block_mem(ncol(Z)) ## allocated by the rank calculations
 
     return(R)
 }
@@ -1885,7 +2020,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 #' @importFrom cli cli_alert_info
 #' @importFrom cli cli_progress_done cli_abort
 .compute_gsva_ranks <- function(Z, sparse, verbose, BPPARAM=NULL, maxmem=Inf,
-                                ondisk=FALSE) {
+                                ondisk=FALSE, density=NA) {
     if (verbose) {
         if (sparse)
             cli_alert_info("Calculating sparse column ranks")
@@ -1894,15 +2029,18 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     }
  
     ## here 'ties.method="last"' allows one to obtain the result
-    ## from 'order()' based on ranks
-    mf <- .step_mem_factors("colranks", Z)
+    ## from 'order()' based on ranks; blocks of sparse data read from disk
+    ## take their memory by their sparse size, from the fraction 'density' of
+    ## nonzero values of 'Z', see .ondisk_mem_factors()
+    mf <- .ondisk_mem_factors(.step_mem_factors("colranks", Z), Z, density)
     R <- .processMatrixCols(Z, FUN=compute.col.ranks, ties.method="last",
                             drop.sparsity=FALSE, verbose=verbose,
                             minparrows=100, minparcols=100,
                             BPPARAM=BPPARAM, maxmem=maxmem,
                             workfactor=mf$workfactor, outfactor=mf$outfactor,
                             outextra=mf$outextra,
-                            sinkout=(ondisk || is(Z, "DelayedMatrix")))
+                            sinkout=(ondisk || is(Z, "DelayedMatrix")),
+                            step="Ranking columns")
 
     return(R)
 }
@@ -1917,9 +2055,15 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     whz_gset <- intersect(gset, whz)
     if (length(whz_gset) > 0) {                 ## if gene set has zeros, then
         whz2 <- integer(length(whz))            ## create a new vector where
-        whz_gset2 <- round(seq(1, length(whz2), ## redistribute gene set zeros
-                               length.out=length(whz_gset)))
-        whz2[whz_gset2] <- whz_gset             ## evenly among all zeros
+        step <- 0                               ## redistribute gene set zeros
+        if (length(whz_gset) > 1)               ## evenly among all zeros, at
+            step <- (length(whz) - 1) / (length(whz_gset) - 1)
+        ## positions 1 + i * step, i=0,...,length(whz_gset)-1, rounding halves
+        ## up, as round() does in the C code, instead of rounding them to the
+        ## even integer, as R's round() does, e.g., round(2.5) == 2 in R or
+        ## whz_gset2 <- round(seq(1, length(whz2), length.out=length(whz_gset)))
+        whz_gset2 <- floor((seq_along(whz_gset) - 1) * step + 1 + 0.5)
+        whz2[whz_gset2] <- whz_gset
         whz2[whz2 == 0] <- setdiff(whz, whz_gset)  ## fill in remaining zeros
         nnz <- length(dos) - length(whz)        ## number of nonzero values
         dos2[whz2] <- nnz + seq_along(whz2)     ## assign new dos to rearranged
@@ -2135,7 +2279,8 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 #' @importFrom cli cli_alert_warning
 #' @importFrom S4Arrays is_sparse
 .compute_gsva_scores <- function(R, geneSetsIdx, tau, maxDiff, absRanking,
-                                 sparse, any_na, na_use, minSize, verbose) {
+                                 sparse, any_na, na_use, minSize, verbose,
+                                 device) {
     if (sparse && !is_sparse(R))
         sparse <- FALSE
     intrnks <- type(R) == "integer"
@@ -2145,7 +2290,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     assign("u", 0, envir=wna_env)     ## number of undefined random walks
     es <- .gsva_score_genesets(R, geneSetsIdx, intrnks, sparse, maxDiff,
                                absRanking, tau, any_na, na_use, minSize,
-                               wna_env, verbose)
+                               wna_env, verbose, device)
 
     if (any_na && na_use == "na.rm")
         if (get("w", envir=wna_env)) {
@@ -2163,8 +2308,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
         cli_alert_warning(msg)
     }
 
-    if (ncol(R) > 10000) ## free up ASAP memory we need not anymore and was
-        out <- gc()      ## allocated during score calculations on a big R
+    .release_block_mem(ncol(R)) ## allocated by the score calculations
 
     return(es)
 }
@@ -2421,7 +2565,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
 #' @importFrom cli cli_abort
 .gsva_score_genesets <- function(R, geneSetsIdx, intrnks, sparse, maxDiff,
                                  absRanking, tau, any_na, na_use, minSize,
-                                 wna_env, verbose) {
+                                 wna_env, verbose, device) {
     minSize <- as.integer(minSize)
     stopifnot(is.list(geneSetsIdx)) ## QC
     stopifnot(length(geneSetsIdx) > 0) ## QC
@@ -2437,24 +2581,86 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
     stopifnot(is.logical(verbose)) ## QC
     na_use <- as.integer(factor(na_use, levels=c("everything", "all.obs",
                                                  "na.rm")))
-    sco <- .Call("gsva_score_genesets_R", R, geneSetsIdx, intrnks, sparse,
-                 maxDiff, absRanking, as.double(tau), any_na, na_use, minSize,
-                 verbose)
 
-    if (any_na) {
-      if (na_use == 2 && !is.null(attr(sco, "attrNAs")))
-          cli_abort(c("x"="Input GSVA ranks have NA values."))
-
-      if (na_use == 3 && !is.null(attr(sco, "attrNAs")))
-          assign("w", TRUE, envir=wna_env)
-
-      attr(sco, "attrNAs") <- NULL ## clean up the NA informing attribute
+    if (device == "gpu") {
+        .check_gpu_device()
     }
 
-    nundef <- attr(sco, "attrUndefWalks")
-    if (!is.null(nundef)) {
-        assign("u", get("u", envir=wna_env) + nundef, envir=wna_env)
-        attr(sco, "attrUndefWalks") <- NULL ## clean up informing attribute
+    n_gsets <- length(geneSetsIdx)
+    n_cols  <- ncol(R)
+
+    if (!any_na && device == "gpu") {
+        gset_sizes  <- lengths(geneSetsIdx)
+        max_gpu_sz  <- .gsva_cuda_max_gset_size()
+        walk_safe   <- .gsva_cuda_walk_safe(nrow(R), gset_sizes, tau)
+        full_set    <- gset_sizes == nrow(R)
+
+        gpu_idxs    <- which(gset_sizes <= max_gpu_sz & walk_safe & !full_set)
+        cpu_idxs    <- which(gset_sizes > max_gpu_sz | !walk_safe | full_set)
+
+        if (length(cpu_idxs) > 0 && verbose) {
+            n_gpu_gsets <- length(gpu_idxs)
+            n_cpu_gsets <- length(cpu_idxs)
+            max_csize   <- max(gset_sizes[cpu_idxs])
+            n_unsafe    <- sum(!walk_safe)
+            n_full      <- sum(full_set)
+            cli_alert_info(paste("Hybrid GPU/CPU dispatch: {n_gpu_gsets} gene sets at most",
+                                 "{max_gpu_sz} genes on GPU,",
+                                 "{n_cpu_gsets} gene sets max {max_csize} genes on CPU"))
+            if (n_unsafe > 0)
+                cli_alert_info(paste("{n_unsafe} gene sets at risk of float overflow",
+                                     "or underflow at tau={tau} scored on CPU"))
+            if (n_full > 0)
+                cli_alert_info(paste("{n_full} gene sets containing all genes",
+                                     "scored on CPU"))
+        }
+    } else {
+        gpu_idxs <- integer(0)
+        cpu_idxs <- seq_len(n_gsets)
+    }
+
+    if (length(gpu_idxs) > 0) {
+        sco_gpu <- .Call("gsva_score_genesets_gpu_R", R,
+                         geneSetsIdx[gpu_idxs], intrnks, sparse,
+                         maxDiff, absRanking, as.double(tau))
+
+        nundef_gpu <- attr(sco_gpu, "attrUndefWalks")
+        if (!is.null(nundef_gpu))
+            assign("u", get("u", envir=wna_env) + nundef_gpu, envir=wna_env)
+        attr(sco_gpu, "attrUndefWalks") <- NULL
+
+        # fast path for the GPU-only computation
+        if (length(cpu_idxs) == 0)
+            return(sco_gpu)
+    }
+
+    sco <- matrix(NA_real_, nrow = n_gsets, ncol = n_cols)
+
+    if (length(gpu_idxs) > 0)
+        sco[gpu_idxs, ] <- sco_gpu
+
+    if (length(cpu_idxs) > 0) {
+        sco_cpu <- .Call("gsva_score_genesets_R", R, geneSetsIdx[cpu_idxs],
+                         intrnks, sparse, maxDiff, absRanking,
+                         as.double(tau), any_na, na_use, minSize, verbose)
+
+        if (any_na) {
+            if (na_use == 2 && !is.null(attr(sco_cpu, "attrNAs")))
+                cli_abort(c("x" = "Input GSVA ranks have NA values."))
+
+            if (na_use == 3 && !is.null(attr(sco_cpu, "attrNAs")))
+                assign("w", TRUE, envir = wna_env)
+
+            attr(sco_cpu, "attrNAs") <- NULL ## clean up the NA informing attribute
+        }
+
+        nundef <- attr(sco_cpu, "attrUndefWalks")
+        if (!is.null(nundef)) {
+            assign("u", get("u", envir=wna_env) + nundef, envir=wna_env)
+            attr(sco_cpu, "attrUndefWalks") <- NULL ## clean up informing attribute
+        }
+
+        sco[cpu_idxs, ] <- sco_cpu
     }
 
     sco

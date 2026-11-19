@@ -12,7 +12,8 @@ gsvaMap(
   output = c("object", "HDF5", "Parquet"),
   verbose = TRUE,
   BTPARAM = BatchtoolsParam(workers = 2, progressbar = verbose),
-  MAPREDO = NULL
+  MAPREDO = NULL,
+  device = c("cpu", "gpu")
 )
 
 gsvaReduce(mapOutput, verbose = TRUE)
@@ -25,7 +26,8 @@ gsvaBatchtoolsSlurmParam(
   ncpus_per_task = 2,
   mem = "10G",
   arrayjobs = FALSE,
-  template = system.file("templates", "slurm-gsva.tmpl", package = "GSVA")
+  template = system.file("templates", "slurm-gsva.tmpl", package = "GSVA"),
+  gres = NULL
 )
 }
 \arguments{
@@ -60,7 +62,9 @@ also writes in that directory a manifest file, ending in \verb{_manifest.rds},
 which allows the \code{MAPREDO} argument to find them. For this reason,
 \code{gsvaMap()} gives an error when that directory already has results of a
 previous call with the same \code{FUN}, \code{inputData} and \code{output} arguments,
-unless \code{MAPREDO} is given.}
+unless \code{MAPREDO} is given. With \code{FUN=gsvaRowNorm} and \code{rowNorm="clr"},
+\code{gsvaMap()} returns an object instead of saving it, see the 'Value'
+section.}
 
 \item{verbose}{Gives information about the progress of the calculations.
 Default: \code{TRUE}.}
@@ -102,6 +106,24 @@ one of them. Note that \code{inputData} is matched by its dimensions, dimension
 names and GSVA parameters, but not by its values. Default: \code{NULL}, which
 computes all chunks.}
 
+\item{device}{In \code{gsvaMap()} with \code{FUN=gsvaColScores}, the device on which
+each job calculates the scores, given to the \code{device} argument of
+\code{\link{gsvaColScores}}: either "cpu" (default) or "gpu". Unlike in
+\code{\link{gsvaColScores}}, the device is not selected automatically, because the
+jobs of a workload manager, such as Slurm, must request a GPU in advance,
+e.g., with the \code{gres} argument of \code{gsvaBatchtoolsSlurmParam()}, and
+\code{gsvaMap()} gives a warning when \code{device="gpu"} and the jobs of Slurm do
+not request it with that argument, which the template of the job scripts
+or the partition may still do. A job that cannot use a GPU gives an error,
+and its chunk can be resubmitted with the \code{MAPREDO} argument. The GPU
+calculates the scores without the parallel workers of each job, so that
+one CPU core per job suffices for this step. The jobs of the \code{"socket"}
+cluster of \code{BTPARAM}, which run on the machine where \code{gsvaMap()} is
+called, share its GPU. The jobs of the \code{"multicore"} cluster of \code{BTPARAM},
+which is the default one on Unix-like systems, are processes forked from
+the R session, which cannot use the GPU, and \code{device="gpu"} gives an error
+with them. This argument is ignored with the other values of \code{FUN}.}
+
 \item{mapOutput}{In \code{gsvaReduce()}, the output of \code{gsvaMap()}, which can be
 a list of objects or a list of paths to GSVA output saved with
 \code{\link{saveHDF5GSVA}} or \code{\link{saveParquetGSVA}}, such as the one returned by
@@ -113,10 +135,11 @@ output of the GSVA calculations will be saved. In this directory,
 run at the start of each job, and a configuration file for the package
 \href{https://cran.r-project.org/package=batchtools}{batchtools},
 \code{gsvabatchtools.conf.R}, which makes \code{gsvaMap()} check the state of the
-jobs at most every 30 seconds, instead of up to every two minutes, to notice
-sooner jobs killed by the workload manager. This file also loads the
-batchtools configuration file of the user, if any, whose settings,
-including the interval between checks, take precedence. Default:
+jobs at most every 10 seconds, instead of up to every two minutes, to notice
+sooner the end of the jobs, including those killed by the workload
+manager. This file also loads the batchtools configuration file of the
+user, if any, whose settings, including the interval between checks, take
+precedence. Default:
 "GSVAOUTPUT" in the current working directory.}
 
 \item{partition}{In \code{gsvaBatchtoolsSlurmParam()}, name of the Slurm partition
@@ -154,11 +177,12 @@ to use for each independent task executed within a compute node. Default: 2.}
 each independent task executed within a compute node, which GSVA uses as its
 maximum main memory, see the \code{maxmem} argument of \code{\link[=gsva]{gsva()}}. Each
 task runs one R process and, with more than one CPU core per task, as many
-parallel workers, and each of these R processes takes about 0.8 GB by
-itself for loading GSVA and the packages it depends on, so that \code{mem}
-should be at least \code{(1 + ncpus_per_task)} times 0.8 GB, plus the memory
-needed by the calculations on each chunk of data. \code{gsvaBatchtoolsSlurmParam()}
-gives a warning when \code{mem} is smaller than the former, while \code{gsvaMap()},
+parallel workers, and each of these R processes takes about 0.9 GB
+(1.05 GB on macOS) by itself for loading GSVA and the packages it depends
+on, so that \code{mem} should be at least \code{(1 + ncpus_per_task)} times 0.9 GB,
+plus the memory needed by the calculations on each chunk of data.
+\code{gsvaBatchtoolsSlurmParam()} gives a warning when \code{mem} is smaller than
+the former, while \code{gsvaMap()},
 before submitting any job, gives an error in that case, because such jobs
 would be killed by the workload manager, and a warning when \code{mem} is smaller
 than the memory it estimates that the calculations on each chunk of data
@@ -188,9 +212,21 @@ arguments \code{walltime} and \code{arrayjobs}, the time limit in the \code{wall
 element only when it is given, which is either a number of seconds, as in
 the templates of batchtools, or the character string \code{"UNLIMITED"}, and in
 array jobs, at most as many tasks at
-the same time as given in the \code{array.throttle} element, see the template
-provided by GSVA. Default:
+the same time as given in the \code{array.throttle} element, and to support the
+argument \code{gres}, the generic resources in the \code{gres} element only when it is
+given, see the template provided by GSVA. Default:
 \code{system.file("templates", "slurm-gsva.tmpl", package="GSVA")}.}
+
+\item{gres}{In \code{gsvaBatchtoolsSlurmParam()}, either \code{NULL} or a character
+string with the generic resources that each job requests from Slurm, as in
+the \code{--gres} option of the Slurm command \code{sbatch}, e.g., \code{"gpu:1"} for one
+GPU, or \code{"gpu:a100:1"} for one GPU of a given type, for \code{gsvaMap()} with
+\code{FUN=gsvaColScores} and \code{device="gpu"}, which uses one GPU per job, so
+that further GPUs of a job would be idle. The jobs of the other steps,
+which do not use the GPU, should not request it, and \code{gsvaMap()} says so
+when they do; e.g., a separate \code{BatchtoolsParam} object, with this argument
+and \code{ncpus_per_task=1}, can be created for the scores. When \code{NULL}, no
+generic resources are requested. Default: \code{NULL}.}
 }
 \value{
 The \code{gsvaMap()} function returns either a list of objects with the
@@ -203,7 +239,21 @@ only the failed chunks, but not to \code{gsvaReduce()}, which gives an error.
 When results are saved to disk, chunks of jobs that did not deliver any
 result, such as jobs killed by the workload manager, are also reported as
 failed, unless no chunk was completed, in which case \code{gsvaMap()} gives an
-error. The \code{gsvaReduce()} function returns a single
+error. When the results are chunks of rows of a \code{SummarizedExperiment}
+object, as with \code{FUN=gsvaRowNorm}, only the first chunk stores the column
+data of the input, which the other chunks share in the result of
+\code{gsvaReduce()}. With \code{FUN=gsvaRowNorm} and a \code{gsvaParam} object with
+\code{rowNorm="clr"}, the jobs only calculate, by chunks of columns, the
+geometric mean of each row across all columns, and \code{gsvaMap()} returns a
+list with a single object, whatever the value of \code{output}, in which the
+division of each row by its geometric mean is a delayed operation on the
+input data, as \code{gsvaRowNorm()} does on data stored on disk. This object
+stores no values of its own, and reads them from the input data, which must
+remain in place, when the next step, e.g., \code{gsvaMap()} with
+\code{FUN=gsvaColRanks}, processes it by chunks of columns. If the calculation
+of the geometric means fails in some chunk, \code{gsvaMap()} gives an error,
+and \code{MAPREDO} has no effect on its result, which has no failed chunks.
+The \code{gsvaReduce()} function returns a single
 object that combines the results from all compute nodes. The
 \code{gsvaBatchtoolsSlurmParam()} function returns a \code{BatchtoolsParam} object with
 some sensible defaults for running GSVA calculations on a SLURM cluster.
@@ -258,7 +308,7 @@ gsvapar <- gsvaParam(y, geneSets)
 ## how to distribute them across multiple compute nodes in a
 ## high-performance computing (HPC) environment
 library(BiocParallel)
-btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="1G"))
+btpar <- BatchtoolsParam(workers=1, resources=list(ncpus=1, memory="2G"))
 
 ## calculate row-normalized expression values
 gsvarnorm <- gsvaReduce(gsvaMap(gsvaRowNorm, gsvapar, BTPARAM=btpar))

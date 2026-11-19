@@ -56,14 +56,17 @@ exportMethods(spatCor)
 import(methods)
 importClassesFrom(Biobase,ExpressionSet)
 importClassesFrom(DelayedArray,DelayedAbind)
+importClassesFrom(DelayedArray,DelayedAperm)
 importClassesFrom(DelayedArray,DelayedArray)
 importClassesFrom(DelayedArray,DelayedMatrix)
 importClassesFrom(DelayedArray,DelayedSetDimnames)
 importClassesFrom(DelayedArray,DelayedSubset)
+importClassesFrom(DelayedArray,DelayedUnaryIsoOp)
 importClassesFrom(GSEABase,GeneIdentifierType)
 importClassesFrom(GSEABase,GeneSet)
 importClassesFrom(GSEABase,GeneSetCollection)
 importClassesFrom(HDF5Array,CSC_H5SparseMatrixSeed)
+importClassesFrom(HDF5Array,H5SparseMatrixSeed)
 importClassesFrom(HDF5Array,HDF5Array)
 importClassesFrom(HDF5Array,HDF5Matrix)
 importClassesFrom(IRanges,IRanges)
@@ -73,6 +76,10 @@ importClassesFrom(SingleCellExperiment,SingleCellExperiment)
 importClassesFrom(SparseArray,SVT_SparseMatrix)
 importClassesFrom(SpatialExperiment,SpatialExperiment)
 importClassesFrom(SummarizedExperiment,SummarizedExperiment)
+importFrom(AnnotationDbi,
+  mget,
+  revmap
+)
 importFrom(Biobase,selectSome)
 importFrom(BiocGenerics,
   "annotation<-",
@@ -109,7 +116,6 @@ importFrom(BiocParallel,
 importFrom(DelayedArray,
   ArbitraryArrayGrid,
   DelayedArray,
-  chunkGrid,
   chunkdim,
   colAutoGrid,
   defaultAutoGrid,
@@ -136,13 +142,15 @@ importFrom(GSEABase,
 )
 importFrom(HDF5Array,
   H5SparseMatrix,
+  H5SparseMatrixSeed,
   HDF5Array,
   getHDF5DumpChunkDim,
   getHDF5DumpChunkLength,
   getHDF5DumpCompressionLevel,
   getHDF5DumpDir,
   loadHDF5SummarizedExperiment,
-  saveHDF5SummarizedExperiment
+  saveHDF5SummarizedExperiment,
+  setHDF5DumpDir
 )
 importFrom(IRanges,
   CharacterList,
@@ -173,6 +181,7 @@ importFrom(S4Vectors,
   "metadata<-",
   DataFrame,
   SimpleList,
+  make_zero_col_DFrame,
   metadata
 )
 importFrom(SingleCellExperiment,
@@ -190,10 +199,13 @@ importFrom(SparseArray,
 importFrom(SpatialExperiment,SpatialExperiment)
 importFrom(SummarizedExperiment,
   "assay<-",
+  "colData<-",
   SummarizedExperiment,
   assay,
-  assayNames
+  assayNames,
+  colData
 )
+importFrom(annotate,getAnnMap)
 importFrom(cli,
   cli_abort,
   cli_alert_danger,
@@ -223,10 +235,12 @@ importFrom(methods,
   getClass,
   is,
   isClass,
-  new
+  new,
+  selectMethod
 )
 importFrom(rhdf5,
-  H5Fis_hdf5,
+  H5Fclose,
+  H5Fopen,
   H5Sunlimited,
   h5createDataset,
   h5createFile,

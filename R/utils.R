@@ -32,7 +32,7 @@ setMethod("unwrapData", signature("SummarizedExperiment"),
               assay <- .check_unwrapping_assay(container,
                                                "SummarizedExperiment", assay)
 
-              return(assays(container)[[assay]])
+              return(.unwrap_assay(container, assay))
           })
 
 #' @importFrom cli cli_abort
@@ -41,7 +41,7 @@ setMethod("unwrapData", signature("SingleCellExperiment"),
               assay <- .check_unwrapping_assay(container,
                                                "SingleCellExperiment", assay)
 
-              return(assays(container)[[assay]])
+              return(.unwrap_assay(container, assay))
           })
 
 setMethod("unwrapData", signature("SpatialExperiment"),
@@ -49,8 +49,28 @@ setMethod("unwrapData", signature("SpatialExperiment"),
               assay <- .check_unwrapping_assay(container,
                                                "SpatialExperiment", assay)
 
-              return(assays(container)[[assay]])
+              return(.unwrap_assay(container, assay))
           })
+
+## the assay 'assay' of the SummarizedExperiment object 'container', with
+## the dimension names of 'container', as assays(container)[[assay]] returns
+## it, but without setting the dimension names of the other assays, since
+## setting them on a DelayedArray object validates it by extracting an empty
+## array from its seeds, which opens every HDF5 file bound by gsvaReduce(),
+## and this can take seconds on the shared filesystems of clusters
+.unwrap_assay <- function(container, assay) {
+    a <- assays(container, withDimnames=FALSE)[[assay]]
+    x_dimnames <- dimnames(container)
+    if (is.null(x_dimnames))
+        x_dimnames <- list(NULL, NULL)
+    a_dimnames <- dimnames(a)
+    a_dimnames[1:2] <- x_dimnames
+    if (all(vapply(a_dimnames, is.null, logical(1))))
+        a_dimnames <- NULL
+    if (!identical(dimnames(a), a_dimnames))
+        dimnames(a) <- a_dimnames
+    a
+}
 
 
 ## metadata recorded in every GSVA output object: the version of GSVA that
@@ -248,23 +268,24 @@ setMethod("wrapData", signature(container="SingleCellExperiment"),
                   stopifnot(all(rownames(dataMatrix) %in% rownames(container)))
                   mask <- rownames(container) %in% rownames(dataMatrix)
                   if (!dropAssays) {
-                      if (!is.na(first) && !is.na(last) && whdim == 2) {
-                          first_to_last <- seq.int(first, last, 1)
-                          adata <- c(assays(container[mask, first_to_last]), adata)
-                          rdimdata <- lapply(rdimdata,
-                                             function(x)
-                                                 x[first_to_last, , drop=FALSE])
-                          aexpsdata <- lapply(aexpsdata,
-                                              function(x)
-                                                  x[, first_to_last, , drop=FALSE])
-                      } else
+                      if (!is.na(first) && !is.na(last) && whdim == 2)
+                          adata <- c(assays(container[mask, seq.int(first, last, 1)]), adata)
+                      else
                           adata <- c(assays(container[mask, ]), adata)
                   }
                   rdata <- rowData(container)[mask, ]
               }
+              ## the column data, reduced dimensions and alternative
+              ## experiments of a chunk of columns are those of its columns
               cdata <- colData(container)
-              if (!is.na(first) && !is.na(last) && whdim == 2)
-                  cdata <- cdata[seq.int(first, last, 1), , drop=FALSE]
+              if (!is.na(first) && !is.na(last) && whdim == 2) {
+                  first_to_last <- seq.int(first, last, 1)
+                  cdata <- cdata[first_to_last, , drop=FALSE]
+                  rdimdata <- lapply(rdimdata,
+                                     function(x) x[first_to_last, , drop=FALSE])
+                  aexpsdata <- lapply(aexpsdata,
+                                      function(x) x[, first_to_last])
+              }
               rval <- SingleCellExperiment(assays=adata, colData=cdata,
                                            rowData=rdata, reducedDims=rdimdata,
                                            altExps=aexpsdata,
@@ -316,18 +337,31 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                   }
                   rdata <- rowData(container)[mask, ]
               }
+              ## the column data, reduced dimensions, alternative experiments
+              ## and spatial coordinates of a chunk of columns are those of
+              ## its columns
               cdata <- colData(container)
-              if (!is.na(first) && !is.na(last) && whdim == 2)
-                  cdata <- cdata[seq.int(first, last, 1), , drop=FALSE]
+              rdimdata <- reducedDims(container)
+              aexpsdata <- altExps(container)
+              coords <- spatialCoords(container)
+              if (!is.na(first) && !is.na(last) && whdim == 2) {
+                  first_to_last <- seq.int(first, last, 1)
+                  cdata <- cdata[first_to_last, , drop=FALSE]
+                  rdimdata <- lapply(rdimdata,
+                                     function(x) x[first_to_last, , drop=FALSE])
+                  aexpsdata <- lapply(aexpsdata,
+                                      function(x) x[, first_to_last])
+                  coords <- coords[first_to_last, , drop=FALSE]
+              }
               rval <- SpatialExperiment(
                   assays=adata,
                   colData=cdata,
                   rowData=rdata,
-                  reducedDims=reducedDims(container),
-                  altExps=altExps(container),
+                  reducedDims=rdimdata,
+                  altExps=aexpsdata,
                   metadata=metadata(container),
                   imgData=imgData(container),
-                  spatialCoords=spatialCoords(container))
+                  spatialCoords=coords)
               metadata(rval)$gsvaParam <- .gsvaParam_as_list(param)
               omd <- .gsva_output_metadata(dataMatrix, assay)
               metadata(rval)$gsvaVersion <- omd$gsvaVersion
@@ -436,10 +470,12 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## nonzero value while it lasts, as measured on single-cell data, and the
 ## blocks of columns already read form the result, which takes their memory
 ## when bound. when 'X' is stored in chunks of several columns, as in dense
-## HDF5 datasets, blocks span the width of the chunks, because blocks
-## splitting chunks make their reading slower, while wider blocks do not make
-## it faster: the smallest multiple of that width not narrower than the
-## default block of the DelayedArray package. otherwise, as in the compressed
+## HDF5 datasets, also through delayed operations such as a subset of its
+## columns, see .ondisk_chunkdim(), blocks span the width of the chunks,
+## because blocks splitting chunks make their reading slower, while wider
+## blocks do not make it faster: the smallest multiple of that width not
+## narrower than the default block of the DelayedArray package. otherwise, as
+## in the compressed
 ## sparse column (CSC) layout of HDF5 files, e.g., those written by
 ## saveHDF5GSVA(), where each column is a chunk, or when 'X' binds several
 ## files, blocks are as wide as the memory allows, because each block reads
@@ -448,57 +484,145 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## jobs of gsvaMap(); without knowing that memory, blocks have the default
 ## size. blocks are narrower when their memory does not fit in the fraction
 ## .mem_fraction_R of the maximum main memory 'maxmem' left by the result,
-## whose estimated size is 'insize', when both are known, and by the memory
-## held by other objects, see .held_mem(). the number of nonzero values of
+## whose estimated size is 'insize', when both are known, by the memory held
+## by other objects, see .held_mem(), and by the memory of this R process by
+## itself, see .block_worker_mem(), but not narrower than a chunk, or
+## than the default block when 'X' is not stored in chunks of several columns,
+## because narrower blocks would make the loading take much longer, e.g.,
+## blocks of a single column would decompress all the chunks that it spans for
+## each column, when the memory left by the result is too small, where the
+## whole calculations do not fit in 'maxmem' anyway. the number of nonzero
+## values of
 ## each column, when the layout of 'X' gives it without reading its values,
 ## see .col_nzcounts(), sets the width of each block to the columns that fit
 ## in that memory, because columns with many more nonzero values than the
 ## average, e.g., of cells with deeper sequencing, may be stored next to each
 ## other, and the average number of nonzero values per column, estimated
-## from 'insize', otherwise
-#' @importFrom DelayedArray colAutoGrid read_block chunkdim ArbitraryArrayGrid
+## from 'insize', otherwise. with the parallel workers of 'BPPARAM', the
+## blocks are read by the workers, see .load_workers()
+#' @importFrom DelayedArray colAutoGrid read_block ArbitraryArrayGrid
 #' @importFrom BiocGenerics type
-.load_sparse_by_blocks <- function(X, maxmem=Inf, insize=NA_real_) {
+.load_sparse_by_blocks <- function(X, maxmem=Inf, insize=NA_real_,
+                                   BPPARAM=NULL) {
     if (ncol(X) == 0L)
         return(as(X, "SVT_SparseMatrix"))
 
     ncolblock <- ncol(colAutoGrid(X)[[1L]]) ## default block size
     budget <- !is.null(maxmem) && !is.null(insize) && is.finite(maxmem) &&
               !is.na(insize)
-    cd <- chunkdim(X)
+    cd <- .ondisk_chunkdim(X)
     multicol <- !is.null(cd) && cd[2] > 1
     if (multicol) ## multiple of the width of the chunks
         ncolblock <- cd[2] * ceiling(ncolblock / cd[2])
-    else if (budget) ## as wide as the memory allows, see below
+    ## the narrowest blocks within the memory available
+    mincols <- if (multicol) cd[2] else ncolblock
+    if (!multicol && budget) ## as wide as the memory allows, see below
         ncolblock <- ncol(X)
     ## the DelayedArray package does not support blocks with more than
     ## .Machine$integer.max values
     maxcols <- floor(.Machine$integer.max / max(1, nrow(X)))
     grid <- NULL
+    avail <- Inf
+    blockbytes <- NA_real_ ## memory of the largest block while it is read
+    pm <- NULL
     if (budget) {
-        avail <- .mem_fraction_R * maxmem - insize - .held_mem()
+        pm <- .block_worker_mem(X, 2L, forked=.forked_workers(BPPARAM))
+        avail <- .mem_fraction_R * maxmem - insize - .held_mem() - pm$workermem
         nz <- if (multicol) NULL else .col_nzcounts(X)
-        if (!is.null(nz))
+        if (!is.null(nz)) {
+            ## at least the memory of 'mincols' columns of average width
+            avail <- max(avail, 160 * mean(pmax(1, nz)) * mincols)
             grid <- .nzcount_col_grid(X, 160 * pmax(1, nz), avail,
                                       min(ncolblock, maxcols))
-        else {
+            ends <- cumsum(vapply(seq_along(grid), function(i)
+                                      ncol(grid[[i]]), integer(1)))
+            blockbytes <- max(diff(c(0, cumsum(160 * pmax(1, nz))[ends])))
+        } else {
             eltbytes <- if (type(X) == "integer") 4 else 8
             nzpercol <- insize / (eltbytes + 4) / ncol(X)
-            ncolblock <- min(ncolblock,
-                             floor(avail / (160 * max(1, nzpercol))))
+            ncolblock <- max(mincols,
+                             min(ncolblock,
+                                 floor(avail / (160 * max(1, nzpercol)))))
+            if (multicol) ## whole chunks
+                ncolblock <- cd[2] * (ncolblock %/% cd[2])
         }
     }
     if (is.null(grid)) {
         ncolblock <- as.integer(max(1, min(ncol(X), ncolblock, maxcols)))
         grid <- colAutoGrid(X, ncol=ncolblock)
+        if (budget)
+            blockbytes <- 160 * max(1, nzpercol) * ncolblock
     }
-    blocks <- lapply(seq_along(grid), function(i)
-                         as(read_block(X, grid[[i]], as.sparse=TRUE),
-                            "SVT_SparseMatrix"))
+    nworkers <- .load_workers(X, length(grid), avail, blockbytes, BPPARAM,
+                              pm)
+    if (nworkers > 1L)
+        blocks <- .read_sparse_blocks_bp(X, grid, nworkers, BPPARAM)
+    else
+        blocks <- lapply(seq_along(grid), .read_sparse_block, X, grid)
     res <- do.call(cbind, blocks)
     dimnames(res) <- dimnames(X)
 
     res
+}
+
+## block 'i' of the grid 'grid' of the on-disk sparse matrix 'M', read into
+## main memory as an SVT_SparseMatrix object, see .load_sparse_by_blocks();
+## the matrix is not called 'X', which is the first argument of bplapply()
+#' @importFrom DelayedArray read_block
+.read_sparse_block <- function(i, M, grid) {
+    as(read_block(M, grid[[i]], as.sparse=TRUE), "SVT_SparseMatrix")
+}
+
+## number of parallel workers of 'BPPARAM' that read at the same time the
+## 'nblocks' blocks of the on-disk sparse matrix 'X', each one taking at most
+## 'blockbytes' bytes while it is read, within the memory 'avail' left by the
+## result, see .load_sparse_by_blocks(): as many as there are workers and
+## blocks, when the memory is not known, and otherwise as many as fit in
+## 'avail' together with the memory of all the workers, 'pm', see
+## .block_worker_mem(), or 1, to read the blocks in this process, when fewer
+## than two fit. reading the blocks of 300,000 cells of single-cell data
+## stored in a dense HDF5 dataset took a third of the time with six workers,
+## each taking about 2.5 GiB more memory while reading its block
+#' @importFrom BiocParallel bpnworkers
+.load_workers <- function(X, nblocks, avail, blockbytes, BPPARAM,
+                          pm=NULL) {
+    if (is.null(BPPARAM) || nblocks < 2L)
+        return(1L)
+    nworkers <- min(bpnworkers(BPPARAM), nblocks)
+    if (nworkers < 2L || !is.finite(avail) || is.na(blockbytes))
+        return(as.integer(nworkers))
+
+    if (is.null(pm))
+        pm <- .block_worker_mem(X, 2L, forked=.forked_workers(BPPARAM))
+    procs <- bpnworkers(BPPARAM) * (pm$parworkermem + pm$copiedmem)
+    as.integer(max(1, min(nworkers, floor((avail - procs) / blockbytes))))
+}
+
+## blocks of the grid 'grid' of the on-disk sparse matrix 'X' read by the
+## workers of 'BPPARAM', in rounds of 'nworkers' blocks, so that at most
+## 'nworkers' blocks are read at the same time, and each worker returns each
+## of its blocks as soon as it is read, instead of holding all of them until
+## the end, as bplapply() does with the elements given to a worker. the
+## workers run all the rounds, instead of being started anew for each of
+## them, and without progress bars, see .bp_blocks()
+#' @importFrom BiocParallel bpisup bpstart bpstop bpprogressbar
+#' @importFrom BiocParallel "bpprogressbar<-"
+.read_sparse_blocks_bp <- function(X, grid, nworkers, BPPARAM) {
+    X <- .h5file_seeds_to_paths(X, BPPARAM, nworkers)
+    if (!bpisup(BPPARAM)) {
+        bpstart(BPPARAM)
+        on.exit(bpstop(BPPARAM), add=TRUE)
+    }
+    if (bpprogressbar(BPPARAM)) {
+        bpprogressbar(BPPARAM) <- FALSE
+        on.exit(bpprogressbar(BPPARAM) <- TRUE, add=TRUE)
+    }
+    rounds <- split(seq_along(grid),
+                    ceiling(seq_along(grid) / nworkers))
+    unlist(lapply(rounds, function(r)
+                      .gsva_bplapply(r, .read_sparse_block, M=X, grid=grid,
+                                     BPPARAM=BPPARAM)),
+           recursive=FALSE, use.names=FALSE)
 }
 
 ## number of nonzero values of each column of the sparse matrix 'X', when
@@ -560,8 +684,10 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     ArbitraryArrayGrid(list(nrow(X), ends))
 }
 
+## with the parallel workers of 'BPPARAM', the sparse data of the GSVA and
+## average methods is loaded by them, see .load_sparse_by_blocks()
 .check_sparse_load_input_expr <- function(expr, method, first, last, whdim,
-                                          ondisk, verbose) {
+                                          ondisk, verbose, BPPARAM=NULL) {
     ## methods that deal with sparse data, which is loaded in main memory as
     ## sparse, while the other methods load it as a dense matrix
     sparsemethods <- c("GSVA", "average")
@@ -599,12 +725,13 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 
         if (method %in% sparsemethods && is_sparse(expr))
             expr <- .load_sparse_by_blocks(expr, maxmem=attr(ondisk, "maxmem"),
-                                           insize=attr(ondisk, "insize"))
+                                           insize=attr(ondisk, "insize"),
+                                           BPPARAM=BPPARAM)
         else
             expr <- as.matrix(expr)
 
         if (ncol(expr) > 10000) ## free up ASAP memory we need not anymore
-          out <- gc()           ## and was allocated when reading a big object
+          invisible(gc())       ## and was allocated when reading a big object
     } 
  
     expr
@@ -729,21 +856,26 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     return(assay)
 }
 
+## the assays are taken without their dimension names, because assays()
+## sets them on every assay, and setting them on a DelayedArray object
+## validates it by extracting an empty array from its seeds, which opens
+## every HDF5 file bound by gsvaReduce()
 #' @importFrom cli cli_abort
 .check_unwrapping_assay <- function(container, container_class, assay) {
 
-    if (length(assays(container)) == 0L) {
+    anames <- names(assays(container, withDimnames=FALSE))
+    if (length(assays(container, withDimnames=FALSE)) == 0L) {
         msg <- "The input {container_class} object has no assay data."
         cli_abort(c("x"=msg))
     }
 
     if (missing(assay) || is.na(assay)) {
-        assay <- names(assays(container))[1]
+        assay <- anames[1]
     } else {
         if (!is.character(assay))
             cli_abort(c("x"="The 'assay' argument must be a character string."))
         assay <- assay[1]
-        if (!assay %in% names(assays(container)))
+        if (!assay %in% anames)
             cli_abort(c("x"=paste("assay {assay} not found in the input",
                                   "{container_class} object.")))
     }
@@ -837,9 +969,11 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
   return(object@ondisk)
 }
 
-#' @importFrom IRanges IRanges
-#' @importFrom S4Arrays is_sparse ArrayViewport
-#' @importFrom DelayedArray chunkdim chunkGrid
+## number of nonzero values of the assay 'assay' of the expression data
+## 'exprData', counted when it is in main memory, when its seeds store it, see
+## .seeds_nzcount(), or when it has fewer than 2000 columns, and otherwise
+## estimated from a sample of its blocks, see .sample_nonzero_fraction()
+#' @importFrom S4Arrays is_sparse
 #' @importFrom SparseArray nzcount
 #' @importFrom cli cli_alert_info cli_abort
 .estimate_nzcount <- function(exprData, assay, verbose) {
@@ -853,20 +987,13 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         if (is(X, "dgCMatrix") || is(X, "SVT_SparseMatrix"))
             nzc <- as.numeric(nzcount(X))
         else if (is(X, "DelayedMatrix")) {
-            if (nc < 2000)
+            seedsnzc <- .seeds_nzcount(X)
+            if (!is.na(seedsnzc))
+                nzc <- seedsnzc
+            else if (nc < 2000)
                 nzc <- as.numeric(nzcount(as(X, "dgCMatrix")))
             else {
-                block_dim <- chunkdim(X)
-                if (is.null(block_dim)) {
-                    grid <- defaultAutoGrid(X)
-                    block_dim <- dim(grid[[1L]])
-                }
-                block_dim <- c(min(c(nr, block_dim[1])), ## just in case there
-                               min(c(nc, block_dim[2]))) ## is only one block
-                ## just use the first block
-                vp <- ArrayViewport(dim(X), IRanges(c(1, 1), width=block_dim))
-                block <- read_block(X, vp)
-                nzc <- ceiling(tot * as.numeric(nzcount(block)) / prod(block_dim))
+                nzc <- ceiling(tot * .sample_nonzero_fraction(X))
                 estimated_flag <- TRUE
             }
         } else
@@ -883,6 +1010,71 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     }
 
     return(nzc)
+}
+
+## number of nonzero values of the DelayedArray object 'x', read from its
+## seeds without reading their values, when 'x' only binds seeds that store
+## it, such as the HDF5 files of the outputs of gsvaMap() bound by
+## gsvaReduce(), possibly setting their dimension names, and NA otherwise,
+## e.g., when 'x' subsets its seeds or operates on their values. sampling the
+## values of such bound outputs instead opens many of their files for each
+## sampled block, which can take minutes on the shared filesystems of clusters
+#' @importClassesFrom DelayedArray DelayedArray DelayedSetDimnames DelayedAbind
+#' @importClassesFrom HDF5Array H5SparseMatrixSeed
+#' @importClassesFrom Matrix dgCMatrix
+#' @importClassesFrom SparseArray SVT_SparseMatrix
+#' @importFrom SparseArray nzcount
+.seeds_nzcount <- function(x) {
+    if (is(x, "DelayedArray"))
+        x <- x@seed
+    if (is(x, "DelayedSetDimnames"))
+        return(.seeds_nzcount(x@seed))
+    if (is(x, "DelayedAbind"))
+        return(sum(vapply(x@seeds, .seeds_nzcount, numeric(1))))
+    if (is(x, "H5SparseMatrixSeed") || is(x, "dgCMatrix") ||
+        is(x, "SVT_SparseMatrix"))
+        return(as.numeric(nzcount(x)))
+
+    NA_real_
+}
+
+## fraction of nonzero values of the matrix 'X' stored on disk, estimated
+## from a sample of up to 'nsample' blocks spread over 'X'. when 'X' is stored
+## in chunks, the blocks are chunks, which are read and decompressed at once,
+## taken from different rows and columns of chunks, because the fraction of
+## nonzero values often differs between rows, e.g., between the genes of
+## single-cell data, which may be sorted in the file; otherwise, they are
+## blocks of columns with up to 'maxvalues' values each, which data stored by
+## columns, such as in CSC layout, read at once, see .h5_csc_create()
+#' @importFrom S4Arrays ArrayViewport read_block
+#' @importFrom SparseArray nzcount
+#' @importFrom IRanges IRanges
+.sample_nonzero_fraction <- function(X, nsample=32L, maxvalues=1e6) {
+    dims <- dim(X)
+    if (any(dims == 0))
+        return(0)
+    cd <- .ondisk_chunkdim(X)
+    if (is.null(cd))
+        cd <- c(dims[1L], max(1, floor(maxvalues / as.numeric(dims[1L]))))
+    cd <- pmax(1, pmin(cd, dims))
+    nchunks <- ceiling(dims / cd)
+    k <- seq_len(min(nsample, prod(nchunks)))
+    ## the i-th block is in the i-th of the k spaced rows of chunks, and in
+    ## the i-th of the k spaced columns of chunks, shifted by half of them
+    ## every other block, so that the blocks do not line up
+    rowpos <- floor((k - 1) * nchunks[1L] / length(k))
+    colpos <- (floor((k - 1) * nchunks[2L] / length(k)) +
+               floor(nchunks[2L] / 2) * (k %% 2L)) %% nchunks[2L]
+    nz <- tot <- 0
+    for (i in k) {
+        vpstart <- c(rowpos[i], colpos[i]) * cd + 1
+        vpend <- pmin(vpstart + cd - 1, dims)
+        block <- read_block(X, ArrayViewport(dims, IRanges(vpstart, vpend)))
+        nz <- nz + as.numeric(nzcount(block))
+        tot <- tot + prod(as.numeric(vpend - vpstart + 1))
+    }
+
+    nz / tot
 }
 
 #' @importFrom cli cli_abort
@@ -1006,6 +1198,30 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 }
 
 
+## fraction of nonzero values of the assay 'assay' of the expression data in
+## 'param', from the number of nonzero values in 'param', see
+## .estimate_nzcount(), or recomputed with 'recompute_nzcount=TRUE'
+#' @importFrom SparseArray nzcount
+.input_density <- function(param, assay, recompute_nzcount=FALSE) {
+    X <- unwrapData(get_exprData(param), assay)
+    tot <- as.numeric(nrow(X)) * as.numeric(ncol(X))
+    if (tot == 0)
+        return(1)
+    if (recompute_nzcount)
+        spa <- .estimate_nzcount(get_exprData(param), assay, FALSE) / tot
+    else {
+        spa <- nzcount(param) / tot
+        ## the number of nonzero values in the parameter object
+        ## may correspond to a larger data set, e.g., when columns
+        ## have been removed, and then it has to be recomputed
+        if (spa > 1)
+            spa <- .estimate_nzcount(get_exprData(param), assay,
+                                     FALSE) / tot
+    }
+
+    min(spa, 1)
+}
+
 ## estimated size in bytes of the input data of a step in main memory, i.e.,
 ## of the assay 'assay' of the expression data in 'param', restricted to the
 ## rows (whdim=1) or columns (whdim=2) from 'first' to 'last', when given,
@@ -1021,21 +1237,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     nr <- as.numeric(nrow(X))
     nc <- as.numeric(ncol(X))
     spa <- 1
-    if (is_sparse(X) && !dense) {
-        tot <- nr * nc
-        if (recompute_nzcount)
-            spa <- .estimate_nzcount(get_exprData(param), assay, FALSE) / tot
-        else {
-            spa <- nzcount(param) / tot
-            ## the number of nonzero values in the parameter object
-            ## may correspond to a larger data set, e.g., when columns
-            ## have been removed, and then it has to be recomputed
-            if (spa > 1)
-                spa <- .estimate_nzcount(get_exprData(param), assay,
-                                         FALSE) / tot
-        }
-        spa <- min(spa, 1)
-    }
+    if (is_sparse(X) && !dense)
+        spa <- .input_density(param, assay, recompute_nzcount)
     if (!is.na(first) || !is.na(last)) {
         if (whdim == 1)
             nr <- as.numeric(last - first + 1)
@@ -1064,18 +1267,20 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## algorithm of GSVA on sparse data, and the output and the working memory of
 ## the blocks take the size of the dense form, while the input keeps its size.
 ## with 'sendblocks=TRUE', the main R process takes a copy of the block of each
-## worker to send it to that worker, see .sends_blocks()
+## worker to send it to that worker, see .sends_blocks(). with 'sinkout=TRUE',
+## the output is written to disk block by block, see .fixed_mem()
 #' @importFrom DelayedArray getAutoBlockSize
 .step_data_mem <- function(dims, whdim, insize, eltbytes, sparse, inmemory,
                            mf, heldmem=.held_mem(), densify=FALSE,
-                           sendblocks=FALSE) {
+                           sendblocks=FALSE, sinkout=FALSE) {
     nunits <- max(1, dims[whdim])
     denseunitbytes <- as.numeric(dims[-whdim]) * eltbytes
     unitbytes <- if (inmemory && !densify) insize / nunits else denseunitbytes
     minunits <- min(nunits, max(1, floor(getAutoBlockSize() / denseunitbytes)))
     .fixed_mem(nunits, insize / nunits, whdim, sparse && !densify, inmemory,
                mf$outfactor, mf$outextra, mf$assembly,
-               outunitbytes=if (densify) denseunitbytes else insize / nunits) +
+               outunitbytes=if (densify) denseunitbytes else insize / nunits,
+               sinkout=sinkout) +
         mf$workfactor * minunits * unitbytes +
         (if (sendblocks && inmemory) minunits * insize / nunits else 0) +
         heldmem
@@ -1084,12 +1289,16 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## verifies that the 'ondisk' parameter is either 'auto', 'yes' or 'no' and, if
 ## 'auto', checks whether the calculations fit in the maximum available main
 ## memory with the input data in it, and sets 'ondisk' to 'yes' or 'no'
-## accordingly. the calculations fit when the memory taken by their data, see
-## .step_data_mem(), together with the rest of the input data in main memory,
-## see .step_held_input(), fits in the fraction .mem_fraction_R of 'maxmem'
-## available to the allocations of R, where 'mf' gives the memory factors of
-## the step, see .step_mem_factors(), and 'dense=TRUE' indicates that the input
-## data is loaded in main memory as a dense matrix, even when it is sparse. If
+## accordingly. the calculations fit when the memory that they require with
+## the input data in main memory and the parallel workers of 'BPPARAM', see
+## .step_mem_need(), fits in 'maxmem': the one taken by the main R process and
+## by each worker by themselves, see .worker_mem(), and the one taken by their
+## data, see .step_data_mem(), together with the rest of the input data in main
+## memory, see .step_held_input(), from the fraction .mem_fraction_R of
+## 'maxmem' available to the allocations of R, where 'mf' gives the memory
+## factors of the step, see .step_mem_factors(), and 'dense=TRUE' indicates
+## that the input data is loaded in main memory as a dense matrix, even when
+## it is sparse. If
 ## the input data is a DelayedArray, also reports whether the calculations fit
 ## in the maximum available main memory.
 ## If 'ondisk' is set to 'yes', then this function returns TRUE, otherwise it
@@ -1102,7 +1311,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 .check_ondisk <- function(param, assay=get_assay(param), first, last, whdim,
                           recompute_nzcount=FALSE, maxmem, verbose,
                           mf=list(workfactor=2, outfactor=1, outextra=0),
-                          dense=FALSE, densify=FALSE) {
+                          dense=FALSE, densify=FALSE, BPPARAM=NULL) {
     ondisk <- .get_ondisk(param)
     if (ondisk != "auto" && ondisk != "yes" && ondisk != "no")
         cli_abort(c("x"="'ondisk' should be either 'auto', 'yes' or 'no'"))
@@ -1119,12 +1328,20 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         heldmem <- .held_mem() +
                    .step_held_input(X, dims, whdim, FALSE,
                                     .input_held_mem(param))
-        need <- .step_data_mem(dims, whdim, insize,
-                               if (type(X) == "integer") 4 else 8,
-                               is_sparse(X) && !dense, TRUE, mf,
-                               heldmem=heldmem, densify=densify)
+        eltbytes <- if (type(X) == "integer") 4 else 8
+        nworkers <- .n_par_workers(BPPARAM, dims)
+        ## each R process takes the memory of this one, besides the matrices
+        ## of the assays of the input data that it holds, see .worker_mem()
+        permem <- .worker_mem(.held_shared_mem() + .input_shared_mem(param),
+                              full=.large_data(dims, eltbytes))
+        need <- .step_mem_need(dims, insize, whdim, eltbytes,
+                               is_sparse(X) && !dense, TRUE, mf, nworkers,
+                               heldmem, densify,
+                               .sends_blocks(TRUE, BPPARAM, nworkers),
+                               dgc=is(X, "dgCMatrix"), permem=permem,
+                               forked=.forked_workers(BPPARAM))
         ondisk <- "no"
-        if (need > .mem_fraction_R * maxmem) {
+        if (need > maxmem) {
             ondisk <- "yes"
             if (is(X, "DelayedArray") && verbose)
                 cli_alert_info(paste("Calculations with on-disk input data",
@@ -1151,12 +1368,122 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 }
 
 ## memory in bytes that each R process running GSVA takes by itself, the main
-## one and each of its parallel workers: loading GSVA and the packages it
-## depends on takes about 0.8 GB, which forked workers end up taking too,
-## because the garbage collector of R writes to the memory pages that they
-## share with the main process. it can be set with the option 'GSVA.workermem'
-.worker_mem <- function() {
-    as.numeric(getOption("GSVA.workermem", 0.8 * 1024^3))
+## one and each of its parallel workers, besides the data of the calculations:
+## the memory allocated by R in this process, other than the 'datamem' bytes
+## of the data of the calculations that it holds, plus the memory that each R
+## process takes outside R, see .proc_extra_mem(). forked workers, such as
+## those of a MulticoreParam object, end up taking that memory as their own,
+## because the garbage collector of R writes to the memory pages of each
+## object that they share with the main process, and a part of the data of
+## the calculations, see .fork_copied_mem(). in a new R session, loading GSVA
+## and the packages it depends on takes about 0.6 GB, which with the memory
+## outside R gives about 0.9 GB, as measured on Linux, to which loading a
+## SingleCellExperiment object with one million cells adds about 0.2 GB.
+## with 'session=FALSE', it is the memory of a new R process loading GSVA, such
+## as the one of a job of gsvaMap() or of a socket worker, instead of the one of
+## this process: those 0.6 GB allocated by R, together with the memory outside
+## R, which gives about 0.9 GB on Linux and about 1.05 GB on macOS. the memory allocated by R is measured
+## with a full collection of garbage with 'full=TRUE', see .r_mem_used(). it can
+## be set with the option 'GSVA.workermem'
+.worker_mem <- function(datamem=0, session=TRUE, full=FALSE) {
+    wm <- getOption("GSVA.workermem")
+    if (!is.null(wm))
+        return(as.numeric(wm))
+    if (!session)
+        return(0.6 * 1024^3 + .proc_extra_mem())
+
+    max(0, .r_mem_used(full) - datamem) + .proc_extra_mem()
+}
+
+## memory in bytes allocated by R in this process, as tracked by its garbage
+## collector, where each cons cell takes 56 bytes and each vector cell 8 bytes.
+## a full collection ('full=TRUE') takes about 0.2 s in a session with GSVA
+## loaded, which adds up over the many calls of small calculations, while a
+## collection of the youngest generation takes less than 1 ms and gives
+## about the same memory, but also the garbage left in the older generations,
+## e.g., about 0.1 GB after loading a SingleCellExperiment object with one
+## million cells, which each R process would take, see .worker_mem(). within
+## a step, which measures it several times, see .open_mem_scope(), a full
+## collection is done only when the one of the youngest generation gives more
+## than 32 MB of difference with the last full one of the step, giving then
+## the memory of the former, which is at least the one in use
+.r_mem_used <- function(full=FALSE) {
+    g <- gc(full=FALSE)
+    used <- sum(g[, 1L] * c(56, 8))
+    if (full) {
+        lastfull <- gsva_global$rmemfull
+        if (is.null(lastfull) || is.na(lastfull) ||
+            abs(used - lastfull) > 32 * 1024^2) {
+            g <- gc(full=TRUE)
+            used <- sum(g[, 1L] * c(56, 8))
+            if (!is.null(lastfull))
+                gsva_global$rmemfull <- used
+        }
+    }
+    used
+}
+
+## release, with a full collection of garbage, the memory that the
+## calculations on a block of 'ncols' columns, more than 10000, have allocated
+## and no longer need, only in an R process that is not a worker forked from
+## the one that loaded GSVA, such as those of a MulticoreParam object: a full
+## collection in a forked worker writes to the memory pages of every object
+## that it shares with the main R process, which the worker then copies, e.g.,
+## about the whole 4.5 GB of an R session holding the ranks of 100,000 cells,
+## in each of 4 workers scoring them, while the memory it would release goes
+## back to the system anyway when the worker ends
+.release_block_mem <- function(ncols) {
+    if (ncols > 10000 && identical(Sys.getpid(), gsva_global$pid))
+        invisible(gc())
+}
+
+## open, in a step, the scope where the memory allocated by R is measured
+## with a full collection of garbage only once, see .r_mem_used(), unless
+## another step running this one has opened it; it returns whether it opened
+## it, to be given to .close_mem_scope() on exit. outside such a scope, such
+## as between the steps run by gsva(), whose objects may then be released
+## without being collected, each measurement does a full collection
+.open_mem_scope <- function() {
+    if (!is.null(gsva_global$rmemfull))
+        return(FALSE)
+    gsva_global$rmemfull <- NA_real_
+    TRUE
+}
+
+.close_mem_scope <- function(opened) {
+    if (opened)
+        gsva_global$rmemfull <- NULL
+}
+
+## whether a matrix with dimensions 'dims' and 'eltbytes' bytes per value is
+## large enough, more than 1 GB in its dense form, for the memory of the R
+## processes processing it to be measured with a full collection of garbage,
+## see .worker_mem(), whose time is then small compared to the one of its
+## calculations
+.large_data <- function(dims, eltbytes=8) {
+    prod(as.numeric(dims)) * eltbytes > 1024^3
+}
+
+## memory in bytes that each R process takes outside the allocations of R,
+## such as the memory that R releases but the process keeps, as measured in
+## forked workers processing blocks of single-cell data stored on disk: about
+## 0.3 GB on Linux and about 0.45 GB on macOS, where an R process reading
+## blocks from an HDF5 file takes about 0.65 GB outside R, including the
+## buffers of .disk_read_mem()
+.proc_extra_mem <- function() {
+    if (Sys.info()[["sysname"]] == "Darwin") 0.45 * 1024^3 else 0.3 * 1024^3
+}
+
+## memory in bytes that each forked worker takes as its own from the data of
+## the calculations held by the main R process, of 'datamem' bytes in total,
+## sparse or not, and stored in a dgCMatrix object or not ('dgc'): the garbage
+## collector of R writes only to the memory page with the header of each
+## object, so that the data of large vectors remain shared, such as the ones
+## of a dense matrix or of a dgCMatrix object, while the many vectors of the
+## columns of an SVT_SparseMatrix object end up taking about one third of
+## their memory in each worker, as measured on Linux
+.fork_copied_mem <- function(datamem, sparse, dgc=FALSE) {
+    if (sparse && !dgc) datamem / 3 else 0
 }
 
 ## memory in bytes that each R process takes outside R while it reads blocks
@@ -1173,6 +1500,13 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## main memory while it runs the steps after the row normalization
 .held_mem <- function() {
     as.numeric(gsva_global$heldmem)
+}
+
+## memory in bytes of the matrices of the assays among the objects held by
+## .held_mem(), which forked workers share with the main R process, see
+## .worker_mem()
+.held_shared_mem <- function() {
+    as.numeric(gsva_global$heldshared)
 }
 
 ## memory in bytes that the matrix 'X' takes in main memory, which is none
@@ -1218,6 +1552,32 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     .container_held_mem(get_exprData(param), get_assay(param))
 }
 
+## memory in bytes that the matrices of the assays of the container 'x' of
+## expression data take in main memory, see .container_held_mem(), whose
+## values are in large vectors that forked workers share with the main R
+## process, see .fork_copied_mem(), unlike the rest of its data, such as the
+## many character strings of the names of the cells of single-cell data,
+## which they end up copying, see .worker_mem()
+#' @importMethodsFrom SummarizedExperiment assays
+#' @importMethodsFrom Biobase assayData
+.container_shared_mem <- function(x, assay) {
+    if (is(x, "SummarizedExperiment"))
+        return(sum(vapply(assays(x, withDimnames=FALSE), .inmem_size,
+                          numeric(1))))
+    if (is(x, "ExpressionSet")) {
+        ad <- assayData(x)
+        nms <- if (is.environment(ad)) ls(ad) else names(ad)
+        return(sum(vapply(nms, function(nm) .inmem_size(ad[[nm]]),
+                          numeric(1))))
+    }
+
+    .inmem_size(unwrapData(x, assay))
+}
+
+.input_shared_mem <- function(param) {
+    .container_shared_mem(get_exprData(param), get_assay(param))
+}
+
 ## memory in bytes held, besides the memory of the step itself, while a step
 ## processes the input matrix 'X', restricted to dimensions 'dims' along
 ## 'whdim', from a container whose assays take 'container' bytes in main
@@ -1249,19 +1609,27 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## held by other objects, see .held_mem(), which the blocks of the
 ## calculations cannot take, while the calling function runs, restoring it
 ## when that function exits; 'container' is the memory that the assays of the
-## input data take in main memory, see .container_held_mem(). the part of
-## 'X' processed is not included, because the blocks of the calculations
-## include it when it is in main memory, see .units_per_block()
+## input data take in main memory, see .container_held_mem(), and 'shared'
+## the one of its matrices of assays among them, see .container_shared_mem(),
+## which is held likewise, see .held_shared_mem(). the part of 'X' processed
+## is not included, because the blocks of the calculations include it when
+## it is in main memory, see .units_per_block()
 .hold_input_mem <- function(X, whdim, first, last, container,
-                            envir=parent.frame()) {
+                            shared=.inmem_size(X), envir=parent.frame()) {
     dims <- dim(X)
     if (!is.na(first) || !is.na(last))
         dims[whdim] <- (if (is.na(last)) dims[whdim] else last) -
                        (if (is.na(first)) 1 else first) + 1
     old <- gsva_global$heldmem
+    oldshared <- gsva_global$heldshared
     gsva_global$heldmem <- old + .step_held_input(X, dims, whdim, FALSE,
                                                    container)
-    do.call(on.exit, list(substitute(gsva_global$heldmem <- old, list(old=old)),
+    gsva_global$heldshared <- oldshared +
+                              .step_held_input(X, dims, whdim, FALSE, shared)
+    do.call(on.exit, list(substitute({
+                              gsva_global$heldmem <- old
+                              gsva_global$heldshared <- oldshared
+                          }, list(old=old, oldshared=oldshared)),
                           add=TRUE), envir=envir)
 
     invisible(old)
@@ -1279,56 +1647,96 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     as.integer(bpnworkers(BPPARAM))
 }
 
+## whether the parallel workers of 'BPPARAM' are forked from this process, as
+## those of a MulticoreParam object, and share its memory until they write to
+## it, unlike those of other back-ends, such as SnowParam, which are new R
+## processes, see .block_worker_mem()
+.forked_workers <- function(BPPARAM) {
+    is(BPPARAM, "MulticoreParam")
+}
+
 ## estimated memory in bytes required by a step processing in blocks a matrix
 ## with dimensions 'dims', along its rows (whdim=1) or columns (whdim=2), of
 ## size 'insize' in main memory and 'eltbytes' bytes per value, sparse or not,
 ## and stored in main memory or not ('inmemory'), with 'nworkers' parallel
 ## workers, where 'mf' gives the memory factors of the step, see
-## .step_mem_factors(). the main R process and each worker take .worker_mem(),
-## and the data of the step take .step_data_mem() from the fraction
-## .mem_fraction_R of the memory available to the allocations of R, including
-## the copies of the blocks sent to the workers with 'sendblocks=TRUE', see
-## .sends_blocks(). each R
+## .step_mem_factors(). the main R process and each worker take 'permem'
+## bytes, by default the ones of .worker_mem() besides the 'datamem' bytes of
+## the data of the calculations that this process holds, and the data of the
+## step take .step_data_mem() from the fraction .mem_fraction_R of the memory
+## available to the allocations of R, including the copies of the blocks sent
+## to the workers with 'sendblocks=TRUE', see .sends_blocks(). each R
 ## process also takes .disk_read_mem() when the input data is read from disk,
 ## i.e., when it is not loaded in main memory ('inmemory=FALSE'). forked
-## workers do not take a copy of the input data in main memory: the garbage
-## collector of R writes only to the memory page with the header of each
-## object, so that the data of large vectors remain shared, as measured on
-## Linux, while the many small objects of the packages loaded are copied, which
-## .worker_mem() includes
+## workers take a copy of a part of the data of the step in main memory, its
+## input and the 'heldmem' bytes held by other objects, see
+## .fork_copied_mem(), where 'dgc' tells whether they are stored in dgCMatrix
+## objects. workers not forked from this process ('forked=FALSE'), such as
+## those of a SnowParam object, take instead each the memory of a new R
+## process, see .worker_mem(), and no copy of those data. blocks of sparse
+## data read from disk take their memory by their sparse size, see
+## .sparse_disk_factors(), from the ratio 'sparseratio' of the sparse size to
+## the dense size of the input, by default the one of 'insize', the estimated
+## size of the input in main memory, see .input_mem_size(), and not when it
+## is NA. with 'sinkout=TRUE', the output is written to disk block by block,
+## see .step_data_mem()
 .step_mem_need <- function(dims, insize, whdim, eltbytes, sparse, inmemory,
                            mf, nworkers, heldmem=.held_mem(), densify=FALSE,
-                           sendblocks=FALSE) {
-    permem <- .worker_mem()
-    if (!inmemory)
-        permem <- permem + .disk_read_mem()
+                           sendblocks=FALSE, datamem=0, dgc=FALSE,
+                           permem=.worker_mem(datamem), forked=TRUE,
+                           sparseratio=insize / max(1, prod(as.numeric(dims)) *
+                                                       eltbytes),
+                           sinkout=FALSE) {
+    if (sparse && !densify && !inmemory)
+        mf <- .sparse_disk_factors(mf, sparseratio)
+    readmem <- if (inmemory) 0 else .disk_read_mem()
+    parmem <- permem + readmem
+    copied <- .fork_copied_mem(heldmem + if (inmemory) insize else 0, sparse,
+                               dgc)
+    if (!forked) {
+        parmem <- .worker_mem(session=FALSE) + readmem
+        copied <- 0
+    }
 
-    (1 + nworkers) * permem +
+    permem + readmem + nworkers * (parmem + copied) +
         .step_data_mem(dims, whdim, insize, eltbytes, sparse, inmemory, mf,
-                       heldmem, densify, sendblocks) / .mem_fraction_R
+                       heldmem, densify, sendblocks, sinkout) / .mem_fraction_R
 }
 
 ## warn, before the calculations of a step start, when the estimated memory
 ## 'need' that they require, with 'nworkers' parallel workers, exceeds the
 ## maximum main memory 'maxmem', suggesting fewer workers or a larger 'maxmem',
-## or what 'hint' says, when given
+## or what 'hint' says, when given, where each R process takes 'permem' bytes
+## by itself, see .worker_mem(), except for workers not forked from this
+## process ('forked=FALSE'), which take the memory of a new R process
 #' @importFrom cli cli_warn
 #' @importFrom memuse mu
-.check_mem_need <- function(need, maxmem, nworkers, hint=NULL) {
+.check_mem_need <- function(need, maxmem, nworkers, hint=NULL,
+                            permem=.worker_mem(), forked=TRUE) {
     if (need <= maxmem)
         return(invisible(FALSE))
 
     needtxt <- as.character(mu(need))
     maxmemtxt <- as.character(mu(maxmem))
-    wmtxt <- as.character(mu(.worker_mem()))
+    wmtxt <- as.character(mu(permem))
     msg <- c("!"=paste("The memory estimated for these calculations,",
                        "{needtxt}, exceeds the maximum available main memory",
                        "of {maxmemtxt}."))
-    if (nworkers > 0)
+    if (nworkers > 0 && forked)
         msg <- c(msg,
                  "i"=paste("The main R process and each of its {nworkers}",
                            "parallel workers take about {wmtxt} by themselves,",
-                           "for loading GSVA and the packages it depends on."))
+                           "for GSVA, the packages it depends on and the",
+                           "other objects of the R session."))
+    else if (nworkers > 0) {
+        pwmtxt <- as.character(mu(.worker_mem(session=FALSE)))
+        msg <- c(msg,
+                 "i"=paste("The main R process takes about {wmtxt} by itself,",
+                           "for GSVA, the packages it depends on and the",
+                           "other objects of the R session, and each of its",
+                           "{nworkers} parallel workers about {pwmtxt}, for",
+                           "GSVA and the packages it depends on."))
+    }
     if (!is.null(hint))
         msg <- c(msg, "i"=hint)
     else if (nworkers > 0)
@@ -1355,14 +1763,18 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## products of the genes of each gene set in PLAGE, see .plage_gram_mem().
 ## the memory of the container of 'X', 'container', see .container_held_mem(),
 ## and of 'X' itself remains allocated as given by .step_held_input(),
-## independently of whether the output is written to disk
+## independently of whether the output is written to disk, where 'shared' is
+## the memory of the matrices of its assays, see .container_shared_mem().
+## 'ondisksink=TRUE' indicates that the step writes its output to disk block by
+## block when it processes its input from disk, see .step_mem_need()
 ## input data in main memory, which is not loaded from disk, remains
 ## allocated when the calculations are done on disk
 #' @importFrom S4Arrays is_sparse
 #' @importFrom BiocGenerics type
 .check_step_mem <- function(X, whdim, first, last, ondisk, mf, BPPARAM,
                             maxmem, dense=FALSE, densify=FALSE,
-                            extramem=0, container=.inmem_size(X)) {
+                            extramem=0, container=.inmem_size(X),
+                            shared=.inmem_size(X), ondisksink=FALSE) {
     if (!gsva_global$check_memory || !getOption("GSVA.check_memory", TRUE))
         return(invisible(FALSE))
 
@@ -1371,17 +1783,31 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         dims[whdim] <- last - first + 1
     eltbytes <- if (type(X) == "integer") 4 else 8
     insize <- attr(ondisk, "insize")
-    if (is.null(insize)) ## e.g., data in Parquet files, processed from disk
+    ## the size of the input, and of its blocks read from disk, is the one of
+    ## its dense form when it is not estimated, e.g., for data in Parquet
+    ## files, processed from disk, see .step_mem_need()
+    sparseratio <- if (is.null(insize)) NA else
+                       insize / max(1, prod(as.numeric(dims)) * eltbytes)
+    if (is.null(insize))
         insize <- prod(as.numeric(dims)) * eltbytes
     nworkers <- .n_par_workers(BPPARAM, dims)
     heldmem <- .held_mem() + extramem +
                .step_held_input(X, dims, whdim, ondisk, container)
+    ## each R process takes the memory of this one, besides the matrices of
+    ## the assays of the input data that it holds, see .worker_mem()
+    permem <- .worker_mem(.held_shared_mem() + shared,
+                          full=.large_data(dims, eltbytes))
     need <- .step_mem_need(dims, insize, whdim, eltbytes,
                            is_sparse(X) && !dense, !ondisk, mf, nworkers,
                            heldmem, densify,
-                           .sends_blocks(!ondisk, BPPARAM, nworkers))
+                           .sends_blocks(!ondisk, BPPARAM, nworkers),
+                           dgc=is(X, "dgCMatrix"), permem=permem,
+                           forked=.forked_workers(BPPARAM),
+                           sparseratio=sparseratio,
+                           sinkout=ondisksink && isTRUE(as.vector(ondisk)))
 
-    .check_mem_need(need, maxmem, nworkers)
+    .check_mem_need(need, maxmem, nworkers, permem=permem,
+                    forked=.forked_workers(BPPARAM))
 }
 
 ## check the memory required by each of the three steps that gsva() runs on
@@ -1421,6 +1847,9 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     rownormnone <- .get_rowNorm(param) == "none"
     held <- max(0, container - .inmem_size(X))
     inres <- !is(X, "DelayedArray")
+    ## each R process takes the memory of this one, besides the matrices of
+    ## the assays of the input data that it holds, see .worker_mem()
+    permem <- .worker_mem(.input_shared_mem(param), full=.large_data(dims))
     need <- 0
     for (st in steps) {
         mf <- .step_mem_factors(st$step, ngs=ngs, sparse=sparse && !densify,
@@ -1430,15 +1859,25 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
         eltbytes <- if (st$int) 4 else 8
         inmemory <- ondisk == "no"
         if (ondisk == "auto")
-            inmemory <- .step_data_mem(dims, st$whdim, insize, eltbytes,
-                                       sparse, TRUE, mf, held,
-                                       densify) <= .mem_fraction_R * maxmem
+            inmemory <- .step_mem_need(dims, insize, st$whdim, eltbytes,
+                                       sparse, TRUE, mf, nworkers, held,
+                                       densify,
+                                       .sends_blocks(TRUE, BPPARAM, nworkers),
+                                       dgc=dgc, permem=permem,
+                                       forked=.forked_workers(BPPARAM)) <=
+                        maxmem
         stepheld <- held + if (inres && !inmemory) insize else 0
+        ## the steps processing their input from disk write their output to
+        ## disk block by block, see gsvaRowNorm(), gsvaColRanks() and
+        ## gsvaColScores()
         need <- max(need, .step_mem_need(dims, insize, st$whdim, eltbytes,
                                          sparse, inmemory, mf, nworkers,
                                          stepheld, densify,
                                          .sends_blocks(inmemory, BPPARAM,
-                                                       nworkers)))
+                                                       nworkers),
+                                         dgc=dgc, permem=permem,
+                                         forked=.forked_workers(BPPARAM),
+                                         sinkout=!inmemory))
         ## the input of the next step and its size: without row
         ## normalization, it is the assay used, held by the input data
         if (st$step == "rownorm" && rownormnone) {
@@ -1455,7 +1894,8 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
             sparse <- densify <- FALSE
     }
 
-    .check_mem_need(need, maxmem, nworkers)
+    .check_mem_need(need, maxmem, nworkers, permem=permem,
+                    forked=.forked_workers(BPPARAM))
 }
 
 ## from https://stat.ethz.ch/pipermail/r-help/2005-September/078974.html
@@ -1573,4 +2013,82 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 .isAnnoPkgInstalled <- function(ap) {
     ap <- c(ap, paste0(ap, ".db"))
     return(any(ap %in% rownames(installed.packages())))
+}
+
+## Check CUDA device availability:
+##   "unbuilt" -- package was compiled without CUDA support
+##   "ok"      -- at least one CUDA-capable device is usable
+##   "driver"  -- CUDA driver missing or too old for this build
+##   "nodev"   -- runtime and driver fine, but no device is visible
+##   "init"    -- CUDA cannot be initialized in this R process, which is the
+##                case of a process forked from one that has already
+##                initialized it, such as a worker of a MulticoreParam
+##   "error"   -- any other CUDA runtime failure
+.gsva_cuda_state <- function() {
+    built <- tryCatch({
+        getNativeSymbolInfo("gsva_score_genesets_gpu_R", PACKAGE = "GSVA")
+        TRUE
+    }, error = function(e) FALSE)
+    if (!built)
+        return("unbuilt")
+
+    .Call("gsva_cuda_state_R", PACKAGE = "GSVA")
+}
+
+#' @importFrom cli cli_abort
+.check_gpu_device <- function() {
+    cuda_state <- .gsva_cuda_state()
+    if (cuda_state == "unbuilt") {
+        cli_abort(c(
+            "x" = paste("GPU mode requested (device = \"gpu\") but this",
+                        "package was built without CUDA support."),
+            "i" = paste("To use GPU acceleration, reinstall the package",
+                        "with the CUDA toolkit available."),
+            "i" = "Alternatively, use device = \"cpu\"."
+        ))
+    } else if (cuda_state == "init") {
+        cli_abort(c(
+            "x" = paste("GPU mode requested (device = \"gpu\") but CUDA",
+                        "cannot be initialized in this R process."),
+            "i" = paste("This happens in a process forked from an R session",
+                        "that has already used the GPU, such as a worker of",
+                        "a MulticoreParam."),
+            "i" = paste("Use device = \"cpu\" in forked processes, or",
+                        "parallel workers that are new R processes, such",
+                        "as those of a SnowParam.")
+        ))
+    } else if (cuda_state != "ok") {
+        reason <- switch(cuda_state,
+                         nodev = "no CUDA-capable device is detected",
+                         driver = "the CUDA driver is missing or too old",
+                         "the CUDA runtime reported an error")
+        cli_abort(c(
+            "x" = "GPU mode requested (device = \"gpu\") but {reason}.",
+            "i" = paste("Check the GPU and CUDA_VISIBLE_DEVICES, or use",
+                        "device = \"cpu\".")
+        ))
+    }
+}
+
+## the device calculating the GSVA scores, from the 'device' argument of
+## gsva() or gsvaColScores(): "auto" selects the GPU when CUDA can be used in
+## this R process, and the data have no missing values, which only the CPU
+## handles, see .gsva_score_genesets(); "gpu" gives an error when CUDA cannot
+## be used, before any calculation starts
+.resolve_device <- function(device, anyna) {
+    if (device == "gpu")
+        .check_gpu_device()
+    else if (device == "auto")
+        device <- if (!anyna && .gsva_cuda_state() == "ok") "gpu" else "cpu"
+
+    device
+}
+
+.gsva_cuda_max_gset_size <- function() {
+    .Call("gsva_cuda_max_gset_size_R", PACKAGE = "GSVA")
+}
+
+.gsva_cuda_walk_safe <- function(G, gset_sizes, tau) {
+    .Call("gsva_cuda_walk_safe_R", as.integer(G), as.integer(gset_sizes),
+          as.double(tau), PACKAGE = "GSVA")
 }

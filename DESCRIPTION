@@ -1,5 +1,5 @@
 Package: GSVA
-Version: 2.7.25
+Version: 2.7.37
 Title: Gene Set Variation Analysis for Microarray and RNA-Seq Data
 Authors@R: c(person("Robert", "Castelo", role=c("aut", "cre"),
                     comment=c(ORCID="0000-0003-2229-4508"),
@@ -8,6 +8,9 @@ Authors@R: c(person("Robert", "Castelo", role=c("aut", "cre"),
              person("Alexey", "Sergushichev", role="ctb", email="alsergbox@gmail.com"),
              person("Pablo Sebastian", "Rodriguez", role="ctb", email="pablo.rodriguez.bio2@gmail.com"),
              person("Axel", "Klenk", role="ctb", email="axel.klenk@gmail.com"),
+             person("Gabriele", "Sales", role="ctb",
+                    comment=c(ORCID="0000-0003-2078-5661"),
+                    email="gabriele.sales@unipd.it"),
              person("Chan Zuckerberg Initiative (CZI)", role="fnd"),
              person("Spanish Ministry of Science, Innovation and Universities (MCIU)", role="fnd"))
 Depends: R (>= 4.0.0)
@@ -16,7 +19,7 @@ Imports: methods, stats, utils, graphics, tools, BiocGenerics,
          DelayedArray, IRanges, Biobase, SummarizedExperiment, GSEABase,
          Matrix (>= 1.5-0), DelayedMatrixStats, BiocParallel,
          SingleCellExperiment, SpatialExperiment, sparseMatrixStats,
-         cli, memuse
+         cli, memuse, AnnotationDbi, annotate
 Suggests: RUnit, BiocStyle, knitr, rmarkdown, limma, RColorBrewer, arrow,
           duckdb, DBI, org.Hs.eg.db, genefilter, edgeR, GSVAdata, sva,
           ExperimentHub, TENxPBMCData, TENxVisiumData, spatialLIBD, scrapper,
@@ -30,6 +33,8 @@ VignetteBuilder: knitr
 URL: https://github.com/rcastelo/GSVA
 BugReports: https://github.com/rcastelo/GSVA/issues
 Encoding: UTF-8
-biocViews: FunctionalGenomics, Microarray, RNASeq, Pathways, GeneSetEnrichment
+biocViews: FunctionalGenomics, Microarray, RNASeq, Pathways, GeneSetEnrichment,
+           GPU
 Roxygen: list(markdown = TRUE)
 Config/roxygen2/version: 8.1.1
+SystemRequirements: CUDA toolkit (optional)

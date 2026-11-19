@@ -13,7 +13,10 @@
 ## rest being taken by the memory that R releases but that the process keeps,
 ## and by allocations outside R, e.g., by the HDF5 library; in the steps of
 ## GSVA on single-cell data, the peak of memory allocated by R was 70% to 80%
-## of the peak of memory resident in the process
+## of the peak of memory resident in the process. on macOS, the parallel
+## workers keep besides, from one round of blocks to the next, up to about
+## half the memory of a block that R releases, as measured on single-cell
+## data stored on disk, which this rest also covers
 .mem_fraction_R <- 0.7
 
 ## memory taken by the steps of GSVA to process each row or column of the
@@ -59,12 +62,22 @@
                          outextra=0),
            ## the ranks of a dgCMatrix object are double, as large as it,
            ## and binding their blocks of columns takes twice their size,
-           ## see .cbind_blocks()
+           ## see .cbind_blocks(). blocks of sparse data read from disk, whose
+           ## size is the one of their dense form, see .units_per_block(),
+           ## take instead about 9 to 11 times their sparse size, reading,
+           ## ranking and writing them, and up to 15 times with blocks of
+           ## about a thousand columns, as measured on single-cell data,
+           ## so that narrow blocks fit too, see .ondisk_mem_factors()
            colranks=list(workfactor=if (sparse) 7 else 2,
                          outfactor=if (int || (sparse && dgc)) 1
                                    else if (sparse) 0.7 else 0.5,
-                         outextra=0, assembly=if (sparse && dgc) 2 else NULL),
-           scores=list(workfactor=2, outfactor=0, outextra=8 * ngs),
+                         outextra=0, assembly=if (sparse && dgc) 2 else NULL,
+                         sparsedisk=list(workfactor=14.3, outfactor=0.7)),
+           ## the scores of blocks of sparse ranks read from disk take about
+           ## two times their sparse size, besides the scores themselves, as
+           ## measured on single-cell data, see .ondisk_mem_factors()
+           scores=list(workfactor=2, outfactor=0, outextra=8 * ngs,
+                       sparsedisk=list(workfactor=2.5, outfactor=0)),
            ## the average method gives its scores directly, while PLAGE,
            ## z-score and ssGSEA give them from an intermediate matrix as large
            ## as their input, of scaled rows or column ranks; the scores of
@@ -87,6 +100,40 @@
            ## columns, as measured on single-cell data, the larger factors
            ## with smaller blocks
            ssgseascores=list(workfactor=6, outfactor=0, outextra=8 * ngs))
+}
+
+## memory factors 'mf' of a step, see .step_mem_factors(), for processing the
+## matrix 'X' in blocks: when 'X' is sparse and stored on disk, the size of
+## its blocks is the one of their dense form, see .units_per_block(), which
+## overestimates the memory that sparse blocks take by the inverse of the
+## ratio of their sparse size to their dense size, e.g., about 3.75 times with
+## 17.6% of nonzero values, where each nonzero value takes its own size and
+## the 4 bytes of its row index. the factors of the step relative to the sparse
+## size of the blocks ('sparsedisk'), when given, are then scaled by that
+## ratio, from the fraction 'density' of nonzero values of 'X', e.g., the one
+## of the input data of the parameter object, see .input_density()
+#' @importFrom BiocGenerics type
+#' @importFrom S4Arrays is_sparse
+.ondisk_mem_factors <- function(mf, X, density=NA) {
+    if (!is(X, "DelayedArray") || !is_sparse(X) || is.null(density))
+        return(mf)
+
+    eltbytes <- if (type(X) == "integer") 4 else 8
+    .sparse_disk_factors(mf, density * (eltbytes + 4) / eltbytes)
+}
+
+## memory factors 'mf' of a step relative to the size of the dense form of the
+## blocks of sparse data read from disk, from its factors relative to their
+## sparse size ('sparsedisk'), when given, and the ratio 'ratio' of the sparse
+## size to the dense size, see .ondisk_mem_factors()
+.sparse_disk_factors <- function(mf, ratio) {
+    if (is.null(mf$sparsedisk) || is.null(ratio) || is.na(ratio))
+        return(mf)
+
+    mf$workfactor <- mf$sparsedisk$workfactor * ratio
+    mf$outfactor <- mf$sparsedisk$outfactor * ratio
+
+    mf
 }
 
 ## memory that remains allocated while a matrix with 'nunits' rows (whdim=1)
@@ -121,9 +168,16 @@
 ## by .step_mem_factors(). the memory available to the blocks of the workers
 ## is what is left by the memory that remains allocated, see .fixed_mem(),
 ## from the fraction .mem_fraction_R, available to the allocations of R, of
-## the memory that the R processes of more than one worker, of 'workermem'
-## bytes each, see .worker_mem(), leave from 'maxmem', when they leave enough
-## for the memory that remains allocated; 'workermem=0' and 'sharedmem=FALSE'
+## the memory that the R processes, the main one of 'workermem' bytes and each
+## of more than one worker, of 'parworkermem' bytes, by default 'workermem',
+## leave from 'maxmem', when they leave enough for the memory that remains
+## allocated. by default, 'workermem' is the memory of this process besides the
+## data of the calculations that it holds, see .worker_mem(), measured with a
+## full collection of garbage when 'X' is large, see .large_data(), together
+## with its buffers to read 'X' from disk, see .disk_read_mem(), and each forked
+## worker takes besides a copy of a part of those data ('copiedmem'), while
+## workers not forked from this process ('forked=FALSE') take the memory of a
+## new R process, see .block_worker_mem(); 'workermem=0' and 'sharedmem=FALSE'
 ## when the workers do not share 'maxmem' but have each their own, such as the
 ## jobs of gsvaMap(), whose blocks can then take each the whole of 'maxmem'.
 ## the size of a row or column of 'X' stored on disk is the one of its
@@ -149,12 +203,15 @@
 #' @importFrom S4Arrays is_sparse
 .units_per_block <- function(X, whdim, nworkers, maxmem, workfactor=2,
                              outfactor=1, outextra=0,
-                             workermem=.worker_mem(), dense=FALSE,
+                             workermem=NULL, dense=FALSE,
                              heldmem=.held_mem(), sinkout=FALSE,
-                             sharedmem=TRUE, sendblocks=FALSE) {
+                             sharedmem=TRUE, sendblocks=FALSE, copiedmem=0,
+                             parworkermem=workermem, forked=TRUE) {
     nunits <- dim(X)[whdim]
     inmemory <- !is(X, "DelayedArray")
-    eltbytes <- if (type(X) == "integer") 4 else 8
+    ## type() of a DelayedArray object binding HDF5 files opens each of them
+    xtype <- type(X)
+    eltbytes <- if (xtype == "integer") 4 else 8
     denseunitbytes <- as.numeric(dim(X)[-whdim]) * eltbytes
     if (inmemory)
         inunitbytes <- as.numeric(object.size(X)) / max(1, nunits)
@@ -168,12 +225,21 @@
     fixed <- .fixed_mem(nunits, inunitbytes, whdim, sparse, inmemory,
                         outfactor, outextra, assembly,
                         outunitbytes=unitbytes, sinkout=sinkout) + heldmem
-    ## with more than one worker, their R processes take memory from 'maxmem',
-    ## unless they leave no memory for the blocks, when 'maxmem' cannot be
-    ## honored anyway, and smaller blocks would only make calculations slower
-    if (nworkers > 1 &&
-        .mem_fraction_R * (maxmem - nworkers * workermem) > fixed)
-        maxmem <- maxmem - nworkers * workermem
+    ## the main R process and, with more than one worker, their R processes
+    ## take memory from 'maxmem', unless they leave no memory for the blocks,
+    ## when 'maxmem' cannot be honored anyway, and smaller blocks would only
+    ## make calculations slower
+    if (is.null(workermem)) {
+        pm <- .block_worker_mem(X, whdim, heldmem, forked)
+        workermem <- pm$workermem
+        parworkermem <- pm$parworkermem
+        copiedmem <- pm$copiedmem
+    }
+    procmem <- workermem
+    if (nworkers > 1)
+        procmem <- procmem + nworkers * (parworkermem + copiedmem)
+    if (.mem_fraction_R * (maxmem - procmem) > fixed)
+        maxmem <- maxmem - procmem
     ## workers with their own memory each, such as the jobs of gsvaMap(),
     ## take each a block within the whole of it
     nsharing <- if (sharedmem) nworkers else 1
@@ -182,7 +248,7 @@
     nperblock <- floor(avail / ((workfactor + outfactor) * unitbytes +
                                 outextra + sendbytes))
     otherdim <- max(1, as.numeric(dim(X)[-whdim]))
-    nperblock <- max(nperblock, floor(getAutoBlockLength(type(X)) / nsharing /
+    nperblock <- max(nperblock, floor(getAutoBlockLength(xtype) / nsharing /
                                       otherdim))
     ## the DelayedArray package does not support blocks with more than
     ## .Machine$integer.max values
@@ -192,25 +258,79 @@
     as.integer(max(1, nperblock))
 }
 
+## memory of the main R process and of each worker besides the blocks of
+## the rows (whdim=1) or columns (whdim=2) of 'X', see .units_per_block(): the
+## memory of this process besides the data of the calculations that it holds,
+## see .worker_mem(), measured with a full collection of garbage when 'X' is
+## large, see .large_data(), together with its buffers to read 'X' from disk,
+## see .disk_read_mem() ('workermem'), the memory of each parallel worker
+## ('parworkermem') and the copy of a part of those data that each worker
+## takes besides ('copiedmem'). forked workers ('forked=TRUE'), such as those
+## of a MulticoreParam object, take the memory of this process, see
+## .worker_mem(), and a copy of a part of its data, see .fork_copied_mem(),
+## where the data held besides 'X' are shared with them, except for the part
+## of those of .held_mem() other than matrices of assays, see
+## .held_shared_mem(). workers not forked from this process, such as those of
+## a SnowParam object, take the memory of a new R process loading GSVA, see
+## .worker_mem(), together with its buffers to read 'X' from disk, and no copy
+## of the data of this process
+#' @importFrom BiocGenerics type
+#' @importFrom utils object.size
+#' @importFrom S4Arrays is_sparse
+.block_worker_mem <- function(X, whdim, heldmem=.held_mem(), forked=TRUE) {
+    inmemory <- !is(X, "DelayedArray")
+    eltbytes <- if (type(X) == "integer") 4 else 8
+    datamem <- (if (inmemory) as.numeric(object.size(X)) else 0) + heldmem -
+               max(0, .held_mem() - .held_shared_mem())
+    readmem <- if (inmemory) 0 else .disk_read_mem()
+    workermem <- .worker_mem(datamem, full=.large_data(dim(X), eltbytes)) +
+                 readmem
+    parworkermem <- workermem
+    copiedmem <- .fork_copied_mem(datamem, is_sparse(X), is(X, "dgCMatrix"))
+    if (!forked) {
+        parworkermem <- .worker_mem(session=FALSE) + readmem
+        copiedmem <- 0
+    }
+
+    list(workermem=workermem, parworkermem=parworkermem, copiedmem=copiedmem)
+}
+
 ## adapted from .define_multiworker_grid() in beachmat/R/colBlockApply.R; with a
 ## finite maximum main memory 'maxmem', blocks have as many rows as fit in it,
 ## see .units_per_block(), and otherwise the default block length of the
 ## DelayedArray package, when there are several workers or 'X' is stored on
-## disk, or form a single block
+## disk, or form a single block. blocks narrower than the chunks of 'X' on disk
+## give a warning naming the calculations in 'step', see .check_chunk_blocks()
 #' @importFrom BiocGenerics type
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .rowgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
-                         outextra=0, workermem=.worker_mem(), dense=FALSE,
+                         outextra=0, workermem=NULL, dense=FALSE,
                          heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE,
-                         sendblocks=FALSE) {
+                         sendblocks=FALSE, step=NULL, forked=TRUE) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
-      nrowblock <- .units_per_block(X, 1L, nworkers, maxmem, workfactor,
-                                    outfactor, outextra, workermem,
-                                    dense=dense, heldmem=heldmem,
-                                    sinkout=sinkout, sharedmem=sharedmem,
-                                    sendblocks=sendblocks)
-      grid <- rowAutoGrid(X, nrow=.align_to_chunks(nrowblock, X, 1L))
+      ## the memory of the processes is measured once, for the width of
+      ## the blocks with 'nworkers' workers within 'maxmem' and with other
+      ## numbers of workers or maximum memory, see .check_chunk_blocks()
+      copiedmem <- 0
+      parworkermem <- workermem
+      if (is.null(workermem)) {
+          pm <- .block_worker_mem(X, 1L, heldmem, forked)
+          workermem <- pm$workermem
+          parworkermem <- pm$parworkermem
+          copiedmem <- pm$copiedmem
+      }
+      upb <- function(nw, mm=maxmem)
+          .units_per_block(X, 1L, nw, mm, workfactor, outfactor,
+                           outextra, workermem, dense=dense, heldmem=heldmem,
+                           sinkout=sinkout, sharedmem=sharedmem,
+                           sendblocks=sendblocks, copiedmem=copiedmem,
+                           parworkermem=parworkermem)
+      nrowblock <- .balance_blocks(.align_to_chunks(upb(nworkers), X, 1L),
+                                X, 1L, nworkers)
+      grid <- rowAutoGrid(X, nrow=nrowblock)
+      if (sharedmem)
+          .check_chunk_blocks(X, 1L, nrowblock, nworkers, maxmem, upb, step)
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
       ## by the number of workers and, in any case, it cannot exceed
@@ -221,7 +341,9 @@
       block.length <- min(max.block.length, expected.block.length)
       ## number of rows per block, as calculated by rowAutoGrid()
       nrowblock <- min(max(1, floor(block.length / max(1, ncol(X)))), nrow(X))
-      grid <- rowAutoGrid(X, nrow=.align_to_chunks(nrowblock, X, 1L))
+      grid <- rowAutoGrid(X, nrow=.balance_blocks(.align_to_chunks(nrowblock,
+                                                                   X, 1L),
+                                                  X, 1L, nworkers))
   }
   grid
 }
@@ -230,21 +352,49 @@
 ## finite maximum main memory 'maxmem', blocks have as many columns as fit in
 ## it, see .units_per_block(), and otherwise the default block length of the
 ## DelayedArray package, when there are several workers or 'X' is stored on
-## disk, or form a single block
+## disk, or form a single block. blocks narrower than the chunks of 'X' on disk
+## give a warning naming the calculations in 'step', see .check_chunk_blocks().
+## with 'rowbands=TRUE', for calculations that process each block of columns
+## in bands of rows, such blocks take instead whole chunks, processed in bands
+## of rows that fit in the memory of the narrower blocks, see .rowband_height(),
+## whose height the grid gives in its attribute "nrowband"
 #' @importFrom BiocGenerics type
 #' @importFrom DelayedArray rowAutoGrid colAutoGrid getAutoBlockLength
 .colgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
-                         outextra=0, workermem=.worker_mem(), dense=FALSE,
+                         outextra=0, workermem=NULL, dense=FALSE,
                          heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE,
-                         sendblocks=FALSE) {
+                         sendblocks=FALSE, step=NULL, forked=TRUE,
+                         rowbands=FALSE) {
+  nrowband <- NULL
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
-      ncolblock <- .units_per_block(X, 2L, nworkers, maxmem, workfactor,
-                                    outfactor, outextra, workermem,
-                                    dense=dense, heldmem=heldmem,
-                                    sinkout=sinkout, sharedmem=sharedmem,
-                                    sendblocks=sendblocks)
-      grid <- colAutoGrid(X, ncol=.align_to_chunks(ncolblock, X, 2L))
+      ## the memory of the processes is measured once, for the width of
+      ## the blocks with 'nworkers' workers within 'maxmem' and with other
+      ## numbers of workers or maximum memory, see .check_chunk_blocks()
+      copiedmem <- 0
+      parworkermem <- workermem
+      if (is.null(workermem)) {
+          pm <- .block_worker_mem(X, 2L, heldmem, forked)
+          workermem <- pm$workermem
+          parworkermem <- pm$parworkermem
+          copiedmem <- pm$copiedmem
+      }
+      upb <- function(nw, mm=maxmem)
+          .units_per_block(X, 2L, nw, mm, workfactor, outfactor,
+                           outextra, workermem, dense=dense, heldmem=heldmem,
+                           sinkout=sinkout, sharedmem=sharedmem,
+                           sendblocks=sendblocks, copiedmem=copiedmem,
+                           parworkermem=parworkermem)
+      ncolblock <- upb(nworkers)
+      if (rowbands)
+          nrowband <- .rowband_height(X, ncolblock)
+      if (!is.null(nrowband))
+          ncolblock <- .ondisk_chunkdim(X)[2L]
+      ncolblock <- .balance_blocks(.align_to_chunks(ncolblock, X, 2L),
+                                   X, 2L, nworkers)
+      grid <- colAutoGrid(X, ncol=ncolblock)
+      if (sharedmem && is.null(nrowband))
+          .check_chunk_blocks(X, 2L, ncolblock, nworkers, maxmem, upb, step)
   } else if (nworkers > 1 || is(X, "DelayedMatrix")) {
       ## assuming all workers share memory, the maximum block length has to reduce
       ## by the number of workers and, in any case, it cannot exceed
@@ -255,22 +405,338 @@
       block.length <- min(max.block.length, expected.block.length)
       ## number of columns per block, as calculated by colAutoGrid()
       ncolblock <- min(max(1, floor(block.length / max(1, nrow(X)))), ncol(X))
-      grid <- colAutoGrid(X, ncol=.align_to_chunks(ncolblock, X, 2L))
+      if (rowbands)
+          nrowband <- .rowband_height(X, ncolblock)
+      if (!is.null(nrowband))
+          ncolblock <- .ondisk_chunkdim(X)[2L]
+      grid <- colAutoGrid(X, ncol=.balance_blocks(.align_to_chunks(ncolblock,
+                                                                   X, 2L),
+                                                  X, 2L, nworkers))
   }
+  if (!is.null(nrowband))
+      attr(grid, "nrowband") <- nrowband
   grid
+}
+
+## height of the bands of rows in which blocks of columns of 'X' that take
+## whole chunks of its data on disk can be processed within the memory of
+## blocks of 'n' columns, narrower than those chunks, which would otherwise be
+## read and decompressed once for each block that they overlap, see
+## .check_chunk_blocks(). the bands take as many values as the blocks of 'n'
+## columns, and their height is rounded down to a multiple of the height of
+## the chunks, so that each chunk is read once. it gives NULL when 'X' is not
+## stored in chunks, when the boundaries of its chunks along the columns are
+## not the ones of 'X', see .ondisk_chunkdim(), or when blocks of 'n' columns
+## already take whole chunks
+.rowband_height <- function(X, n) {
+    cd <- .ondisk_chunkdim(X, aligned=TRUE)
+    if (is.null(cd) || is.na(cd[2L]) || n >= cd[2L])
+        return(NULL)
+    ## the chunks along the rows are also read once by bands of rows whose
+    ## boundaries are not the ones of 'X', e.g., of a subset of its rows,
+    ## except those of the rows at the boundary of two bands
+    cdrows <- .ondisk_chunkdim(X)[1L]
+    h <- floor(as.numeric(n) * nrow(X) / cd[2L])
+    if (h >= cdrows)
+        h <- (h %/% cdrows) * cdrows
+    as.integer(max(1, min(h, nrow(X))))
 }
 
 ## when the data in 'X' is stored in chunks, such as in HDF5 or Parquet files,
 ## round down the block width 'n' along the dimension 'whdim' to a multiple of
 ## the chunk width, so that blocks do not split chunks, which would then be
 ## read more than once; when a block is narrower than a chunk, its width is
-## kept, to avoid exceeding the memory bound behind the block width
-#' @importFrom DelayedArray chunkdim
+## kept, to avoid exceeding the memory bound behind the block width. the
+## chunks are the ones of the on-disk data of 'X', also when 'X' is a delayed
+## operation on them, such as a subset, along the dimensions where their
+## boundaries are the ones of 'X', see .ondisk_chunkdim()
 .align_to_chunks <- function(n, X, whdim) {
-    cd <- if (is(X, "DelayedArray")) chunkdim(X) else NULL
-    if (!is.null(cd) && cd[whdim] > 0 && n >= cd[whdim])
+    cd <- .ondisk_chunkdim(X, aligned=TRUE)
+    if (!is.null(cd) && !is.na(cd[whdim]) && cd[whdim] > 0 &&
+        n >= cd[whdim])
         n <- (n %/% cd[whdim]) * cd[whdim]
     as.integer(n)
+}
+
+## warn when the blocks of width 'n' along the dimension 'whdim' of 'X', stored
+## on disk in chunks, are narrower than half a chunk, so that each chunk is
+## read and decompressed once for each of the at least three blocks that it
+## overlaps, which makes the calculations much slower, e.g., ten times slower
+## with blocks of 700 columns of chunks of 10000 columns, as measured on
+## single-cell data. such blocks are kept, see .align_to_chunks(), because
+## wider ones do not fit in the maximum memory 'maxmem', and the warning
+## suggests the smallest maximum memory whose blocks with the same number of
+## workers 'nworkers' would take whole chunks, see .chunk_maxmem(), where
+## 'upb' gives the width of the blocks with a given number of workers and
+## maximum memory, see .units_per_block(). fewer workers also give wider
+## blocks, but they are not suggested because they make the calculations
+## faster only when reading and decompressing the data takes most of their
+## time and, even when ranking the columns of single-cell data stored in
+## dense chunks, where it does, one worker instead of two made each job only
+## about 4% faster, as measured. 'step' names the step of the calculations in
+## the warning, e.g., "Ranking columns". the chunks are the ones of the
+## on-disk data of 'X', also
+## when 'X' is a delayed operation on them, see .ondisk_chunkdim(), even when
+## their boundaries are not the ones of 'X', because blocks narrower than
+## chunks read them more than once anyway. the warning is given at the end of
+## gsva(), together with the ones of its other steps, see .start_chunk_blocks(),
+## and it is skipped with the option 'GSVA.check_memory=FALSE'
+.check_chunk_blocks <- function(X, whdim, n, nworkers, maxmem, upb,
+                                step=NULL) {
+    cd <- .ondisk_chunkdim(X)
+    if (!getOption("GSVA.check_memory", TRUE) || is.null(cd) ||
+        cd[whdim] <= 2 * n || n >= dim(X)[whdim])
+        return(invisible(FALSE))
+
+    rec <- list(step=step, what=if (whdim == 1L) "rows" else "columns", n=n,
+                cd=cd[whdim], nreads=ceiling(cd[whdim] / n),
+                nworkers=nworkers,
+                needmem=.chunk_maxmem(cd[whdim], nworkers, maxmem, upb))
+    if (is.null(gsva_global$chunkblocks))
+        .warn_chunk_blocks(list(rec))
+    else
+        gsva_global$chunkblocks <- c(gsva_global$chunkblocks, list(rec))
+
+    invisible(TRUE)
+}
+
+## smallest maximum memory, above 'maxmem' and rounded up to whole GiB, or to
+## whole MiB below 1 GiB, so that it can be given as 'maxmem', see
+## .maxmem_text(), whose
+## blocks with 'nworkers' workers have at least the width 'cd' of the chunks,
+## where 'upb' gives the width of the blocks, see .check_chunk_blocks(), found
+## by doubling 'maxmem' and then bisecting, to 1% of it. it gives NA when no
+## maximum memory up to 2^20 times 'maxmem' gives such blocks, e.g., when
+## 'nworkers' blocks cover 'X' with narrower ones
+.chunk_maxmem <- function(cd, nworkers, maxmem, upb) {
+    lo <- hi <- maxmem
+    i <- 0L
+    while (upb(nworkers, hi) < cd) {
+        if (i == 20L)
+            return(NA_real_)
+        lo <- hi
+        hi <- 2 * hi
+        i <- i + 1L
+    }
+    while (hi - lo > 0.01 * maxmem) {
+        mid <- (lo + hi) / 2
+        if (upb(nworkers, mid) < cd)
+            lo <- mid
+        else
+            hi <- mid
+    }
+
+    unit <- if (hi < 1024^3) 1024^2 else 1024^3
+    ceiling(hi / unit) * unit
+}
+
+## text of the memory 'x' in bytes, in whole MiB or GiB, as given by
+## .chunk_maxmem(), with the suffix M or G that 'maxmem' takes, e.g., "64G"
+.maxmem_text <- function(x) {
+    if (x < 1024^3)
+        sprintf("%.0fM", ceiling(x / 1024^2))
+    else
+        sprintf("%.0fG", ceiling(x / 1024^3))
+}
+
+## begin collecting the warnings of blocks narrower than chunks, see
+## .check_chunk_blocks(), giving the collection in progress, if any, which
+## .end_chunk_blocks() takes to give them, or to add them to it, so that
+## gsva() gives one warning for all of its steps, at its end
+.start_chunk_blocks <- function() {
+    old <- gsva_global$chunkblocks
+    gsva_global$chunkblocks <- list()
+
+    old
+}
+
+## end the collection begun by .start_chunk_blocks(), whose result is 'old',
+## giving the warnings collected, or adding them to the collection 'old'
+## in progress
+.end_chunk_blocks <- function(old) {
+    recs <- gsva_global$chunkblocks
+    gsva_global$chunkblocks <- old
+    if (is.null(old))
+        .warn_chunk_blocks(recs)
+    else
+        gsva_global$chunkblocks <- c(old, recs)
+
+    invisible(NULL)
+}
+
+## evaluate 'expr', giving at its end one warning for all of its blocks
+## narrower than chunks, see .start_chunk_blocks()
+.with_chunk_blocks <- function(expr) {
+    old <- .start_chunk_blocks()
+    on.exit(gsva_global$chunkblocks <- old)
+    res <- expr
+    on.exit()
+    .end_chunk_blocks(old)
+
+    res
+}
+
+## warning for the blocks narrower than chunks in 'recs', each one of a step
+## of the calculations, see .check_chunk_blocks(), suggesting the largest of
+## their smallest maximum memory whose blocks take whole chunks
+#' @importFrom cli cli_warn
+.warn_chunk_blocks <- function(recs) {
+    if (length(recs) == 0L)
+        return(invisible(FALSE))
+
+    nworkers <- max(vapply(recs, function(r) r$nworkers, numeric(1)))
+    needmem <- max(vapply(recs, function(r) r$needmem, numeric(1)))
+    if (length(recs) == 1L) {
+        r <- recs[[1L]]
+        step <- if (is.null(r$step)) "The calculations" else r$step
+        verb <- if (is.null(r$step)) "process" else "processes"
+        msg <- c("!"=paste("{step} {verb} the input data on disk in blocks",
+                           "of {r$n} {r$what}, narrower than its chunks of",
+                           "{r$cd} {r$what}, which are then read and",
+                           "decompressed at least {r$nreads} times each,",
+                           "making the calculations much slower."))
+        blocks <- "the blocks"
+    } else {
+        msg <- c("!"=paste("Some steps process the input data on disk in",
+                           "blocks narrower than its chunks, which are then",
+                           "read and decompressed several times each, making",
+                           "the calculations much slower:"))
+        for (r in recs) {
+            step <- if (is.null(r$step)) "Another step" else r$step
+            msg <- c(msg, " "=sprintf(paste("%s: blocks of %d %s, chunks of",
+                                            "%d %s, read at least %d times",
+                                            "each."),
+                                      step, as.integer(r$n), r$what,
+                                      as.integer(r$cd), r$what,
+                                      as.integer(r$nreads)))
+        }
+        blocks <- "the blocks of all of them"
+    }
+    if (is.na(needmem))
+        msg <- c(msg, "i"=paste("Consider using a larger {.arg maxmem}, for",
+                                "the blocks to take whole chunks."))
+    else {
+        needmemtxt <- .maxmem_text(needmem)
+        msg <- c(msg, "i"=paste("With {.code maxmem=\"{needmemtxt}\"} or",
+                                "more, {blocks} would take whole chunks with",
+                                "the {nworkers} parallel worker{?s} in",
+                                "{.arg BPPARAM}."))
+    }
+    if (nworkers > 1)
+        msg <- c(msg, "i"=paste("Fewer parallel workers would also give wider",
+                                "blocks, but they make the calculations faster",
+                                "only when reading the input data takes most",
+                                "of their time."))
+    cli_warn(msg)
+
+    invisible(TRUE)
+}
+
+## dimensions of the chunks in which the data of 'X' are stored on disk, such
+## as in an HDF5 file, also when 'X' is a delayed operation on them, which
+## chunkdim() does not give for some of them, such as the subset of the
+## cells of a SingleCellExperiment object stored in an HDF5 file. with
+## 'aligned=TRUE', they are NA along the dimensions where the boundaries of
+## the chunks are not the ones of 'X', because a subset along them takes
+## rows or columns that are not consecutive, or that do not start at the
+## start of a chunk, see .chunks_of_seed(). the chunks are at most as large
+## as 'X'. it gives NULL when the data of 'X' are not stored in chunks, or
+## when their chunks are not known, e.g., with several seeds
+.ondisk_chunkdim <- function(X, aligned=FALSE) {
+    if (!is(X, "DelayedArray"))
+        return(NULL)
+    ch <- .chunks_of_seed(X@seed)
+    if (is.null(ch) || length(ch$cd) != length(dim(X)))
+        return(NULL)
+    cd <- pmin(ch$cd, dim(X))
+    if (aligned)
+        cd[!ch$aligned] <- NA
+
+    cd
+}
+
+## dimensions 'cd' of the chunks of the seed or delayed operation 'x', see
+## .ondisk_chunkdim(), from those of the seeds under delayed operations that
+## keep the geometry of their input, such as setting the dimnames or
+## operating on each value, transposing it, or taking a subset of it, where
+## 'aligned' tells, along each dimension, whether the boundaries of the chunks
+## are the ones of 'x': along the dimensions of a subset, when it takes
+## consecutive rows or columns starting at the start of a chunk
+#' @importFrom DelayedArray chunkdim
+#' @importClassesFrom DelayedArray DelayedSubset DelayedAperm DelayedUnaryIsoOp
+.chunks_of_seed <- function(x) {
+    if (is(x, "DelayedSubset")) {
+        ch <- .chunks_of_seed(x@seed)
+        if (is.null(ch))
+            return(NULL)
+        for (i in seq_along(x@index)) {
+            idx <- x@index[[i]]
+            if (!is.null(idx))
+                ch$aligned[i] <- ch$aligned[i] && length(idx) > 0 &&
+                                 all(diff(idx) == 1L) &&
+                                 (idx[1L] - 1L) %% ch$cd[i] == 0
+        }
+        return(ch)
+    }
+    if (is(x, "DelayedAperm")) {
+        ch <- .chunks_of_seed(x@seed)
+        if (is.null(ch) || length(x@perm) != length(ch$cd))
+            return(NULL)
+        return(list(cd=ch$cd[x@perm], aligned=ch$aligned[x@perm]))
+    }
+    if (is(x, "DelayedUnaryIsoOp"))
+        return(.chunks_of_seed(x@seed))
+    cd <- tryCatch(chunkdim(x), error=function(e) NULL)
+    if (is.null(cd))
+        return(NULL)
+
+    list(cd=cd, aligned=rep(TRUE, length(cd)))
+}
+
+## with more than one worker, narrow the blocks of width 'n' along the
+## dimension 'whdim' of 'X' so that their number is a multiple of 'nworkers',
+## spreading the rows or columns of 'X' evenly among them. the workers process
+## the blocks in rounds of 'nworkers' blocks, so that a last round with fewer
+## blocks leaves the other workers idle while it lasts as long as the previous
+## ones, e.g., 11 blocks take two rounds of 10 workers, as long as 20 blocks of
+## about half their width. the blocks keep the number of rounds of blocks of
+## width 'n' and only become narrower, so that they still fit in the memory
+## behind 'n'; their number may be slightly smaller than that multiple when
+## the rows or columns do not split evenly into blocks of the same width.
+## when 'n' is a multiple of the width of the chunks of 'X', see
+## .align_to_chunks(), blocks keep taking whole chunks, which may leave their
+## number unchanged, e.g., 30 chunks in blocks of 2 chunks, 15 blocks, take
+## two rounds of 10 workers, and blocks of whole chunks cannot be narrower in
+## two rounds. blocks of whole chunks can then be narrower in more rounds,
+## when these take less time, which is about the number of rounds times the
+## width of the blocks, e.g., 30 blocks of 1 chunk take three rounds of 10
+## workers, which take three quarters of the time of the two rounds of blocks
+## of 2 chunks. because each round adds the time of starting it and of
+## gathering its results, more rounds are taken only when they save at least
+## a tenth of that time, taking the fewest rounds of those taking the least
+## time. with a single block, 'X' is not split, as without parallelism
+.balance_blocks <- function(n, X, whdim, nworkers) {
+    nunits <- dim(X)[whdim]
+    if (nworkers < 2L || n < 1L || n >= nunits)
+        return(as.integer(n))
+
+    ## widths in multiples of the width 'u' of the chunks or of one row or
+    ## column, of which 'X' has 'm'
+    u <- 1
+    cd <- .ondisk_chunkdim(X, aligned=TRUE)
+    if (!is.null(cd) && !is.na(cd[whdim]) && cd[whdim] > 0 &&
+        n >= cd[whdim] && n %% cd[whdim] == 0)
+        u <- cd[whdim]
+    m <- ceiling(nunits / u)
+    rounds <- ceiling(ceiling(m / (n %/% u)) / nworkers)
+    if (u > 1) {
+        r <- seq(rounds, max(rounds, ceiling(m / nworkers)))
+        cost <- r * ceiling(m / (r * nworkers))
+        better <- cost <= 0.9 * cost[1L]
+        if (any(better))
+            rounds <- r[better][which.min(cost[better])]
+    }
+    as.integer(ceiling(m / (rounds * nworkers)) * u)
 }
 
 #' @importClassesFrom IRanges IRanges
@@ -460,12 +926,19 @@ BLOCK_FUN_WRAPPER <- function(block, WRAPPED_FUN, ...) {
 ## write the nonzero values left in the buffer, the column pointers and the
 ## dimensions 'dims' of the CSC layout, given the state of the appending 'st',
 ## see .h5_csc_append()
-#' @importFrom rhdf5 h5write
+#' @importFrom rhdf5 h5createDataset h5write
+#' @importFrom HDF5Array getHDF5DumpCompressionLevel
 .h5_csc_close <- function(st, dims) {
     st <- .h5_csc_flush(st, length(st$x))
     indptr <- st$indptr
     if (max(indptr) <= .Machine$integer.max)
         indptr <- as.integer(indptr)
+    ## created in chunks, as the other datasets, because rhdf5 creates it
+    ## otherwise as a single chunk, and warns about it with many columns
+    h5createDataset(st$fname, paste0(st$group, "/indptr"), length(indptr),
+                    storage.mode=storage.mode(indptr),
+                    chunk=min(length(indptr), st$chunk),
+                    level=getHDF5DumpCompressionLevel())
     h5write(indptr, st$fname, paste0(st$group, "/indptr"))
     h5write(as.integer(dims), st$fname, paste0(st$group, "/shape"))
 }
@@ -847,7 +1320,10 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
 ## 'workfactor', 'outfactor' and 'outextra' give the memory that FUN takes to
 ## process the rows of 'X' within the maximum main memory 'maxmem', see
 ## .units_per_block(), as do 'dense', when FUN converts blocks of sparse 'X'
-## into dense matrices, and 'heldmem', the memory held by other objects
+## into dense matrices, and 'heldmem', the memory held by other objects.
+## 'step' names the calculations in the warning of blocks narrower than the
+## chunks of 'X' on disk, see .check_chunk_blocks(), and is by default
+## 'progressmsg', when given.
 ## with 'sinkout=TRUE', FUN processes each block in main memory and the
 ## output is written into on-disk data structures, see .ondisk_blocks()
 
@@ -863,7 +1339,8 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
                                progressmsg="Progress", BPPARAM=NULL,
                                maxmem=Inf, workfactor=2, outfactor=1,
                                outextra=0, dense=FALSE,
-                               heldmem=.held_mem(), sinkout=FALSE) {
+                               heldmem=.held_mem(), sinkout=FALSE,
+                               step=NULL) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
@@ -872,10 +1349,13 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
         nworkers <- bpnworkers(BPPARAM)
     }
     X <- .h5file_seeds_to_paths(X, BPPARAM, nworkers)
+    if (is.null(step) && progressmsg != "Progress")
+        step <- progressmsg
 
     grid <- .rowgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra,
                          dense=dense, heldmem=heldmem, sinkout=sinkout,
-                         sendblocks=.sends_blocks(X, BPPARAM, nworkers))
+                         sendblocks=.sends_blocks(X, BPPARAM, nworkers),
+                         step=step, forked=.forked_workers(BPPARAM))
     rir <- .splitRowsInRanges(grid)
     if (length(rir) > 1 && verbose) {
         sze <- howbig(as.numeric(width(rir[[1]])), as.numeric(ncol(X)),
@@ -983,7 +1463,10 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
 ## 'workfactor', 'outfactor' and 'outextra' give the memory that FUN takes to
 ## process the columns of 'X' within the maximum main memory 'maxmem', see
 ## .units_per_block(), as do 'dense', when FUN converts blocks of sparse 'X'
-## into dense matrices, and 'heldmem', the memory held by other objects
+## into dense matrices, and 'heldmem', the memory held by other objects.
+## 'step' names the calculations in the warning of blocks narrower than the
+## chunks of 'X' on disk, see .check_chunk_blocks(), and is by default
+## 'progressmsg', when given.
 ## the results of FUN on each block of columns are bound by columns or,
 ## when 'combine' is a function of two results, reduced with it as they
 ## arrive, instead of holding the results of all the blocks: after each block
@@ -995,6 +1478,9 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
 ## the result of the block in process
 ## with 'sinkout=TRUE', FUN processes each block in main memory and the
 ## output is written into on-disk data structures, see .ondisk_blocks()
+## with 'rowbands=TRUE', FUN takes an argument 'nrowband' with which it
+## processes each block in bands of that many rows, given when blocks take
+## whole chunks of 'X' on disk instead of narrower blocks, see .colgridsize()
 #' @importFrom BiocGenerics type
 #' @importFrom cli cli_abort cli_progress_bar cli_progress_update
 #' @importFrom cli cli_progress_done
@@ -1009,7 +1495,7 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
                                maxmem=Inf, workfactor=2, outfactor=1,
                                outextra=0, dense=FALSE,
                                heldmem=.held_mem(), combine=NULL,
-                               sinkout=FALSE) {
+                               sinkout=FALSE, step=NULL, rowbands=FALSE) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
@@ -1018,17 +1504,29 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
         nworkers <- bpnworkers(BPPARAM)
     }
     X <- .h5file_seeds_to_paths(X, BPPARAM, nworkers)
+    if (is.null(step) && progressmsg != "Progress")
+        step <- progressmsg
 
     grid <- .colgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra,
                          dense=dense, heldmem=heldmem, sinkout=sinkout,
-                         sendblocks=.sends_blocks(X, BPPARAM, nworkers))
+                         sendblocks=.sends_blocks(X, BPPARAM, nworkers),
+                         step=step, forked=.forked_workers(BPPARAM),
+                         rowbands=rowbands)
     cir <- .splitColsInRanges(grid)
+    nrowband <- attr(grid, "nrowband")
+    if (!is.null(nrowband)) {
+        FUN0 <- FUN
+        FUN <- function(...) FUN0(..., nrowband=nrowband)
+    }
 
     if (length(cir) > 1 && verbose) {
         sze <- howbig(as.numeric(nrow(X)), as.numeric(width(cir[[1]])),
                       representation="dense", type=type(X))
         cli_alert_info(sprintf("Splitting calculations in %d chunks of [%d, %d] and %s",
                                length(cir), nrow(X), width(cir[[1]]), as.character(sze)))
+        if (!is.null(nrowband))
+            cli_alert_info(sprintf("Processing each chunk in bands of %d rows",
+                                   nrowband))
     } else if (length(cir) == 1 && !sinkout) ## serial execution in one call
         return(FUN(X, ..., verbose=verbose))
 

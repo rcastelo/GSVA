@@ -887,8 +887,82 @@ setMethod("mapGeneSetsToAnno",
               return(geneIds(geneSets))
           })
 
-#' @importFrom cli cli_alert_info cli_alert_warning
+## identifiers of the gene sets in 'geneSets', a GeneSetCollection object,
+## mapped to the type of 'anno', as mapIdentifiers() of GSEABase maps them,
+## which queries the annotation package once for each gene set, taking
+## seconds with hundreds of gene sets; here each map between identifier types
+## is queried once for the identifiers of all gene sets. gene sets of
+## different identifier types, or of classes other than GeneSet, and the
+## identifier types without such maps, are mapped by mapIdentifiers(), which
+## also gives the corresponding errors
 #' @importFrom GSEABase mapIdentifiers geneIds
+#' @importFrom AnnotationDbi mget
+.mapGeneSetIds <- function(geneSets, anno) {
+    maps <- .geneSetIdMaps(geneSets, anno)
+    if (is.null(maps))
+        return(geneIds(mapIdentifiers(geneSets, anno)))
+
+    ids <- geneIds(geneSets)
+    for (map in maps) {
+        keys <- unique(unlist(ids, use.names=FALSE))
+        vals <- mget(keys, map, ifnotfound=NA_character_)
+        ids <- lapply(ids, function(k) {
+            uvals <- unique(unlist(vals[k], use.names=FALSE))
+            if (is.null(uvals))
+                character(0)
+            else
+                as.character(uvals[!is.na(uvals)])
+        })
+    }
+
+    ids
+}
+
+## maps of the annotation package between the identifier type of the gene sets
+## in 'geneSets' and the one of 'to', the ones that mapIdentifiers() of
+## GSEABase uses in the same order, an empty list when both types are the
+## same, or NULL when mapIdentifiers() should map them, see .mapGeneSetIds()
+#' @importFrom GSEABase geneIdType
+#' @importFrom BiocGenerics annotation annotation<-
+#' @importFrom AnnotationDbi revmap
+#' @importFrom annotate getAnnMap
+.geneSetIdMaps <- function(geneSets, to) {
+    if (length(geneSets) == 0 ||
+        !all(vapply(geneSets, function(gs) class(gs) == "GeneSet", TRUE)))
+        return(NULL)
+    from <- geneIdType(geneSets[[1]])
+    if (is(from, "NullIdentifier") ||
+        !all(vapply(geneSets, function(gs) identical(geneIdType(gs), from),
+                    TRUE)))
+        return(NULL)
+
+    if (nchar(annotation(from)) == 0)
+        annotation(from) <- annotation(to)
+    else if (nchar(annotation(to)) == 0)
+        annotation(to) <- annotation(from)
+    if (nchar(annotation(from)) == 0 || annotation(from) != annotation(to))
+        return(NULL)
+    if (geneIdType(from) == geneIdType(to))
+        return(list())
+
+    isorg <- function(x) grepl("^org\\.", annotation(x))
+    tryCatch({
+        if (is(from, "AnnotationIdentifier"))
+            list(getAnnMap(toupper(geneIdType(to)), annotation(from)))
+        else if (is(to, "AnnotationIdentifier"))
+            list(revmap(getAnnMap(toupper(geneIdType(from)), annotation(to))))
+        else if (is(from, "EntrezIdentifier") && isorg(from))
+            list(getAnnMap(toupper(geneIdType(to)), annotation(from)))
+        else if (is(to, "EntrezIdentifier") && isorg(to))
+            list(revmap(getAnnMap(toupper(geneIdType(from)), annotation(to))))
+        else
+            list(revmap(getAnnMap(toupper(geneIdType(from)), annotation(from))),
+                 getAnnMap(toupper(geneIdType(to)), annotation(to)))
+    }, error=function(e) NULL)
+}
+
+#' @importFrom cli cli_alert_info cli_alert_warning
+#' @importFrom GSEABase geneIds
 #' @importFrom BiocGenerics annotation
 setMethod("mapGeneSetsToAnno",
           signature(geneSets="GeneSetCollection",
@@ -905,8 +979,7 @@ setMethod("mapGeneSetsToAnno",
                   if (verbose)
                       cli_alert_info("Mapping identifiers")
 
-                  mappedGeneSets <- mapIdentifiers(geneSets, anno)
-                  rval <- geneIds(mappedGeneSets)
+                  rval <- .mapGeneSetIds(geneSets, anno)
 
               } else {
                   if (verbose) {
@@ -1010,12 +1083,21 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 ## nonzero non-missing values ('n'), the number of missing values ('nna') and,
 ## if 'logsums=TRUE', the sum of the logarithm of the nonzero non-missing
 ## values ('lsum'). when 'X' is dense, they are the same but on all values,
-## where the minimum and maximum are 'min' and 'max'
+## where the minimum and maximum are 'min' and 'max'. when 'X' is stored on
+## disk, it is read in bands of 'nrowband' rows, if given, see .rowStats()
 
 #' @importFrom S4Arrays is_sparse DummyArrayGrid read_block
 #' @importFrom MatrixGenerics rowSums
 #' @importFrom cli cli_abort
-.rowStats_block <- function(X, logsums=FALSE, verbose=FALSE) {
+.rowStats_block <- function(X, logsums=FALSE, nrowband=NULL, verbose=FALSE) {
+    if (is(X, "DelayedArray") && !is.null(nrowband) && nrowband < nrow(X)) {
+        starts <- seq(1L, nrow(X), by=nrowband)
+        st <- lapply(starts, function(i) {
+            rows <- i:min(nrow(X), i + nrowband - 1L)
+            .rowStats_block(X[rows, , drop=FALSE], logsums=logsums)
+        })
+        return(do.call("rbind", st))
+    }
     if (is(X, "DelayedArray")) ## input HDF5 may be sparse or not
         X <- read_block(X, DummyArrayGrid(dim(X))[[1L]])
 
@@ -1061,14 +1143,19 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 
 ## statistics of the rows of 'X', see .rowStats_block(), calculated through
 ## blocks of columns, which fits the column-wise layout of HDF5 files storing
-## single-cell and spatial transcriptomics data
+## single-cell and spatial transcriptomics data. when 'X' is stored on disk in
+## chunks wider than the blocks of columns that fit in memory, the blocks take
+## whole chunks instead, read in bands of rows of the same size as the
+## narrower blocks, so that each chunk is read and decompressed once, see
+## .colgridsize()
 .rowStats <- function(X, logsums=FALSE, verbose=FALSE, BPPARAM=NULL,
                       maxmem=Inf) {
     mf <- .step_mem_factors("rowstats", X)
     .processMatrixCols(X, .rowStats_block, logsums=logsums, verbose=verbose,
                        BPPARAM=BPPARAM, maxmem=maxmem,
                        workfactor=mf$workfactor, outfactor=mf$outfactor,
-                       outextra=mf$outextra, combine=.combine_rowstats)
+                       outextra=mf$outextra, combine=.combine_rowstats,
+                       step="Calculating row statistics", rowbands=TRUE)
 }
 
 ## matrix with as many rows as 'X' and 2 columns if 'X' is dense, and 4
@@ -1102,8 +1189,6 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
                          removeNzConstant=TRUE, errorOnTooFewRows=TRUE,
 			 verbose=TRUE, BPPARAM=NULL, maxmem=Inf,
                          logsums=FALSE) {
-    rowrngs <- NULL
-
     if (verbose) {
         if (!is_sparse(expr))
             cli_alert_info("Searching for rows with constant values")
@@ -1111,11 +1196,35 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
             cli_alert_info("Searching for rows with constant (nonzero) values")
     }
 
-    ## the statistics of the rows are calculated through blocks of columns,
-    ## see .rowStats_ranges() for the ranges of values in 'rowrngs'
+    ## the statistics of the rows are calculated through blocks of columns
     rowstats <- .rowStats(expr, logsums=logsums, verbose=verbose,
                           BPPARAM=BPPARAM, maxmem=maxmem)
-    rowrngs <- .rowStats_ranges(rowstats, ncol(expr))
+    removemask <- .filter_rows_mask(rowstats, ncol(expr), rowNorm=rowNorm,
+                                    removeConstant=removeConstant,
+                                    removeNzConstant=removeNzConstant,
+                                    errorOnTooFewRows=errorOnTooFewRows,
+                                    verbose=verbose)
+
+    if (any(removemask))
+        expr <- expr[!removemask, , drop=FALSE]
+
+    if (logsums)
+        return(list(expr=expr, rowstats=rowstats[!removemask, , drop=FALSE]))
+
+    return(expr)
+}
+
+## rows to remove, as a logical mask, from a matrix with 'ncolX' columns whose
+## rows have the statistics 'rowstats', see .rowStats(), which can also be
+## accumulated across chunks of columns processed by different jobs, see
+## .map_clr_stats(); see .filterGenes() for the other arguments
+#' @importFrom cli cli_alert_warning cli_abort qty
+.filter_rows_mask <- function(rowstats, ncolX, rowNorm=NA, removeConstant=TRUE,
+                              removeNzConstant=TRUE, errorOnTooFewRows=TRUE,
+                              verbose=TRUE) {
+    nrowX <- nrow(rowstats)
+    ## see .rowStats_ranges() for the ranges of values in 'rowrngs'
+    rowrngs <- .rowStats_ranges(rowstats, ncolX)
 
     constantRows <- (rowrngs[, 1] == rowrngs[, 2])
     mask <- is.na(constantRows)
@@ -1124,9 +1233,9 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
 
     ## rows with only missing values, which have no minimum and maximum, are
     ## discarded as constant rows, but reported separately
-    allNaRows <- rep(FALSE, nrow(expr))
-    if (ncol(expr) > 0)
-        allNaRows <- rowstats[, "nna"] == ncol(expr)
+    allNaRows <- rep(FALSE, nrowX)
+    if (ncolX > 0)
+        allNaRows <- rowstats[, "nna"] == ncolX
     if (verbose && any(allNaRows)) {
         n <- sum(allNaRows)
         cli_alert_warning("{n} row{?s} with only missing values")
@@ -1135,7 +1244,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
                                    "{?is/are} discarded"))
     }
 
-    constantNzRows <- rep(FALSE, nrow(expr))
+    constantNzRows <- rep(FALSE, nrowX)
     if (ncol(rowrngs) > 2) { ## sparse input
         constantNzRows <- (rowrngs[, 3] == rowrngs[, 4])
         mask <- is.na(constantNzRows)
@@ -1162,14 +1271,14 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
                                    "values {?is/are} discarded"))
     }
 
-    removemask <- rep(FALSE, nrow(expr))
+    removemask <- rep(FALSE, nrowX)
     if (removeConstant)
          removemask <- constantRows
 
     if (removeNzConstant && any(nzmask))
          removemask <- removemask | nzmask
 
-    if (any(removemask) && (nrow(expr) - sum(removemask)) < 2) {
+    if (any(removemask) && (nrowX - sum(removemask)) < 2) {
         msg <- "Less than two rows left in the input assay object."
         if (errorOnTooFewRows)
             cli_abort(c("x"=msg))
@@ -1195,13 +1304,7 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
         }
     }
 
-    if (any(removemask))
-        expr <- expr[!removemask, , drop=FALSE]
-
-    if (logsums)
-        return(list(expr=expr, rowstats=rowstats[!removemask, , drop=FALSE]))
-
-    return(expr)
+    removemask
 }
 
 

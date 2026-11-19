@@ -125,3 +125,45 @@ test_readGMT <- function() {
     gsets.read <- readGMT(fname, deduplUse="drop", valueType="list")
     checkTrue(!any(duplicated(gsets.read[[1]])))
 }
+
+test_geneSetIdMapping <- function() {
+    message("Running unit tests for mapping gene set identifiers")
+
+    if (!requireNamespace("org.Hs.eg.db", quietly=TRUE))
+        return(invisible())
+    suppressPackageStartupMessages(library(GSEABase))
+
+    ## gene sets of symbols, sharing some of them, with one symbol that is
+    ## not in the annotation package and an empty gene set after mapping
+    syms <- c("TP53", "BRCA1", "EGFR", "MYC", "KRAS", "PTEN", "AKT1", "CDK2",
+              "GAPDH", "ACTB")
+    gsets <- list(set1=syms[1:4], set2=c(syms[3:8], "NOTAGENE"),
+                  set3=syms[c(9, 10, 1)], set4="NOTAGENE")
+    gsc <- GeneSetCollection(lapply(names(gsets), function(nm)
+        GeneSet(gsets[[nm]], setName=nm,
+                geneIdType=SymbolIdentifier("org.Hs.eg.db"))))
+
+    ## the maps queried once for all gene sets give the same identifiers as
+    ## mapIdentifiers() of GSEABase, through one map to Entrez identifiers,
+    ## two maps to Ensembl ones, and none to symbols
+    for (anno in list(EntrezIdentifier("org.Hs.eg.db"),
+                      ENSEMBLIdentifier("org.Hs.eg.db"),
+                      SymbolIdentifier("org.Hs.eg.db")))
+        checkIdentical(GSVA:::.mapGeneSetIds(gsc, anno),
+                       geneIds(mapIdentifiers(gsc, anno)))
+    checkIdentical(length(GSVA:::.geneSetIdMaps(gsc,
+                                                EntrezIdentifier("org.Hs.eg.db"))),
+                   1L)
+    checkIdentical(length(GSVA:::.geneSetIdMaps(gsc,
+                                                ENSEMBLIdentifier("org.Hs.eg.db"))),
+                   2L)
+
+    ## gene sets of different identifier types are left to mapIdentifiers()
+    gsc2 <- GeneSetCollection(c(gsc[[1]],
+                                GeneSet(c("7157", "672"), setName="set5",
+                                        geneIdType=EntrezIdentifier("org.Hs.eg.db"))))
+    checkTrue(is.null(GSVA:::.geneSetIdMaps(gsc2,
+                                            ENSEMBLIdentifier("org.Hs.eg.db"))))
+    checkIdentical(GSVA:::.mapGeneSetIds(gsc2, ENSEMBLIdentifier("org.Hs.eg.db")),
+                   geneIds(mapIdentifiers(gsc2, ENSEMBLIdentifier("org.Hs.eg.db"))))
+}

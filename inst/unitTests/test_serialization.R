@@ -58,6 +58,13 @@ test_ranksserialization <- function() {
                                                
     ## load the GSVA ranks from disk               
     loaded_gsvacolranks <- loadHDF5GSVA(savedranksdir)      
+
+    ## the dimension names are kept by the container and not also by the
+    ## assay, while the assay still gives them
+    checkTrue(is.null(dimnames(assay(loaded_gsvarownorm, "gsvarnorm",
+                                     withDimnames=FALSE))))
+    checkIdentical(dimnames(assay(loaded_gsvarownorm, "gsvarnorm")),
+                   dimnames(gsvarownorm))
                                                
     ## check that the loaded row-normalized values provide the
     ## same ranks as the ones calculated from the original values
@@ -85,6 +92,42 @@ test_ranksserialization <- function() {
     loaded_gsvacolranks <- loadHDF5GSVA(savedranksdir)
     es_from_loaded_gsvaranks <- gsvaColScores(loaded_gsvacolranks, verbose=FALSE)
     checkEqualsNumeric(assay(es), es_from_loaded_gsvaranks)
+
+    ## sparse values are given the dimensions and layout that the
+    ## H5SparseMatrixSeed() constructor would otherwise read from the file,
+    ## and loading or checking a file leaves no HDF5 handle open, also when
+    ## the file does not contain GSVA output
+    suppressPackageStartupMessages(library(HDF5Array))
+    checkIdentical(as.character(rhdf5::h5read(savedranksdir, "gsva/layout")),
+                   "csc")
+    checkIdentical(seed(loaded_gsvacolranks),
+                   H5SparseMatrixSeed(savedranksdir, "gsva/assay"))
+    rhdf5::h5closeAll()
+    checkTrue(GSVA:::.is_gsva_h5_file(savedranksdir))
+    txtfile <- tempfile()
+    writeLines("not HDF5", txtfile)
+    h5file <- tempfile(fileext=".h5")
+    rhdf5::h5write(1:3, h5file, "x")
+    for (f in c(txtfile, h5file)) {
+        checkTrue(!GSVA:::.is_gsva_h5_file(f))
+        checkException(loadHDF5GSVA(f), silent=TRUE)
+        checkException(GSVA:::.load_gsva_path(f, "auto", "x", FALSE),
+                       silent=TRUE)
+    }
+    checkIdentical(length(rhdf5::h5validObjects()), 0L)
+
+    ## loading dense values gives no warning about the file being open
+    densefile <- saveHDF5GSVA(es, tempfile())
+    checkIdentical(as.character(rhdf5::h5read(densefile, "gsva/layout")),
+                   "dense")
+    warns <- character(0)
+    withCallingHandlers(loadHDF5GSVA(densefile, verbose=FALSE),
+                        warning=function(w) {
+                            warns <<- c(warns, conditionMessage(w))
+                            invokeRestart("muffleWarning")
+                        })
+    checkIdentical(warns, character(0))
+    checkIdentical(length(rhdf5::h5validObjects()), 0L)
 }
 
 test_parquetserialization <- function() {

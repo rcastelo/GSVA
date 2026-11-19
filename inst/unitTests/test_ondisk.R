@@ -1,3 +1,5 @@
+source(system.file("unitTests", "test_helpers.R", package = "GSVA"))
+
 test_ondisk <- function() {
 
     message("Running unit tests for ondisk input.")
@@ -31,14 +33,26 @@ test_ondisk <- function() {
     H5 <- as(M, "HDF5Matrix")
 
     ## estimate GSVA enrichment scores with and without HDF5 input and check that they are identical
-    es_noh5 <- gsva(gsvaParam(M, gsets, verbose=FALSE), verbose=FALSE)
-    es_h5 <- gsva(gsvaParam(H5, gsets, verbose=FALSE), verbose=FALSE)
+    es_noh5 <- gsva(gsvaParam(M, gsets, verbose = FALSE), verbose = FALSE, device = "cpu")
+    es_h5 <- gsva(gsvaParam(H5, gsets, verbose = FALSE), verbose = FALSE, device = "cpu")
     checkIdentical(es_noh5, es_h5)
 
     ## estimate GSVA enrichment scores with HDF5 input and output and check that they are identical
-    es_h5ondisk <- gsva(gsvaParam(H5, gsets, ondisk="yes", verbose=FALSE), verbose=FALSE)
+    es_h5ondisk <- gsva(gsvaParam(H5, gsets, ondisk = "yes", verbose = FALSE), verbose = FALSE, device = "cpu")
     es_h5ondiskmat <- as.matrix(es_h5ondisk)
     checkEqualsNumeric(es_noh5, es_h5ondiskmat)
+
+    ## CPU vs GPU
+    .run_with_gpu({
+        es_noh5_gpu <- gsva(gsvaParam(M, gsets, verbose = FALSE), verbose = FALSE, device = "gpu")
+        .check_gpu_equiv(es_noh5, es_noh5_gpu)
+
+        es_h5_gpu <- gsva(gsvaParam(H5, gsets, verbose = FALSE), verbose = FALSE, device = "gpu")
+        .check_gpu_equiv(es_h5, es_h5_gpu)
+
+        es_h5ondisk_gpu <- gsva(gsvaParam(H5, gsets, ondisk = "yes", verbose = FALSE), verbose = FALSE, device = "gpu")
+        .check_gpu_equiv(es_h5ondisk, es_h5ondisk_gpu)
+    })
 
     ## estimate ssGSEA enrichment scores with and without HDF5 input and check that they are identical
     es_noh5 <- gsva(ssgseaParam(M, gsets, verbose=FALSE), verbose=FALSE)
@@ -227,6 +241,98 @@ test_load_sparse_by_blocks <- function() {
     checkIdentical(GSVA:::.load_sparse_by_blocks(x, maxmem=maxmem,
                                                  insize=insize),
                    as(x, "SVT_SparseMatrix"))
+
+    ## with a budget smaller than the result, blocks are not narrower than a
+    ## chunk, also through a subset of the columns, whose chunkdim() is NULL,
+    ## or than the default block without chunks of several columns, as
+    ## counted by the calls to read_block()
+    imports <- parent.env(asNamespace("GSVA"))
+    readblock <- get("read_block", envir=imports)
+    nreads <- 0L
+    unlockBinding("read_block", imports)
+    assign("read_block", function(...) {
+               nreads <<- nreads + 1L
+               readblock(...)
+           }, envir=imports)
+    on.exit({
+        assign("read_block", readblock, envir=imports)
+        lockBinding("read_block", imports)
+    }, add=TRUE)
+    loads <- function(x) {
+        nreads <<- 0L
+        insize <- as.numeric(object.size(as(x, "SVT_SparseMatrix")))
+        res <- GSVA:::.load_sparse_by_blocks(x, maxmem=insize, insize=insize)
+        checkIdentical(res, as(x, "SVT_SparseMatrix"))
+        nreads
+    }
+    h <- writeHDF5Array(as.matrix(m), chunkdim=c(50L, 30L))
+    checkTrue(is.null(chunkdim(h[, 1:90])))
+    checkIdentical(loads(h[, 1:90]), 3L)
+    checkTrue(loads(x) <= 2L)
+}
+
+test_load_sparse_by_blocks_bp <- function() {
+
+    message("Running unit tests for loading sparse on-disk data in parallel")
+
+    suppressPackageStartupMessages({
+        library(Matrix)
+        library(HDF5Array)
+        library(BiocParallel)
+    })
+
+    ## sparse on-disk data in three blocks of a chunk each, with a default
+    ## block of a chunk, loaded by the parallel workers into the same object
+    ## as with as(), also through a subset of its columns, with forked and
+    ## socket workers, which leave the parallel back-end as it was
+    set.seed(123)
+    m <- rsparsematrix(200, 90, density=0.1)
+    dimnames(m) <- list(paste0("g", 1:200), paste0("s", 1:90))
+    h <- writeHDF5Array(as.matrix(m), chunkdim=c(50L, 30L))[, 1:90]
+    expected <- as(h, "SVT_SparseMatrix")
+    insize <- as.numeric(object.size(expected))
+    oldbs <- getAutoBlockSize()
+    suppressMessages(setAutoBlockSize(200 * 30 * 8))
+    on.exit(suppressMessages(setAutoBlockSize(oldbs)), add=TRUE)
+    grid <- colAutoGrid(h)
+    checkIdentical(length(grid), 3L)
+    ## socket workers, which take a few seconds to start, are tested once
+    bp <- SnowParam(workers=2)
+    checkIdentical(GSVA:::.load_sparse_by_blocks(h, maxmem=Inf, BPPARAM=bp),
+                   expected)
+    checkTrue(!bpisup(bp))
+    if (.Platform$OS.type != "windows") {
+        bp <- MulticoreParam(workers=2)
+        checkIdentical(GSVA:::.load_workers(h, length(grid), Inf, NA_real_,
+                                            bp), 2L)
+        blocks <- GSVA:::.read_sparse_blocks_bp(h, grid, 2L, bp)
+        checkIdentical(length(blocks), 3L)
+        checkIdentical(unname(do.call(cbind, blocks)), unname(expected))
+        checkIdentical(GSVA:::.load_sparse_by_blocks(h, maxmem=Inf,
+                                                     BPPARAM=bp), expected)
+        checkIdentical(GSVA:::.load_sparse_by_blocks(h, maxmem=2^40,
+                                                     insize=insize,
+                                                     BPPARAM=bp), expected)
+        checkTrue(!bpisup(bp))
+    }
+
+    ## the number of workers reading blocks at the same time is the one of
+    ## the workers or blocks, when the memory is not known, and otherwise the
+    ## one whose blocks fit in the memory left by the result together with
+    ## the memory of all the workers, or 1, to read them in this process
+    bp <- SnowParam(workers=4)
+    checkIdentical(GSVA:::.load_workers(h, 3L, Inf, NA_real_, NULL), 1L)
+    checkIdentical(GSVA:::.load_workers(h, 1L, Inf, NA_real_, bp), 1L)
+    checkIdentical(GSVA:::.load_workers(h, 3L, Inf, NA_real_, bp), 3L)
+    checkIdentical(GSVA:::.load_workers(h, 10L, Inf, NA_real_, bp), 4L)
+    gb <- 1024^3
+    oldopt <- options(GSVA.workermem=gb)
+    on.exit(options(oldopt), add=TRUE)
+    procs <- 4 * GSVA:::.block_worker_mem(h, 2L)$workermem
+    checkIdentical(GSVA:::.load_workers(h, 10L, procs + 2 * gb, gb, bp), 2L)
+    checkIdentical(GSVA:::.load_workers(h, 10L, procs + 9 * gb, gb, bp), 4L)
+    checkIdentical(GSVA:::.load_workers(h, 10L, procs + 1.5 * gb, gb, bp),
+                   1L)
 }
 
 test_memory_check <- function() {
@@ -320,6 +426,8 @@ test_scores_ondisk <- function() {
     checkTrue(is(esdisk, "DelayedMatrix"))
     checkTrue(any(grepl("on-disk", out)))
     checkEqualsNumeric(es, as.matrix(esdisk))
+    ## the step closes on exit the scope where it measures the memory of R
+    checkTrue(is.null(GSVA:::gsva_global$rmemfull))
 }
 
 test_h5file_seeds <- function() {
