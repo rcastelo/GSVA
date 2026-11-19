@@ -49,9 +49,20 @@ that runs through the `gsvaParam()` parameter constructor, and originally
 described in the publication by @haenzelmann2013gsva. At the moment, this
 specific support consists of the following features:
 
-  * The currently available container for spatial omics data that allows one
-    to input additional row and column metadata, and spatial coordinates, is a
-    `SpatialExperiment` object.
+  * GSVA can take as input a `SpatialExperiment` object, a container for
+    spatial omics data that holds the expression data together with
+    additional row and column metadata, and spatial coordinates.
+  * Spatial omics data stored in a `SpatialData` object, from the
+    `r Biocpkg("spatialdataR")` package, can also be analyzed with GSVA by
+    extracting a table with `table(sd)`, where `sd` is the `SpatialData`
+    object. If the object stores more than one table, `table(sd)` returns
+    the first one, and `table(sd, i)` returns the `i`-th one. Tables in a
+    `SpatialData` object store functional annotations or information
+    aggregated across layers, such as a gene-by-cell matrix of expression
+    values, and are currently represented as `SingleCellExperiment` objects,
+    which GSVA accepts as input. Since the GSVA algorithm does not currently
+    use spatial coordinates, working only with this table does not leave out
+    any information that GSVA would use.
   * While the input spatial omics data is always sparse, the output of enrichment
     scores will be always dense, and therefore, the container storing those
     scores will be different from the input data, typically a `matrix` or a
