@@ -1338,8 +1338,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                                is_sparse(X) && !dense, TRUE, mf, nworkers,
                                heldmem, densify,
                                .sends_blocks(TRUE, BPPARAM, nworkers),
-                               dgc=is(X, "dgCMatrix"), permem=permem,
-                               forked=.forked_workers(BPPARAM))
+                               permem=permem, forked=.forked_workers(BPPARAM))
         ondisk <- "no"
         if (need > maxmem) {
             ondisk <- "yes"
@@ -1372,13 +1371,12 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## the memory allocated by R in this process, other than the 'datamem' bytes
 ## of the data of the calculations that it holds, plus the memory that each R
 ## process takes outside R, see .proc_extra_mem(). forked workers, such as
-## those of a MulticoreParam object, end up taking that memory as their own,
-## because the garbage collector of R writes to the memory pages of each
-## object that they share with the main process, and a part of the data of
-## the calculations, see .fork_copied_mem(). in a new R session, loading GSVA
-## and the packages it depends on takes about 0.6 GB, which with the memory
-## outside R gives about 0.9 GB, as measured on Linux, to which loading a
-## SingleCellExperiment object with one million cells adds about 0.2 GB.
+## those of a MulticoreParam object, share instead with the main process the
+## memory allocated by R, see .forked_worker_mem(). in a new R session,
+## loading GSVA and the packages it depends on takes about 0.6 GB, which with
+## the memory outside R gives about 0.9 GB, as measured on Linux, to which
+## loading a SingleCellExperiment object with one million cells adds about
+## 0.2 GB.
 ## with 'session=FALSE', it is the memory of a new R process loading GSVA, such
 ## as the one of a job of gsvaMap() or of a socket worker, instead of the one of
 ## this process: those 0.6 GB allocated by R, together with the memory outside
@@ -1474,16 +1472,51 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     if (Sys.info()[["sysname"]] == "Darwin") 0.45 * 1024^3 else 0.3 * 1024^3
 }
 
-## memory in bytes that each forked worker takes as its own from the data of
-## the calculations held by the main R process, of 'datamem' bytes in total,
-## sparse or not, and stored in a dgCMatrix object or not ('dgc'): the garbage
-## collector of R writes only to the memory page with the header of each
-## object, so that the data of large vectors remain shared, such as the ones
-## of a dense matrix or of a dgCMatrix object, while the many vectors of the
-## columns of an SVT_SparseMatrix object end up taking about one third of
-## their memory in each worker, as measured on Linux
-.fork_copied_mem <- function(datamem, sparse, dgc=FALSE) {
-    if (sparse && !dgc) datamem / 3 else 0
+## memory in bytes that each worker forked from this R process, such as those
+## of a MulticoreParam object, takes by itself besides the blocks of its
+## calculations, whose input is in main memory ('inmemory=TRUE') or not:
+## with the input in main memory, the memory that it takes outside R, see
+## .proc_extra_mem(), because it shares with this process the memory
+## allocated by R, except for the memory pages that it copies, see
+## .fork_copied_mem(); about 0.04 GB in each worker scoring the ranks of
+## 100,000 cells held in main memory, and nothing measurable in each worker
+## normalizing their rows, as measured on Linux. with the input read from
+## disk, the memory of this process 'permem', see .worker_mem(), because each
+## worker then processes several rounds of blocks and keeps memory of its own
+## from one round to the next: with less, the steps of one million cells read
+## from disk by 10 workers within 'maxmem' exceeded it on macOS. it can be
+## set with the option 'GSVA.workermem', as the one of each R process
+.forked_worker_mem <- function(inmemory=TRUE, permem=.worker_mem()) {
+    wm <- getOption("GSVA.workermem")
+    if (!is.null(wm))
+        return(as.numeric(wm))
+    if (inmemory) .proc_extra_mem() else permem
+}
+
+## memory in bytes that each forked worker copies from the 'sessionmem' bytes
+## allocated by R in the main R process, including the data of the
+## calculations that it holds, in a step whose factor 'forkcopy' gives the
+## fraction copied, see .step_mem_factors(): a full collection of garbage in a
+## worker writes to the memory page with the header of each object, which the
+## worker then copies, so that the data of large vectors remain shared, such
+## as the ones of a dense matrix, while objects made of many small vectors,
+## such as an SVT_SparseMatrix object, are copied almost completely. workers
+## that allocate little memory, as when scoring gene sets, rarely collect
+## garbage and copy almost nothing, while workers ranking the columns of
+## 100,000 cells held in main memory copied about 0.17 times the memory of the
+## main R process, as measured on Linux and macOS, where GSVA does not collect
+## garbage itself in forked workers, see .release_block_mem(). workers
+## calculating the row ECDFs of 100,000 cells held in main memory as an
+## SVT_SparseMatrix object, which take longer, ran full collections at about
+## the same time and copied almost the whole memory of the main R process,
+## about 3 GB each, on macOS. 'forkcopy' can give two fractions, the first
+## for the input in main memory ('inmemory=TRUE') and the second for the input
+## read from disk, see .step_mem_factors()
+.fork_copied_mem <- function(sessionmem, forkcopy=NULL, inmemory=TRUE) {
+    if (is.null(forkcopy))
+        return(0)
+
+    forkcopy[if (inmemory) 1L else length(forkcopy)] * sessionmem
 }
 
 ## memory in bytes that each R process takes outside R while it reads blocks
@@ -1557,7 +1590,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## values are in large vectors that forked workers share with the main R
 ## process, see .fork_copied_mem(), unlike the rest of its data, such as the
 ## many character strings of the names of the cells of single-cell data,
-## which they end up copying, see .worker_mem()
+## which they may copy, see .worker_mem()
 #' @importMethodsFrom SummarizedExperiment assays
 #' @importMethodsFrom Biobase assayData
 .container_shared_mem <- function(x, assay) {
@@ -1660,18 +1693,20 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## size 'insize' in main memory and 'eltbytes' bytes per value, sparse or not,
 ## and stored in main memory or not ('inmemory'), with 'nworkers' parallel
 ## workers, where 'mf' gives the memory factors of the step, see
-## .step_mem_factors(). the main R process and each worker take 'permem'
-## bytes, by default the ones of .worker_mem() besides the 'datamem' bytes of
-## the data of the calculations that this process holds, and the data of the
+## .step_mem_factors(). the main R process takes 'permem' bytes, by default
+## the ones of .worker_mem() besides the 'datamem' bytes of the data of the
+## calculations that this process holds, each worker forked from it the ones
+## of .forked_worker_mem(), from 'permem' when the input is read from disk,
+## and the data of the
 ## step take .step_data_mem() from the fraction .mem_fraction_R of the memory
 ## available to the allocations of R, including the copies of the blocks sent
 ## to the workers with 'sendblocks=TRUE', see .sends_blocks(). each R
 ## process also takes .disk_read_mem() when the input data is read from disk,
 ## i.e., when it is not loaded in main memory ('inmemory=FALSE'). forked
-## workers take a copy of a part of the data of the step in main memory, its
-## input and the 'heldmem' bytes held by other objects, see
-## .fork_copied_mem(), where 'dgc' tells whether they are stored in dgCMatrix
-## objects. workers not forked from this process ('forked=FALSE'), such as
+## workers take a copy of the fraction 'forkcopy' of 'mf' of the memory of
+## this process, including the data of the step in main memory, its input and
+## the 'heldmem' bytes held by other objects, see .fork_copied_mem(). workers
+## not forked from this process ('forked=FALSE'), such as
 ## those of a SnowParam object, take instead each the memory of a new R
 ## process, see .worker_mem(), and no copy of those data. blocks of sparse
 ## data read from disk take their memory by their sparse size, see
@@ -1679,10 +1714,11 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## the dense size of the input, by default the one of 'insize', the estimated
 ## size of the input in main memory, see .input_mem_size(), and not when it
 ## is NA. with 'sinkout=TRUE', the output is written to disk block by block,
-## see .step_data_mem()
+## see .step_data_mem(). the attribute "workermem" of the result gives the
+## memory of each worker, including its copy of the memory of this process
 .step_mem_need <- function(dims, insize, whdim, eltbytes, sparse, inmemory,
                            mf, nworkers, heldmem=.held_mem(), densify=FALSE,
-                           sendblocks=FALSE, datamem=0, dgc=FALSE,
+                           sendblocks=FALSE, datamem=0,
                            permem=.worker_mem(datamem), forked=TRUE,
                            sparseratio=insize / max(1, prod(as.numeric(dims)) *
                                                        eltbytes),
@@ -1690,29 +1726,39 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     if (sparse && !densify && !inmemory)
         mf <- .sparse_disk_factors(mf, sparseratio)
     readmem <- if (inmemory) 0 else .disk_read_mem()
-    parmem <- permem + readmem
-    copied <- .fork_copied_mem(heldmem + if (inmemory) insize else 0, sparse,
-                               dgc)
+    ## forked workers copy a part of the memory of this process, including
+    ## the data of the calculations that it holds, see .fork_copied_mem()
+    parmem <- .forked_worker_mem(inmemory, permem) + readmem
+    copied <- .fork_copied_mem(max(0, permem - .proc_extra_mem()) + heldmem +
+                               if (inmemory) insize else 0, mf$forkcopy,
+                               inmemory)
     if (!forked) {
         parmem <- .worker_mem(session=FALSE) + readmem
         copied <- 0
     }
 
-    permem + readmem + nworkers * (parmem + copied) +
-        .step_data_mem(dims, whdim, insize, eltbytes, sparse, inmemory, mf,
-                       heldmem, densify, sendblocks, sinkout) / .mem_fraction_R
+    need <- permem + readmem + nworkers * (parmem + copied) +
+            .step_data_mem(dims, whdim, insize, eltbytes, sparse, inmemory, mf,
+                           heldmem, densify, sendblocks, sinkout) /
+            .mem_fraction_R
+
+    structure(need, workermem=parmem + copied)
 }
 
 ## warn, before the calculations of a step start, when the estimated memory
 ## 'need' that they require, with 'nworkers' parallel workers, exceeds the
 ## maximum main memory 'maxmem', suggesting fewer workers or a larger 'maxmem',
-## or what 'hint' says, when given, where each R process takes 'permem' bytes
-## by itself, see .worker_mem(), except for workers not forked from this
-## process ('forked=FALSE'), which take the memory of a new R process
+## or what 'hint' says, when given, where the main R process takes 'permem'
+## bytes by itself, see .worker_mem(), and each worker forked from it
+## 'forkedmem' bytes, see .forked_worker_mem(), together with its copy of the
+## memory of this process, see .step_mem_need(), while workers not forked from
+## this process ('forked=FALSE') take the memory of a new R process
 #' @importFrom cli cli_warn
 #' @importFrom memuse mu
 .check_mem_need <- function(need, maxmem, nworkers, hint=NULL,
-                            permem=.worker_mem(), forked=TRUE) {
+                            permem=.worker_mem(), forked=TRUE,
+                            forkedmem=.forked_worker_mem(TRUE, permem)) {
+    need <- as.vector(need)
     if (need <= maxmem)
         return(invisible(FALSE))
 
@@ -1722,13 +1768,15 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     msg <- c("!"=paste("The memory estimated for these calculations,",
                        "{needtxt}, exceeds the maximum available main memory",
                        "of {maxmemtxt}."))
-    if (nworkers > 0 && forked)
+    if (nworkers > 0 && forked) {
+        pwmtxt <- as.character(mu(forkedmem))
         msg <- c(msg,
-                 "i"=paste("The main R process and each of its {nworkers}",
-                           "parallel workers take about {wmtxt} by themselves,",
+                 "i"=paste("The main R process takes about {wmtxt} by itself,",
                            "for GSVA, the packages it depends on and the",
-                           "other objects of the R session."))
-    else if (nworkers > 0) {
+                           "other objects of the R session, which its",
+                           "{nworkers} parallel workers share, each taking",
+                           "about {pwmtxt} besides."))
+    } else if (nworkers > 0) {
         pwmtxt <- as.character(mu(.worker_mem(session=FALSE)))
         msg <- c(msg,
                  "i"=paste("The main R process takes about {wmtxt} by itself,",
@@ -1801,13 +1849,13 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                            is_sparse(X) && !dense, !ondisk, mf, nworkers,
                            heldmem, densify,
                            .sends_blocks(!ondisk, BPPARAM, nworkers),
-                           dgc=is(X, "dgCMatrix"), permem=permem,
-                           forked=.forked_workers(BPPARAM),
+                           permem=permem, forked=.forked_workers(BPPARAM),
                            sparseratio=sparseratio,
                            sinkout=ondisksink && isTRUE(as.vector(ondisk)))
 
     .check_mem_need(need, maxmem, nworkers, permem=permem,
-                    forked=.forked_workers(BPPARAM))
+                    forked=.forked_workers(BPPARAM),
+                    forkedmem=attr(need, "workermem"))
 }
 
 ## check the memory required by each of the three steps that gsva() runs on
@@ -1851,9 +1899,11 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     ## the assays of the input data that it holds, see .worker_mem()
     permem <- .worker_mem(.input_shared_mem(param), full=.large_data(dims))
     need <- 0
+    forkedmem <- .forked_worker_mem(ondisk == "no", permem)
     for (st in steps) {
         mf <- .step_mem_factors(st$step, ngs=ngs, sparse=sparse && !densify,
-                                int=st$int, clr=clr, dgc=dgc)
+                                int=st$int, clr=clr, dgc=dgc,
+                                insparse=sparse)
         if (densify && clr) ## dense CLR, see gsvaRowNorm()
             mf$assembly <- 2
         eltbytes <- if (st$int) 4 else 8
@@ -1863,21 +1913,24 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
                                        sparse, TRUE, mf, nworkers, held,
                                        densify,
                                        .sends_blocks(TRUE, BPPARAM, nworkers),
-                                       dgc=dgc, permem=permem,
+                                       permem=permem,
                                        forked=.forked_workers(BPPARAM)) <=
                         maxmem
         stepheld <- held + if (inres && !inmemory) insize else 0
         ## the steps processing their input from disk write their output to
         ## disk block by block, see gsvaRowNorm(), gsvaColRanks() and
         ## gsvaColScores()
-        need <- max(need, .step_mem_need(dims, insize, st$whdim, eltbytes,
-                                         sparse, inmemory, mf, nworkers,
-                                         stepheld, densify,
-                                         .sends_blocks(inmemory, BPPARAM,
-                                                       nworkers),
-                                         dgc=dgc, permem=permem,
-                                         forked=.forked_workers(BPPARAM),
-                                         sinkout=!inmemory))
+        stepneed <- .step_mem_need(dims, insize, st$whdim, eltbytes,
+                                   sparse, inmemory, mf, nworkers, stepheld,
+                                   densify,
+                                   .sends_blocks(inmemory, BPPARAM, nworkers),
+                                   permem=permem,
+                                   forked=.forked_workers(BPPARAM),
+                                   sinkout=!inmemory)
+        if (stepneed > need) {
+            need <- as.vector(stepneed)
+            forkedmem <- attr(stepneed, "workermem")
+        }
         ## the input of the next step and its size: without row
         ## normalization, it is the assay used, held by the input data
         if (st$step == "rownorm" && rownormnone) {
@@ -1895,7 +1948,7 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     }
 
     .check_mem_need(need, maxmem, nworkers, permem=permem,
-                    forked=.forked_workers(BPPARAM))
+                    forked=.forked_workers(BPPARAM), forkedmem=forkedmem)
 }
 
 ## from https://stat.ethz.ch/pipermail/r-help/2005-September/078974.html

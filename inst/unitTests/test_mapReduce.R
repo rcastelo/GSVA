@@ -1283,3 +1283,46 @@ test_mapChunkFactors <- function() {
     mf <- GSVA:::.map_step_factors("gsvaColRanks", par, D)
     checkIdentical(GSVA:::.ondisk_mem_factors(mf, D, NA_real_)$workfactor, 2)
 }
+
+## the workers forked in each job of gsvaMap() calculating the row ECDFs of
+## sparse data other than a dgCMatrix object copy the memory of the R process
+## of the job, see .step_mem_factors(), also when the classical algorithm
+## gives a dense output from the sparse input, so that the memory checked
+## for the jobs before submitting them includes these copies
+test_mapForkedWorkerMem <- function() {
+    if (.Platform$OS.type != "unix")
+        return(invisible(TRUE))
+    suppressPackageStartupMessages({
+        library(SummarizedExperiment)
+        library(SparseArray)
+    })
+
+    x <- matrix(0, nrow=200, ncol=400,
+                dimnames=list(paste0("g", 1:200), paste0("s", 1:400)))
+    x[seq(1L, length(x), by=4L)] <- 1
+    gsets <- list(gs1=paste0("g", 1:10), gs2=paste0("g", 11:20))
+    S <- as(x, "SVT_SparseMatrix")
+    C <- as(x, "dgCMatrix")
+    pars <- lapply(list(svt=S, dgc=C), function(m)
+        gsvaParam(SummarizedExperiment(assays=list(counts=m)), gsets,
+                  sparse=FALSE, verbose=FALSE))
+    mf <- GSVA:::.map_step_factors("gsvaRowNorm", pars$svt, S)
+    checkTrue(mf$densify)
+    checkEqualsNumeric(mf$forkcopy, c(1, 0))
+    checkTrue(is.null(GSVA:::.map_step_factors("gsvaRowNorm", pars$dgc,
+                                               C)$forkcopy))
+
+    ## with the memory of each R process set to zero, the jobs with 4 forked
+    ## workers on the SVT_SparseMatrix object need more memory than on the
+    ## dgCMatrix object, by the copies of the input of the workers
+    oldopt <- options(GSVA.workermem=0)
+    on.exit(options(oldopt))
+    warns <- function(par, maxmem)
+        suppressWarnings(GSVA:::.check_map_mem("gsvaRowNorm", par, "counts",
+                                               1L, 200, 4, maxmem))
+    maxmem <- 64 * 1024
+    while (warns(pars$dgc, maxmem))
+        maxmem <- maxmem * 1.05
+    checkTrue(warns(pars$svt, maxmem))
+    checkTrue(!warns(pars$svt, 2 * maxmem + 4 * object.size(S)))
+}

@@ -1053,6 +1053,7 @@ gsvaRowNorm <- function(param,
                .get_rowNorm(param) != "none"
     mf <- .step_mem_factors("rownorm", dataMatrix,
                             sparse=is_sparse(dataMatrix) && !densify,
+                            insparse=is_sparse(dataMatrix),
                             clr=(.get_rowNorm(param) == "clr"))
     ## CLR converts the whole sparse input into a dense matrix and divides it,
     ## which takes twice the size of the dense output, see .clr_scale()
@@ -1960,7 +1961,8 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
 
     ## the classical algorithm on sparse input gives dense blocks and output
     densify <- is_sparse(expr) && !sparse
-    mf <- .step_mem_factors("rownorm", expr, sparse=is_sparse(expr) && sparse)
+    mf <- .step_mem_factors("rownorm", expr, sparse=is_sparse(expr) && sparse,
+                            insparse=is_sparse(expr))
     Z <- NULL
     if (rowNorm == "ecdf")
         Z <- .processMatrixRows(expr, FUN=compute.gene.cdf, Gaussk=Gaussk,
@@ -1969,7 +1971,7 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
                                 minparcols=100, BPPARAM=BPPARAM, maxmem=maxmem,
                                 workfactor=mf$workfactor,
                                 outfactor=mf$outfactor, outextra=mf$outextra,
-                                dense=densify,
+                                forkcopy=mf$forkcopy, dense=densify,
                                 sinkout=(ondisk || is(expr, "DelayedMatrix")),
                                 step="Normalizing rows")
     else if (rowNorm == "clr") {
@@ -2040,7 +2042,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
                             workfactor=mf$workfactor, outfactor=mf$outfactor,
                             outextra=mf$outextra,
                             sinkout=(ondisk || is(Z, "DelayedMatrix")),
-                            step="Ranking columns")
+                            step="Ranking columns", forkcopy=mf$forkcopy)
 
     return(R)
 }

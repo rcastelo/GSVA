@@ -200,8 +200,9 @@ test_units_per_block <- function() {
     checkIdentical(GSVA:::.units_per_block(X, 2L, 1, maxmem / frac + wm,
                                            workermem=wm), 50L)
     ## which, by default, is the memory of this process besides the data of
-    ## the calculations, see .worker_mem(), and forked workers take a copy of
-    ## one third of sparse data, unless they are stored in a dgCMatrix object
+    ## the calculations, see .worker_mem(), while forked workers take the
+    ## memory outside R and a copy of the fraction of the memory of this
+    ## process given by the step, see .fork_copied_mem()
     oldopt <- options(GSVA.workermem=NULL)
     on.exit(options(oldopt), add=TRUE)
     extra <- GSVA:::.proc_extra_mem()
@@ -213,9 +214,11 @@ test_units_per_block <- function() {
     ## measured with a full collection of garbage only for large data
     checkTrue(!GSVA:::.large_data(dim(X)))
     checkTrue(GSVA:::.large_data(c(1e4, 1e6), 4))
-    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, sparse=TRUE), 1e6)
-    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, sparse=TRUE, dgc=TRUE), 0)
-    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, sparse=FALSE), 0)
+    checkEqualsNumeric(GSVA:::.forked_worker_mem(), extra)
+    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, 0.2), 6e5)
+    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6), 0)
+    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, c(1, 0)), 3e6)
+    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, c(1, 0), FALSE), 0)
     ## the data shared with forked workers are the matrices of the assays of
     ## the input data, not the rest of its data, such as the names of cells
     se <- SummarizedExperiment::SummarizedExperiment(
@@ -223,9 +226,11 @@ test_units_per_block <- function() {
               colData=S4Vectors::DataFrame(barcode=sprintf("cell%04d", 1:500)))
     checkEqualsNumeric(GSVA:::.container_shared_mem(se, "counts"), insize)
     checkTrue(GSVA:::.container_held_mem(se, "counts") > insize)
-    ## up to the small changes of the memory of this process between calls
+    ## up to the small changes of the memory of this process between calls,
+    ## where each forked worker takes the memory of .forked_worker_mem()
     wm <- GSVA:::.worker_mem(insize)
-    upbdef <- GSVA:::.units_per_block(X, 2L, 2, maxmem / frac + 3 * wm)
+    upbdef <- GSVA:::.units_per_block(X, 2L, 2, maxmem / frac + wm +
+                                                2 * GSVA:::.forked_worker_mem())
     checkTrue(upbdef >= 24L && upbdef <= 26L)
     options(oldopt)
     ## unless they leave no memory for the blocks, which are then as large as

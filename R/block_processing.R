@@ -33,7 +33,11 @@
 ## of columns, see .rowStats(), and gives its output in one piece, which takes
 ## twice its size when the input is a dgCMatrix object ('dgc=TRUE') converted
 ## into an SVT_SparseMatrix object, see .rownorm_clr(); when the input is
-## stored on disk, its output is a delayed operation that takes no memory
+## stored on disk, its output is a delayed operation that takes no memory. the
+## optional factor 'forkcopy' gives the fraction of the memory of the main R
+## process that each worker forked from it copies, see .fork_copied_mem(), and
+## 'insparse' whether the input of the step is sparse, even when its blocks are
+## processed as dense matrices
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
 .step_mem_factors <- function(step=c("rownorm", "rowstats", "colranks",
@@ -43,16 +47,22 @@
                                      "plagescores"), X=NULL, ngs=0,
                               sparse=is_sparse(X),
                               int=(type(X) == "integer"), clr=FALSE,
-                              dgc=is(X, "dgCMatrix")) {
+                              dgc=is(X, "dgCMatrix"), insparse=sparse) {
     step <- match.arg(step)
     if (step == "rownorm" && clr)
         return(list(workfactor=if (sparse) 2 else 5,
                     outfactor=if (!int) 1 else if (sparse) 1.5 else 2,
                     outextra=0, assembly=if (dgc) 2 else 1))
     switch(step,
+           ## each worker forked from the main R process copies its whole
+           ## memory when calculating the row ECDFs of sparse input held in
+           ## main memory other than a dgCMatrix object, about 3 GB in each
+           ## of 4 workers with 100,000 cells, and none of it with the input
+           ## read from disk, see .fork_copied_mem()
            rownorm=list(workfactor=if (sparse) 6 else 4,
                         outfactor=if (!int) 1 else if (sparse) 1.5 else 2,
-                        outextra=0),
+                        outextra=0,
+                        forkcopy=if (insparse && !dgc) c(1, 0)),
            ## the row statistics of each block of columns, four or five
            ## doubles per row, are small and reduced at the end, see
            ## .rowStats(); dense blocks take a copy of the block, the mask of
@@ -68,11 +78,15 @@
            ## ranking and writing them, and up to 15 times with blocks of
            ## about a thousand columns, as measured on single-cell data,
            ## so that narrow blocks fit too, see .ondisk_mem_factors()
+           ## each worker forked from the main R process copies a fraction
+           ## 'forkcopy' of its memory, see .fork_copied_mem(), about 0.17
+           ## when ranking the columns of 100,000 cells held in main memory
            colranks=list(workfactor=if (sparse) 7 else 2,
                          outfactor=if (int || (sparse && dgc)) 1
                                    else if (sparse) 0.7 else 0.5,
                          outextra=0, assembly=if (sparse && dgc) 2 else NULL,
-                         sparsedisk=list(workfactor=14.3, outfactor=0.7)),
+                         sparsedisk=list(workfactor=14.3, outfactor=0.7),
+                         forkcopy=0.2),
            ## the scores of blocks of sparse ranks read from disk take about
            ## two times their sparse size, besides the scores themselves, as
            ## measured on single-cell data, see .ondisk_mem_factors()
@@ -175,7 +189,8 @@
 ## data of the calculations that it holds, see .worker_mem(), measured with a
 ## full collection of garbage when 'X' is large, see .large_data(), together
 ## with its buffers to read 'X' from disk, see .disk_read_mem(), and each forked
-## worker takes besides a copy of a part of those data ('copiedmem'), while
+## worker takes besides a copy of a part of the memory of this process
+## ('copiedmem'), see .block_worker_mem(), while
 ## workers not forked from this process ('forked=FALSE') take the memory of a
 ## new R process, see .block_worker_mem(); 'workermem=0' and 'sharedmem=FALSE'
 ## when the workers do not share 'maxmem' but have each their own, such as the
@@ -266,18 +281,21 @@
 ## see .disk_read_mem() ('workermem'), the memory of each parallel worker
 ## ('parworkermem') and the copy of a part of those data that each worker
 ## takes besides ('copiedmem'). forked workers ('forked=TRUE'), such as those
-## of a MulticoreParam object, take the memory of this process, see
-## .worker_mem(), and a copy of a part of its data, see .fork_copied_mem(),
-## where the data held besides 'X' are shared with them, except for the part
-## of those of .held_mem() other than matrices of assays, see
-## .held_shared_mem(). workers not forked from this process, such as those of
-## a SnowParam object, take the memory of a new R process loading GSVA, see
-## .worker_mem(), together with its buffers to read 'X' from disk, and no copy
-## of the data of this process
+## of a MulticoreParam object, take the memory of .forked_worker_mem(), which
+## is the one of this process when 'X' is stored on disk, with its buffers to
+## read 'X' from disk, and a copy of the fraction 'forkcopy'
+## of the memory of this process, including those data, see
+## .fork_copied_mem(), where the data held besides 'X' are shared with them,
+## except for the part of those of .held_mem() other than matrices of assays,
+## see .held_shared_mem(). workers not forked from this process, such as
+## those of a SnowParam object, take the memory of a new R process loading
+## GSVA, see .worker_mem(), together with its buffers to read 'X' from disk,
+## and no copy of the data of this process
 #' @importFrom BiocGenerics type
 #' @importFrom utils object.size
 #' @importFrom S4Arrays is_sparse
-.block_worker_mem <- function(X, whdim, heldmem=.held_mem(), forked=TRUE) {
+.block_worker_mem <- function(X, whdim, heldmem=.held_mem(), forked=TRUE,
+                              forkcopy=NULL) {
     inmemory <- !is(X, "DelayedArray")
     eltbytes <- if (type(X) == "integer") 4 else 8
     datamem <- (if (inmemory) as.numeric(object.size(X)) else 0) + heldmem -
@@ -285,8 +303,11 @@
     readmem <- if (inmemory) 0 else .disk_read_mem()
     workermem <- .worker_mem(datamem, full=.large_data(dim(X), eltbytes)) +
                  readmem
-    parworkermem <- workermem
-    copiedmem <- .fork_copied_mem(datamem, is_sparse(X), is(X, "dgCMatrix"))
+    parworkermem <- .forked_worker_mem(inmemory, workermem - readmem) +
+                    readmem
+    copiedmem <- .fork_copied_mem(max(0, workermem - readmem -
+                                         .proc_extra_mem()) + datamem,
+                                  forkcopy, inmemory)
     if (!forked) {
         parworkermem <- .worker_mem(session=FALSE) + readmem
         copiedmem <- 0
@@ -306,7 +327,8 @@
 .rowgridsize <- function(X, nworkers=1, maxmem=Inf, workfactor=2, outfactor=1,
                          outextra=0, workermem=NULL, dense=FALSE,
                          heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE,
-                         sendblocks=FALSE, step=NULL, forked=TRUE) {
+                         sendblocks=FALSE, step=NULL, forked=TRUE,
+                         forkcopy=NULL) {
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
       ## the memory of the processes is measured once, for the width of
@@ -315,7 +337,7 @@
       copiedmem <- 0
       parworkermem <- workermem
       if (is.null(workermem)) {
-          pm <- .block_worker_mem(X, 1L, heldmem, forked)
+          pm <- .block_worker_mem(X, 1L, heldmem, forked, forkcopy)
           workermem <- pm$workermem
           parworkermem <- pm$parworkermem
           copiedmem <- pm$copiedmem
@@ -364,7 +386,7 @@
                          outextra=0, workermem=NULL, dense=FALSE,
                          heldmem=.held_mem(), sinkout=FALSE, sharedmem=TRUE,
                          sendblocks=FALSE, step=NULL, forked=TRUE,
-                         rowbands=FALSE) {
+                         rowbands=FALSE, forkcopy=NULL) {
   nrowband <- NULL
   grid <- DummyArrayGrid(dim(X))
   if (is.finite(maxmem)) {
@@ -374,7 +396,7 @@
       copiedmem <- 0
       parworkermem <- workermem
       if (is.null(workermem)) {
-          pm <- .block_worker_mem(X, 2L, heldmem, forked)
+          pm <- .block_worker_mem(X, 2L, heldmem, forked, forkcopy)
           workermem <- pm$workermem
           parworkermem <- pm$parworkermem
           copiedmem <- pm$copiedmem
@@ -1340,7 +1362,7 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
                                maxmem=Inf, workfactor=2, outfactor=1,
                                outextra=0, dense=FALSE,
                                heldmem=.held_mem(), sinkout=FALSE,
-                               step=NULL) {
+                               step=NULL, forkcopy=NULL) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
@@ -1355,7 +1377,8 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
     grid <- .rowgridsize(X, nworkers, maxmem, workfactor, outfactor, outextra,
                          dense=dense, heldmem=heldmem, sinkout=sinkout,
                          sendblocks=.sends_blocks(X, BPPARAM, nworkers),
-                         step=step, forked=.forked_workers(BPPARAM))
+                         step=step, forked=.forked_workers(BPPARAM),
+                         forkcopy=forkcopy)
     rir <- .splitRowsInRanges(grid)
     if (length(rir) > 1 && verbose) {
         sze <- howbig(as.numeric(width(rir[[1]])), as.numeric(ncol(X)),
@@ -1495,7 +1518,8 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
                                maxmem=Inf, workfactor=2, outfactor=1,
                                outextra=0, dense=FALSE,
                                heldmem=.held_mem(), combine=NULL,
-                               sinkout=FALSE, step=NULL, rowbands=FALSE) {
+                               sinkout=FALSE, step=NULL, rowbands=FALSE,
+                               forkcopy=NULL) {
     stopifnot(length(dim(X)) == 2) ## QC
     FUN <- match.fun(FUN)
     nworkers <- 1L
@@ -1511,7 +1535,7 @@ COMBINE_GROUP_FUN <- function(grp, FUN_WRAPPER, WRAPPED_FUN, combine, ...) {
                          dense=dense, heldmem=heldmem, sinkout=sinkout,
                          sendblocks=.sends_blocks(X, BPPARAM, nworkers),
                          step=step, forked=.forked_workers(BPPARAM),
-                         rowbands=rowbands)
+                         rowbands=rowbands, forkcopy=forkcopy)
     cir <- .splitColsInRanges(grid)
     nrowband <- attr(grid, "nrowband")
     if (!is.null(nrowband)) {
