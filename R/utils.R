@@ -1402,10 +1402,57 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
 ## collection of the youngest generation takes less than 1 ms and gives
 ## about the same memory, but also the garbage left in the older generations,
 ## e.g., about 0.1 GB after loading a SingleCellExperiment object with one
-## million cells, which each R process would take, see .worker_mem()
+## million cells, which each R process would take, see .worker_mem(). within
+## a step, which measures it several times, see .open_mem_scope(), a full
+## collection is done only when the one of the youngest generation gives more
+## than 32 MB of difference with the last full one of the step, giving then
+## the memory of the former, which is at least the one in use
 .r_mem_used <- function(full=FALSE) {
-    g <- gc(full=full)
-    sum(g[, 1L] * c(56, 8))
+    g <- gc(full=FALSE)
+    used <- sum(g[, 1L] * c(56, 8))
+    if (full) {
+        lastfull <- gsva_global$rmemfull
+        if (is.null(lastfull) || is.na(lastfull) ||
+            abs(used - lastfull) > 32 * 1024^2) {
+            g <- gc(full=TRUE)
+            used <- sum(g[, 1L] * c(56, 8))
+            if (!is.null(lastfull))
+                gsva_global$rmemfull <- used
+        }
+    }
+    used
+}
+
+## release, with a full collection of garbage, the memory that the
+## calculations on a block of 'ncols' columns, more than 10000, have allocated
+## and no longer need, only in an R process that is not a worker forked from
+## the one that loaded GSVA, such as those of a MulticoreParam object: a full
+## collection in a forked worker writes to the memory pages of every object
+## that it shares with the main R process, which the worker then copies, e.g.,
+## about the whole 4.5 GB of an R session holding the ranks of 100,000 cells,
+## in each of 4 workers scoring them, while the memory it would release goes
+## back to the system anyway when the worker ends
+.release_block_mem <- function(ncols) {
+    if (ncols > 10000 && identical(Sys.getpid(), gsva_global$pid))
+        invisible(gc())
+}
+
+## open, in a step, the scope where the memory allocated by R is measured
+## with a full collection of garbage only once, see .r_mem_used(), unless
+## another step running this one has opened it; it returns whether it opened
+## it, to be given to .close_mem_scope() on exit. outside such a scope, such
+## as between the steps run by gsva(), whose objects may then be released
+## without being collected, each measurement does a full collection
+.open_mem_scope <- function() {
+    if (!is.null(gsva_global$rmemfull))
+        return(FALSE)
+    gsva_global$rmemfull <- NA_real_
+    TRUE
+}
+
+.close_mem_scope <- function(opened) {
+    if (opened)
+        gsva_global$rmemfull <- NULL
 }
 
 ## whether a matrix with dimensions 'dims' and 'eltbytes' bytes per value is

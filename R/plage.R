@@ -21,6 +21,8 @@ setMethod("gsva", signature(param="plageParam"),
               }
 
               .check_bpparam(BPPARAM)
+              memscope <- .open_mem_scope()
+              on.exit(.close_mem_scope(memscope), add=TRUE)
 
               famGaGS <- .filterAndMapGenesAndGeneSets(param,
                                                        removeConstant=TRUE,

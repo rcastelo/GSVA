@@ -887,8 +887,82 @@ setMethod("mapGeneSetsToAnno",
               return(geneIds(geneSets))
           })
 
-#' @importFrom cli cli_alert_info cli_alert_warning
+## identifiers of the gene sets in 'geneSets', a GeneSetCollection object,
+## mapped to the type of 'anno', as mapIdentifiers() of GSEABase maps them,
+## which queries the annotation package once for each gene set, taking
+## seconds with hundreds of gene sets; here each map between identifier types
+## is queried once for the identifiers of all gene sets. gene sets of
+## different identifier types, or of classes other than GeneSet, and the
+## identifier types without such maps, are mapped by mapIdentifiers(), which
+## also gives the corresponding errors
 #' @importFrom GSEABase mapIdentifiers geneIds
+#' @importFrom AnnotationDbi mget
+.mapGeneSetIds <- function(geneSets, anno) {
+    maps <- .geneSetIdMaps(geneSets, anno)
+    if (is.null(maps))
+        return(geneIds(mapIdentifiers(geneSets, anno)))
+
+    ids <- geneIds(geneSets)
+    for (map in maps) {
+        keys <- unique(unlist(ids, use.names=FALSE))
+        vals <- mget(keys, map, ifnotfound=NA_character_)
+        ids <- lapply(ids, function(k) {
+            uvals <- unique(unlist(vals[k], use.names=FALSE))
+            if (is.null(uvals))
+                character(0)
+            else
+                as.character(uvals[!is.na(uvals)])
+        })
+    }
+
+    ids
+}
+
+## maps of the annotation package between the identifier type of the gene sets
+## in 'geneSets' and the one of 'to', the ones that mapIdentifiers() of
+## GSEABase uses in the same order, an empty list when both types are the
+## same, or NULL when mapIdentifiers() should map them, see .mapGeneSetIds()
+#' @importFrom GSEABase geneIdType
+#' @importFrom BiocGenerics annotation annotation<-
+#' @importFrom AnnotationDbi revmap
+#' @importFrom annotate getAnnMap
+.geneSetIdMaps <- function(geneSets, to) {
+    if (length(geneSets) == 0 ||
+        !all(vapply(geneSets, function(gs) class(gs) == "GeneSet", TRUE)))
+        return(NULL)
+    from <- geneIdType(geneSets[[1]])
+    if (is(from, "NullIdentifier") ||
+        !all(vapply(geneSets, function(gs) identical(geneIdType(gs), from),
+                    TRUE)))
+        return(NULL)
+
+    if (nchar(annotation(from)) == 0)
+        annotation(from) <- annotation(to)
+    else if (nchar(annotation(to)) == 0)
+        annotation(to) <- annotation(from)
+    if (nchar(annotation(from)) == 0 || annotation(from) != annotation(to))
+        return(NULL)
+    if (geneIdType(from) == geneIdType(to))
+        return(list())
+
+    isorg <- function(x) grepl("^org\\.", annotation(x))
+    tryCatch({
+        if (is(from, "AnnotationIdentifier"))
+            list(getAnnMap(toupper(geneIdType(to)), annotation(from)))
+        else if (is(to, "AnnotationIdentifier"))
+            list(revmap(getAnnMap(toupper(geneIdType(from)), annotation(to))))
+        else if (is(from, "EntrezIdentifier") && isorg(from))
+            list(getAnnMap(toupper(geneIdType(to)), annotation(from)))
+        else if (is(to, "EntrezIdentifier") && isorg(to))
+            list(revmap(getAnnMap(toupper(geneIdType(from)), annotation(to))))
+        else
+            list(revmap(getAnnMap(toupper(geneIdType(from)), annotation(from))),
+                 getAnnMap(toupper(geneIdType(to)), annotation(to)))
+    }, error=function(e) NULL)
+}
+
+#' @importFrom cli cli_alert_info cli_alert_warning
+#' @importFrom GSEABase geneIds
 #' @importFrom BiocGenerics annotation
 setMethod("mapGeneSetsToAnno",
           signature(geneSets="GeneSetCollection",
@@ -905,8 +979,7 @@ setMethod("mapGeneSetsToAnno",
                   if (verbose)
                       cli_alert_info("Mapping identifiers")
 
-                  mappedGeneSets <- mapIdentifiers(geneSets, anno)
-                  rval <- geneIds(mappedGeneSets)
+                  rval <- .mapGeneSetIds(geneSets, anno)
 
               } else {
                   if (verbose) {
