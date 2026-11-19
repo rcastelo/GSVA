@@ -1170,7 +1170,7 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     held <- .step_held_input(X, dims, whdim, !inmemory, container)
     need <- .step_mem_need(dims, insize, whdim, eltbytes, sparse, inmemory,
                            mf, nworkers, held, densify=mf$densify,
-                           dgc=is(X, "dgCMatrix"), permem=permem)
+                           permem=permem)
 
     .check_mem_need(need, maxmem, nworkers, hint=hint, permem=permem)
 }

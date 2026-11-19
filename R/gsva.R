@@ -2040,7 +2040,7 @@ compute.col.ranks <- function(Z, ties.method="last", drop.sparsity=FALSE,
                             workfactor=mf$workfactor, outfactor=mf$outfactor,
                             outextra=mf$outextra,
                             sinkout=(ondisk || is(Z, "DelayedMatrix")),
-                            step="Ranking columns")
+                            step="Ranking columns", forkcopy=mf$forkcopy)
 
     return(R)
 }
