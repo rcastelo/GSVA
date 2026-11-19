@@ -35,7 +35,9 @@
 ## into an SVT_SparseMatrix object, see .rownorm_clr(); when the input is
 ## stored on disk, its output is a delayed operation that takes no memory. the
 ## optional factor 'forkcopy' gives the fraction of the memory of the main R
-## process that each worker forked from it copies, see .fork_copied_mem()
+## process that each worker forked from it copies, see .fork_copied_mem(), and
+## 'insparse' whether the input of the step is sparse, even when its blocks are
+## processed as dense matrices
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
 .step_mem_factors <- function(step=c("rownorm", "rowstats", "colranks",
@@ -45,16 +47,22 @@
                                      "plagescores"), X=NULL, ngs=0,
                               sparse=is_sparse(X),
                               int=(type(X) == "integer"), clr=FALSE,
-                              dgc=is(X, "dgCMatrix")) {
+                              dgc=is(X, "dgCMatrix"), insparse=sparse) {
     step <- match.arg(step)
     if (step == "rownorm" && clr)
         return(list(workfactor=if (sparse) 2 else 5,
                     outfactor=if (!int) 1 else if (sparse) 1.5 else 2,
                     outextra=0, assembly=if (dgc) 2 else 1))
     switch(step,
+           ## each worker forked from the main R process copies its whole
+           ## memory when calculating the row ECDFs of sparse input held in
+           ## main memory other than a dgCMatrix object, about 3 GB in each
+           ## of 4 workers with 100,000 cells, and none of it with the input
+           ## read from disk, see .fork_copied_mem()
            rownorm=list(workfactor=if (sparse) 6 else 4,
                         outfactor=if (!int) 1 else if (sparse) 1.5 else 2,
-                        outextra=0),
+                        outextra=0,
+                        forkcopy=if (insparse && !dgc) c(1, 0)),
            ## the row statistics of each block of columns, four or five
            ## doubles per row, are small and reduced at the end, see
            ## .rowStats(); dense blocks take a copy of the block, the mask of
@@ -299,7 +307,7 @@
                     readmem
     copiedmem <- .fork_copied_mem(max(0, workermem - readmem -
                                          .proc_extra_mem()) + datamem,
-                                  forkcopy)
+                                  forkcopy, inmemory)
     if (!forked) {
         parworkermem <- .worker_mem(session=FALSE) + readmem
         copiedmem <- 0

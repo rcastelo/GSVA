@@ -217,6 +217,8 @@ test_units_per_block <- function() {
     checkEqualsNumeric(GSVA:::.forked_worker_mem(), extra)
     checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, 0.2), 6e5)
     checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6), 0)
+    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, c(1, 0)), 3e6)
+    checkEqualsNumeric(GSVA:::.fork_copied_mem(3e6, c(1, 0), FALSE), 0)
     ## the data shared with forked workers are the matrices of the assays of
     ## the input data, not the rest of its data, such as the names of cells
     se <- SummarizedExperiment::SummarizedExperiment(
