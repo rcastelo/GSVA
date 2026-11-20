@@ -252,20 +252,27 @@ test_available_cores <- function() {
 
     ## more workers on this machine than cores give a warning, while serial
     ## execution, as many workers as cores, or an unknown number of cores
-    ## do not
-    checkTrue(GSVA:::.check_cores(SnowParam(workers=4), cores=2))
+    ## do not; the parallel back-ends have at most two workers, the most that
+    ## BiocParallel allows under 'R CMD check', which sets the environment
+    ## variable _R_CHECK_LIMIT_CORES_, and their workers are not started
+    checkTrue(suppressWarnings(GSVA:::.check_cores(SnowParam(workers=2),
+                                                   cores=1)))
     checkException(withCallingHandlers(
-        GSVA:::.check_cores(MulticoreParam(workers=4), cores=2),
+        GSVA:::.check_cores(MulticoreParam(workers=2), cores=1),
         warning=function(w) stop(conditionMessage(w))), silent=TRUE)
     checkTrue(!GSVA:::.check_cores(MulticoreParam(workers=2), cores=2))
     checkTrue(!GSVA:::.check_cores(SerialParam(), cores=1))
-    checkTrue(!GSVA:::.check_cores(MulticoreParam(workers=4), cores=NA))
+    checkTrue(!GSVA:::.check_cores(MulticoreParam(workers=2), cores=NA))
 
     ## gsva() checks them once, and not again in its steps, which do not
-    ## start the workers with these few rows
-    nw <- GSVA:::.available_cores() + 1L
-    bp <- if (.Platform$OS.type == "unix") MulticoreParam(workers=nw)
-          else SnowParam(workers=nw)
+    ## start the workers with these few rows, with one core available
+    ns <- asNamespace("GSVA")
+    oldcores <- get(".available_cores", envir=ns)
+    assignInNamespace(".available_cores", function() 1L, ns="GSVA")
+    on.exit(assignInNamespace(".available_cores", oldcores, ns="GSVA"),
+            add=TRUE)
+    bp <- if (.Platform$OS.type == "unix") MulticoreParam(workers=2)
+          else SnowParam(workers=2)
     p <- 10; n <- 120
     set.seed(123)
     y <- matrix(rnorm(n * p), nrow=p, ncol=n,

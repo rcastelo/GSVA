@@ -319,8 +319,9 @@ test_load_sparse_by_blocks_bp <- function() {
     ## the number of workers reading blocks at the same time is the one of
     ## the workers or blocks, when the memory is not known, and otherwise the
     ## one whose blocks fit in the memory left by the result together with
-    ## the memory of all the workers, or 1, to read them in this process
-    bp <- SnowParam(workers=4)
+    ## the memory of all the workers, or 1, to read them in this process,
+    ## with four workers, which are not started
+    bp <- .without_core_limit(SnowParam(workers=4))
     checkIdentical(GSVA:::.load_workers(h, 3L, Inf, NA_real_, NULL), 1L)
     checkIdentical(GSVA:::.load_workers(h, 1L, Inf, NA_real_, bp), 1L)
     checkIdentical(GSVA:::.load_workers(h, 3L, Inf, NA_real_, bp), 3L)
@@ -363,8 +364,9 @@ test_memory_check <- function() {
     ## parallel workers are counted only when calculations are parallelized
     checkIdentical(GSVA:::.n_par_workers(NULL, c(1000, 1000)), 0L)
     checkIdentical(GSVA:::.n_par_workers(SerialParam(), c(1000, 1000)), 0L)
-    checkIdentical(GSVA:::.n_par_workers(SnowParam(4), c(50, 1000)), 0L)
-    checkIdentical(GSVA:::.n_par_workers(SnowParam(4), c(1000, 1000)), 4L)
+    bp4 <- .without_core_limit(SnowParam(4))
+    checkIdentical(GSVA:::.n_par_workers(bp4, c(50, 1000)), 0L)
+    checkIdentical(GSVA:::.n_par_workers(bp4, c(1000, 1000)), 4L)
 
     ## sparse input data loaded in main memory takes the size of its nonzero
     ## values and their row indices with the GSVA method, and the size of a

@@ -59,3 +59,16 @@
               msg = "GPU emits NaN where the CPU emits NA, or vice versa")
     checkEqualsNumeric(cpu, gpu, tolerance = tol)
 }
+
+## evaluates 'expr' without the limit of two parallel workers that
+## BiocParallel and the parallel package enforce when the environment variable
+## _R_CHECK_LIMIT_CORES_ is set, as 'R CMD check --as-cran' does, and as the
+## parallelly package does when it is loaded by 'R CMD check', so that tests
+## can create parallel back-ends with more workers, which they must not start
+.without_core_limit <- function(expr) {
+    old <- Sys.getenv("_R_CHECK_LIMIT_CORES_", NA_character_)
+    Sys.setenv("_R_CHECK_LIMIT_CORES_"="false")
+    on.exit(if (is.na(old)) Sys.unsetenv("_R_CHECK_LIMIT_CORES_")
+            else Sys.setenv("_R_CHECK_LIMIT_CORES_"=old))
+    expr
+}

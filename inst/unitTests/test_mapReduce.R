@@ -952,12 +952,14 @@ test_mapReduceRedo <- function() {
 
     ## jobs saving the same chunk use different temporary names, also when
     ## they run in forked processes, where tempfile() gives names that only
-    ## differ in the process id
+    ## differ in the process id, here one process for each of four jobs, at
+    ## most two at a time, as 'R CMD check' allows
     if (.Platform$OS.type == "unix") {
         fname <- file.path(tempdir(), "chunk_1_10")
         tmpnames <- unlist(parallel::mclapply(1:4, function(i)
                                                   GSVA:::.unique_tmpname(fname),
-                                              mc.cores=4))
+                                              mc.cores=2,
+                                              mc.preschedule=FALSE))
         tmpnames <- c(tmpnames, GSVA:::.unique_tmpname(fname))
         checkTrue(!anyDuplicated(tmpnames))
         checkTrue(all(dirname(tmpnames) == dirname(fname)))
