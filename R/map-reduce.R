@@ -134,8 +134,11 @@
 #' see `mem`, and distributes them among `nodes` jobs, each of which processes
 #' its chunks one after another, so that `walltime` should be long enough for
 #' about the number of chunks divided by `nodes`; with `arrayjobs=TRUE`, it is
-#' instead the maximum wall time of each chunk. When `NULL`, no time limit is
-#' requested, and the jobs take the default time limit of the partition,
+#' instead the maximum wall time of each chunk. The function
+#' [`gsvaJobWalltime`] estimates it by running a small part of the
+#' calculations, e.g., `walltime=gsvaJobWalltime(param, mem=mem, nodes=nodes,
+#' ncpus_per_task=2)`, preferably on a compute node. When `NULL`, no time
+#' limit is requested, and the jobs take the default time limit of the partition,
 #' which its maximum time limit bounds; e.g., the Slurm command
 #' `scontrol show partition` shows both of them in the fields `DefaultTime`
 #' and `MaxTime`. Chunks of jobs ended by Slurm can be resubmitted with the
@@ -161,7 +164,9 @@
 #' before submitting any job, gives an error in that case, because such jobs
 #' would be killed by the workload manager, and a warning when `mem` is smaller
 #' than the memory it estimates that the calculations on each chunk of data
-#' require. Default: "10G".
+#' require. The function [`gsvaJobMemory`] estimates the memory that each job
+#' requires from the parameter object of the calculations, e.g.,
+#' `mem=gsvaJobMemory(param, ncpus_per_task=2)`. Default: "10G".
 #'
 #' @param arrayjobs In `gsvaBatchtoolsSlurmParam()`, logical vector of length
 #' 1. When `TRUE`, each of the `nodes` jobs is sent to Slurm as an array job,
@@ -387,7 +392,6 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     ncpus <- BTPARAM$resources$ncpus
     maxmem <- .memtext2bytes(BTPARAM$resources$memory)
 
-    gridsizefun <- .colgridsize
     splitinrangesfun <- .splitColsInRanges
 
     funargs <- list()
@@ -406,16 +410,8 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         funargs <- c(funargs, list(param=inputData,
                                    dropExistingAssays=TRUE,
                                    errorOnTooFewRows=FALSE))
-        if (!clr) {
-            gridsizefun <- .rowgridsize
+        if (!clr)
             splitinrangesfun <- .splitRowsInRanges
-        } else
-            ## the jobs calculating the statistics of the rows for the CLR
-            ## take whole chunks of the input data on disk, instead of
-            ## narrower chunks of columns, which would be read and
-            ## decompressed by several jobs, and process them in bands of
-            ## rows that fit in their memory, see .rowStats()
-            gridsizefun <- function(...) .colgridsize(..., rowbands=TRUE)
         assay <- get_assay(inputData)
 
     } else if (identical(FUN, gsvaColRanks)) {
@@ -451,23 +447,10 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     chunks <- density <- Xd <- nrowband <- NULL
     if (!is.list(X)) {
         if (is.null(mapinfo)) {
-            ## each job has its own memory 'maxmem', not shared with the
-            ## other jobs, and its chunk takes the memory of the selected
-            ## step, see .map_step_factors(), besides the memory of the rest
-            ## of the input data that each job receives, see .check_map_mem();
-            ## sparse data read from disk take it by their sparse size, see
-            ## .ondisk_mem_factors()
             Xd <- unwrapData(get_exprData(inputData), assay)
             density <- .map_density(inputData, assay, Xd)
-            mf <- .ondisk_mem_factors(.map_step_factors(funname, inputData,
-                                                        Xd),
-                                      Xd, density)
-            container <- .map_container_mem(inputData, assay)
-            grid <- gridsizefun(Xd, nworkers, maxmem, mf$workfactor,
-                                mf$outfactor, mf$outextra, workermem=0,
-                                dense=mf$densify,
-                                heldmem=max(0, container - .inmem_size(Xd)),
-                                sharedmem=FALSE)
+            grid <- .map_grid(funname, inputData, assay, Xd, nworkers, maxmem,
+                              clr, density)
             nrowband <- attr(grid, "nrowband")
             X <- splitinrangesfun(grid)
             chunks <- data.frame(first=vapply(X, start, integer(1)),
@@ -719,6 +702,8 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
                               "string with the generic resources of each",
                               "job, e.g., \"gpu:1\".")))
 
+    ## e.g., the output of gsvaJobMemory(), of class gsvaJobMemory
+    mem <- as.character(mem)
     .check_job_mem(ncpus_per_task, .memtext2bytes(mem))
 
     ## automatically created HDF5 datasets should be stored in a filesystem
@@ -1100,24 +1085,53 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
               maxmem=maxmem)
 }
 
+## chunks of the matrix 'Xd' of the assay 'assay' of the input data
+## 'inputData' that the jobs of gsvaMap() process in the step 'funname',
+## as a grid of blocks, with 'nworkers' jobs at the same time and 'maxmem'
+## bytes of memory each. each job has its own memory 'maxmem', not shared with
+## the other jobs, and its chunk takes the memory of the step, see
+## .map_step_factors(), besides the memory of the rest of the input data that
+## each job receives, see .check_map_mem(); sparse data read from disk take it
+## by their sparse size, from the fraction 'density' of their nonzero values,
+## see .ondisk_mem_factors(). the chunks of the row normalization through
+## ECDFs are blocks of rows, and otherwise of columns, where the jobs
+## calculating the statistics of the rows for the CLR ('clr=TRUE') take whole
+## chunks of the input data on disk, instead of narrower chunks of columns,
+## which would be read and decompressed by several jobs, and process them in
+## bands of rows that fit in their memory, see .rowStats(), whose height the
+## grid gives in its attribute "nrowband". the memory taken by the assays of
+## the input data in main memory is 'container', see .map_container_mem()
+.map_grid <- function(funname, inputData, assay, Xd, nworkers, maxmem, clr,
+                      density=NULL,
+                      container=.map_container_mem(inputData, assay)) {
+    gridsizefun <- .colgridsize
+    if (funname == "gsvaRowNorm")
+        gridsizefun <- if (clr) function(...) .colgridsize(..., rowbands=TRUE)
+                       else .rowgridsize
+    mf <- .ondisk_mem_factors(.map_step_factors(funname, inputData, Xd), Xd,
+                              density)
+
+    gridsizefun(Xd, nworkers, maxmem, mf$workfactor, mf$outfactor,
+                mf$outextra, workermem=0, dense=mf$densify,
+                heldmem=max(0, container - .inmem_size(Xd)), sharedmem=FALSE)
+}
+
 ## check, before gsvaMap() submits any job, the memory required by the step
 ## 'funname' in each job, on the input data 'inputData', of which each job
 ## processes a chunk of at most 'chunkwidth' rows (whdim=1) or columns
-## (whdim=2), using 'ncpus' CPU cores and 'maxmem' bytes of memory. it gives an
-## error when the R process of each job and its parallel workers do not fit in
-## 'maxmem', because such jobs would be killed by the workload manager, and
-## otherwise it warns when the memory estimated for the step exceeds 'maxmem',
-## see .step_mem_need(). for a list input, whose chunks are not loaded to
-## know their size, only the former is checked. the fraction of nonzero values
-## of sparse input data is given in 'density', or computed when NULL, see
-## .map_density(), and the matrix of the assay 'assay' of 'inputData' is
-## given in 'X', or obtained from 'inputData' when NULL, since gsvaMap() has
-## already obtained both to size the chunks. it is skipped with the option
-## 'GSVA.check_memory=FALSE'
+## (whdim=2), using 'ncpus' CPU cores and 'maxmem' bytes of memory, see
+## .map_job_need(). it gives an error when the R process of each job and its
+## parallel workers do not fit in 'maxmem', because such jobs would be killed
+## by the workload manager, and otherwise it warns when the memory estimated
+## for the step exceeds 'maxmem', see .check_mem_need(). for a list input,
+## whose chunks are not loaded to know their size, only the former is checked.
+## the fraction of nonzero values of sparse input data is given in 'density',
+## or computed when NULL, see .map_density(), and the matrix of the assay
+## 'assay' of 'inputData' is given in 'X', or obtained from 'inputData' when
+## NULL, since gsvaMap() has already obtained both to size the chunks. it is
+## skipped with the option 'GSVA.check_memory=FALSE'
 #' @importFrom cli cli_abort
 #' @importFrom memuse mu
-#' @importFrom BiocGenerics type
-#' @importFrom S4Arrays is_sparse
 .check_map_mem <- function(funname, inputData, assay, whdim, chunkwidth, ncpus,
                            maxmem, density=NULL, X=NULL) {
     if (!getOption("GSVA.check_memory", TRUE) || !is.finite(maxmem))
@@ -1125,7 +1139,47 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
 
     hint <- paste("Consider using fewer CPU cores per job, or more memory per",
                   "job, e.g., with the arguments {.arg ncpus_per_task} and",
-                  "{.arg mem} of {.fn gsvaBatchtoolsSlurmParam}.")
+                  "{.arg mem} of {.fn gsvaBatchtoolsSlurmParam}, see also",
+                  "{.fn gsvaJobMemory}.")
+    need <- .map_job_need(funname, inputData, assay, whdim, chunkwidth, ncpus,
+                          maxmem, density, X)
+    nworkers <- attr(need, "nworkers")
+    baseline <- attr(need, "baseline")
+    if (baseline > maxmem) {
+        bltxt <- as.character(mu(baseline))
+        mmtxt <- as.character(mu(maxmem))
+        cli_abort(c("x"=paste("Each job would run GSVA in one R process with",
+                              "{nworkers} parallel worker{?s}, which take",
+                              "about {bltxt} by themselves, more than the",
+                              "{mmtxt} of memory of each job."),
+                    "i"=hint))
+    }
+    if (is.na(need))
+        return(invisible(FALSE))
+
+    .check_mem_need(need, maxmem, nworkers, hint=hint,
+                    permem=attr(need, "permem"), forked=attr(need, "forked"),
+                    forkedmem=attr(need, "workermem"))
+}
+
+## memory in bytes required by the step 'funname' of gsvaMap() in each job, on
+## the input data 'inputData', of which each job processes a chunk of at most
+## 'chunkwidth' rows (whdim=1) or columns (whdim=2), using 'ncpus' CPU cores
+## and 'maxmem' bytes of memory, which decide whether the job holds its chunk
+## in main memory, see .step_mem_need(); NA for a list input, whose chunks are
+## not loaded to know their size. its attributes give the number of parallel
+## workers of each job ("nworkers"), the memory of its R process and of each of
+## its workers by themselves ("permem", "workermem"), whether they are forked
+## from it ("forked"), and the memory that they take together ("baseline").
+## the fraction of nonzero values of sparse input data is given in 'density',
+## or computed when NULL, see .map_density(), the matrix of the assay 'assay'
+## of 'inputData' in 'X', or obtained from 'inputData' when NULL, and the
+## memory that the assays of the input data take in main memory in each job in
+## 'container', see .map_container_mem()
+#' @importFrom BiocGenerics type
+#' @importFrom S4Arrays is_sparse
+.map_job_need <- function(funname, inputData, assay, whdim, chunkwidth, ncpus,
+                          maxmem, density=NULL, X=NULL, container=NULL) {
     dims <- NULL
     if (is.list(inputData))
         X <- NULL
@@ -1139,18 +1193,14 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     ## the R process of each job is a new one, which does not take the memory
     ## of this one, see .worker_mem()
     permem <- .worker_mem(session=FALSE)
-    baseline <- (1 + nworkers) * permem
-    if (baseline > maxmem) {
-        bltxt <- as.character(mu(baseline))
-        mmtxt <- as.character(mu(maxmem))
-        cli_abort(c("x"=paste("Each job would run GSVA in one R process with",
-                              "{nworkers} parallel worker{?s}, which take",
-                              "about {bltxt} by themselves, more than the",
-                              "{mmtxt} of memory of each job."),
-                    "i"=hint))
-    }
+    ## the workers of each job are forked from its R process on Unix-like
+    ## systems, see .map_job_backend()
+    forked <- .Platform$OS.type == "unix"
+    need <- structure(NA_real_, nworkers=nworkers, permem=permem,
+                      workermem=permem, forked=forked,
+                      baseline=(1 + nworkers) * permem)
     if (is.null(X))
-        return(invisible(FALSE))
+        return(need)
 
     ## memory of the step on the largest chunk, of size 'insize' in memory
     sparse <- is_sparse(X)
@@ -1164,21 +1214,21 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     mf <- .map_step_factors(funname, inputData, X)
     ## each job receives the whole input data, whose assays in main memory
     ## remain allocated while it processes its chunk, see .step_held_input()
-    container <- .map_container_mem(inputData, assay)
+    if (is.null(container))
+        container <- .map_container_mem(inputData, assay)
     held <- .step_held_input(X, dims, whdim, FALSE, container)
     inmemory <- .step_data_mem(dims, whdim, insize, eltbytes, sparse, TRUE,
                                mf, held, densify=mf$densify) <=
                 .mem_fraction_R() * maxmem
     held <- .step_held_input(X, dims, whdim, !inmemory, container)
-    ## the workers of each job are forked from its R process on Unix-like
-    ## systems, see .map_job_backend()
-    forked <- .Platform$OS.type == "unix"
-    need <- .step_mem_need(dims, insize, whdim, eltbytes, sparse, inmemory,
-                           mf, nworkers, held, densify=mf$densify,
-                           permem=permem, forked=forked)
+    stepneed <- .step_mem_need(dims, insize, whdim, eltbytes, sparse,
+                               inmemory, mf, nworkers, held,
+                               densify=mf$densify, permem=permem,
+                               forked=forked)
 
-    .check_mem_need(need, maxmem, nworkers, hint=hint, permem=permem,
-                    forked=forked, forkedmem=attr(need, "workermem"))
+    structure(as.vector(stepneed), nworkers=nworkers, permem=permem,
+              workermem=attr(stepneed, "workermem"), forked=forked,
+              baseline=(1 + nworkers) * permem)
 }
 
 #' @importFrom BiocParallel SerialParam MulticoreParam SnowParam

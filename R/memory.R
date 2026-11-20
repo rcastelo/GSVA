@@ -679,13 +679,20 @@
 ## bytes by itself, see .worker_mem(), and each worker forked from it
 ## 'forkedmem' bytes, see .forked_worker_mem(), together with its copy of the
 ## memory of this process, see .step_mem_need(), while workers not forked from
-## this process ('forked=FALSE') take the memory of a new R process
+## this process ('forked=FALSE') take the memory of a new R process. with
+## 'gsva_global$memdryrun=TRUE', it signals instead a condition of class
+## "gsvaMemDryRun" with the memory 'need', which stops the calculations
+## before they start, see .dry_run_mem_need()
 #' @importFrom cli cli_warn
 #' @importFrom memuse mu
 .check_mem_need <- function(need, maxmem, nworkers, hint=NULL,
                             permem=.worker_mem(), forked=TRUE,
                             forkedmem=.forked_worker_mem(TRUE, permem)) {
     need <- as.vector(need)
+    if (isTRUE(gsva_global$memdryrun))
+        stop(structure(class=c("gsvaMemDryRun", "condition"),
+                       list(message="memory dry run", call=NULL, need=need,
+                            nworkers=nworkers)))
     if (need <= maxmem)
         return(invisible(FALSE))
 
