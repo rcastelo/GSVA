@@ -15,6 +15,11 @@ gsva_global$check_memory <- TRUE
 ## its steps, see .check_bpparam()
 gsva_global$check_cores <- TRUE
 
+## whether the memory checks of the gsva*() functions stop the calculations
+## before they start, giving the memory that they require, see
+## .dry_run_mem_need()
+gsva_global$memdryrun <- FALSE
+
 ## memory in bytes that other objects keep allocated in the main R process
 ## while a step processes its input in blocks, such as the input data of
 ## gsva() while it runs the steps after the row normalization, see .held_mem()

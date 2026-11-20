@@ -186,7 +186,9 @@ the former, while \code{gsvaMap()},
 before submitting any job, gives an error in that case, because such jobs
 would be killed by the workload manager, and a warning when \code{mem} is smaller
 than the memory it estimates that the calculations on each chunk of data
-require. Default: "10G".}
+require. The function \code{\link{gsvaJobMemory}} estimates the memory that each job
+requires from the parameter object of the calculations, e.g.,
+\code{mem=gsvaJobMemory(param, ncpus_per_task=2)}. Default: "10G".}
 
 \item{arrayjobs}{In \code{gsvaBatchtoolsSlurmParam()}, logical vector of length
 \enumerate{
