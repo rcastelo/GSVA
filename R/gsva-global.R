@@ -20,6 +20,10 @@ gsva_global$check_cores <- TRUE
 ## .dry_run_mem_need()
 gsva_global$memdryrun <- FALSE
 
+## time in seconds of starting an R process and loading GSVA, measured once in
+## this R session, see .job_start_secs()
+gsva_global$rscriptsecs <- NULL
+
 ## memory in bytes that other objects keep allocated in the main R process
 ## while a step processes its input in blocks, such as the input data of
 ## gsva() while it runs the steps after the row normalization, see .held_mem()

@@ -134,8 +134,11 @@
 #' see `mem`, and distributes them among `nodes` jobs, each of which processes
 #' its chunks one after another, so that `walltime` should be long enough for
 #' about the number of chunks divided by `nodes`; with `arrayjobs=TRUE`, it is
-#' instead the maximum wall time of each chunk. When `NULL`, no time limit is
-#' requested, and the jobs take the default time limit of the partition,
+#' instead the maximum wall time of each chunk. The function
+#' [`gsvaJobWalltime`] estimates it by running a small part of the
+#' calculations, e.g., `walltime=gsvaJobWalltime(param, mem=mem, nodes=nodes,
+#' ncpus_per_task=2)`, preferably on a compute node. When `NULL`, no time
+#' limit is requested, and the jobs take the default time limit of the partition,
 #' which its maximum time limit bounds; e.g., the Slurm command
 #' `scontrol show partition` shows both of them in the fields `DefaultTime`
 #' and `MaxTime`. Chunks of jobs ended by Slurm can be resubmitted with the

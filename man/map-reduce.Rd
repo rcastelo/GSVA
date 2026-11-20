@@ -159,8 +159,10 @@ chunks, whose number depends on its size and on the memory of each job,
 see \code{mem}, and distributes them among \code{nodes} jobs, each of which processes
 its chunks one after another, so that \code{walltime} should be long enough for
 about the number of chunks divided by \code{nodes}; with \code{arrayjobs=TRUE}, it is
-instead the maximum wall time of each chunk. When \code{NULL}, no time limit is
-requested, and the jobs take the default time limit of the partition,
+instead the maximum wall time of each chunk. The function
+\code{\link{gsvaJobWalltime}} estimates it by running a small part of the
+calculations, e.g., \code{walltime=gsvaJobWalltime(param, mem=mem, nodes=nodes, ncpus_per_task=2)}, preferably on a compute node. When \code{NULL}, no time
+limit is requested, and the jobs take the default time limit of the partition,
 which its maximum time limit bounds; e.g., the Slurm command
 \verb{scontrol show partition} shows both of them in the fields \code{DefaultTime}
 and \code{MaxTime}. Chunks of jobs ended by Slurm can be resubmitted with the
