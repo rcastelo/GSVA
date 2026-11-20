@@ -40,11 +40,19 @@
 ## average, e.g., of cells with deeper sequencing, may be stored next to each
 ## other, and the average number of nonzero values per column, estimated
 ## from 'insize', otherwise. with the parallel workers of 'BPPARAM', the
-## blocks are read by the workers, see .load_workers()
+## blocks are read by the workers, see .load_workers(), when 'X' is stored in
+## chunks of several columns, while otherwise they are read in this process,
+## because reading the CSC layout of 100,000 cells of single-cell data took
+## about 20% to 45% longer with six workers than in this process, on the
+## shared file system of a computer cluster, and twice as long on macOS,
+## since each column is read without decompressing other columns and sending
+## the blocks back from the workers takes longer than reading them; with
+## 'parallelonly=TRUE', it gives NULL instead of reading them in this process
+## when fewer than two workers can read them, see .load_dense()
 #' @importFrom DelayedArray colAutoGrid read_block ArbitraryArrayGrid
 #' @importFrom BiocGenerics type
 .load_sparse_by_blocks <- function(X, maxmem=Inf, insize=NA_real_,
-                                   BPPARAM=NULL) {
+                                   BPPARAM=NULL, parallelonly=FALSE) {
     if (ncol(X) == 0L)
         return(as(X, "SVT_SparseMatrix"))
 
@@ -94,8 +102,11 @@
         if (budget)
             blockbytes <- 160 * max(1, nzpercol) * ncolblock
     }
-    nworkers <- .load_workers(X, length(grid), avail, blockbytes, BPPARAM,
-                              pm)
+    nworkers <- if (multicol) .load_workers(X, length(grid), avail,
+                                            blockbytes, BPPARAM, pm)
+                else 1L
+    if (parallelonly && nworkers < 2L)
+        return(NULL)
     if (nworkers > 1L)
         blocks <- .read_sparse_blocks_bp(X, grid, nworkers, BPPARAM)
     else
@@ -225,8 +236,81 @@
     ArbitraryArrayGrid(list(nrow(X), ends))
 }
 
+## maximum fraction of nonzero values of the on-disk data loaded into main
+## memory as a dense matrix by parallel workers reading it as sparse, see
+## .load_dense(): the workers send each block back to this process, which
+## took about 3 s per GB of the block on macOS, against about 1.5 s per GB of
+## the dense matrix reading it in this process, so that reading in parallel
+## is faster up to about a third of nonzero values, from which this leaves
+## a margin
+.max_parload_density <- 0.25
+
+## load into main memory as a dense matrix the on-disk data in 'X'. with the
+## parallel workers of 'BPPARAM', when 'X' is stored in chunks of several
+## columns, such as in dense HDF5 datasets, and has a fraction of nonzero
+## values of at most .max_parload_density, estimated from a sample of its
+## chunks, see .sample_nonzero_fraction(), the workers read it as sparse, see
+## .load_sparse_by_blocks(), and this process converts the result into a
+## dense matrix, which, with the parallel reading of the chunks, which takes
+## most of the time, and the smaller size of the sparse blocks sent back,
+## took less than half the time of reading 100,000 cells of single-cell data
+## stored in a dense HDF5 dataset in this process, with six workers on
+## macOS. reading data stored by columns, such as in the compressed sparse
+## column (CSC) layout of HDF5 files, is instead faster in this process,
+## because each column is read without decompressing the values of other
+## columns, and so is sending dense blocks back from the workers. within the
+## maximum main memory 'maxmem', both the sparse result and the dense matrix
+## have to fit, together with the memory held by other objects, see
+## .held_mem(), and the one of this process by itself, see
+## .block_worker_mem(), and otherwise the data are read in this process
+#' @importFrom BiocParallel bpnworkers
+#' @importFrom BiocGenerics type
+.load_dense <- function(X, maxmem=Inf, BPPARAM=NULL) {
+    par <- .parallel_dense_load(X, BPPARAM)
+    if (!par)
+        return(as.matrix(X))
+
+    density <- attr(par, "density")
+    eltbytes <- if (type(X) == "integer") 4 else 8
+    sparsesize <- density * as.numeric(nrow(X)) * ncol(X) * (eltbytes + 4)
+    if (!is.null(maxmem) && is.finite(maxmem)) {
+        densesize <- as.numeric(nrow(X)) * ncol(X) * eltbytes
+        pm <- .block_worker_mem(X, 2L, forked=.forked_workers(BPPARAM))
+        if (.mem_fraction_R * maxmem <
+            sparsesize + densesize + .held_mem() + pm$workermem)
+            return(as.matrix(X))
+    }
+    res <- .load_sparse_by_blocks(X, maxmem=maxmem, insize=sparsesize,
+                                  BPPARAM=BPPARAM, parallelonly=TRUE)
+    if (is.null(res))
+        return(as.matrix(X))
+
+    as.matrix(res)
+}
+
+## whether the on-disk data in 'X' can be loaded into main memory as a dense
+## matrix by the parallel workers of 'BPPARAM', see .load_dense(): with at
+## least two of them, when 'X' is stored in chunks of several columns and
+## has more columns than one chunk, and with a fraction of nonzero values of
+## at most .max_parload_density, estimated from a sample of its chunks, see
+## .sample_nonzero_fraction(), which the attribute "density" of the result
+## gives
+#' @importFrom BiocParallel bpnworkers
+.parallel_dense_load <- function(X, BPPARAM=NULL) {
+    if (is.null(BPPARAM) || bpnworkers(BPPARAM) < 2L)
+        return(FALSE)
+    cd <- .ondisk_chunkdim(X)
+    if (is.null(cd) || is.na(cd[2]) || cd[2] < 2 || ncol(X) <= cd[2])
+        return(FALSE)
+
+    density <- .sample_nonzero_fraction(X)
+
+    structure(density <= .max_parload_density, density=density)
+}
+
 ## with the parallel workers of 'BPPARAM', the sparse data of the GSVA and
-## average methods is loaded by them, see .load_sparse_by_blocks()
+## average methods is loaded by them, see .load_sparse_by_blocks(), and the
+## data loaded as a dense matrix may be loaded by them, see .load_dense()
 .check_sparse_load_input_expr <- function(expr, method, first, last, whdim,
                                           ondisk, verbose, BPPARAM=NULL) {
     ## methods that deal with sparse data, which is loaded in main memory as
@@ -269,7 +353,8 @@
                                            insize=attr(ondisk, "insize"),
                                            BPPARAM=BPPARAM)
         else
-            expr <- as.matrix(expr)
+            expr <- .load_dense(expr, maxmem=attr(ondisk, "maxmem"),
+                                BPPARAM=BPPARAM)
 
         if (ncol(expr) > 10000) ## free up ASAP memory we need not anymore
           invisible(gc())       ## and was allocated when reading a big object

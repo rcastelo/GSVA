@@ -463,3 +463,62 @@ test_h5file_seeds <- function() {
                    silent=TRUE)
     checkTrue(h5file(GSVA:::.h5file_seeds_to_paths(x, SerialParam(), 1L)))
 }
+
+test_load_dense_bp <- function() {
+
+    message("Running unit tests for loading on-disk data as dense in parallel")
+
+    suppressPackageStartupMessages({
+        library(Matrix)
+        library(HDF5Array)
+        library(BiocParallel)
+    })
+
+    ## on-disk data stored in chunks of several columns, with a tenth of
+    ## nonzero values, in three blocks of a chunk each, with a default block
+    ## of a chunk
+    set.seed(123)
+    m <- rsparsematrix(200, 90, density=0.1)
+    dimnames(m) <- list(paste0("g", 1:200), paste0("s", 1:90))
+    h <- writeHDF5Array(as.matrix(m), chunkdim=c(50L, 30L))[, 1:90]
+    expected <- as.matrix(h)
+    oldbs <- getAutoBlockSize()
+    suppressMessages(setAutoBlockSize(200 * 30 * 8))
+    on.exit(suppressMessages(setAutoBlockSize(oldbs)), add=TRUE)
+
+    ## without parallel workers, with data denser than .max_parload_density,
+    ## or with data in chunks of one column, they are loaded in this process
+    parload <- function(X, BPPARAM)
+        as.vector(GSVA:::.parallel_dense_load(X, BPPARAM))
+    checkTrue(!parload(h, NULL))
+    checkTrue(!parload(h, SerialParam()))
+    bp <- SnowParam(workers=2)
+    dense <- writeHDF5Array(matrix(runif(200 * 90), 200), chunkdim=c(50L, 30L))
+    checkTrue(!parload(dense, bp))
+    bycol <- writeHDF5Array(as.matrix(m), chunkdim=c(200L, 1L))
+    checkTrue(!parload(bycol, bp))
+    checkIdentical(GSVA:::.load_dense(bycol, BPPARAM=bp), as.matrix(bycol))
+    ## data in chunks of one column, as in the CSC layout, are also loaded as
+    ## sparse in this process
+    checkTrue(is.null(GSVA:::.load_sparse_by_blocks(bycol, BPPARAM=bp,
+                                                    parallelonly=TRUE)))
+    checkIdentical(GSVA:::.load_sparse_by_blocks(bycol, BPPARAM=bp),
+                   as(bycol, "SVT_SparseMatrix"))
+
+    ## otherwise, the parallel workers read them as sparse, and the result is
+    ## the same dense matrix as with as.matrix(), also when the memory does
+    ## not fit both the sparse result and the dense matrix, when they are
+    ## loaded in this process
+    if (.Platform$OS.type != "windows")
+        bp <- MulticoreParam(workers=2)
+    par <- GSVA:::.parallel_dense_load(h, bp)
+    checkTrue(as.vector(par))
+    checkEqualsNumeric(attr(par, "density"), 0.1, tolerance=0.2)
+    checkTrue(!is.null(GSVA:::.load_sparse_by_blocks(h, BPPARAM=bp,
+                                                     parallelonly=TRUE)))
+    checkTrue(is.null(GSVA:::.load_sparse_by_blocks(h, BPPARAM=NULL,
+                                                    parallelonly=TRUE)))
+    checkIdentical(GSVA:::.load_dense(h, BPPARAM=bp), expected)
+    checkIdentical(GSVA:::.load_dense(h, maxmem=1, BPPARAM=bp), expected)
+    checkTrue(!bpisup(bp))
+}
