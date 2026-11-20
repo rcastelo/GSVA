@@ -201,6 +201,10 @@ setMethod("gsva", signature(param="gsvaParam"),
               }
 
               .check_bpparam(BPPARAM)
+              ## the steps do not check the CPU cores again
+              oldcores <- gsva_global$check_cores
+              gsva_global$check_cores <- FALSE
+              on.exit(gsva_global$check_cores <- oldcores, add=TRUE)
 
               device <- .resolve_device(match.arg(device), anyNA(param))
 

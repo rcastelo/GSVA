@@ -452,12 +452,132 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     as.list(geneSets2)
 }
 
+## check that 'BPPARAM' is a BiocParallelParam object and, unless a function
+## running several steps already did it, see gsva(), whether its workers
+## exceed the CPU cores available to this R process, see .check_cores()
 .check_bpparam <- function(BPPARAM) {
     if (!is(BPPARAM, "BiocParallelParam")) {
         msg <- paste("Argument 'BPPARAM' must be a 'BiocParallelParam'",
                      "derivative. Please consult the BiocParallel package.")
         cli_abort(c("x"=msg))
     }
+    if (gsva_global$check_cores)
+        .check_cores(BPPARAM)
+}
+
+## warn when the parallel workers of 'BPPARAM' running on this machine, those
+## of a MulticoreParam object or of a SnowParam object with a number of
+## workers, exceed the 'cores' CPU cores available to this R process, see
+## .available_cores(), because workers sharing cores make the calculations
+## slower
+#' @importFrom BiocParallel bpnworkers bpworkers SnowParam MulticoreParam
+#' @importFrom cli cli_warn
+.check_cores <- function(BPPARAM, cores=.available_cores()) {
+    local <- is(BPPARAM, "MulticoreParam") ||
+             (is(BPPARAM, "SnowParam") && is.numeric(bpworkers(BPPARAM)))
+    nworkers <- bpnworkers(BPPARAM)
+    if (!local || is.na(cores) || nworkers <= cores)
+        return(invisible(FALSE))
+
+    cli_warn(c("!"=paste("The {nworkers} parallel workers of {.arg BPPARAM}",
+                         "exceed the {cores} CPU core{?s} available to this",
+                         "R process, which may make the calculations",
+                         "slower."),
+               "i"="Consider using at most {cores} worker{?s}."))
+
+    invisible(TRUE)
+}
+
+## number of CPU cores available to this R process, or NA when it is not
+## known, given by availableCores() of the parallelly package, when it is
+## installed, which takes into account the cores allocated by workload
+## managers such as SLURM, SGE, PBS or LSF, also when they do not restrict
+## the cores on which the process can run, those of containers, and the limits
+## set with the option 'mc.cores' or by 'R CMD check', and otherwise by
+## .proc_available_cores()
+.available_cores <- function() {
+    if (requireNamespace("parallelly", quietly=TRUE))
+        return(as.integer(parallelly::availableCores()))
+
+    .proc_available_cores()
+}
+
+## number of CPU cores available to this R process, or NA when it is not
+## known: those of the machine, see detectCores(), restricted on Linux to the
+## cores on which the process can run, given by its CPU affinity in the field
+## 'Cpus_allowed_list' of 'statusfile', which workload managers such as SLURM
+## set to the cores of the job, and to the CPU quota of its control group
+## (cgroup), set by container engines, in any of the cgroups along its path
+## in 'cgroupfile', using either cgroup version 1 or 2, as .job_memory_limit()
+## does with the memory limit. the paths of the files are arguments to allow
+## testing this function
+#' @importFrom parallel detectCores
+.proc_available_cores <- function(statusfile="/proc/self/status",
+                                  cgroupfile="/proc/self/cgroup",
+                                  cgroupdir="/sys/fs/cgroup") {
+    cores <- suppressWarnings(detectCores())
+    readfirst <- function(fname) {
+        if (!file.exists(fname))
+            return(NA_character_)
+        tryCatch(readLines(fname, n=1L, warn=FALSE)[1],
+                 error=function(e) NA_character_)
+    }
+    ## the CPU affinity, e.g., 'Cpus_allowed_list:  0-3,8,10-11'
+    status <- if (file.exists(statusfile))
+                  tryCatch(readLines(statusfile, warn=FALSE),
+                           error=function(e) character(0))
+              else character(0)
+    allowed <- grep("^Cpus_allowed_list:", status, value=TRUE)
+    if (length(allowed) == 1L) {
+        rngs <- strsplit(trimws(sub("^Cpus_allowed_list:", "", allowed)),
+                         ",", fixed=TRUE)[[1]]
+        n <- sum(vapply(rngs, function(r) {
+            b <- suppressWarnings(as.numeric(strsplit(r, "-",
+                                                      fixed=TRUE)[[1]]))
+            if (length(b) == 1L) 1 else b[2] - b[1] + 1
+        }, numeric(1)))
+        if (!is.na(n) && n > 0)
+            cores <- min(cores, n, na.rm=TRUE)
+    }
+    ## the CPU quota of the cgroups, 'quota period' in cpu.max of version 2,
+    ## where the quota is 'max' when there is none, or the quota in
+    ## cpu.cfs_quota_us, -1 when there is none, and the period in
+    ## cpu.cfs_period_us of version 1
+    cglines <- if (file.exists(cgroupfile))
+                   tryCatch(readLines(cgroupfile, warn=FALSE),
+                            error=function(e) character(0))
+               else character(0)
+    for (cgline in cglines) {
+        fields <- strsplit(cgline, ":", fixed=TRUE)[[1]]
+        if (length(fields) < 3L)
+            next
+        v2 <- fields[1] == "0" && fields[2] == ""
+        if (!v2 && !"cpu" %in% strsplit(fields[2], ",", fixed=TRUE)[[1]])
+            next
+        dir <- if (v2) cgroupdir else file.path(cgroupdir, "cpu")
+        path <- strsplit(paste(fields[-seq_len(2)], collapse=":"), "/",
+                         fixed=TRUE)[[1]]
+        path <- path[path != ""]
+        for (k in rev(seq_len(length(path) + 1L) - 1L)) {
+            d <- do.call(file.path, as.list(c(dir, path[seq_len(k)])))
+            if (v2) {
+                qp <- strsplit(readfirst(file.path(d, "cpu.max")), " ",
+                               fixed=TRUE)[[1]]
+                quota <- suppressWarnings(as.numeric(qp[1]))
+                period <- suppressWarnings(as.numeric(qp[2]))
+            } else {
+                quota <- suppressWarnings(as.numeric(
+                             readfirst(file.path(d, "cpu.cfs_quota_us"))))
+                period <- suppressWarnings(as.numeric(
+                              readfirst(file.path(d, "cpu.cfs_period_us"))))
+            }
+            if (!is.na(quota) && !is.na(period) && quota > 0 && period > 0)
+                cores <- min(cores, max(1, ceiling(quota / period)),
+                             na.rm=TRUE)
+        }
+    }
+
+    as.integer(cores)
 }
 
 #' @importFrom BiocParallel bpnworkers

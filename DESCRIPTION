@@ -1,5 +1,5 @@
 Package: GSVA
-Version: 2.7.41
+Version: 2.7.42
 Title: Gene Set Variation Analysis for Microarray and RNA-Seq Data
 Authors@R: c(person("Robert", "Castelo", role=c("aut", "cre"),
                     comment=c(ORCID="0000-0003-2229-4508"),
@@ -14,7 +14,7 @@ Authors@R: c(person("Robert", "Castelo", role=c("aut", "cre"),
              person("Chan Zuckerberg Initiative (CZI)", role="fnd"),
              person("Spanish Ministry of Science, Innovation and Universities (MCIU)", role="fnd"))
 Depends: R (>= 4.0.0)
-Imports: methods, stats, utils, graphics, tools, BiocGenerics,
+Imports: methods, stats, utils, graphics, tools, parallel, BiocGenerics,
          MatrixGenerics, S4Vectors, S4Arrays, HDF5Array, rhdf5, SparseArray,
          DelayedArray, IRanges, Biobase, SummarizedExperiment, GSEABase,
          Matrix (>= 1.5-0), DelayedMatrixStats, BiocParallel,
@@ -25,7 +25,7 @@ Suggests: RUnit, BiocStyle, knitr, rmarkdown, limma, RColorBrewer, arrow,
           ExperimentHub, TENxPBMCData, TENxVisiumData, spatialLIBD, scrapper,
           bluster, igraph, ggspavis, patchwork, ggplot2, shiny, shinydashboard,
           data.table, plotly, future, promises, shinybusy, shinyjs,
-          batchtools, foreach, doParallel
+          batchtools, foreach, doParallel, parallelly
 LinkingTo: cli
 Description: Gene Set Variation Analysis (GSVA) is a non-parametric, unsupervised method for estimating variation of gene set enrichment through the samples of a expression data set. GSVA performs a change in coordinate systems, transforming the data from a gene by sample matrix to a gene-set by sample matrix, thereby allowing the evaluation of pathway enrichment for each sample. This new matrix of GSVA enrichment scores facilitates applying standard analytical methods like functional enrichment, survival analysis, clustering, CNV-pathway analysis or cross-tissue pathway analysis, in a pathway-centric manner.
 License: Artistic-2.0

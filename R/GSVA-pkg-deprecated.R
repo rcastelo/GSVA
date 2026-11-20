@@ -40,6 +40,10 @@ setMethod("gsvaRanks", signature(param="gsvaParam"),
                       add=TRUE)
 
               .check_bpparam(BPPARAM)
+              ## the steps do not check the CPU cores again
+              oldcores <- gsva_global$check_cores
+              gsva_global$check_cores <- FALSE
+              on.exit(gsva_global$check_cores <- oldcores, add=TRUE)
 
               ## the ranks are calculated as gsva() does, with the row
               ## normalization and the column ranks steps, which decide where

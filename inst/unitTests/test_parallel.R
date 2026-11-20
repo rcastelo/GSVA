@@ -197,3 +197,89 @@ test_parallel_bpparam_unchanged <- function() {
                              BTPARAM=btparam))
     checkTrue(!bpprogressbar(btparam))
 }
+
+## the CPU cores available to this R process, from its CPU affinity and the
+## CPU quota of its control group without the parallelly package, which
+## otherwise gives them, and the warning when the parallel workers
+## running on this machine exceed them, once for the steps of gsva()
+test_available_cores <- function() {
+
+    message("Running unit tests for the CPU cores available")
+
+    suppressPackageStartupMessages(library(BiocParallel))
+    root <- tempfile("cores")
+    on.exit(unlink(root, recursive=TRUE), add=TRUE)
+    writefile <- function(path, lines) {
+        dir.create(dirname(path), recursive=TRUE, showWarnings=FALSE)
+        writeLines(lines, path)
+    }
+    none <- file.path(root, "none")
+    machine <- parallel::detectCores()
+    statusfile <- file.path(root, "proc_self_status")
+    cgroupfile <- file.path(root, "proc_self_cgroup")
+
+    ## with the parallelly package, the cores that it gives
+    if (requireNamespace("parallelly", quietly=TRUE))
+        checkIdentical(GSVA:::.available_cores(),
+                       as.integer(parallelly::availableCores()))
+
+    ## without the files of Linux, the cores of the machine
+    checkIdentical(GSVA:::.proc_available_cores(none, none, root),
+                   as.integer(machine))
+
+    ## the CPU affinity, e.g., of a SLURM job, with ranges and single cores
+    writefile(statusfile, c("Name:\tR", "Cpus_allowed_list:\t0-1,4"))
+    checkIdentical(GSVA:::.proc_available_cores(statusfile, none, root),
+                   as.integer(min(machine, 3)))
+
+    ## the CPU quota of cgroup version 2, set in an ancestor of the cgroup of
+    ## the process, whose own quota is 'max', i.e., none
+    cgdir <- file.path(root, "v2")
+    writefile(cgroupfile, "0::/docker/abc/task")
+    writefile(file.path(cgdir, "docker", "abc", "cpu.max"), "150000 100000")
+    writefile(file.path(cgdir, "docker", "abc", "task", "cpu.max"),
+              "max 100000")
+    checkIdentical(GSVA:::.proc_available_cores(none, cgroupfile, cgdir),
+                   as.integer(min(machine, 2)))
+
+    ## the CPU quota of cgroup version 1, where -1 means none
+    cgdir <- file.path(root, "v1")
+    writefile(cgroupfile, c("11:memory:/job", "4:cpu,cpuacct:/job"))
+    writefile(file.path(cgdir, "cpu", "job", "cpu.cfs_quota_us"), "-1")
+    writefile(file.path(cgdir, "cpu", "job", "cpu.cfs_period_us"), "100000")
+    checkIdentical(GSVA:::.proc_available_cores(none, cgroupfile, cgdir),
+                   as.integer(machine))
+
+    ## more workers on this machine than cores give a warning, while serial
+    ## execution, as many workers as cores, or an unknown number of cores
+    ## do not
+    checkTrue(GSVA:::.check_cores(SnowParam(workers=4), cores=2))
+    checkException(withCallingHandlers(
+        GSVA:::.check_cores(MulticoreParam(workers=4), cores=2),
+        warning=function(w) stop(conditionMessage(w))), silent=TRUE)
+    checkTrue(!GSVA:::.check_cores(MulticoreParam(workers=2), cores=2))
+    checkTrue(!GSVA:::.check_cores(SerialParam(), cores=1))
+    checkTrue(!GSVA:::.check_cores(MulticoreParam(workers=4), cores=NA))
+
+    ## gsva() checks them once, and not again in its steps, which do not
+    ## start the workers with these few rows
+    nw <- GSVA:::.available_cores() + 1L
+    bp <- if (.Platform$OS.type == "unix") MulticoreParam(workers=nw)
+          else SnowParam(workers=nw)
+    p <- 10; n <- 120
+    set.seed(123)
+    y <- matrix(rnorm(n * p), nrow=p, ncol=n,
+                dimnames=list(paste0("g", 1:p), paste0("s", 1:n)))
+    gsets <- list(set1=paste0("g", 1:3), set2=paste0("g", 4:10))
+    nwarn <- 0L
+    withCallingHandlers(
+        gsva(gsvaParam(y, gsets, verbose=FALSE), verbose=FALSE,
+             BPPARAM=bp, device="cpu"),
+        warning=function(w) {
+            if (grepl("CPU core", conditionMessage(w)))
+                nwarn <<- nwarn + 1L
+            invokeRestart("muffleWarning")
+        })
+    checkIdentical(nwarn, 1L)
+    checkTrue(GSVA:::gsva_global$check_cores)
+}

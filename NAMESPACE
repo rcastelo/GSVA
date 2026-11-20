@@ -111,7 +111,8 @@ importFrom(BiocParallel,
   bpstart,
   bpstop,
   bpstopOnError,
-  bptry
+  bptry,
+  bpworkers
 )
 importFrom(DelayedArray,
   ArbitraryArrayGrid,
@@ -239,6 +240,7 @@ importFrom(methods,
   new,
   selectMethod
 )
+importFrom(parallel,detectCores)
 importFrom(rhdf5,
   H5Fclose,
   H5Fopen,
