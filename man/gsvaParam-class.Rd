@@ -17,7 +17,7 @@ gsvaParam(
   annotation = NULL,
   minSize = 1,
   maxSize = Inf,
-  rowNorm = c("ecdf", "clr", "none"),
+  rowNorm = c("auto", "ecdf", "clr", "none"),
   kcdf = c("auto", "Gaussian", "Poisson", "none"),
   kcdfNoneMinSampleSize = 200,
   tau = 1,
@@ -70,11 +70,23 @@ gene sets after gene identifier mapping. By default, the maximum size is
 \code{Inf}.}
 
 \item{rowNorm}{Character vector of length 1 denoting the method to use for
-row normalization of the input expression data. The default value
-\code{rowNorm="ecdf"} will perform a row normalization of the input expression
-data by transforming the expression values of each row using an empirical
+row normalization of the input expression data. The value \code{rowNorm="ecdf"}
+will perform a row normalization of the input expression data by
+transforming the expression values of each row using an empirical
 cumulative distribution function (ECDF) built from the same gene expression
-profile. The value \code{rowNorm="none"} will skip the row normalization step.}
+profile. The value \code{rowNorm="clr"} will perform a centered log-ratio (CLR)
+transformation of each row, dividing its values by their geometric mean,
+which requires positive values and, on sparse input data processed with
+\code{sparse=TRUE}, uses only the nonzero values, leaving zeros intact. The
+default value \code{rowNorm="auto"} will select \code{"clr"} when the input
+expression data is sparse, is processed with \code{sparse=TRUE}, and its nonzero
+values are positive, which is the case of normalized single-cell and
+spatial transcriptomics data, and \code{"ecdf"} otherwise; the nonzero values of
+sparse data stored on disk, whose number is known without reading them, or
+estimated from a sample of the data, are checked on a sample of them, and
+when they include nonpositive values that the sample missed, the CLR
+transformation gives an error suggesting \code{rowNorm="ecdf"}. The value
+\code{rowNorm="none"} will skip the row normalization step.}
 
 \item{kcdf}{Character vector of length 1 denoting the kernel to use during
 the non-parametric estimation of the empirical cumulative distribution
@@ -205,11 +217,9 @@ All of these parameters are described in detail below.
 
 \describe{
 \item{\code{rowNorm}}{Character vector of length 1 denoting the method to use for
-row normalization of the input expression data. The default value
-\code{rowNorm="ecdf"} will perform a row normalization of the input expression
-data by transforming the expression values of each row using an empirical
-cumulative distribution function (ECDF) built from the same gene expression
-profile. The value \code{rowNorm="none"} will skip the row normalization step.}
+row normalization of the input expression data, \code{"ecdf"}, \code{"clr"} or
+\code{"none"}, where the value \code{rowNorm="auto"} of \code{\link{gsvaParam}} is stored as
+the method that it selects; see the argument \code{rowNorm} of \code{\link{gsvaParam}}.}
 
 \item{\code{kcdf}}{Character vector of length 1 denoting the kernel to use during
 the non-parametric estimation of the empirical cumulative distribution

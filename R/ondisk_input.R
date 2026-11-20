@@ -366,28 +366,48 @@
 ## number of nonzero values of the assay 'assay' of the expression data
 ## 'exprData', counted when it is in main memory, when its seeds store it, see
 ## .seeds_nzcount(), or when it has fewer than 2000 columns, and otherwise
-## estimated from a sample of its blocks, see .sample_nonzero_fraction()
+## estimated from a sample of its blocks, see .sample_nonzero_fraction().
+## with 'nzmin=TRUE', the smallest nonzero value of sparse data is given in
+## the attribute "nzmin" of the result, see .nzmin(), found among all its
+## nonzero values when they are counted from the data, and otherwise among
+## those of a sample of its blocks, as the attribute "nzminexact" tells
 #' @importFrom S4Arrays is_sparse
 #' @importFrom SparseArray nzcount
 #' @importFrom cli cli_alert_info cli_abort
-.estimate_nzcount <- function(exprData, assay, verbose) {
+.estimate_nzcount <- function(exprData, assay, verbose, nzmin=FALSE) {
     X <- unwrapData(exprData, assay)
     ## coerce to double to ensure we can deal with numbers larger than 2^31
     nr <- as.numeric(nrow(X))
     nc <- as.numeric(ncol(X))
     nzc <- tot <- nr*nc
+    nzm <- NA_real_
+    nzmexact <- TRUE
     if (is_sparse(X)) {
         estimated_flag <- FALSE
-        if (is(X, "dgCMatrix") || is(X, "SVT_SparseMatrix"))
+        if (is(X, "dgCMatrix") || is(X, "SVT_SparseMatrix")) {
             nzc <- as.numeric(nzcount(X))
-        else if (is(X, "DelayedMatrix")) {
+            if (nzmin)
+                nzm <- .nzmin_blocks(X)
+        } else if (is(X, "DelayedMatrix")) {
             seedsnzc <- .seeds_nzcount(X)
-            if (!is.na(seedsnzc))
+            if (!is.na(seedsnzc)) {
                 nzc <- seedsnzc
-            else if (nc < 2000)
-                nzc <- as.numeric(nzcount(as(X, "dgCMatrix")))
-            else {
-                nzc <- ceiling(tot * .sample_nonzero_fraction(X))
+                if (nzmin) {
+                    nzm <- attr(.sample_nonzero_fraction(X, nzmin=TRUE),
+                                "nzmin")
+                    nzmexact <- FALSE
+                }
+            } else if (nc < 2000) {
+                Xc <- as(X, "dgCMatrix")
+                nzc <- as.numeric(nzcount(Xc))
+                if (nzmin)
+                    nzm <- .nzmin(Xc)
+                rm(Xc)
+            } else {
+                frac <- .sample_nonzero_fraction(X, nzmin=nzmin)
+                nzc <- ceiling(tot * as.vector(frac))
+                nzm <- if (nzmin) attr(frac, "nzmin") else NA_real_
+                nzmexact <- FALSE
                 estimated_flag <- TRUE
             }
         } else
@@ -402,8 +422,38 @@
                                    100 - (100 * nzc / tot), estmsg))
         }
     }
+    if (nzmin)
+        nzc <- structure(nzc, nzmin=nzm, nzminexact=nzmexact)
 
     return(nzc)
+}
+
+## smallest nonzero value of the matrix or block 'x', ignoring missing values,
+## or Inf when it has none
+#' @importFrom SparseArray nzvals
+.nzmin <- function(x) {
+    v <- if (is(x, "dgCMatrix")) x@x
+         else if (is(x, "SparseArray")) nzvals(x)
+         else x[x != 0]
+    v <- v[!is.na(v)]
+    if (length(v) == 0L)
+        return(Inf)
+
+    min(v)
+}
+
+## smallest nonzero value of the sparse matrix 'X' in main memory, see
+## .nzmin(), through blocks of columns of the default size of the DelayedArray
+## package, so that only the nonzero values of one block are copied at a time
+#' @importFrom DelayedArray colAutoGrid read_block
+.nzmin_blocks <- function(X) {
+    if (is(X, "dgCMatrix"))
+        return(.nzmin(X))
+    grid <- colAutoGrid(X)
+
+    min(Inf, vapply(seq_along(grid), function(i)
+                        .nzmin(read_block(X, grid[[i]], as.sparse=TRUE)),
+                    numeric(1)))
 }
 
 ## number of nonzero values of the DelayedArray object 'x', read from its
@@ -439,14 +489,17 @@
 ## nonzero values often differs between rows, e.g., between the genes of
 ## single-cell data, which may be sorted in the file; otherwise, they are
 ## blocks of columns with up to 'maxvalues' values each, which data stored by
-## columns, such as in CSC layout, read at once, see .h5_csc_create()
+## columns, such as in CSC layout, read at once, see .h5_csc_create(). with
+## 'nzmin=TRUE', the smallest nonzero value of the blocks is given in the
+## attribute "nzmin" of the result, see .nzmin()
 #' @importFrom S4Arrays ArrayViewport read_block
 #' @importFrom SparseArray nzcount
 #' @importFrom IRanges IRanges
-.sample_nonzero_fraction <- function(X, nsample=32L, maxvalues=1e6) {
+.sample_nonzero_fraction <- function(X, nsample=32L, maxvalues=1e6,
+                                     nzmin=FALSE) {
     dims <- dim(X)
     if (any(dims == 0))
-        return(0)
+        return(if (nzmin) structure(0, nzmin=Inf) else 0)
     cd <- .ondisk_chunkdim(X)
     if (is.null(cd))
         cd <- c(dims[1L], max(1, floor(maxvalues / as.numeric(dims[1L]))))
@@ -460,13 +513,16 @@
     colpos <- (floor((k - 1) * nchunks[2L] / length(k)) +
                floor(nchunks[2L] / 2) * (k %% 2L)) %% nchunks[2L]
     nz <- tot <- 0
+    nzm <- Inf
     for (i in k) {
         vpstart <- c(rowpos[i], colpos[i]) * cd + 1
         vpend <- pmin(vpstart + cd - 1, dims)
         block <- read_block(X, ArrayViewport(dims, IRanges(vpstart, vpend)))
         nz <- nz + as.numeric(nzcount(block))
         tot <- tot + prod(as.numeric(vpend - vpstart + 1))
+        if (nzmin)
+            nzm <- min(nzm, .nzmin(block))
     }
 
-    nz / tot
+    if (nzmin) structure(nz / tot, nzmin=nzm) else nz / tot
 }

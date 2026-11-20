@@ -55,7 +55,8 @@ test_sparseMethods <- function(){
     checkEqualsNumeric(ms, Ms)
 
     M[1, 1] <- NA
-    checkException(Mg <- gsva(gsvaParam(M, gsets), verbose=TRUE))
+    checkException(Mg <- gsva(gsvaParam(M, gsets, rowNorm="ecdf"),
+                              verbose=TRUE))
     
 }
 

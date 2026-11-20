@@ -114,7 +114,7 @@ test_gsvaColRanksPermutation <- function() {
 
     ## sparse ranks: the stored values of each column are 1..nnz without
     ## repeats, the implicitly-zero genes carry rank zero.
-    gsp <- gsvaParam(as(cnt, "dgCMatrix"), gsets, sparse=TRUE)
+    gsp <- gsvaParam(as(cnt, "dgCMatrix"), gsets, rowNorm="ecdf", sparse=TRUE)
     gsvarnorm <- gsvaRowNorm(gsp, verbose=FALSE)
     Rs <- gsvaColRanks(gsvarnorm, verbose=FALSE)
     checkTrue(is(Rs, "sparseMatrix"))

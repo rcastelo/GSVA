@@ -78,6 +78,13 @@ specific support consists of the following features:
     typical single-cell data set will result in longer running times and larger
     memory consumption than running it in the default sparse regime for this
     type of data.
+  * By default, the GSVA method normalizes each row of sparse input data whose
+    nonzero values are positive, such as log-normalized single-cell data, with
+    a centered log-ratio (CLR) transformation, which divides the nonzero
+    values of each row by their geometric mean and is much faster than the
+    original row normalization through the empirical cumulative distribution
+    function (ECDF) of each row, which is used otherwise and can be selected
+    with the parameter `rowNorm="ecdf"` in the call to `gsvaParam()`.
   * The GSVA algorithm can be run either at once through a call to `gsva()`
     with a parameter object or in three steps: (1) row normalization with
     `gsvaRowNorm()`; (2) column rank transformation with `gsvaColRanks()`;
@@ -203,7 +210,8 @@ gsvaAnnotation(sce)
 
 We first build a parameter object using the function `gsvaParam()`. By
 default, the expression values in the `logcounts` assay will be selected for
-downstream analysis.
+downstream analysis, and since they are sparse and their nonzero values are
+positive, the CLR row normalization will be used.
 
 ```{r}
 gsvapar <- gsvaParam(sce, gsets)
@@ -260,13 +268,13 @@ Following @amezquita2020orchestrating, and some of the steps described in
 we use GSVA scores to build a nearest-neighbor graph of the cells using the
 function `makeSNNGraph()` from the `r Biocpkg("bluster")` package. The
 parameter `k` in the call to `makeSNNGraph()` specifies the number of nearest
-neighbors to consider during graph construction, and here we set `k=20` because
+neighbors to consider during graph construction, and here we set `k=30` because
 it leads to a number of clusters close to the expected number of cell types.
 
 ```{r, message=FALSE, warning=FALSE}
 library(bluster)
 
-g <- makeSNNGraph(t(assay(es)), k=20)
+g <- makeSNNGraph(t(assay(es)), k=30)
 ```
 Second, we use the function `cluster_walktrap()` from the `r CRANpkg("igraph")`
 package [@csardi2006igraph], to cluster cells by finding densely connected
@@ -336,17 +344,17 @@ data.
 
 # Stability of GSVA scores with sparse data
 
-This version of GSVA (>= 2.6.4) fixes a known problem with the stability of
-GSVA scores with sparse data. More concretely, for a given gene set, its genes
+Since GSVA version 2.6.4, a known problem with the stability of GSVA scores with
+sparse data has been fixed. More concretely, for a given gene set, its genes
 with a zero count expression value in a given column/cell, would occupy
-arbitrary positions in the gene ranking of that column/cell. This, and newer
-versions of GSVA, place those genes evenly distributed after the nonzerovalues
-along the ranking. We can see this happening with the MONOCYTES
-gene set in Figure \@ref(fig:gsvaenrichment), where the genes of this gene set
-with zero expression values are evenly distributed after the left vertical
-dashed line that in this plot indicates the largest positive leading edge of
-the enrichment score. We can also verify that those genes have zero expression
-values in the first cell annotated to the MONOCYTES cell type, as follows.
+arbitrary positions in the gene ranking of that column/cell. The current version
+of GSVA places those genes evenly distributed after the nonzero values along the
+ranking. We can see this happening with the MONOCYTES gene set in Figure
+\@ref(fig:gsvaenrichment), where the genes of this gene set with zero expression
+values are evenly distributed after the left vertical dashed line that in this
+plot indicates the largest positive leading edge of the enrichment score. We can
+also verify that those genes have zero expression values in the first cell
+annotated to the MONOCYTES cell type, as follows.
 
 ```{r}
 edat <- gsvaEnrichment(gsvacolranks, column=firstmonocytecell,
@@ -364,17 +372,21 @@ diff(sort(edat$gsetrnk))
 ```
 Finally, we can verify that this strategy results in stable GSVA scores, by
 running the GSVA algorithm on a random permutation of the rows of the `sce`
-object, and checking that the resulting GSVA scores are nearly identical to
-those obtained with the original `sce` object.
+object, and checking that the resulting GSVA scores are identical, or nearly
+identical, to those obtained with the original `sce` object.
 
 ```{r}
+set.seed(123)
 gsvapar <- gsvaParam(sce[sample(1:nrow(sce)), ], gsets, verbose=FALSE)
 es2 <- gsva(gsvapar, verbose=FALSE)
 all.equal(assay(es), assay(es2))
 ```
-The tiny differences in the enrichment scores (less than 1e-3 in these data)
-are due to the nonzero values in gene sets that are tied in rankings
-of the internally calculated expression statistic.
+In this case, GSVA scores after permuting the rows of the input data are
+identical to those obtained with the original input data. However, tiny
+differences (typically less than 0.001) in the enrichment scores between two
+versions of the same data set with permuted rows are still possible due to
+nonzero values of genes in gene sets that are tied in the rankings of the
+internally calculated expression statistic.
 
 # Benchmarking
 

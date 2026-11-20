@@ -208,7 +208,9 @@ gsets
 ```
 We first build a parameter object using the function `gsvaParam()`. By default,
 the expression values in the `logcounts` assay will be selected for downstream
-analysis.
+analysis, and when they are sparse and their nonzero values are positive, the
+row normalization will be done with a centered log-ratio (CLR)
+transformation.
 
 ```{r}
 gsvapar <- gsvaParam(spe, gsets)

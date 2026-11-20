@@ -412,11 +412,9 @@ setClass("ssgseaParam",
 #' method described below.
 #'
 #' @slot rowNorm Character vector of length 1 denoting the method to use for
-#' row normalization of the input expression data. The default value
-#' `rowNorm="ecdf"` will perform a row normalization of the input expression
-#' data by transforming the expression values of each row using an empirical
-#' cumulative distribution function (ECDF) built from the same gene expression
-#' profile. The value `rowNorm="none"` will skip the row normalization step.
+#' row normalization of the input expression data, `"ecdf"`, `"clr"` or
+#' `"none"`, where the value `rowNorm="auto"` of [`gsvaParam`] is stored as
+#' the method that it selects; see the argument `rowNorm` of [`gsvaParam`].
 #'
 #' @slot kcdf Character vector of length 1 denoting the kernel to use during
 #' the non-parametric estimation of the empirical cumulative distribution

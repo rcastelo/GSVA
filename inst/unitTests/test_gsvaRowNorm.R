@@ -98,3 +98,67 @@ test_gsvaRowNorm <- function() {
                            as.vector(gsvarownorm_dbl))
     }
 }
+
+## rowNorm="auto" selects CLR for sparse input processed with sparse=TRUE whose
+## nonzero values are positive, including integer counts, and ECDF otherwise,
+## informing of the selection, and stores the selected method
+test_rowNormAuto <- function() {
+    message("Running unit tests for rowNorm='auto'")
+
+    suppressPackageStartupMessages({
+        library(Matrix)
+        library(SparseArray)
+        library(HDF5Array)
+        library(cli)
+    })
+
+    set.seed(123)
+    p <- 40; n <- 30
+    cnt <- matrix(rpois(p * n, 0.8), p, n,
+                  dimnames=list(paste0("g", 1:p), paste0("s", 1:n)))
+    gsets <- list(set1=paste0("g", 1:5), set2=paste0("g", 6:12))
+    rownorm <- function(x, ...)
+        GSVA:::.get_rowNorm(gsvaParam(x, gsets, verbose=FALSE, ...))
+
+    ## dense input
+    checkIdentical(rownorm(cnt + 1), "ecdf")
+    out <- cli_fmt(gsvaParam(cnt + 1, gsets))
+    checkTrue(any(grepl("rowNorm='auto' selects 'ecdf'", out)))
+
+    ## sparse input in main memory with positive nonzero values, also integer
+    ## counts, unless processed as dense
+    S <- as(log1p(cnt), "dgCMatrix")
+    checkIdentical(rownorm(S), "clr")
+    checkIdentical(rownorm(as(cnt, "dgCMatrix")), "clr")
+    checkIdentical(rownorm(as(S, "SVT_SparseMatrix")), "clr")
+    checkIdentical(rownorm(S, sparse=FALSE), "ecdf")
+    out <- cli_fmt(gsvaParam(S, gsets))
+    checkTrue(any(grepl("rowNorm='auto' selects 'clr'", out)))
+
+    ## a nonpositive nonzero value selects ECDF, while the method given
+    ## explicitly is kept
+    N <- S
+    N[2, 3] <- -1
+    checkIdentical(rownorm(N), "ecdf")
+    checkIdentical(rownorm(S, rowNorm="ecdf"), "ecdf")
+    checkIdentical(rownorm(S, rowNorm="none"), "none")
+
+    ## the smallest nonzero value, from all of them or from a sample of the
+    ## data on disk, whose number of nonzero values its seeds store
+    nzc <- GSVA:::.estimate_nzcount(S, NA, FALSE, nzmin=TRUE)
+    checkEqualsNumeric(attr(nzc, "nzmin"), min(S@x))
+    checkTrue(attr(nzc, "nzminexact"))
+    H <- SummarizedExperiment::SummarizedExperiment(
+             assays=list(counts=writeTENxMatrix(S)))
+    nzc <- GSVA:::.estimate_nzcount(H, "counts", FALSE, nzmin=TRUE)
+    checkEqualsNumeric(as.vector(nzc), nnzero(S))
+    checkTrue(attr(nzc, "nzmin") > 0)
+    checkTrue(!attr(nzc, "nzminexact"))
+    checkIdentical(rownorm(H), "clr")
+
+    ## CLR on nonpositive nonzero values gives an error suggesting ECDF
+    err <- tryCatch(gsvaRowNorm(gsvaParam(N, gsets, rowNorm="clr",
+                                          verbose=FALSE), verbose=FALSE),
+                    error=conditionMessage)
+    checkTrue(is.character(err) && grepl("rowNorm=\"ecdf\"", err, fixed=TRUE))
+}

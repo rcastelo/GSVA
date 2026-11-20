@@ -173,7 +173,7 @@ test_mapReduce <- function() {
     ## chunks of rows of a SingleCellExperiment object leave out the column
     ## data of the input, except the first one, from which gsvaReduce() takes
     ## it, both when they are returned and when they are saved to disk
-    gsvapar <- gsvaParam(sce, gsets, verbose=FALSE)
+    gsvapar <- gsvaParam(sce, gsets, rowNorm="ecdf", verbose=FALSE)
     gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
     for (output in c("object", "HDF5")) {
         mapnorm <- gsvaMap(gsvaRowNorm, gsvapar, output=output, verbose=FALSE,
@@ -538,7 +538,7 @@ test_mapReduceParquet <- function() {
                            output="csv", verbose=FALSE), silent=TRUE)
 
     for (input in list(SummarizedExperiment(assays=list(counts=cnt)), y)) {
-        gsvapar <- gsvaParam(input, gsets, verbose=FALSE)
+        gsvapar <- gsvaParam(input, gsets, rowNorm="ecdf", verbose=FALSE)
         gsvarnorm <- gsvaRowNorm(gsvapar, verbose=FALSE)
         gsvaranks <- gsvaColRanks(gsvarnorm, verbose=FALSE)
         gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE, device="cpu")

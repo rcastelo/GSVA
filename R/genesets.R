@@ -1293,13 +1293,15 @@ setMethod("filterGeneSets", signature(gSets="GeneSetCollection"),
             if (any(rowrngs[, 1] <= 0)) {
                 msg <- paste("Cannot apply row normalization method 'clr' to",
                              "expression data with nonpositive values")
-                cli_abort(c("x"=msg))
+                cli_abort(c("x"=msg,
+                            "i"="Use {.code rowNorm=\"ecdf\"} for such data."))
             }
         } else { ## sparse input
             if (any(rowrngs[, 3] <= 0)) {
                 msg <- paste("Cannot apply row normalization method 'clr' to",
                              "expression data with nonzero nonpositive values")
-                cli_abort(c("x"=msg))
+                cli_abort(c("x"=msg,
+                            "i"="Use {.code rowNorm=\"ecdf\"} for such data."))
             }
         }
     }

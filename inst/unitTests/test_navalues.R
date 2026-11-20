@@ -25,15 +25,15 @@ test_navalues <- function() {
 
     ## calculate GSVA scores with default use="everything"
     out <- cli_fmt(gsvapar <- gsvaParam(y, gsets))
-    checkTrue(grepl("Input expression data has NA values, which will be propagated through calculations", out))
+    checkTrue(any(grepl("Input expression data has NA values, which will be propagated through calculations", out)))
     es <- gsva(gsvapar, verbose=FALSE)
 
     ## calculate GSVA scores with use="na.rm"
     out <- cli_fmt(gsvapar <- gsvaParam(y, gsets, use="na.rm"))
-    checkTrue(grepl("Input expression data has NA values, which will be discarded from calculations", out))
+    checkTrue(any(grepl("Input expression data has NA values, which will be discarded from calculations", out)))
     es <- gsva(gsvapar, verbose=FALSE)
     out <- cli_fmt(gsvapar <- gsvaParam(y, gsets, kcdf="none", use="na.rm"))
-    checkTrue(grepl("Input expression data has NA values, which will be discarded from calculations", out))
+    checkTrue(any(grepl("Input expression data has NA values, which will be discarded from calculations", out)))
     es <- gsva(gsvapar, verbose=FALSE)
 
     ## calculate GSVA scores with use="all.obs", which
@@ -42,12 +42,12 @@ test_navalues <- function() {
 
     ## calculate ssGSEA scores with default use="everything"
     out <- cli_fmt(ssgseapar <- ssgseaParam(y, gsets))
-    checkTrue(grepl("Input expression data has NA values, which will be propagated through calculations", out))
+    checkTrue(any(grepl("Input expression data has NA values, which will be propagated through calculations", out)))
     es <- gsva(ssgseapar, verbose=FALSE)
 
     ## calculate ssGSEA scores with use="na.rm"
     out <- cli_fmt(ssgseapar <- ssgseaParam(y, gsets, use="na.rm"))
-    checkTrue(grepl("Input expression data has NA values, which will be discarded from calculations", out))
+    checkTrue(any(grepl("Input expression data has NA values, which will be discarded from calculations", out)))
     es <- gsva(ssgseapar, verbose=FALSE)
 
     ## calculate ssGSEA scores with use="all.obs", which

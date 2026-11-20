@@ -304,11 +304,23 @@ setMethod("gsva", signature(param="gsvaParam"),
 #' `Inf`.
 #' 
 #' @param rowNorm Character vector of length 1 denoting the method to use for
-#' row normalization of the input expression data. The default value
-#' `rowNorm="ecdf"` will perform a row normalization of the input expression
-#' data by transforming the expression values of each row using an empirical
+#' row normalization of the input expression data. The value `rowNorm="ecdf"`
+#' will perform a row normalization of the input expression data by
+#' transforming the expression values of each row using an empirical
 #' cumulative distribution function (ECDF) built from the same gene expression
-#' profile. The value `rowNorm="none"` will skip the row normalization step.
+#' profile. The value `rowNorm="clr"` will perform a centered log-ratio (CLR)
+#' transformation of each row, dividing its values by their geometric mean,
+#' which requires positive values and, on sparse input data processed with
+#' `sparse=TRUE`, uses only the nonzero values, leaving zeros intact. The
+#' default value `rowNorm="auto"` will select `"clr"` when the input
+#' expression data is sparse, is processed with `sparse=TRUE`, and its nonzero
+#' values are positive, which is the case of normalized single-cell and
+#' spatial transcriptomics data, and `"ecdf"` otherwise; the nonzero values of
+#' sparse data stored on disk, whose number is known without reading them, or
+#' estimated from a sample of the data, are checked on a sample of them, and
+#' when they include nonpositive values that the sample missed, the CLR
+#' transformation gives an error suggesting `rowNorm="ecdf"`. The value
+#' `rowNorm="none"` will skip the row normalization step.
 #'
 #' @param kcdf Character vector of length 1 denoting the kernel to use during
 #' the non-parametric estimation of the empirical cumulative distribution
@@ -449,7 +461,7 @@ setMethod("gsva", signature(param="gsvaParam"),
 gsvaParam <- function(exprData, geneSets,
                       assay=NA_character_, annotation=NULL,
                       minSize=1, maxSize=Inf,
-                      rowNorm=c("ecdf", "clr", "none"),
+                      rowNorm=c("auto", "ecdf", "clr", "none"),
                       kcdf=c("auto", "Gaussian", "Poisson", "none"),
                       kcdfNoneMinSampleSize=200, tau=1, maxDiff=TRUE,
                       absRanking=FALSE, sparse=TRUE,
@@ -495,10 +507,16 @@ gsvaParam <- function(exprData, geneSets,
     naparam <- .check_for_na_values(exprData=exprData, assay=assay,
                                     checkNA=checkNA, use=use)
 
-    nzc <- .estimate_nzcount(exprData, assay, verbose)
-
     if (!is_sparse(unwrapData(exprData, assay))) ## use sparse regime only
         sparse <- FALSE                          ## when input is sparse
+    ## the smallest nonzero value, which rowNorm="auto" needs, is found while
+    ## counting or estimating the nonzero values
+    nzc <- .estimate_nzcount(exprData, assay, verbose,
+                             nzmin=(rowNorm == "auto" && sparse))
+    if (rowNorm == "auto")
+        rowNorm <- .auto_rownorm(sparse, attr(nzc, "nzmin"),
+                                 attr(nzc, "nzminexact"), verbose)
+    nzc <- as.numeric(nzc)
 
     if (!filterRows) {
         cli_alert_warning("filterRows=FALSE and rows with constant values will not be filtered out")
@@ -1751,7 +1769,8 @@ gsvaEnrichment <- function(rankExprData, column=1, geneSet=1,
         if (anyNA(g)) {
             msg <- paste("Cannot apply row normalization method 'clr' to",
                          "expression data with nonzero nonpositive values")
-            cli_abort(c("x"=msg))
+            cli_abort(c("x"=msg,
+                        "i"="Use {.code rowNorm=\"ecdf\"} for such data."))
         }
     }
 
@@ -1879,6 +1898,28 @@ compute.gene.cdf <- function(expr, Gaussk=TRUE, kernel=TRUE,
     ## in every other case, including the dense case, by now,
     ## just look at the number of columns
     return(ncol(expr) >= kcdf.min.ssize)
+}
+
+## row normalization selected by rowNorm="auto" in gsvaParam(): CLR when the
+## input is sparse and processed in the sparse regime ('sparse=TRUE'), where
+## zeros remain intact, and its smallest nonzero value 'nzmin' is positive,
+## found among all of them or, with 'exact=FALSE', among those of a sample of
+## the data, see .estimate_nzcount(), and ECDF otherwise; dense input and
+## sparse input processed as dense, where zeros enter the calculations, are
+## not positive for CLR, see .clr_gmeans()
+#' @importFrom cli cli_alert_info
+.auto_rownorm <- function(sparse, nzmin=NULL, exact=TRUE, verbose=TRUE) {
+    clr <- sparse && !is.null(nzmin) && !is.na(nzmin) && nzmin > 0
+    if (verbose) {
+        why <- if (clr) paste("sparse input with positive nonzero values",
+                              if (!isTRUE(exact)) "in a sample of them")
+               else if (!sparse) "the input is not processed as sparse"
+               else "sparse input with nonpositive nonzero values"
+        cli_alert_info(paste0("rowNorm='auto' selects '",
+                              if (clr) "clr" else "ecdf", "' (", why, ")"))
+    }
+
+    if (clr) "clr" else "ecdf"
 }
 
 #' @importFrom S4Arrays is_sparse

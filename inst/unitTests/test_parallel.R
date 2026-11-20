@@ -87,7 +87,8 @@ test_parallel <- function() {
     })
 
     M[1, 2] <- NA
-    checkException(gsva(gsvaParam(M, gsets, kcdf="Gaussian", verbose=FALSE),
+    checkException(gsva(gsvaParam(M, gsets, rowNorm="ecdf", kcdf="Gaussian",
+                                  verbose=FALSE),
 			verbose=FALSE, BPPARAM=MulticoreParam(workers=2), device="cpu"))
 }
 

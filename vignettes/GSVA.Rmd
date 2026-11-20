@@ -238,9 +238,22 @@ help pages.
 When using `gsvaParam()`, the user can additionally tune the following
 parameters, whose default values cover most of the use cases:
 
-* `kcdf`: The first step of the GSVA algorithm brings gene expression
-  profiles to a common scale by calculating an expression statistic through
-  the estimation of the CDF across samples. The way in which such an estimation
+* `rowNorm`: The first step of the GSVA algorithm brings gene expression
+  profiles to a common scale by normalizing each row of the input data, which
+  can be done in two ways: (1) `"ecdf"`, by calculating an expression
+  statistic through the estimation of the cumulative distribution function
+  (CDF) across samples, see the next parameter `kcdf`; (2) `"clr"`, by a
+  centered log-ratio (CLR) transformation, dividing the values of each row by
+  their geometric mean, which requires positive values and is much faster on
+  large data sets. The default value `"auto"` selects `"clr"` when the input
+  data is sparse, as single-cell and spatial transcriptomics data usually
+  are, and its nonzero values are positive, which is the case of normalized
+  data, such as log-normalized counts, and `"ecdf"` otherwise. The value
+  `"none"` skips this step.
+
+* `kcdf`: With `rowNorm="ecdf"`, the first step of the GSVA algorithm brings
+  gene expression profiles to a common scale by calculating an expression
+  statistic through the estimation of the CDF across samples. The way in which such an estimation
   is performed by GSVA is controlled by the `kcdf` parameter, which accepts the
   following four possible values: (1) `"auto"`, the default value, lets GSVA
   automatically decide the estimation method; (2) `"Gaussian"`, use a Gaussian

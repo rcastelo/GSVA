@@ -193,6 +193,7 @@ importFrom(SparseArray,
   SparseArray,
   extract_sparse_array,
   nzcount,
+  nzvals,
   rowMeans,
   rowSds
 )
