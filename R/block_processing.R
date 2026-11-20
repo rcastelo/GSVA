@@ -9,35 +9,22 @@
 ## internally by the functions that need to process the rows or the columns of
 ## a matrix in blocks.
 
-## fraction of the maximum main memory available to the allocations of R, the
-## rest being taken by the memory that R releases but that the process keeps,
-## and by allocations outside R, e.g., by the HDF5 library; in the steps of
-## GSVA on single-cell data, the peak of memory allocated by R was 70% to 80%
-## of the peak of memory resident in the process. on macOS, the parallel
-## workers keep besides, from one round of blocks to the next, up to about
-## half the memory of a block that R releases, as measured on single-cell
-## data stored on disk, which this rest also covers
-.mem_fraction_R <- 0.7
-
-## memory taken by the steps of GSVA to process each row or column of the
-## input data 'X', relative to its size in 'X' ('workfactor'), and by the
-## output of each row or column, relative to that size ('outfactor') plus a
-## number of bytes ('outextra'), with 'ngs' gene sets in the steps giving
-## enrichment scores, which are dense. the
-## factors were measured on single-cell data and include a margin; the output
-## of normalizing rows is double, and of ranking columns integer. instead of
+## memory factors of a step of GSVA, see the 'stepfactors' of
+## .memory_model_defaults: the memory taken by processing each row or column
+## of the input data 'X', relative to its size in 'X' ('workfactor'), and by
+## the output of each row or column, relative to that size ('outfactor') plus
+## a number of bytes ('outextra'), with 'ngs' gene sets in the steps giving
+## enrichment scores, which are dense, and of double precision. the output of
+## normalizing rows is double, and of ranking columns integer. instead of
 ## 'X', whether its values are sparse or integer can be given directly. the
 ## optional factor 'assembly' gives the memory taken by the output in main
-## memory, relative to its size, while it is produced, see .fixed_mem(). the
-## row normalization with CLR ('clr=TRUE') reads its input once through blocks
-## of columns, see .rowStats(), and gives its output in one piece, which takes
-## twice its size when the input is a dgCMatrix object ('dgc=TRUE') converted
-## into an SVT_SparseMatrix object, see .rownorm_clr(); when the input is
-## stored on disk, its output is a delayed operation that takes no memory. the
-## optional factor 'forkcopy' gives the fraction of the memory of the main R
-## process that each worker forked from it copies, see .fork_copied_mem(), and
-## 'insparse' whether the input of the step is sparse, even when its blocks are
-## processed as dense matrices
+## memory, relative to its size, while it is produced, see .fixed_mem(), and
+## the optional factor 'forkcopy' the fraction of the memory of the main R
+## process that each worker forked from it copies, see .fork_copied_mem(),
+## which with the row normalization through ECDFs is given only when its input
+## is sparse ('insparse'), even when its blocks are processed as dense
+## matrices, and other than a dgCMatrix object ('dgc'). with 'clr=TRUE', the
+## factors are the ones of the row normalization with CLR
 #' @importFrom BiocGenerics type
 #' @importFrom S4Arrays is_sparse
 .step_mem_factors <- function(step=c("rownorm", "rowstats", "colranks",
@@ -49,71 +36,52 @@
                               int=(type(X) == "integer"), clr=FALSE,
                               dgc=is(X, "dgCMatrix"), insparse=sparse) {
     step <- match.arg(step)
-    if (step == "rownorm" && clr)
-        return(list(workfactor=if (sparse) 2 else 5,
-                    outfactor=if (!int) 1 else if (sparse) 1.5 else 2,
-                    outextra=0, assembly=if (dgc) 2 else 1))
+    sf <- .memory_model("stepfactors")
+    bysparse <- function(f) unname(f[[if (sparse) "sparse" else "dense"]])
+    bytype <- function(f) unname(f[[if (!int) "double" else if (sparse)
+                                        "intsparse" else "intdense"]])
+    if (step == "rownorm" && clr) {
+        f <- sf$rownormclr
+        return(list(workfactor=bysparse(f$workfactor),
+                    outfactor=bytype(f$outfactor), outextra=0,
+                    assembly=unname(f$assembly[[if (dgc) "dgc" else
+                                                    "other"]])))
+    }
     switch(step,
-           ## each worker forked from the main R process copies its whole
-           ## memory when calculating the row ECDFs of sparse input held in
-           ## main memory other than a dgCMatrix object, about 3 GB in each
-           ## of 4 workers with 100,000 cells, and none of it with the input
-           ## read from disk, see .fork_copied_mem()
-           rownorm=list(workfactor=if (sparse) 6 else 4,
-                        outfactor=if (!int) 1 else if (sparse) 1.5 else 2,
+           rownorm=list(workfactor=bysparse(sf$rownorm$workfactor),
+                        outfactor=bytype(sf$rownorm$outfactor),
                         outextra=0,
-                        forkcopy=if (insparse && !dgc) c(1, 0)),
-           ## the row statistics of each block of columns, four or five
-           ## doubles per row, are small and reduced at the end, see
-           ## .rowStats(); dense blocks take a copy of the block, the mask of
-           ## missing values, the logarithm of their values and temporary
-           ## matrices, about five times their size, as measured
-           rowstats=list(workfactor=if (sparse) 2 else 5, outfactor=0,
-                         outextra=0),
-           ## the ranks of a dgCMatrix object are double, as large as it,
-           ## and binding their blocks of columns takes twice their size,
-           ## see .cbind_blocks(). blocks of sparse data read from disk, whose
-           ## size is the one of their dense form, see .units_per_block(),
-           ## take instead about 9 to 11 times their sparse size, reading,
-           ## ranking and writing them, and up to 15 times with blocks of
-           ## about a thousand columns, as measured on single-cell data,
-           ## so that narrow blocks fit too, see .ondisk_mem_factors()
-           ## each worker forked from the main R process copies a fraction
-           ## 'forkcopy' of its memory, see .fork_copied_mem(), about 0.17
-           ## when ranking the columns of 100,000 cells held in main memory
-           colranks=list(workfactor=if (sparse) 7 else 2,
-                         outfactor=if (int || (sparse && dgc)) 1
-                                   else if (sparse) 0.7 else 0.5,
-                         outextra=0, assembly=if (sparse && dgc) 2 else NULL,
-                         sparsedisk=list(workfactor=14.3, outfactor=0.7),
-                         forkcopy=0.2),
-           ## the scores of blocks of sparse ranks read from disk take about
-           ## two times their sparse size, besides the scores themselves, as
-           ## measured on single-cell data, see .ondisk_mem_factors()
-           scores=list(workfactor=2, outfactor=0, outextra=8 * ngs,
-                       sparsedisk=list(workfactor=2.5, outfactor=0)),
-           ## the average method gives its scores directly, while PLAGE,
-           ## z-score and ssGSEA give them from an intermediate matrix as large
-           ## as their input, of scaled rows or column ranks; the scores of
-           ## z-score, from its scaled rows, take as much memory as the ones
-           ## of the average method, as the ones of PLAGE, from its scaled
-           ## rows and the singular vectors of the gene sets, see plage()
-           average=, zscorescores=, plagescores=list(workfactor=2,
-                                                     outfactor=0,
-                                                     outextra=8 * ngs),
-           ## the products of the rows of each gene set in each block of
-           ## columns of the scaled rows of PLAGE, whose memory is given
-           ## separately, see plage()
-           plagegram=list(workfactor=2, outfactor=0, outextra=0),
-           plage=, zscore=,
-           ssgsea=list(workfactor=if (step == "ssgsea") 3 else 2, outfactor=1,
-                       outextra=8 * ngs),
-           ## the scores of ssGSEA, from its ranks, which take from four to
-           ## six times the size of a block of integer ranks: the block read
-           ## from disk, its integer copy and the temporary vectors of its
-           ## columns, as measured on single-cell data, the larger factors
-           ## with smaller blocks
-           ssgseascores=list(workfactor=6, outfactor=0, outextra=8 * ngs))
+                        forkcopy=if (insparse && !dgc)
+                                     unname(sf$rownorm$forkcopy)),
+           rowstats=list(workfactor=bysparse(sf$rowstats$workfactor),
+                         outfactor=sf$rowstats$outfactor, outextra=0),
+           colranks=list(workfactor=bysparse(sf$colranks$workfactor),
+                         outfactor=unname(sf$colranks$outfactor[[
+                             if (int || (sparse && dgc)) "intordgc"
+                             else if (sparse) "sparse" else "dense"]]),
+                         outextra=0,
+                         assembly=if (sparse && dgc)
+                                      unname(sf$colranks$assembly[[
+                                          "sparsedgc"]]),
+                         sparsedisk=sf$colranks$sparsedisk,
+                         forkcopy=sf$colranks$forkcopy),
+           scores=list(workfactor=sf$scores$workfactor,
+                       outfactor=sf$scores$outfactor, outextra=8 * ngs,
+                       sparsedisk=sf$scores$sparsedisk),
+           average=, zscorescores=,
+           plagescores=list(workfactor=sf$setscores$workfactor,
+                            outfactor=sf$setscores$outfactor,
+                            outextra=8 * ngs),
+           plagegram=list(workfactor=sf$plagegram$workfactor,
+                          outfactor=sf$plagegram$outfactor, outextra=0),
+           plage=, zscore=list(workfactor=sf$rowscaling$workfactor,
+                               outfactor=sf$rowscaling$outfactor,
+                               outextra=8 * ngs),
+           ssgsea=list(workfactor=sf$ssgsea$workfactor,
+                       outfactor=sf$ssgsea$outfactor, outextra=8 * ngs),
+           ssgseascores=list(workfactor=sf$ssgseascores$workfactor,
+                             outfactor=sf$ssgseascores$outfactor,
+                             outextra=8 * ngs))
 }
 
 ## memory factors 'mf' of a step, see .step_mem_factors(), for processing the
@@ -181,7 +149,7 @@
 ## memory 'maxmem', where 'workfactor', 'outfactor' and 'outextra' are given
 ## by .step_mem_factors(). the memory available to the blocks of the workers
 ## is what is left by the memory that remains allocated, see .fixed_mem(),
-## from the fraction .mem_fraction_R, available to the allocations of R, of
+## from the fraction .mem_fraction_R(), available to the allocations of R, of
 ## the memory that the R processes, the main one of 'workermem' bytes and each
 ## of more than one worker, of 'parworkermem' bytes, by default 'workermem',
 ## leave from 'maxmem', when they leave enough for the memory that remains
@@ -234,9 +202,11 @@
         inunitbytes <- denseunitbytes
     sparse <- is_sparse(X) && !dense
     unitbytes <- if (dense) denseunitbytes else inunitbytes
-    ## binding blocks of columns of a dgCMatrix object takes twice the size
-    ## of the result, as measured, unlike binding SVT_SparseMatrix objects
-    assembly <- if (whdim == 2L && sparse && is(X, "dgCMatrix")) 2 else NULL
+    ## binding blocks of columns of a dgCMatrix object takes more memory than
+    ## the result, unlike binding SVT_SparseMatrix objects, see 'dgcassembly'
+    ## in .memory_model_defaults
+    assembly <- if (whdim == 2L && sparse && is(X, "dgCMatrix"))
+                    .memory_model("dgcassembly")
     fixed <- .fixed_mem(nunits, inunitbytes, whdim, sparse, inmemory,
                         outfactor, outextra, assembly,
                         outunitbytes=unitbytes, sinkout=sinkout) + heldmem
@@ -253,12 +223,12 @@
     procmem <- workermem
     if (nworkers > 1)
         procmem <- procmem + nworkers * (parworkermem + copiedmem)
-    if (.mem_fraction_R * (maxmem - procmem) > fixed)
+    if (.mem_fraction_R() * (maxmem - procmem) > fixed)
         maxmem <- maxmem - procmem
     ## workers with their own memory each, such as the jobs of gsvaMap(),
     ## take each a block within the whole of it
     nsharing <- if (sharedmem) nworkers else 1
-    avail <- (.mem_fraction_R * maxmem - fixed) / nsharing
+    avail <- (.mem_fraction_R() * maxmem - fixed) / nsharing
     sendbytes <- if (sendblocks && inmemory) inunitbytes else 0
     nperblock <- floor(avail / ((workfactor + outfactor) * unitbytes +
                                 outextra + sendbytes))

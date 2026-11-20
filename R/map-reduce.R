@@ -1168,7 +1168,7 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     held <- .step_held_input(X, dims, whdim, FALSE, container)
     inmemory <- .step_data_mem(dims, whdim, insize, eltbytes, sparse, TRUE,
                                mf, held, densify=mf$densify) <=
-                .mem_fraction_R * maxmem
+                .mem_fraction_R() * maxmem
     held <- .step_held_input(X, dims, whdim, !inmemory, container)
     ## the workers of each job are forked from its R process on Unix-like
     ## systems, see .map_job_backend()

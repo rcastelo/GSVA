@@ -237,7 +237,7 @@ test_load_sparse_by_blocks <- function() {
     grid <- GSVA:::.nzcount_col_grid(x, bytes, avail=0, maxcols=100L)
     checkIdentical(length(grid), 100L)
     insize <- as.numeric(object.size(as(x, "SVT_SparseMatrix")))
-    maxmem <- (insize + avail) / GSVA:::.mem_fraction_R
+    maxmem <- (insize + avail) / GSVA:::.mem_fraction_R()
     checkIdentical(GSVA:::.load_sparse_by_blocks(x, maxmem=maxmem,
                                                  insize=insize),
                    as(x, "SVT_SparseMatrix"))
@@ -486,8 +486,9 @@ test_load_dense_bp <- function() {
     suppressMessages(setAutoBlockSize(200 * 30 * 8))
     on.exit(suppressMessages(setAutoBlockSize(oldbs)), add=TRUE)
 
-    ## without parallel workers, with data denser than .max_parload_density,
-    ## or with data in chunks of one column, they are loaded in this process
+    ## without parallel workers, with data denser than 'maxparloaddensity' in
+    ## the memory model, or with data in chunks of one column, they are loaded
+    ## in this process
     parload <- function(X, BPPARAM)
         as.vector(GSVA:::.parallel_dense_load(X, BPPARAM))
     checkTrue(!parload(h, NULL))

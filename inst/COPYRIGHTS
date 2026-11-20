@@ -1,0 +1,17 @@
+The GSVA package is distributed under the Artistic License 2.0, see the field
+License of its DESCRIPTION file, except for the following files, which are
+separate programs, neither built nor used by the package itself, that are used
+by the scripts in inst/scripts to calibrate its memory model:
+
+inst/scripts/tools/cgmemtime/
+  A modified version of cgmemtime (https://github.com/gsauthof/cgmemtime),
+  Copyright (C) 2022 Georg Sauthoff <mail@gms.tf>, modified in 2026 by the
+  authors of the GSVA package, as described at the start of the file
+  cgmemtime.c. Distributed under the GNU General Public License version 3 or
+  any later version, see the file COPYING in that directory.
+
+inst/scripts/tools/macmemtime/
+  macmemtime, Copyright (C) 2026 the authors of the GSVA package, written after
+  the interface and output of cgmemtime. Distributed under the GNU General
+  Public License version 3 or any later version, see the file COPYING in that
+  directory.

@@ -224,7 +224,7 @@
 ## .step_mem_need(), fits in 'maxmem': the one taken by the main R process and
 ## by each worker by themselves, see .worker_mem(), and the one taken by their
 ## data, see .step_data_mem(), together with the rest of the input data in main
-## memory, see .step_held_input(), from the fraction .mem_fraction_R of
+## memory, see .step_held_input(), from the fraction .mem_fraction_R() of
 ## 'maxmem' available to the allocations of R, where 'mf' gives the memory
 ## factors of the step, see .step_mem_factors(), and 'dense=TRUE' indicates
 ## that the input data is loaded in main memory as a dense matrix, even when
@@ -302,15 +302,13 @@
 ## of the data of the calculations that it holds, plus the memory that each R
 ## process takes outside R, see .proc_extra_mem(). forked workers, such as
 ## those of a MulticoreParam object, share instead with the main process the
-## memory allocated by R, see .forked_worker_mem(). in a new R session,
-## loading GSVA and the packages it depends on takes about 0.6 GB, which with
-## the memory outside R gives about 0.9 GB, as measured on Linux, to which
-## loading a SingleCellExperiment object with one million cells adds about
-## 0.2 GB.
-## with 'session=FALSE', it is the memory of a new R process loading GSVA, such
-## as the one of a job of gsvaMap() or of a socket worker, instead of the one of
-## this process: those 0.6 GB allocated by R, together with the memory outside
-## R, which gives about 0.9 GB on Linux and about 1.05 GB on macOS. the memory allocated by R is measured
+## memory allocated by R, see .forked_worker_mem(). loading a
+## SingleCellExperiment object with one million cells adds about 0.2 GB to
+## the memory of this process. with 'session=FALSE', it is the memory of a
+## new R process loading GSVA, such as the one of a job of gsvaMap() or of a
+## socket worker, instead of the one of this process, see 'newprocmem' in
+## .memory_model_defaults, together with the memory outside R. the memory
+## allocated by R is measured
 ## with a full collection of garbage with 'full=TRUE', see .r_mem_used(). it can
 ## be set with the option 'GSVA.workermem'
 .worker_mem <- function(datamem=0, session=TRUE, full=FALSE) {
@@ -318,7 +316,7 @@
     if (!is.null(wm))
         return(as.numeric(wm))
     if (!session)
-        return(0.6 * 1024^3 + .proc_extra_mem())
+        return(.memory_model("newprocmem") + .proc_extra_mem())
 
     max(0, .r_mem_used(full) - datamem) + .proc_extra_mem()
 }
@@ -393,13 +391,13 @@
 }
 
 ## memory in bytes that each R process takes outside the allocations of R,
-## such as the memory that R releases but the process keeps, as measured in
-## forked workers processing blocks of single-cell data stored on disk: about
-## 0.3 GB on Linux and about 0.45 GB on macOS, where an R process reading
-## blocks from an HDF5 file takes about 0.65 GB outside R, including the
-## buffers of .disk_read_mem()
+## such as the memory that R releases but the process keeps, on this
+## operating system, see 'procextramem' in .memory_model_defaults
 .proc_extra_mem <- function() {
-    if (Sys.info()[["sysname"]] == "Darwin") 0.45 * 1024^3 else 0.3 * 1024^3
+    pe <- .memory_model("procextramem")
+    os <- Sys.info()[["sysname"]]
+
+    unname(if (os %in% names(pe)) pe[[os]] else pe[["default"]])
 }
 
 ## memory in bytes that each worker forked from this R process, such as those
@@ -451,10 +449,9 @@
 
 ## memory in bytes that each R process takes outside R while it reads blocks
 ## of input data from disk, such as the buffers of the HDF5 library to
-## decompress the chunks read: about 0.2 GB, measured on single-cell data
-## stored in chunks of about 1000 x 1000 values
+## decompress the chunks read, see 'diskreadmem' in .memory_model_defaults
 .disk_read_mem <- function() {
-    0.2 * 1024^3
+    .memory_model("diskreadmem")
 }
 
 ## memory in bytes that other objects keep allocated in the main R process
@@ -628,7 +625,7 @@
 ## calculations that this process holds, each worker forked from it the ones
 ## of .forked_worker_mem(), from 'permem' when the input is read from disk,
 ## and the data of the
-## step take .step_data_mem() from the fraction .mem_fraction_R of the memory
+## step take .step_data_mem() from the fraction .mem_fraction_R() of the memory
 ## available to the allocations of R, including the copies of the blocks sent
 ## to the workers with 'sendblocks=TRUE', see .sends_blocks(). each R
 ## process also takes .disk_read_mem() when the input data is read from disk,
@@ -670,7 +667,7 @@
     need <- permem + readmem + nworkers * (parmem + copied) +
             .step_data_mem(dims, whdim, insize, eltbytes, sparse, inmemory, mf,
                            heldmem, densify, sendblocks, sinkout) /
-            .mem_fraction_R
+            .mem_fraction_R()
 
     structure(need, workermem=parmem + copied)
 }

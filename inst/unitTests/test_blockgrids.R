@@ -181,7 +181,7 @@ test_units_per_block <- function() {
     insize <- as.numeric(object.size(X))
     colbytes <- insize / 500
     ## the budgets below are for the allocations of R, a fraction of 'maxmem'
-    frac <- GSVA:::.mem_fraction_R
+    frac <- GSVA:::.mem_fraction_R()
     upb <- function(nworkers, maxmem, ..., workermem=0)
         GSVA:::.units_per_block(X, 2L, nworkers, maxmem / frac, ...,
                                 workermem=workermem)
@@ -667,9 +667,36 @@ test_ondisk_mem_factors <- function() {
                                  GSVA:::.sparse_disk_factors(mf, 3/8),
                                  heldmem=0)
     checkEqualsNumeric(need(mf), GSVA:::.disk_read_mem() +
-                                 blk / GSVA:::.mem_fraction_R)
+                                 blk / GSVA:::.mem_fraction_R())
     checkTrue(need(mf) < need(mf, sparseratio=NA))
     mf <- GSVA:::.step_mem_factors("scores", sparse=TRUE, int=TRUE, ngs=100)
     checkEqualsNumeric(need(mf) - need(mf, sinkout=TRUE),
-                       2 * 8 * 100 * dims[2] / GSVA:::.mem_fraction_R)
+                       2 * 8 * 100 * dims[2] / GSVA:::.mem_fraction_R())
+}
+
+## the constants of the memory model can be replaced with the option
+## 'GSVA.memorymodel', also element by element in the memory factors of the
+## steps, keeping the others
+test_memoryModelOption <- function() {
+    message("Running unit tests for the option GSVA.memorymodel")
+
+    oldopt <- options(GSVA.memorymodel=NULL)
+    on.exit(options(oldopt), add=TRUE)
+    checkEqualsNumeric(GSVA:::.mem_fraction_R(), 0.7)
+    mf <- GSVA:::.step_mem_factors("colranks", sparse=TRUE, int=FALSE,
+                                   dgc=FALSE)
+    checkEqualsNumeric(mf$sparsedisk$workfactor, 14.3)
+
+    options(GSVA.memorymodel=list(memfractionR=0.6, diskreadmem=1e8,
+                                  procextramem=c(default=1e8, Darwin=1e8),
+                                  stepfactors=list(colranks=list(
+                                      sparsedisk=list(workfactor=20)))))
+    checkEqualsNumeric(GSVA:::.mem_fraction_R(), 0.6)
+    checkEqualsNumeric(GSVA:::.disk_read_mem(), 1e8)
+    checkEqualsNumeric(GSVA:::.proc_extra_mem(), 1e8)
+    mf <- GSVA:::.step_mem_factors("colranks", sparse=TRUE, int=FALSE,
+                                   dgc=FALSE)
+    checkEqualsNumeric(mf$sparsedisk$workfactor, 20)
+    checkEqualsNumeric(mf$sparsedisk$outfactor, 0.7)
+    checkEqualsNumeric(mf$workfactor, 7)
 }

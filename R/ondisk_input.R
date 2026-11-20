@@ -10,7 +10,8 @@
 ## block as sparse with the HDF5Array package takes about 160 bytes per
 ## nonzero value while it lasts, as measured on single-cell data, and the
 ## blocks of columns already read form the result, which takes their memory
-## when bound. when 'X' is stored in chunks of several columns, as in dense
+## when bound, see 'sparsereadbytes' in .memory_model_defaults. when 'X' is
+## stored in chunks of several columns, as in dense
 ## HDF5 datasets, also through delayed operations such as a subset of its
 ## columns, see .ondisk_chunkdim(), blocks span the width of the chunks,
 ## because blocks splitting chunks make their reading slower, while wider
@@ -24,7 +25,7 @@
 ## computer clusters, as measured with the row normalization saved by the
 ## jobs of gsvaMap(); without knowing that memory, blocks have the default
 ## size. blocks are narrower when their memory does not fit in the fraction
-## .mem_fraction_R of the maximum main memory 'maxmem' left by the result,
+## .mem_fraction_R() of the maximum main memory 'maxmem' left by the result,
 ## whose estimated size is 'insize', when both are known, by the memory held
 ## by other objects, see .held_mem(), and by the memory of this R process by
 ## itself, see .block_worker_mem(), but not narrower than a chunk, or
@@ -74,24 +75,27 @@
     avail <- Inf
     blockbytes <- NA_real_ ## memory of the largest block while it is read
     pm <- NULL
+    nzbytes <- .memory_model("sparsereadbytes")
     if (budget) {
         pm <- .block_worker_mem(X, 2L, forked=.forked_workers(BPPARAM))
-        avail <- .mem_fraction_R * maxmem - insize - .held_mem() - pm$workermem
+        avail <- .mem_fraction_R() * maxmem - insize - .held_mem() - pm$workermem
         nz <- if (multicol) NULL else .col_nzcounts(X)
         if (!is.null(nz)) {
             ## at least the memory of 'mincols' columns of average width
-            avail <- max(avail, 160 * mean(pmax(1, nz)) * mincols)
-            grid <- .nzcount_col_grid(X, 160 * pmax(1, nz), avail,
+            avail <- max(avail, nzbytes * mean(pmax(1, nz)) * mincols)
+            grid <- .nzcount_col_grid(X, nzbytes * pmax(1, nz), avail,
                                       min(ncolblock, maxcols))
             ends <- cumsum(vapply(seq_along(grid), function(i)
                                       ncol(grid[[i]]), integer(1)))
-            blockbytes <- max(diff(c(0, cumsum(160 * pmax(1, nz))[ends])))
+            blockbytes <- max(diff(c(0, cumsum(nzbytes *
+                                               pmax(1, nz))[ends])))
         } else {
             eltbytes <- if (type(X) == "integer") 4 else 8
             nzpercol <- insize / (eltbytes + 4) / ncol(X)
             ncolblock <- max(mincols,
                              min(ncolblock,
-                                 floor(avail / (160 * max(1, nzpercol)))))
+                                 floor(avail / (nzbytes *
+                                                max(1, nzpercol)))))
             if (multicol) ## whole chunks
                 ncolblock <- cd[2] * (ncolblock %/% cd[2])
         }
@@ -100,7 +104,7 @@
         ncolblock <- as.integer(max(1, min(ncol(X), ncolblock, maxcols)))
         grid <- colAutoGrid(X, ncol=ncolblock)
         if (budget)
-            blockbytes <- 160 * max(1, nzpercol) * ncolblock
+            blockbytes <- nzbytes * max(1, nzpercol) * ncolblock
     }
     nworkers <- if (multicol) .load_workers(X, length(grid), avail,
                                             blockbytes, BPPARAM, pm)
@@ -236,26 +240,17 @@
     ArbitraryArrayGrid(list(nrow(X), ends))
 }
 
-## maximum fraction of nonzero values of the on-disk data loaded into main
-## memory as a dense matrix by parallel workers reading it as sparse, see
-## .load_dense(): the workers send each block back to this process, which
-## took about 3 s per GB of the block on macOS, against about 1.5 s per GB of
-## the dense matrix reading it in this process, so that reading in parallel
-## is faster up to about a third of nonzero values, from which this leaves
-## a margin
-.max_parload_density <- 0.25
-
 ## load into main memory as a dense matrix the on-disk data in 'X'. with the
 ## parallel workers of 'BPPARAM', when 'X' is stored in chunks of several
 ## columns, such as in dense HDF5 datasets, and has a fraction of nonzero
-## values of at most .max_parload_density, estimated from a sample of its
-## chunks, see .sample_nonzero_fraction(), the workers read it as sparse, see
-## .load_sparse_by_blocks(), and this process converts the result into a
-## dense matrix, which, with the parallel reading of the chunks, which takes
-## most of the time, and the smaller size of the sparse blocks sent back,
-## took less than half the time of reading 100,000 cells of single-cell data
-## stored in a dense HDF5 dataset in this process, with six workers on
-## macOS. reading data stored by columns, such as in the compressed sparse
+## values of at most 'maxparloaddensity' in .memory_model_defaults, estimated
+## from a sample of its chunks, see .sample_nonzero_fraction(), the workers
+## read it as sparse, see .load_sparse_by_blocks(), and this process converts
+## the result into a dense matrix, which, with the parallel reading of the
+## chunks, which takes most of the time, and the smaller size of the sparse
+## blocks sent back, took less than half the time of reading 100,000 cells of
+## single-cell data stored in a dense HDF5 dataset in this process, with six
+## workers on macOS. reading data stored by columns, such as in the compressed sparse
 ## column (CSC) layout of HDF5 files, is instead faster in this process,
 ## because each column is read without decompressing the values of other
 ## columns, and so is sending dense blocks back from the workers. within the
@@ -276,7 +271,7 @@
     if (!is.null(maxmem) && is.finite(maxmem)) {
         densesize <- as.numeric(nrow(X)) * ncol(X) * eltbytes
         pm <- .block_worker_mem(X, 2L, forked=.forked_workers(BPPARAM))
-        if (.mem_fraction_R * maxmem <
+        if (.mem_fraction_R() * maxmem <
             sparsesize + densesize + .held_mem() + pm$workermem)
             return(as.matrix(X))
     }
@@ -292,9 +287,9 @@
 ## matrix by the parallel workers of 'BPPARAM', see .load_dense(): with at
 ## least two of them, when 'X' is stored in chunks of several columns and
 ## has more columns than one chunk, and with a fraction of nonzero values of
-## at most .max_parload_density, estimated from a sample of its chunks, see
-## .sample_nonzero_fraction(), which the attribute "density" of the result
-## gives
+## at most 'maxparloaddensity' in .memory_model_defaults, estimated from a
+## sample of its chunks, see .sample_nonzero_fraction(), which the attribute
+## "density" of the result gives
 #' @importFrom BiocParallel bpnworkers
 .parallel_dense_load <- function(X, BPPARAM=NULL) {
     if (is.null(BPPARAM) || bpnworkers(BPPARAM) < 2L)
@@ -305,7 +300,8 @@
 
     density <- .sample_nonzero_fraction(X)
 
-    structure(density <= .max_parload_density, density=density)
+    structure(density <= .memory_model("maxparloaddensity"),
+              density=density)
 }
 
 ## with the parallel workers of 'BPPARAM', the sparse data of the GSVA and

@@ -435,7 +435,7 @@ setMethod("anyNA", signature=c("plageParam"),
 ## processes
 .plage_gram_mem <- function(geneSets, maxmem, nworkers) {
     grambytes <- 8 * as.numeric(lengths(geneSets))^2
-    maxgram <- .mem_fraction_R * maxmem / 4 / (2 * nworkers)
+    maxgram <- .mem_fraction_R() * maxmem / 4 / (2 * nworkers)
     grp <- .plage_groups(grambytes, maxgram)
     mem <- if (length(grp) == 0) 0 else
                2 * nworkers * max(tapply(grambytes, grp, sum))
@@ -493,9 +493,10 @@ plage <- function(X, geneSets, ondisk=FALSE, verbose=TRUE,
     ## processed
     heldmem <- .held_mem() + .inmem_size(X)
     ## when the input is stored on disk, the scaled rows are delayed operations
-    ## on it, and realizing each of their blocks of columns takes about three
-    ## times the size of its dense form, as measured on single-cell data
-    delayedextra <- if (is(X, "DelayedMatrix")) 2 else 0
+    ## on it, and realizing each of their blocks of columns takes more memory
+    ## than its dense form, see 'plagedelayedextra' in .memory_model_defaults
+    delayedextra <- if (is(X, "DelayedMatrix"))
+                        .memory_model("plagedelayedextra") else 0
     nworkers <- if (is.null(BPPARAM)) 1L else bpnworkers(BPPARAM)
 
     ## the products Z_gs Z_gs^T of the gene sets are accumulated in groups of
