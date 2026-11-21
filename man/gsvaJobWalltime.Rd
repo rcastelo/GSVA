@@ -13,6 +13,7 @@ gsvaJobWalltime(
   arrayjobs = FALSE,
   margin = 2,
   map = is(param, "gsvaParam"),
+  cold = TRUE,
   verbose = TRUE
 )
 
@@ -51,6 +52,12 @@ three steps of the GSVA method on chunks of the input data. When \code{FALSE},
 the default with other parameter objects, the wall time of a single job
 running \code{\link{gsva}} on the whole input data.}
 
+\item{cold}{When \code{TRUE}, the default, a small part of each step is also
+run in a new R process, as each job runs it, to measure what it does the
+first time, e.g., loading the packages that the step uses, see below. When
+\code{FALSE}, this time is not included, and only the time of starting a new R
+process and loading GSVA is added to the time of each job.}
+
 \item{verbose}{Gives information about the parts of the calculations that
 are run. Default: \code{TRUE}.}
 
@@ -61,7 +68,8 @@ A character string with the estimated wall time, in hours,
 minutes and seconds rounded up to minutes, e.g., \code{"1:30:00"}, which can
 be given to the argument \code{walltime} of \code{\link{gsvaBatchtoolsSlurmParam}}. It has
 the class \code{gsvaJobWalltime}, and the function \code{details()} shows, for each
-step, the width and number of the chunks, the time of each chunk, the
+step, the width and number of the chunks, the additional time of the
+first chunk of a job in a new R process, the time of each chunk, the
 chunks of each job and its time, before multiplying it by \code{margin}.
 }
 \description{
@@ -88,9 +96,17 @@ proportional to its width; the steps after the row normalization are run
 on the row-normalized values and the ranks of a part of the input data,
 calculated beforehand. To the time of the chunks of each job, the time of
 starting the R process of the job, loading GSVA and its input data, is
-added, also measured. The wall time returned is the largest one of the
-three steps, so that the same jobs can run all of them, multiplied by
-\code{margin}.
+added, as well as the time of what the R process does the first time that
+it runs the step, such as loading the packages that the step uses. With
+\code{cold=TRUE}, both are measured by running a small part of each step in a
+new R process, all of them at the same time, which, e.g., loads the
+annotation package that maps the identifiers of the genes of the gene sets
+to the ones of the input data only when they are of different kinds, as
+the jobs would do. The wall time returned is the largest one of the three
+steps, so that the same jobs can run all of them, multiplied by \code{margin}.
+The time that the workload manager and the package batchtools take to start
+each job, and to read and write its files on a shared file system, is not
+included, and \code{margin} should cover it.
 
 For a single job running \code{\link{gsva}} with the GSVA method, each of its three
 steps is run in the same way, on parts of the whole input data, and the

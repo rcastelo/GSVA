@@ -38,6 +38,12 @@
 #' the default with other parameter objects, the wall time of a single job
 #' running [`gsva`] on the whole input data.
 #'
+#' @param cold When `TRUE`, the default, a small part of each step is also
+#' run in a new R process, as each job runs it, to measure what it does the
+#' first time, e.g., loading the packages that the step uses, see below. When
+#' `FALSE`, this time is not included, and only the time of starting a new R
+#' process and loading GSVA is added to the time of each job.
+#'
 #' @param verbose Gives information about the parts of the calculations that
 #' are run. Default: `TRUE`.
 #'
@@ -57,9 +63,17 @@
 #' on the row-normalized values and the ranks of a part of the input data,
 #' calculated beforehand. To the time of the chunks of each job, the time of
 #' starting the R process of the job, loading GSVA and its input data, is
-#' added, also measured. The wall time returned is the largest one of the
-#' three steps, so that the same jobs can run all of them, multiplied by
-#' `margin`.
+#' added, as well as the time of what the R process does the first time that
+#' it runs the step, such as loading the packages that the step uses. With
+#' `cold=TRUE`, both are measured by running a small part of each step in a
+#' new R process, all of them at the same time, which, e.g., loads the
+#' annotation package that maps the identifiers of the genes of the gene sets
+#' to the ones of the input data only when they are of different kinds, as
+#' the jobs would do. The wall time returned is the largest one of the three
+#' steps, so that the same jobs can run all of them, multiplied by `margin`.
+#' The time that the workload manager and the package batchtools take to start
+#' each job, and to read and write its files on a shared file system, is not
+#' included, and `margin` should cover it.
 #'
 #' For a single job running [`gsva`] with the GSVA method, each of its three
 #' steps is run in the same way, on parts of the whole input data, and the
@@ -76,7 +90,8 @@
 #' minutes and seconds rounded up to minutes, e.g., `"1:30:00"`, which can
 #' be given to the argument `walltime` of [`gsvaBatchtoolsSlurmParam`]. It has
 #' the class `gsvaJobWalltime`, and the function `details()` shows, for each
-#' step, the width and number of the chunks, the time of each chunk, the
+#' step, the width and number of the chunks, the additional time of the
+#' first chunk of a job in a new R process, the time of each chunk, the
 #' chunks of each job and its time, before multiplying it by `margin`.
 #'
 #' @seealso [`gsvaJobMemory`], [`gsvaBatchtoolsSlurmParam`], [`gsvaMap`],
@@ -104,7 +119,8 @@
 #' @export
 gsvaJobWalltime <- function(param, mem, ncpus_per_task=1, nodes=2,
                             arrayjobs=FALSE, margin=2,
-                            map=is(param, "gsvaParam"), verbose=TRUE) {
+                            map=is(param, "gsvaParam"), cold=TRUE,
+                            verbose=TRUE) {
     if (!is(param, "GsvaMethodParam"))
         cli_abort(c("x"=paste("'param' must be a parameter object built with",
                               "gsvaParam(), plageParam(), zscoreParam(),",
@@ -124,6 +140,8 @@ gsvaJobWalltime <- function(param, mem, ncpus_per_task=1, nodes=2,
         cli_abort(c("x"="'margin' must be a number not smaller than 1."))
     if (!is.logical(map) || length(map) != 1 || is.na(map))
         cli_abort(c("x"="'map' must be either TRUE or FALSE."))
+    if (!is.logical(cold) || length(cold) != 1 || is.na(cold))
+        cli_abort(c("x"="'cold' must be either TRUE or FALSE."))
     if (map && !is(param, "gsvaParam"))
         cli_abort(c("x"=paste("gsvaMap() only runs the GSVA method, whose",
                               "parameter object is built with gsvaParam();",
@@ -140,19 +158,22 @@ gsvaJobWalltime <- function(param, mem, ncpus_per_task=1, nodes=2,
                              "and the jobs may fail.")))
     }
 
-    startsecs <- .job_start_secs(param)
     if (map || is(param, "gsvaParam")) {
         ## a single job running gsva() with the GSVA method runs its three
         ## steps on the whole input data, one after another
-        det <- .map_jobs_walltime(param, memb, ncpus, nodes, verbose,
+        det <- .map_jobs_walltime(param, memb, ncpus, nodes, cold, verbose,
                                   single=!map)
     } else
-        det <- .single_job_walltime(param, memb, ncpus, verbose)
+        det <- .single_job_walltime(param, memb, ncpus, cold, verbose)
+    startsecs <- attr(det, "startsecs")
     ## each task of an array job processes one chunk in its own R process,
-    ## and each job of gsvaMap() otherwise its chunks one after another
+    ## and each job of gsvaMap() otherwise its chunks one after another, the
+    ## first of which takes in addition the time of what a new R process
+    ## does the first time, such as loading the packages that the step uses
     det$perjob <- if (arrayjobs || !map) 1 else ceiling(det$chunks / nodes)
-    det$jobsecs <- det$perjob * det$chunksecs + startsecs
-    secs <- if (map) max(det$jobsecs) else sum(det$chunksecs) + startsecs
+    det$jobsecs <- startsecs + det$firstsecs + det$perjob * det$chunksecs
+    secs <- if (map) max(det$jobsecs)
+            else startsecs + sum(det$firstsecs + det$chunksecs)
 
     structure(.walltime_text(margin * secs),
               class=c("gsvaJobWalltime", "character"), details=det,
@@ -190,7 +211,7 @@ setMethod("details", signature=signature(object="gsvaJobWalltime"),
                                 "loading GSVA and its input data: %.1f s\n"),
                           attr(object, "startsecs")))
               tab <- det
-              for (col in c("chunksecs", "jobsecs"))
+              for (col in c("firstsecs", "chunksecs", "jobsecs"))
                   tab[[col]] <- round(tab[[col]], 1)
               print(tab, row.names=FALSE)
               invisible(det)
@@ -230,17 +251,20 @@ setMethod("details", signature=signature(object="gsvaJobWalltime"),
 ## and 'mem' bytes of memory each, with 'nodes' jobs at the same time, or,
 ## with 'single=TRUE', of a single job running each step on the whole input
 ## data, see gsvaJobWalltime(), as a data frame with, for each step, the
-## largest chunk
-## of each job, in rows (by="rows") or columns (by="columns"), the number of
-## chunks, and the time of the largest chunk, see .chunk_secs(). the steps
-## after the row normalization are run on the row-normalized values and the
-## ranks of the columns of the input data taken by their parts, calculated
-## beforehand and saved to disk, unless the row normalization is the CLR,
-## whose values are a delayed operation on the input data, as the jobs of
-## gsvaMap() would read them, see .probe_inputs()
+## largest chunk of each job, in rows (by="rows") or columns (by="columns"),
+## the number of chunks, the time of the largest chunk in this R session, see
+## .chunk_secs(), and the additional time of the first chunk of a job in a new
+## R process ("firstsecs"), whose attribute "startsecs" gives the time of
+## starting it, see .cold_secs(). the steps after the row normalization are
+## run on the row-normalized values and the ranks of the columns of the input
+## data taken by their parts, calculated beforehand and saved to disk, unless
+## the row normalization is the CLR, whose values are a delayed operation on
+## the input data, as the jobs of gsvaMap() would read them, see
+## .probe_inputs(). with 'cold=FALSE', no new R process runs a step, and the
+## time of starting one is measured by loading GSVA, see .job_start_secs()
 #' @importFrom BiocGenerics dims
 #' @importFrom IRanges IRanges
-.map_jobs_walltime <- function(param, mem, ncpus, nodes, verbose,
+.map_jobs_walltime <- function(param, mem, ncpus, nodes, cold, verbose,
                                single=FALSE) {
     steps <- .gsva_steps(param)
     clr <- attr(steps, "clr")
@@ -261,8 +285,9 @@ setMethod("details", signature=signature(object="gsvaJobWalltime"),
             w <- max(dims(g)[, st$whdim])
             nchunks <- length(g)
         }
-        list(chunk=w, chunks=nchunks,
-             parts=.probe_widths(st, w, ncpus, mem, stepclr))
+        parts <- .probe_widths(st, w, ncpus, mem, stepclr)
+        list(chunk=w, chunks=nchunks, parts=parts,
+             tiny=min(parts[1], if (st$whdim == 1L) 20 else 100))
     })
     ## the input of the steps after the row normalization, on the columns that
     ## their parts take
@@ -270,53 +295,149 @@ setMethod("details", signature=signature(object="gsvaJobWalltime"),
                             sum(geom[[3]]$parts), ncpus, mem, clr, tmpdir,
                             verbose)
 
+    ## the arguments of MAP_FUN_WRAPPER() running the i-th step on the rows
+    ## or columns from 'first' to 'last', as a job of gsvaMap() does
+    stepargs <- function(i, first, last) {
+        st <- steps[[i]]
+        chunk <- IRanges(start=first, end=last)
+        args <- list(output="object", ncpus=ncpus, maxmem=mem)
+        if (st$funname == "gsvaRowNorm" && clr)
+            return(c(list(X=chunk), args,
+                     list(WRAPPED_FUN=.map_rowstats_chunk, param=param)))
+        ## the jobs of gsvaMap() save their output to disk, unlike a single
+        ## job running gsva()
+        if (!single) {
+            chunk <- structure(list(chunk=chunk,
+                                    fname=tempfile(tmpdir=tmpdir,
+                                                   fileext=".h5")),
+                               class="gsvaMapChunk")
+            args$output <- "HDF5"
+        }
+        c(list(X=chunk), args, switch(st$funname,
+            gsvaRowNorm=list(WRAPPED_FUN=gsvaRowNorm, param=param,
+                             dropExistingAssays=TRUE,
+                             errorOnTooFewRows=FALSE),
+            gsvaColRanks=list(WRAPPED_FUN=gsvaColRanks,
+                              rowNormExprData=inputs$rnorm,
+                              dropExistingAssays=TRUE),
+            gsvaColScores=list(WRAPPED_FUN=gsvaColScores,
+                               rankExprData=inputs$ranks, device="cpu")))
+    }
+    calls <- lapply(seq_along(steps), function(i)
+                        list(fun=MAP_FUN_WRAPPER,
+                             args=stepargs(i, 1, geom[[i]]$tiny)))
+    tiny <- .cold_secs(calls, param, cold, tmpdir, verbose)
+
     secs <- vapply(seq_along(steps), function(i) {
         st <- steps[[i]]
         if (verbose)
             cli_alert_info(paste("Running the step of {st$step} on",
                                  "{sum(geom[[i]]$parts)} {if (st$whdim == 1L)",
                                  "'rows' else 'columns'}"))
-        run <- function(first, last) {
-            chunk <- IRanges(start=first, end=last)
-            args <- list(output="object", ncpus=ncpus, maxmem=mem)
-            if (st$funname == "gsvaRowNorm" && clr)
-                args <- c(args, list(WRAPPED_FUN=.map_rowstats_chunk,
-                                     param=param))
-            else {
-                ## the jobs of gsvaMap() save their output to disk, unlike a
-                ## single job running gsva()
-                if (!single) {
-                    chunk <- structure(list(chunk=chunk,
-                                            fname=tempfile(tmpdir=tmpdir,
-                                                           fileext=".h5")),
-                                       class="gsvaMapChunk")
-                    args$output <- "HDF5"
-                }
-                args <- c(args, switch(st$funname,
-                    gsvaRowNorm=list(WRAPPED_FUN=gsvaRowNorm, param=param,
-                                     dropExistingAssays=TRUE,
-                                     errorOnTooFewRows=FALSE),
-                    gsvaColRanks=list(WRAPPED_FUN=gsvaColRanks,
-                                      rowNormExprData=inputs$rnorm,
-                                      dropExistingAssays=TRUE),
-                    gsvaColScores=list(WRAPPED_FUN=gsvaColScores,
-                                       rankExprData=inputs$ranks,
-                                       device="cpu")))
-            }
+        run <- function(first, last)
             system.time(suppressMessages(do.call(MAP_FUN_WRAPPER,
-                                                 c(list(X=chunk),
-                                                   args))))[["elapsed"]]
-        }
+                                                 stepargs(i, first,
+                                                          last))))[["elapsed"]]
         .chunk_secs(geom[[i]]$parts, geom[[i]]$chunk, run)
     }, numeric(1))
 
-    data.frame(step=vapply(steps, `[[`, character(1), "step"),
-               by=vapply(steps, function(st)
-                             if (st$whdim == 1L) "rows" else "columns",
-                         character(1)),
-               chunk=vapply(geom, `[[`, numeric(1), "chunk"),
-               chunks=vapply(geom, `[[`, numeric(1), "chunks"),
-               chunksecs=secs)
+    structure(data.frame(step=vapply(steps, `[[`, character(1), "step"),
+                         by=vapply(steps, function(st)
+                                       if (st$whdim == 1L) "rows"
+                                       else "columns", character(1)),
+                         chunk=vapply(geom, `[[`, numeric(1), "chunk"),
+                         chunks=vapply(geom, `[[`, numeric(1), "chunks"),
+                         firstsecs=tiny$firstsecs, chunksecs=secs),
+              startsecs=attr(tiny, "startsecs"))
+}
+
+## time in seconds of starting a new R process and loading GSVA and the input
+## data of a job, and of what the R process of each job does the first time
+## it runs each of the 'calls', a list of lists with a function 'fun' and its
+## arguments 'args', each running a step on a small part of the input data of
+## the parameter object 'param', such as loading the packages that it uses,
+## e.g., an annotation package to map the identifiers of the genes of the
+## gene sets to the ones of the input data, when they are of different
+## kinds: each call is run in a new R process, all of them at the same time,
+## see .cold_runs(), and twice in this R session, which then runs them as
+## they are run after the first time, and the first-time time of each call
+## is the time of its new R process minus the shorter one of this R session.
+## the time of starting a new R process is the median of the ones of the
+## calls. with 'cold=FALSE', the calls are not run in new R processes, the
+## first-time times are zero, and the time of starting a new R process is
+## measured by loading GSVA, see .job_start_secs(). 'dir' is a directory for
+## the temporary files of the new R processes
+#' @importFrom stats median
+.cold_secs <- function(calls, param, cold, dir, verbose) {
+    startsecs <- NA_real_
+    coldsecs <- rep(NA_real_, length(calls))
+    if (cold) {
+        if (verbose)
+            cli_alert_info(paste("Running a small part of each step in a new",
+                                 "R process"))
+        cr <- .cold_runs(calls, dir)
+        startsecs <- median(cr$startsecs, na.rm=TRUE)
+        coldsecs <- cr$runsecs
+    }
+    if (is.na(startsecs))
+        startsecs <- .job_start_secs(param)
+    ## this R session runs each call after the first time
+    warmsecs <- vapply(calls, function(cl)
+                           min(replicate(2, system.time(suppressMessages(
+                               do.call(cl$fun, cl$args)))[["elapsed"]])),
+                       numeric(1))
+
+    structure(data.frame(firstsecs=ifelse(is.na(coldsecs), 0,
+                                          pmax(0, coldsecs - warmsecs))),
+              startsecs=startsecs)
+}
+
+## time in seconds of starting a new R process, loading GSVA and reading the
+## arguments of each of the 'calls', a list of lists with a function 'fun'
+## and its arguments 'args' ("startsecs"), and of running the call
+## ("runsecs"), run each in a new R process with the library paths of this R
+## session, all of them at the same time, as a data frame with NA for the
+## calls that give an error. 'dir' is a directory for the temporary files
+## with the calls and the times of the new R processes, which give an error
+## when they do not end within 'timeout' seconds
+#' @importFrom cli cli_abort
+.cold_runs <- function(calls, dir, timeout=7200) {
+    rscript <- file.path(R.home("bin"), "Rscript")
+    code <- paste(
+        "a <- commandArgs(TRUE); t <- rep(NA_real_, 3); tryCatch({",
+        "suppressPackageStartupMessages(library(GSVA));",
+        "t[1] <- as.numeric(Sys.time()); x <- readRDS(a[1]);",
+        "t[2] <- as.numeric(Sys.time());",
+        "invisible(suppressWarnings(suppressMessages(do.call(x$fun,",
+        "x$args)))); t[3] <- as.numeric(Sys.time())},",
+        "error=function(e) NULL);",
+        "writeLines(format(t, digits=15), paste0(a[2], \".tmp\"));",
+        "invisible(file.rename(paste0(a[2], \".tmp\"), a[2]))")
+    infiles <- file.path(dir, sprintf("coldcall%d.rds", seq_along(calls)))
+    outfiles <- file.path(dir, sprintf("coldtimes%d.txt", seq_along(calls)))
+    oldlibs <- Sys.getenv("R_LIBS", unset=NA)
+    Sys.setenv(R_LIBS=paste(.libPaths(), collapse=.Platform$path.sep))
+    on.exit(if (is.na(oldlibs)) Sys.unsetenv("R_LIBS")
+            else Sys.setenv(R_LIBS=oldlibs), add=TRUE)
+    launched <- numeric(length(calls))
+    for (i in seq_along(calls)) {
+        saveRDS(calls[[i]], infiles[i])
+        launched[i] <- as.numeric(Sys.time())
+        system2(rscript, c("-e", shQuote(code), shQuote(infiles[i]),
+                           shQuote(outfiles[i])),
+                wait=FALSE, stdout=FALSE, stderr=FALSE)
+    }
+    deadline <- Sys.time() + timeout
+    while (!all(file.exists(outfiles))) {
+        if (Sys.time() > deadline)
+            cli_abort(c("x"=paste("The new R processes running the steps",
+                                  "did not end within {timeout} seconds.")))
+        Sys.sleep(0.1)
+    }
+    t <- do.call(rbind, lapply(outfiles, function(f)
+                                   as.numeric(readLines(f, warn=FALSE))))
+
+    data.frame(startsecs=t[, 2] - launched, runsecs=t[, 3] - t[, 2])
 }
 
 ## widths of the two parts of the input of the step described in 'st', see
@@ -423,13 +544,15 @@ setMethod("details", signature=signature(object="gsvaJobWalltime"),
 }
 
 ## time in seconds of a single job running gsva() with a parameter object
-## 'param' of a method other than GSVA, using 'ncpus' CPU cores and 'mem' bytes of memory, see
-## gsvaJobWalltime(), as a data frame with the time of gsva() on all the
-## columns of the input data, extrapolated from its time on two parts of
-## them, see .chunk_secs(), whose widths are the larger of 1,000 columns and
-## 2% of them, in whole chunks of the input data on disk, if any
+## 'param' of a method other than GSVA, using 'ncpus' CPU cores and 'mem'
+## bytes of memory, see gsvaJobWalltime(), as a data frame with the time of
+## gsva() on all the columns of the input data, extrapolated from its time on
+## two parts of them, see .chunk_secs(), whose widths are the larger of 1,000
+## columns and 2% of them, in whole chunks of the input data on disk, if any,
+## and the additional time of running it in a new R process, see
+## .cold_secs(), on its first 100 columns
 #' @importFrom BiocParallel SerialParam
-.single_job_walltime <- function(param, mem, ncpus, verbose) {
+.single_job_walltime <- function(param, mem, ncpus, cold, verbose) {
     X <- unwrapData(get_exprData(param), get_assay(param))
     n <- ncol(X)
     bp <- if (ncpus > 1) .map_job_backend(ncpus) else SerialParam()
@@ -440,14 +563,22 @@ setMethod("details", signature=signature(object="gsvaJobWalltime"),
     p1 <- min(n, base)
     p2 <- min(n - p1, 2 * base)
     parts <- c(p1, p2)[c(p1, p2) > 0]
+    gsvaargs <- function(first, last)
+        list(param=.subset_param_cols(param, seq.int(first, last)),
+             verbose=FALSE, BPPARAM=bp, maxmem=mem)
+    tmpdir <- tempfile("gsvawalltime")
+    dir.create(tmpdir)
+    on.exit(unlink(tmpdir, recursive=TRUE), add=TRUE)
+    tiny <- .cold_secs(list(list(fun=gsva, args=gsvaargs(1, min(n, 100)))),
+                       param, cold, tmpdir, verbose)
     if (verbose)
         cli_alert_info("Running gsva() on {sum(parts)} columns")
-    run <- function(first, last) {
-        p <- .subset_param_cols(param, seq.int(first, last))
-        system.time(suppressMessages(gsva(p, verbose=FALSE, BPPARAM=bp,
-                                          maxmem=mem)))[["elapsed"]]
-    }
+    run <- function(first, last)
+        system.time(suppressMessages(do.call(gsva, gsvaargs(first,
+                                                            last))))[["elapsed"]]
 
-    data.frame(step="gsva()", by="columns", chunk=n, chunks=1,
-               chunksecs=.chunk_secs(parts, n, run))
+    structure(data.frame(step="gsva()", by="columns", chunk=n, chunks=1,
+                         firstsecs=tiny$firstsecs,
+                         chunksecs=.chunk_secs(parts, n, run)),
+              startsecs=attr(tiny, "startsecs"))
 }
