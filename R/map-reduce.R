@@ -1265,10 +1265,21 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     parallelbackend <- .map_job_backend(ncpus)
 
     if (is(X, "IRanges")) { ## input is splitted in chunks
-        res <- WRAPPED_FUN(..., first=start(rng), last=end(rng),
-                           verbose=FALSE,
-                           BPPARAM=parallelbackend,
-                           maxmem=maxmem)
+        args <- list(...)
+        ## the row-normalized values and the ranks given by gsvaReduce(), in
+        ## files saved by the jobs of the previous step, of which the chunk
+        ## of columns of this job only reads a few, see .drop_unread_seeds()
+        if (identical(WRAPPED_FUN, gsvaColRanks) ||
+            identical(WRAPPED_FUN, gsvaColScores))
+            for (a in intersect(names(args),
+                                c("rowNormExprData", "rankExprData")))
+                args[[a]] <- .drop_unread_seeds(args[[a]], start(rng),
+                                                end(rng))
+        res <- do.call(WRAPPED_FUN, c(args, list(first=start(rng),
+                                                 last=end(rng),
+                                                 verbose=FALSE,
+                                                 BPPARAM=parallelbackend,
+                                                 maxmem=maxmem)))
     } else {                ## input was already splitted in chunks
         rem <- 0
         if (is(X, "SummarizedExperiment")) {
@@ -1328,6 +1339,156 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     }
     return(res)
 }
+
+## the input data 'x' of a job of gsvaMap() processing its columns from
+## 'first' to 'last', a container of expression data or a matrix, whose
+## matrices given by delayed operations binding several seeds by columns,
+## such as the output of gsvaReduce() binding the files saved by the jobs of
+## the previous step, keep only the seeds of those columns, see
+## .drop_unread_seed(). reading any part of such a matrix, even of a few
+## columns or of none, which DelayedArray does to find out the type of its
+## values, reads each of its seeds, opening its file, which takes much
+## longer on the file systems shared by the jobs on a cluster, e.g., about
+## 650 times by the scores of a chunk of 20,000 columns of the ranks of
+## 200,000 columns in 40 seeds of 5,000 columns, which took twice as long as
+## with only its 4 seeds, as measured on a BeeGFS file system
+.drop_unread_seeds <- function(x, first, last) {
+    if (is(x, "SummarizedExperiment")) {
+        for (i in seq_along(assays(x, withDimnames=FALSE)))
+            assay(x, i, withDimnames=FALSE) <-
+                .drop_unread_seeds(assay(x, i, withDimnames=FALSE), first,
+                                   last)
+        return(x)
+    }
+    if (!is(x, "DelayedArray") || length(dim(x)) != 2L)
+        return(x)
+    x@seed <- .drop_unread_seed(x@seed, first, last)
+
+    x
+}
+
+## the seed or delayed operation 'x', whose seeds bound by columns that do
+## not hold any of its columns from 'first' to 'last' are replaced by
+## seeds without values, see GsvaUnreadSeed, keeping the dimensions, the
+## dimnames, the type and the sparsity of 'x', through the delayed operations
+## that keep its geometry, such as setting the dimnames or operating on each
+## value, and the subsets of consecutive columns
+#' @importClassesFrom DelayedArray DelayedAbind DelayedSubset DelayedUnaryIsoOp
+.drop_unread_seed <- function(x, first, last) {
+    if (is(x, "DelayedUnaryIsoOp")) {
+        x@seed <- .drop_unread_seed(x@seed, first, last)
+        return(x)
+    }
+    if (is(x, "DelayedSubset")) {
+        idx <- x@index[[2L]]
+        if (is.null(idx))
+            x@seed <- .drop_unread_seed(x@seed, first, last)
+        else if (all(diff(idx[first:last]) == 1L))
+            x@seed <- .drop_unread_seed(x@seed, idx[first], idx[last])
+        return(x)
+    }
+    if (!is(x, "DelayedAbind"))
+        return(x)
+    if (x@along == 1L) { ## each seed holds all the columns
+        x@seeds <- lapply(x@seeds, .drop_unread_seed, first, last)
+        return(x)
+    }
+    widths <- vapply(x@seeds, function(s) dim(s)[2L], integer(1))
+    ends <- cumsum(widths)
+    starts <- ends - widths + 1L
+    for (i in seq_along(x@seeds)) {
+        if (ends[i] < first || starts[i] > last)
+            x@seeds[[i]] <- .GsvaUnreadSeed(x@seeds[[i]])
+        else
+            x@seeds[[i]] <- .drop_unread_seed(x@seeds[[i]],
+                                              max(first, starts[i]) -
+                                                  starts[i] + 1L,
+                                              min(last, ends[i]) -
+                                                  starts[i] + 1L)
+    }
+
+    x
+}
+
+#' `GsvaUnreadSeed` class
+#'
+#' Internal class of `DelayedArray` seeds used by the jobs of [`gsvaMap`] in
+#' place of the seeds of their input that hold none of the columns that they
+#' process. It is not intended to be used directly.
+#'
+#' @return `dim()` and `dimnames()` return the dimensions and the dimnames of
+#' the seed that it replaces; `type()` its type; `is_sparse()` whether it is
+#' sparse; and `extract_array()` and `extract_sparse_array()` an empty
+#' array, when some dimension of the part to read is zero, and give an error
+#' otherwise.
+#'
+#' @aliases GsvaUnreadSeed-class
+#' @aliases dim,GsvaUnreadSeed-method
+#' @aliases dimnames,GsvaUnreadSeed-method
+#' @aliases type,GsvaUnreadSeed-method
+#' @aliases is_sparse,GsvaUnreadSeed-method
+#' @aliases extract_array,GsvaUnreadSeed-method
+#' @aliases extract_sparse_array,GsvaUnreadSeed-method
+#' @name GsvaUnreadSeed-class
+#' @rdname GsvaUnreadSeed-class
+#' @keywords internal
+#'
+#' @importClassesFrom S4Arrays Array
+setClass("GsvaUnreadSeed",
+         contains="Array",
+         slots=c(dim="integer", dimnames="list", type="character",
+                 sparse="logical"))
+
+## a seed without values in place of the seed 'x', see GsvaUnreadSeed
+#' @importFrom S4Arrays is_sparse
+.GsvaUnreadSeed <- function(x) {
+    dn <- dimnames(x)
+    if (is.null(dn))
+        dn <- vector("list", length(dim(x)))
+    new("GsvaUnreadSeed", dim=dim(x), dimnames=dn, type=.seed_type(x),
+        sparse=is_sparse(x))
+}
+
+## type of the values of the seed or delayed operation 'x', from the types of
+## its seeds under the delayed operations that set the dimnames or bind
+## seeds, for which type() reads each seed, see .drop_unread_seeds()
+#' @importFrom BiocGenerics type
+#' @importClassesFrom DelayedArray DelayedAbind DelayedSetDimnames
+.seed_type <- function(x) {
+    if (is(x, "DelayedSetDimnames"))
+        return(.seed_type(x@seed))
+    if (is(x, "DelayedAbind"))
+        return(typeof(unlist(lapply(x@seeds, function(s)
+                                        vector(.seed_type(s), 0L)))))
+    type(x)
+}
+
+setMethod("dim", "GsvaUnreadSeed", function(x) x@dim)
+
+setMethod("dimnames", "GsvaUnreadSeed", function(x) x@dimnames)
+
+setMethod("type", "GsvaUnreadSeed", function(x) x@type)
+
+setMethod("is_sparse", "GsvaUnreadSeed", function(x) x@sparse)
+
+## the empty array of the part of 'x' selected by 'index', which has to be
+## empty, since 'x' holds none of the values of the input data
+#' @importFrom cli cli_abort
+.extract_unread_seed <- function(x, index) {
+    lens <- ifelse(vapply(index, is.null, logical(1)), x@dim,
+                   lengths(index))
+    if (all(lens > 0L))
+        cli_abort(c("x"=paste("Internal error, reading values of the input",
+                              "data out of the chunk of this job.")))
+    array(vector(x@type, 0L), dim=lens)
+}
+
+#' @importFrom S4Arrays extract_array
+setMethod("extract_array", "GsvaUnreadSeed", .extract_unread_seed)
+
+#' @importFrom SparseArray extract_sparse_array
+setMethod("extract_sparse_array", "GsvaUnreadSeed", function(x, index)
+    as(.extract_unread_seed(x, index), "SVT_SparseArray"))
 
 ## whether the file 'fname' is a result of gsvaMap() saved in the format
 ## 'output', "HDF5" or "Parquet", given by default by the extension of its
