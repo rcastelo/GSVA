@@ -96,8 +96,7 @@ gsvaJobMemory <- function(param, ncpus_per_task=1,
         cli_abort(c("x"=paste("'param' must be a parameter object built with",
                               "gsvaParam(), plageParam(), zscoreParam(),",
                               "ssgseaParam() or avgParam().")))
-    if (length(ncpus_per_task) != 1 || is.na(ncpus_per_task) ||
-        ncpus_per_task < 1)
+    if (!.isPosIntLength1(ncpus_per_task))
         cli_abort(c("x"="'ncpus_per_task' must be a positive integer."))
     if (!is.logical(map) || length(map) != 1 || is.na(map))
         cli_abort(c("x"="'map' must be either TRUE or FALSE."))

@@ -128,16 +128,14 @@ gsvaJobWalltime <- function(param, mem, ncpus_per_task=1, nodes=2,
     memb <- .memtext2bytes(as.character(mem))
     if (length(memb) != 1 || is.na(memb) || memb <= 0)
         cli_abort(c("x"="'mem' must be a positive amount of memory."))
-    for (a in c("ncpus_per_task", "nodes")) {
-        v <- get(a)
-        if (length(v) != 1 || is.na(v) || v < 1)
+    for (a in c("ncpus_per_task", "nodes"))
+        if (!.isPosIntLength1(get(a)))
             cli_abort(c("x"="'{a}' must be a positive integer."))
-    }
     if (!is.logical(arrayjobs) || length(arrayjobs) != 1 || is.na(arrayjobs))
         cli_abort(c("x"="'arrayjobs' must be either TRUE or FALSE."))
-    if (!is.numeric(margin) || length(margin) != 1 || is.na(margin) ||
-        margin < 1)
-        cli_abort(c("x"="'margin' must be a number not smaller than 1."))
+    if (!.isNumLength1(margin) || !is.finite(margin) || margin < 1)
+        cli_abort(c("x"=paste("'margin' must be a finite number not smaller",
+                              "than 1.")))
     if (!is.logical(map) || length(map) != 1 || is.na(map))
         cli_abort(c("x"="'map' must be either TRUE or FALSE."))
     if (!is.logical(cold) || length(cold) != 1 || is.na(cold))

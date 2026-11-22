@@ -65,4 +65,7 @@ test_jobMemory <- function() {
     checkException(gsvaJobMemory(ssgseaParam(x, gsets, verbose=FALSE),
                                  map=TRUE), silent=TRUE)
     checkException(gsvaJobMemory(par, ncpus_per_task=0), silent=TRUE)
+    ## numbers of CPU cores that as.integer() would truncate or turn into NA
+    checkException(gsvaJobMemory(par, ncpus_per_task=1.5), silent=TRUE)
+    checkException(gsvaJobMemory(par, ncpus_per_task=Inf), silent=TRUE)
 }

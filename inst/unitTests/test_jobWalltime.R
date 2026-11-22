@@ -67,4 +67,10 @@ test_jobWalltime <- function() {
                                    mem="4G", map=TRUE), silent=TRUE)
     checkException(gsvaJobWalltime(par, mem="4G", nodes=0), silent=TRUE)
     checkException(gsvaJobWalltime(par, mem="4G", margin=0.5), silent=TRUE)
+    ## numbers that as.integer() would truncate or turn into NA, and an
+    ## infinite margin, which would give an infinite wall time
+    checkException(gsvaJobWalltime(par, mem="4G", ncpus_per_task=1.5),
+                   silent=TRUE)
+    checkException(gsvaJobWalltime(par, mem="4G", nodes=Inf), silent=TRUE)
+    checkException(gsvaJobWalltime(par, mem="4G", margin=Inf), silent=TRUE)
 }
