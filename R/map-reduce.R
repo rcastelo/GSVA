@@ -1375,6 +1375,9 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
 ## value, and the subsets of consecutive columns
 #' @importClassesFrom DelayedArray DelayedAbind DelayedSubset DelayedUnaryIsoOp
 .drop_unread_seed <- function(x, first, last) {
+    ## the delayed operations on each value keep the geometry of their seed,
+    ## including DelayedSetDimnames, a subclass of DelayedUnaryIsoOp, which
+    ## wraps the binding of the files of the chunks given by gsvaReduce()
     if (is(x, "DelayedUnaryIsoOp")) {
         x@seed <- .drop_unread_seed(x@seed, first, last)
         return(x)
