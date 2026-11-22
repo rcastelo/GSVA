@@ -134,8 +134,11 @@
 #' see `mem`, and distributes them among `nodes` jobs, each of which processes
 #' its chunks one after another, so that `walltime` should be long enough for
 #' about the number of chunks divided by `nodes`; with `arrayjobs=TRUE`, it is
-#' instead the maximum wall time of each chunk. When `NULL`, no time limit is
-#' requested, and the jobs take the default time limit of the partition,
+#' instead the maximum wall time of each chunk. The function
+#' [`gsvaJobWalltime`] estimates it by running a small part of the
+#' calculations, e.g., `walltime=gsvaJobWalltime(param, mem=mem, nodes=nodes,
+#' ncpus_per_task=2)`, preferably on a compute node. When `NULL`, no time
+#' limit is requested, and the jobs take the default time limit of the partition,
 #' which its maximum time limit bounds; e.g., the Slurm command
 #' `scontrol show partition` shows both of them in the fields `DefaultTime`
 #' and `MaxTime`. Chunks of jobs ended by Slurm can be resubmitted with the
@@ -161,7 +164,9 @@
 #' before submitting any job, gives an error in that case, because such jobs
 #' would be killed by the workload manager, and a warning when `mem` is smaller
 #' than the memory it estimates that the calculations on each chunk of data
-#' require. Default: "10G".
+#' require. The function [`gsvaJobMemory`] estimates the memory that each job
+#' requires from the parameter object of the calculations, e.g.,
+#' `mem=gsvaJobMemory(param, ncpus_per_task=2)`. Default: "10G".
 #'
 #' @param arrayjobs In `gsvaBatchtoolsSlurmParam()`, logical vector of length
 #' 1. When `TRUE`, each of the `nodes` jobs is sent to Slurm as an array job,
@@ -387,7 +392,6 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     ncpus <- BTPARAM$resources$ncpus
     maxmem <- .memtext2bytes(BTPARAM$resources$memory)
 
-    gridsizefun <- .colgridsize
     splitinrangesfun <- .splitColsInRanges
 
     funargs <- list()
@@ -406,16 +410,8 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
         funargs <- c(funargs, list(param=inputData,
                                    dropExistingAssays=TRUE,
                                    errorOnTooFewRows=FALSE))
-        if (!clr) {
-            gridsizefun <- .rowgridsize
+        if (!clr)
             splitinrangesfun <- .splitRowsInRanges
-        } else
-            ## the jobs calculating the statistics of the rows for the CLR
-            ## take whole chunks of the input data on disk, instead of
-            ## narrower chunks of columns, which would be read and
-            ## decompressed by several jobs, and process them in bands of
-            ## rows that fit in their memory, see .rowStats()
-            gridsizefun <- function(...) .colgridsize(..., rowbands=TRUE)
         assay <- get_assay(inputData)
 
     } else if (identical(FUN, gsvaColRanks)) {
@@ -451,23 +447,10 @@ gsvaMap <- function(FUN, inputData, output=c("object", "HDF5", "Parquet"),
     chunks <- density <- Xd <- nrowband <- NULL
     if (!is.list(X)) {
         if (is.null(mapinfo)) {
-            ## each job has its own memory 'maxmem', not shared with the
-            ## other jobs, and its chunk takes the memory of the selected
-            ## step, see .map_step_factors(), besides the memory of the rest
-            ## of the input data that each job receives, see .check_map_mem();
-            ## sparse data read from disk take it by their sparse size, see
-            ## .ondisk_mem_factors()
             Xd <- unwrapData(get_exprData(inputData), assay)
             density <- .map_density(inputData, assay, Xd)
-            mf <- .ondisk_mem_factors(.map_step_factors(funname, inputData,
-                                                        Xd),
-                                      Xd, density)
-            container <- .map_container_mem(inputData, assay)
-            grid <- gridsizefun(Xd, nworkers, maxmem, mf$workfactor,
-                                mf$outfactor, mf$outextra, workermem=0,
-                                dense=mf$densify,
-                                heldmem=max(0, container - .inmem_size(Xd)),
-                                sharedmem=FALSE)
+            grid <- .map_grid(funname, inputData, assay, Xd, nworkers, maxmem,
+                              clr, density)
             nrowband <- attr(grid, "nrowband")
             X <- splitinrangesfun(grid)
             chunks <- data.frame(first=vapply(X, start, integer(1)),
@@ -719,6 +702,8 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
                               "string with the generic resources of each",
                               "job, e.g., \"gpu:1\".")))
 
+    ## e.g., the output of gsvaJobMemory(), of class gsvaJobMemory
+    mem <- as.character(mem)
     .check_job_mem(ncpus_per_task, .memtext2bytes(mem))
 
     ## automatically created HDF5 datasets should be stored in a filesystem
@@ -1100,24 +1085,53 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
               maxmem=maxmem)
 }
 
+## chunks of the matrix 'Xd' of the assay 'assay' of the input data
+## 'inputData' that the jobs of gsvaMap() process in the step 'funname',
+## as a grid of blocks, with 'nworkers' jobs at the same time and 'maxmem'
+## bytes of memory each. each job has its own memory 'maxmem', not shared with
+## the other jobs, and its chunk takes the memory of the step, see
+## .map_step_factors(), besides the memory of the rest of the input data that
+## each job receives, see .check_map_mem(); sparse data read from disk take it
+## by their sparse size, from the fraction 'density' of their nonzero values,
+## see .ondisk_mem_factors(). the chunks of the row normalization through
+## ECDFs are blocks of rows, and otherwise of columns, where the jobs
+## calculating the statistics of the rows for the CLR ('clr=TRUE') take whole
+## chunks of the input data on disk, instead of narrower chunks of columns,
+## which would be read and decompressed by several jobs, and process them in
+## bands of rows that fit in their memory, see .rowStats(), whose height the
+## grid gives in its attribute "nrowband". the memory taken by the assays of
+## the input data in main memory is 'container', see .map_container_mem()
+.map_grid <- function(funname, inputData, assay, Xd, nworkers, maxmem, clr,
+                      density=NULL,
+                      container=.map_container_mem(inputData, assay)) {
+    gridsizefun <- .colgridsize
+    if (funname == "gsvaRowNorm")
+        gridsizefun <- if (clr) function(...) .colgridsize(..., rowbands=TRUE)
+                       else .rowgridsize
+    mf <- .ondisk_mem_factors(.map_step_factors(funname, inputData, Xd), Xd,
+                              density)
+
+    gridsizefun(Xd, nworkers, maxmem, mf$workfactor, mf$outfactor,
+                mf$outextra, workermem=0, dense=mf$densify,
+                heldmem=max(0, container - .inmem_size(Xd)), sharedmem=FALSE)
+}
+
 ## check, before gsvaMap() submits any job, the memory required by the step
 ## 'funname' in each job, on the input data 'inputData', of which each job
 ## processes a chunk of at most 'chunkwidth' rows (whdim=1) or columns
-## (whdim=2), using 'ncpus' CPU cores and 'maxmem' bytes of memory. it gives an
-## error when the R process of each job and its parallel workers do not fit in
-## 'maxmem', because such jobs would be killed by the workload manager, and
-## otherwise it warns when the memory estimated for the step exceeds 'maxmem',
-## see .step_mem_need(). for a list input, whose chunks are not loaded to
-## know their size, only the former is checked. the fraction of nonzero values
-## of sparse input data is given in 'density', or computed when NULL, see
-## .map_density(), and the matrix of the assay 'assay' of 'inputData' is
-## given in 'X', or obtained from 'inputData' when NULL, since gsvaMap() has
-## already obtained both to size the chunks. it is skipped with the option
-## 'GSVA.check_memory=FALSE'
+## (whdim=2), using 'ncpus' CPU cores and 'maxmem' bytes of memory, see
+## .map_job_need(). it gives an error when the R process of each job and its
+## parallel workers do not fit in 'maxmem', because such jobs would be killed
+## by the workload manager, and otherwise it warns when the memory estimated
+## for the step exceeds 'maxmem', see .check_mem_need(). for a list input,
+## whose chunks are not loaded to know their size, only the former is checked.
+## the fraction of nonzero values of sparse input data is given in 'density',
+## or computed when NULL, see .map_density(), and the matrix of the assay
+## 'assay' of 'inputData' is given in 'X', or obtained from 'inputData' when
+## NULL, since gsvaMap() has already obtained both to size the chunks. it is
+## skipped with the option 'GSVA.check_memory=FALSE'
 #' @importFrom cli cli_abort
 #' @importFrom memuse mu
-#' @importFrom BiocGenerics type
-#' @importFrom S4Arrays is_sparse
 .check_map_mem <- function(funname, inputData, assay, whdim, chunkwidth, ncpus,
                            maxmem, density=NULL, X=NULL) {
     if (!getOption("GSVA.check_memory", TRUE) || !is.finite(maxmem))
@@ -1125,7 +1139,47 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
 
     hint <- paste("Consider using fewer CPU cores per job, or more memory per",
                   "job, e.g., with the arguments {.arg ncpus_per_task} and",
-                  "{.arg mem} of {.fn gsvaBatchtoolsSlurmParam}.")
+                  "{.arg mem} of {.fn gsvaBatchtoolsSlurmParam}, see also",
+                  "{.fn gsvaJobMemory}.")
+    need <- .map_job_need(funname, inputData, assay, whdim, chunkwidth, ncpus,
+                          maxmem, density, X)
+    nworkers <- attr(need, "nworkers")
+    baseline <- attr(need, "baseline")
+    if (baseline > maxmem) {
+        bltxt <- as.character(mu(baseline))
+        mmtxt <- as.character(mu(maxmem))
+        cli_abort(c("x"=paste("Each job would run GSVA in one R process with",
+                              "{nworkers} parallel worker{?s}, which take",
+                              "about {bltxt} by themselves, more than the",
+                              "{mmtxt} of memory of each job."),
+                    "i"=hint))
+    }
+    if (is.na(need))
+        return(invisible(FALSE))
+
+    .check_mem_need(need, maxmem, nworkers, hint=hint,
+                    permem=attr(need, "permem"), forked=attr(need, "forked"),
+                    forkedmem=attr(need, "workermem"))
+}
+
+## memory in bytes required by the step 'funname' of gsvaMap() in each job, on
+## the input data 'inputData', of which each job processes a chunk of at most
+## 'chunkwidth' rows (whdim=1) or columns (whdim=2), using 'ncpus' CPU cores
+## and 'maxmem' bytes of memory, which decide whether the job holds its chunk
+## in main memory, see .step_mem_need(); NA for a list input, whose chunks are
+## not loaded to know their size. its attributes give the number of parallel
+## workers of each job ("nworkers"), the memory of its R process and of each of
+## its workers by themselves ("permem", "workermem"), whether they are forked
+## from it ("forked"), and the memory that they take together ("baseline").
+## the fraction of nonzero values of sparse input data is given in 'density',
+## or computed when NULL, see .map_density(), the matrix of the assay 'assay'
+## of 'inputData' in 'X', or obtained from 'inputData' when NULL, and the
+## memory that the assays of the input data take in main memory in each job in
+## 'container', see .map_container_mem()
+#' @importFrom BiocGenerics type
+#' @importFrom S4Arrays is_sparse
+.map_job_need <- function(funname, inputData, assay, whdim, chunkwidth, ncpus,
+                          maxmem, density=NULL, X=NULL, container=NULL) {
     dims <- NULL
     if (is.list(inputData))
         X <- NULL
@@ -1139,18 +1193,14 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     ## the R process of each job is a new one, which does not take the memory
     ## of this one, see .worker_mem()
     permem <- .worker_mem(session=FALSE)
-    baseline <- (1 + nworkers) * permem
-    if (baseline > maxmem) {
-        bltxt <- as.character(mu(baseline))
-        mmtxt <- as.character(mu(maxmem))
-        cli_abort(c("x"=paste("Each job would run GSVA in one R process with",
-                              "{nworkers} parallel worker{?s}, which take",
-                              "about {bltxt} by themselves, more than the",
-                              "{mmtxt} of memory of each job."),
-                    "i"=hint))
-    }
+    ## the workers of each job are forked from its R process on Unix-like
+    ## systems, see .map_job_backend()
+    forked <- .Platform$OS.type == "unix"
+    need <- structure(NA_real_, nworkers=nworkers, permem=permem,
+                      workermem=permem, forked=forked,
+                      baseline=(1 + nworkers) * permem)
     if (is.null(X))
-        return(invisible(FALSE))
+        return(need)
 
     ## memory of the step on the largest chunk, of size 'insize' in memory
     sparse <- is_sparse(X)
@@ -1164,21 +1214,21 @@ gsvaBatchtoolsSlurmParam <- function(dir="GSVAOUTPUT", partition,
     mf <- .map_step_factors(funname, inputData, X)
     ## each job receives the whole input data, whose assays in main memory
     ## remain allocated while it processes its chunk, see .step_held_input()
-    container <- .map_container_mem(inputData, assay)
+    if (is.null(container))
+        container <- .map_container_mem(inputData, assay)
     held <- .step_held_input(X, dims, whdim, FALSE, container)
     inmemory <- .step_data_mem(dims, whdim, insize, eltbytes, sparse, TRUE,
                                mf, held, densify=mf$densify) <=
                 .mem_fraction_R() * maxmem
     held <- .step_held_input(X, dims, whdim, !inmemory, container)
-    ## the workers of each job are forked from its R process on Unix-like
-    ## systems, see .map_job_backend()
-    forked <- .Platform$OS.type == "unix"
-    need <- .step_mem_need(dims, insize, whdim, eltbytes, sparse, inmemory,
-                           mf, nworkers, held, densify=mf$densify,
-                           permem=permem, forked=forked)
+    stepneed <- .step_mem_need(dims, insize, whdim, eltbytes, sparse,
+                               inmemory, mf, nworkers, held,
+                               densify=mf$densify, permem=permem,
+                               forked=forked)
 
-    .check_mem_need(need, maxmem, nworkers, hint=hint, permem=permem,
-                    forked=forked, forkedmem=attr(need, "workermem"))
+    structure(as.vector(stepneed), nworkers=nworkers, permem=permem,
+              workermem=attr(stepneed, "workermem"), forked=forked,
+              baseline=(1 + nworkers) * permem)
 }
 
 #' @importFrom BiocParallel SerialParam MulticoreParam SnowParam
@@ -1215,10 +1265,21 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     parallelbackend <- .map_job_backend(ncpus)
 
     if (is(X, "IRanges")) { ## input is splitted in chunks
-        res <- WRAPPED_FUN(..., first=start(rng), last=end(rng),
-                           verbose=FALSE,
-                           BPPARAM=parallelbackend,
-                           maxmem=maxmem)
+        args <- list(...)
+        ## the row-normalized values and the ranks given by gsvaReduce(), in
+        ## files saved by the jobs of the previous step, of which the chunk
+        ## of columns of this job only reads a few, see .drop_unread_seeds()
+        if (identical(WRAPPED_FUN, gsvaColRanks) ||
+            identical(WRAPPED_FUN, gsvaColScores))
+            for (a in intersect(names(args),
+                                c("rowNormExprData", "rankExprData")))
+                args[[a]] <- .drop_unread_seeds(args[[a]], start(rng),
+                                                end(rng))
+        res <- do.call(WRAPPED_FUN, c(args, list(first=start(rng),
+                                                 last=end(rng),
+                                                 verbose=FALSE,
+                                                 BPPARAM=parallelbackend,
+                                                 maxmem=maxmem)))
     } else {                ## input was already splitted in chunks
         rem <- 0
         if (is(X, "SummarizedExperiment")) {
@@ -1278,6 +1339,159 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
     }
     return(res)
 }
+
+## the input data 'x' of a job of gsvaMap() processing its columns from
+## 'first' to 'last', a container of expression data or a matrix, whose
+## matrices given by delayed operations binding several seeds by columns,
+## such as the output of gsvaReduce() binding the files saved by the jobs of
+## the previous step, keep only the seeds of those columns, see
+## .drop_unread_seed(). reading any part of such a matrix, even of a few
+## columns or of none, which DelayedArray does to find out the type of its
+## values, reads each of its seeds, opening its file, which takes much
+## longer on the file systems shared by the jobs on a cluster, e.g., about
+## 650 times by the scores of a chunk of 20,000 columns of the ranks of
+## 200,000 columns in 40 seeds of 5,000 columns, which took twice as long as
+## with only its 4 seeds, as measured on a BeeGFS file system
+.drop_unread_seeds <- function(x, first, last) {
+    if (is(x, "SummarizedExperiment")) {
+        for (i in seq_along(assays(x, withDimnames=FALSE)))
+            assay(x, i, withDimnames=FALSE) <-
+                .drop_unread_seeds(assay(x, i, withDimnames=FALSE), first,
+                                   last)
+        return(x)
+    }
+    if (!is(x, "DelayedArray") || length(dim(x)) != 2L)
+        return(x)
+    x@seed <- .drop_unread_seed(x@seed, first, last)
+
+    x
+}
+
+## the seed or delayed operation 'x', whose seeds bound by columns that do
+## not hold any of its columns from 'first' to 'last' are replaced by
+## seeds without values, see GsvaUnreadSeed, keeping the dimensions, the
+## dimnames, the type and the sparsity of 'x', through the delayed operations
+## that keep its geometry, such as setting the dimnames or operating on each
+## value, and the subsets of consecutive columns
+#' @importClassesFrom DelayedArray DelayedAbind DelayedSubset DelayedUnaryIsoOp
+.drop_unread_seed <- function(x, first, last) {
+    ## the delayed operations on each value keep the geometry of their seed,
+    ## including DelayedSetDimnames, a subclass of DelayedUnaryIsoOp, which
+    ## wraps the binding of the files of the chunks given by gsvaReduce()
+    if (is(x, "DelayedUnaryIsoOp")) {
+        x@seed <- .drop_unread_seed(x@seed, first, last)
+        return(x)
+    }
+    if (is(x, "DelayedSubset")) {
+        idx <- x@index[[2L]]
+        if (is.null(idx))
+            x@seed <- .drop_unread_seed(x@seed, first, last)
+        else if (all(diff(idx[first:last]) == 1L))
+            x@seed <- .drop_unread_seed(x@seed, idx[first], idx[last])
+        return(x)
+    }
+    if (!is(x, "DelayedAbind"))
+        return(x)
+    if (x@along == 1L) { ## each seed holds all the columns
+        x@seeds <- lapply(x@seeds, .drop_unread_seed, first, last)
+        return(x)
+    }
+    widths <- vapply(x@seeds, function(s) dim(s)[2L], integer(1))
+    ends <- cumsum(widths)
+    starts <- ends - widths + 1L
+    for (i in seq_along(x@seeds)) {
+        if (ends[i] < first || starts[i] > last)
+            x@seeds[[i]] <- .GsvaUnreadSeed(x@seeds[[i]])
+        else
+            x@seeds[[i]] <- .drop_unread_seed(x@seeds[[i]],
+                                              max(first, starts[i]) -
+                                                  starts[i] + 1L,
+                                              min(last, ends[i]) -
+                                                  starts[i] + 1L)
+    }
+
+    x
+}
+
+#' `GsvaUnreadSeed` class
+#'
+#' Internal class of `DelayedArray` seeds used by the jobs of [`gsvaMap`] in
+#' place of the seeds of their input that hold none of the columns that they
+#' process. It is not intended to be used directly.
+#'
+#' @return `dim()` and `dimnames()` return the dimensions and the dimnames of
+#' the seed that it replaces; `type()` its type; `is_sparse()` whether it is
+#' sparse; and `extract_array()` and `extract_sparse_array()` an empty
+#' array, when some dimension of the part to read is zero, and give an error
+#' otherwise.
+#'
+#' @aliases GsvaUnreadSeed-class
+#' @aliases dim,GsvaUnreadSeed-method
+#' @aliases dimnames,GsvaUnreadSeed-method
+#' @aliases type,GsvaUnreadSeed-method
+#' @aliases is_sparse,GsvaUnreadSeed-method
+#' @aliases extract_array,GsvaUnreadSeed-method
+#' @aliases extract_sparse_array,GsvaUnreadSeed-method
+#' @name GsvaUnreadSeed-class
+#' @rdname GsvaUnreadSeed-class
+#' @keywords internal
+#'
+#' @importClassesFrom S4Arrays Array
+setClass("GsvaUnreadSeed",
+         contains="Array",
+         slots=c(dim="integer", dimnames="list", type="character",
+                 sparse="logical"))
+
+## a seed without values in place of the seed 'x', see GsvaUnreadSeed
+#' @importFrom S4Arrays is_sparse
+.GsvaUnreadSeed <- function(x) {
+    dn <- dimnames(x)
+    if (is.null(dn))
+        dn <- vector("list", length(dim(x)))
+    new("GsvaUnreadSeed", dim=dim(x), dimnames=dn, type=.seed_type(x),
+        sparse=is_sparse(x))
+}
+
+## type of the values of the seed or delayed operation 'x', from the types of
+## its seeds under the delayed operations that set the dimnames or bind
+## seeds, for which type() reads each seed, see .drop_unread_seeds()
+#' @importFrom BiocGenerics type
+#' @importClassesFrom DelayedArray DelayedAbind DelayedSetDimnames
+.seed_type <- function(x) {
+    if (is(x, "DelayedSetDimnames"))
+        return(.seed_type(x@seed))
+    if (is(x, "DelayedAbind"))
+        return(typeof(unlist(lapply(x@seeds, function(s)
+                                        vector(.seed_type(s), 0L)))))
+    type(x)
+}
+
+setMethod("dim", "GsvaUnreadSeed", function(x) x@dim)
+
+setMethod("dimnames", "GsvaUnreadSeed", function(x) x@dimnames)
+
+setMethod("type", "GsvaUnreadSeed", function(x) x@type)
+
+setMethod("is_sparse", "GsvaUnreadSeed", function(x) x@sparse)
+
+## the empty array of the part of 'x' selected by 'index', which has to be
+## empty, since 'x' holds none of the values of the input data
+#' @importFrom cli cli_abort
+.extract_unread_seed <- function(x, index) {
+    lens <- ifelse(vapply(index, is.null, logical(1)), x@dim,
+                   lengths(index))
+    if (all(lens > 0L))
+        cli_abort(c("x"=paste("Internal error, reading values of the input",
+                              "data out of the chunk of this job.")))
+    array(vector(x@type, 0L), dim=lens)
+}
+
+#' @importFrom S4Arrays extract_array
+setMethod("extract_array", "GsvaUnreadSeed", .extract_unread_seed)
+
+#' @importFrom SparseArray extract_sparse_array
+setMethod("extract_sparse_array", "GsvaUnreadSeed", function(x, index)
+    as(.extract_unread_seed(x, index), "SVT_SparseArray"))
 
 ## whether the file 'fname' is a result of gsvaMap() saved in the format
 ## 'output', "HDF5" or "Parquet", given by default by the extension of its

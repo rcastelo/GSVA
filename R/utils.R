@@ -882,6 +882,13 @@ setMethod("wrapData", signature(container="SpatialExperiment"),
     return((.isNumNonEmpty(x)) && (length(x) == 1))
 }
 
+## whether 'x' is a single whole number from 1 to the largest integer value,
+## which as.integer() then gives without truncating it or giving NA
+.isPosIntLength1 <- function(x) {
+    return((.isNumLength1(x)) && (is.finite(x)) && (x >= 1) &&
+           (x <= .Machine$integer.max) && (x == round(x)))
+}
+
 #' @importFrom cli cli_abort
 .check_first_last_values <- function(X, dimfun, dimname, first, last, rmdt) {
     dimfun <- match.fun(dimfun)

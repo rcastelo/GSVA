@@ -449,6 +449,18 @@ test_mapReduceClr <- function() {
                                as.matrix(assay(gsvaranks, "gsvaranks")))
         else
             checkEqualsNumeric(as.matrix(redranks), as.matrix(gsvaranks))
+        ## the scores of each chunk of columns, which reads only the files of
+        ## the ranks of its columns, see .drop_unread_seeds()
+        mapes <- gsvaMap(gsvaColScores, redranks, verbose=FALSE,
+                         BTPARAM=btpar)
+        checkTrue(length(mapes) > 1)
+        es <- gsvaReduce(mapes, verbose=FALSE)
+        gsvaes <- gsvaColScores(gsvaranks, verbose=FALSE)
+        if (is(gsvaes, "SummarizedExperiment"))
+            checkEqualsNumeric(as.matrix(assay(es, "es")),
+                               as.matrix(assay(gsvaes, "es")))
+        else
+            checkEqualsNumeric(as.matrix(es), as.matrix(gsvaes))
         ## the results and manifest of the ranks, whose input fingerprint is
         ## the same for inputs that differ only in their values
         unlink(list.files(wd, pattern="_ranks_", full.names=TRUE))
