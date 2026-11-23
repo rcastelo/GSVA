@@ -1,3 +1,54 @@
+CHANGES IN VERSION 3.0
+----------------------
+
+USER VISIBLE CHANGES
+
+  o The GSVA algorithm has been updated to handle zeros in such a way that enrichment scores are stable, and the scoring step is now between one and two orders of magnitude faster than previous versions of the package.
+
+  o There is a new default row-normalization method for sparse data in the GSVA algorithm, the centered log ratio (CLR) transformation, which is computed in blocks of columns and scales better with the size of the input data than the original ECDF method. The row-normalization method can be now controlled through the argument rowNorm=c("auto", "ecdf", "clr", "none") in the call to the parameter constructor function 'gsvaParam()'.
+
+  o Functions 'gsvaRanks()' and 'gsvaScores()' have been deprecated and replaced by 'gsvaRowNorm()', 'gsvaColRanks()' and 'gsvaColScores()', which perform, separately, the three steps of the GSVA algorithm (row normalization, column rank transformation, column gene set scoring calculation), and take two new parameters 'first' and 'last' that enable restricting calculations to a range of rows or columns.
+
+  o Functions 'saveHDF5GSVAranks()' and 'loadHDF5GSVAranks()' have been deprecated and replaced by 'saveHDF5GSVA()' and 'loadHDF5GSVA()'.
+
+  o New functions 'saveParquetGSVA()' and 'loadParquetGSVA()' load and save GSVA row-normalized values and GSVA column ranks into Parquet files, which can be lazily queried to score individual gene sets over a cloud storage (Amazon S3 or Google Cloud Storgae buckets) or a HTTPS connection using functions 'gsvaColScores()' or 'gsvaEnrichment()'.
+
+  o A memory consumption model has been implemented, which allows GSVA to better honor the memory cap given in the parameter 'maxmem' in functions 'gsva()', 'gsvaRowNorm()', 'gsvaColRanks()' and 'gsvaColScores()'; see GSVA/inst/scripts/README.md.
+
+  o New functions 'gsvaMap()' and 'gsvaReduce()' enable distributing and balancing the computing load of 'gsvaRowNorm()', 'gsvaColRanks()' and 'gsvaColScores()' in an HPC environment. A new function 'gsvaBatchtoolsSlurmParam()' allows the user to more easily configure the jobs submitted by `gsvaMap()` in a SLURM workload manager. New functions 'gsvaJobMemory()' and 'gsvaJobWalltime()' can estimate the 'mem' and 'walltime' arguments in the call to 'gsvaBatchtoolsSlurmParam()'.
+
+  o A new "average" method has been added, through the parameter constructor function 'avgParam()', which currently calculates the arithmetic mean of expression values per gene set and column, handling missing values as in GSVA or ssGSEA.
+
+  o When 'ondisk="no"' and a parallel backend is given in 'BPPPARAM', dense HDF5 input data is loaded in parallel, while sparse CSC input is still loaded serially because it is faster than in parallel.
+
+  o GSVA gene set scoring can be calculated in NVIDIA GPU hardware, when available. Functions 'gsva()' and 'gsvaColScores()' gain a new parameter 'device=c("auto", "cpu", "gpu)' for that purpose. Contributed by Gabriele Sales from University of Padova; see https://github.com/rcastelo/GSVA/pull/294.
+
+  o Z-scores and PLAGE scores are now calculated by column to help keeping the memory consumption within the budget given in the 'maxmem' parameter. The sign of PLAGE scores may change with respect to earlier versions of GSVA, since now instead of being the arbitrary default of the SVD, it is set so that scores now correlate positively with the gene sets mean expression.
+
+  o Few improvments in ssGSEA that make it faster and consume less memory, including gene set matching to ranked genes and computing R^alpha by column blocks.
+
+  o ssGSEA, Z-score and PLAGE were ignoring the ondisk parameter and now take it into account.
+
+  o Updated proteomics and single-cell vignettes, added new vignettes on using GSVA with spatial omics data, and on how to use GSVA with GPU hardware, HPC environments and cloud storage.
+
+BUG FIXES
+
+  o Fix in the C code handling missing data.
+
+  o Fix in the C code that calculates ECDF and KCDF values when building their output from a copy of the input, where matrices without nonzero values or columns where all nonzero where 1s (lacunar leaves in SVT_SparseMatrix objects) were not correctly handled.
+
+  o Fixes in R and C code to detect invalid ranks in the GSVA method.
+
+  o Fix progress reporting in the C code of the GSVA method.
+
+  o Fix in the C code for ECDF row normalization when input are dense integer matrices. 
+
+  o Fix in the PLAGE method when an input gene set has only one gene.
+
+  o Several fixes on properly discarding duplicated gene identifiers in gene sets, handling undefined random walk scores, avoiding integer overflows and freeing a couple of missing memory allocations in C code.
+
+  o Fix to avoid updating the users BPPARAM argument, since it is a reference class.
+
 CHANGES IN VERSION 2.6
 ----------------------
 
