@@ -1,5 +1,5 @@
 ---
-title: "GSVA on GPUs, HPC clusters and the cloud"
+title: "Using GSVA on GPUs, HPC clusters and the cloud"
 author:
 - name: Robert Castelo
   affiliation:
@@ -12,7 +12,7 @@ abstract: >
 date: "`r BiocStyle::doc_date()`"
 package: "`r pkg_ver('GSVA')`"
 vignette: >
-  %\VignetteIndexEntry{GSVA on GPUs, HPC clusters and the cloud}
+  %\VignetteIndexEntry{Using GSVA on GPUs, HPC clusters and the cloud}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
   %\VignetteKeywords{GeneExpression, Microarray, RNAseq, GeneSetEnrichment, Pathway}
@@ -46,25 +46,22 @@ backends such as `BiocParallel::MulticoreParam()` or `BiocParallel::SnowParam()`
 However, running GSVA in GPU accelerated hardware or in a high-performance
 computing (HPC) environment that distributes the computational load across
 multiple independent nodes that do not share their main memory, requires using
-some additional parameters and functions for that purpose. In this vignette we
-illustrate these use cases assuming our GPU hardware is NVIDIA running the CUDA
-library, and our HPC environment uses the [SLURM](https://slurm.schedmd.com)
-workload manager. Other workload managers can be used, please consult the
-documentation of the `r Biocpkg("BiocParallel")` package for more information,
-or open an [issue](https://github.com/rcastelo/GSVA/issues/new/choose) in the
-GSVA GitHub repo if you need help with a different workload manager.
+some additional parameters and functions for that purpose.
 
-When GPU hardware is available, we can use parameter `device` in the calls to
-`gsva()` or `gsvaColScores()` to instruct GSVA to use GPUs. In HPC, we will be
-using the three-step GSVA pipeline, illustrated in the scRNA-seq vignette, with
-the additional parameters `first` and `last`, which allow the algorithm to run
-on a subset of rows (`gsvaRowNorm()`) or columns (`gsvaColRanks()` and
-`gsvaColScores()`) of the input data, storing the intermediate results using
-on-disk data structures, and merging them into a final single output object that
-will store the enrichment scores using also an on-disk data structure. We will
-not have to worry about how to split the input data and merge the intermediate
-results. These two tasks will be executed by the functions `gsvaMap()` and
-`gsvaReduce()`.
+In this vignette we illustrate these use cases assuming that our GPU hardware
+is NVIDIA running the CUDA library, and that our HPC environment uses the
+[SLURM](https://slurm.schedmd.com) workload manager. Other workload managers
+can be used, please consult the documentation of the `r Biocpkg("BiocParallel")`
+package for more information, or open an
+[issue](https://github.com/rcastelo/GSVA/issues/new/choose) in the GSVA GitHub
+repo if you need help with a different workload manager.
+
+When GPU hardware is available, we can use the parameter `device` in the calls
+to `gsva()` or `gsvaColScores()` to instruct GSVA to use the available GPUs. In
+HPC, we use the three-step GSVA pipeline of the scRNA-seq vignette, whose input
+data the function `gsvaMap()` splits into chunks processed by separate jobs,
+storing their intermediate results on disk, which are then merged into a single
+object with the function `gsvaReduce()`.
 
 In the last section, we show how GSVA column ranks stored with Apache Parquet
 format in cloud object storage, such as Amazon S3 or Google Cloud Storage
@@ -88,10 +85,10 @@ loads on machines without a GPU, where it uses the CPU.
 With such an installation, `gsva()` and `gsvaColScores()` use the GPU by default
 (`device="auto"`), falling back to the CPU when no usable GPU is found, while
 `device="cpu"` or `device="gpu"` select the device explicitly, and with
-`verbose=TRUE` GSVA reports which device scores the gene sets. The GPU
-calculates in single precision, so its scores differ from those of the CPU in
-about the seventh significant digit. Gene sets whose weights would not survive
-single precision, and all gene sets of data with missing values, are scored on
+`verbose=TRUE` GSVA reports which device scores the gene sets. A GPU calculates
+in single precision, so its scores differ from those of the CPU in about the
+seventh significant digit. Gene sets whose weights would not survive single
+precision, and all gene sets of data with missing values, are scored on
 the CPU. The GPU scores the gene sets in the main R process, while the parallel
 workers of `BPPARAM` do the other steps.
 
@@ -113,112 +110,122 @@ corresponding
 [vignette](https://bioconductor.org/packages/release/bioc/vignettes/BiocParallel/inst/doc/BiocParallel_BatchtoolsParam.html)
 of the `r Biocpkg("BiocParallel")` package. The GSVA package, however, provides
 a convenience function called `gsvaBatchtoolsSlurmParam()` that will build a
-`BatchtoolsParam` object with some sensible settings for running GSVA in an HPC
-environment with a SLURM workload manager.
+`BatchtoolsParam` object with some sensible default settings for running GSVA in
+an HPC environment with a SLURM workload manager.
 
 ```{r, eval=FALSE}
 gsvabtpar <- gsvaBatchtoolsSlurmParam(partition="short", nodes=10,
                                       ncpus_per_task=4)
 ```
-In this example, we are distributing the computational load across 10 nodes, where
-in each of them calculations will be done in parallel using 4 CPU cores, sending
-the corresponding jobs to a partition called `short`. By default, the function
-`gsvaBatchtoolsSlurmParam()` has a first argument `dir="GSVAOUTPUT"`, which will
-create a directory called `GSVAOUTPUT` in the current working directory, where
-the intermediate results will be stored. The user can change this directory by
-specifying a different value for the `dir` argument, but it is important that this
-directory is accessible from all nodes in the HPC environment. The user is also
-responsible for deleting the contents of this directory after the GSVA calculations
-are finished. Each job saves its results under a temporary name ending in
-`.partial`, which it renames once they are complete, so files with that ending
-left in this directory belong to jobs that did not finish, and can be deleted once
-no job of those calculations is running.
+In this example, we are distributing the computational load across at most 10
+jobs running at the same time, which SLURM may place on the same or on
+different nodes, where in each of them calculations will be done in parallel
+using 4 CPU cores, sending the jobs to a partition called `short`. The first
+argument of `gsvaBatchtoolsSlurmParam()`, in fact, is an output directory
+called `dir`, which by default is `dir="GSVAOUTPUT"` and where the
+intermediate results are stored. The user can change this directory by
+specifying a different value for the `dir` argument, but it is important that
+this directory is accessible from all nodes in the HPC environment. The user is
+also responsible for deleting the contents of this directory after the GSVA
+calculations are finished. Each job saves its results under a temporary name
+ending in `.partial`, which it renames once they are complete, so files with
+that ending left in this directory belong to jobs that did not finish, and can
+be deleted once no job of those calculations is running.
 
-The memory requested for each job, given by the `mem` argument of
-`gsvaBatchtoolsSlurmParam()`, with a default value of `"10G"`, is also the maximum
-main memory that GSVA will attempt to use in that job. Each job runs one R process
-and, with more than one CPU core per job, as many parallel workers, and each of
-these R processes takes about 0.9 GB by itself for loading GSVA and the packages it
-depends on (1.05 GB on macOS). Therefore, the memory requested for each job should be
-at least `(1 + ncpus_per_task)` times 0.9 GB, i.e., 4.5 GB in the previous example,
-plus the memory needed by the calculations on each chunk of the input data. The
-function
-`gsvaBatchtoolsSlurmParam()` gives a warning when the memory requested for each job
-is smaller than the former, while the function `gsvaMap()`, before submitting any
-job, gives an error in that case, because such jobs would be killed by the workload
-manager, and a warning when it estimates that the calculations on each chunk of the
-input data require more memory than requested, suggesting in both cases to use
-fewer CPU cores per job or to request more memory. The job scripts are written
-from a template provided by GSVA, which requests this memory for the whole job;
-clusters that require their own template, e.g., to load modules or to set an
-account, can give it in the `template` argument of `gsvaBatchtoolsSlurmParam()`,
-and it should also request the memory for the whole job (`--mem`) instead of
-for each CPU core (`--mem-per-cpu`).
+The SLURM job scripts are written from a template provided by GSVA, stored in
+`system.file("templates", "slurm-gsva.tmpl", package="GSVA")`, which can be
+overridden by giving the path to a different one in the `template` argument of
+`gsvaBatchtoolsSlurmParam()`. This can be necessary in HPC environments that
+require their own template, e.g., to load software modules or to set an
+account. Such a template should request the memory for the whole job
+(`--mem`), as the one of GSVA does, instead of for each CPU core
+(`--mem-per-cpu`), so that SLURM enforces the memory that GSVA uses in each
+job, see the next subsection.
 
-The function `gsvaMap()` splits the input data into chunks, whose number depends
-on the size of the input data and on the memory requested for each job, and
-distributes them among the `nodes` jobs, each of which processes its chunks one
-after another. By default, `gsvaBatchtoolsSlurmParam()` does not request any time
-limit for the jobs, which then take the default time limit of the partition,
-bounded by its maximum time limit; the SLURM command `scontrol show partition`
-shows both of them in the fields `DefaultTime` and `MaxTime`. A time limit can
-be requested with the `walltime` argument, written as in the `--time` option of
-the SLURM command `sbatch`, e.g., `walltime=90` or `walltime="1:30:00"` for one
-hour and a half, or `walltime="2-0"` for two days, which should be long enough
-for each job to process about the number of chunks divided by `nodes`.
-With the argument `arrayjobs=TRUE`, each job is sent instead as an array job,
-whose tasks process one chunk each, one after another, so that the time limit
-in `walltime` applies to each chunk, the scheduler may start the shorter tasks
-sooner, and a task ended by SLURM, e.g., for exceeding its memory or time
-limit, does not prevent the next tasks from processing their chunks. In both
-cases, at most `nodes` jobs or tasks run at the same time, and the chunks of
-those ended by SLURM can be resubmitted as described below.
+## Memory and wall time of each job
 
-How `gsvaMap()` splits the input data into chunks depends on the step of the
-calculations. The column ranks and the enrichment scores of each column only
-depend on the values of that column, and `gsvaMap()` splits the data into
-chunks of columns. The row normalization with `rowNorm="ecdf"` needs all the
-values of each row, and `gsvaMap()` splits the data into chunks of rows, whose
-results `gsvaReduce()` binds into a single object. With `rowNorm="clr"`, the
-jobs only calculate, by chunks of columns, the geometric mean of each row, and
-the division of each row by its geometric mean is a delayed operation on the
-input data, which the next step, the calculation of the column ranks, reads
-again by chunks of columns. In this case, `gsvaMap()` saves no normalized
-values to disk, and the input data must remain in place until the column ranks
-are calculated.
+Each job runs one R process plus, with more than one CPU core, one parallel
+worker per core, each taking about 1 GB for R, GSVA and its dependencies, in
+addition to the memory of the calculations on its chunks. The memory
+requested for each job with the `mem` argument of
+`gsvaBatchtoolsSlurmParam()` (default `"10G"`) is also the maximum memory
+that GSVA uses in that job. `gsvaBatchtoolsSlurmParam()` warns when `mem`
+cannot hold the R processes of a job, and `gsvaMap()`, before submitting any
+job, gives an error in that case and a warning when the chunks would need
+more memory than `mem`.
 
-Since every step with `rowNorm="clr"` reads the input data by blocks of columns,
-how fast it does so depends on how the data are stored on disk. Single-cell
-data stored in the compressed sparse column (CSC) layout of 10x Genomics,
-written with the function `writeTENxMatrix()` of the `r Biocpkg("HDF5Array")`
-package and loaded with `TENxMatrix()`, store only the nonzero values, column
-after column, and are read by blocks of columns several times faster than a
-dense HDF5 dataset, such as the one written by `saveHDF5SummarizedExperiment()`.
-A dense HDF5 dataset is stored and compressed in chunks of rows and columns,
-each of which has to be read and decompressed completely to obtain any of its
-values. GSVA aligns the blocks of columns it reads with these chunks but, when
-the memory available to each parallel worker only fits blocks narrower than a
-chunk, each chunk is read and decompressed several times, and GSVA gives a
-warning with the memory for which the blocks would take whole chunks, which
-can then be requested for each job with the `mem` argument of
-`gsvaBatchtoolsSlurmParam()`. Therefore, single-cell data stored only in a
-dense HDF5 dataset can be saved once in the CSC layout before running GSVA
-with `rowNorm="clr"`, for instance, with
-`writeTENxMatrix(logcounts(sce), "logcounts.h5", group="matrix")`, where `sce`
-is a `SingleCellExperiment` object with log-normalized values in its assay
-`logcounts`.
+`gsvaMap()` splits the input data into chunks, whose number depends on the
+size and layout of the data and on `mem`, and each of the `nodes` jobs
+processes about the number of chunks divided by `nodes`, one after another.
+Without the `walltime` argument, the jobs take the default time limit of the
+partition, shown with its maximum by `scontrol show partition`
+(`DefaultTime` and `MaxTime`). `walltime` is written as in the `--time`
+option of `sbatch`, e.g., `walltime="1:30:00"`. With `arrayjobs=TRUE`, each
+chunk is processed by a task of an array job, to which the time limit
+applies, and a task killed by SLURM does not prevent the next ones from
+processing their chunks.
 
-The next step is to run the function `gsvaMap()`, which will submit the jobs to
-the SLURM workload manager, and return a list object, where each of its elements
-will be the path to the intermediate results of one chunk of the input data,
-saved in the `GSVAOUTPUT` directory with the function `saveHDF5GSVA()`. Saving
-these results to disk is the default behavior of `gsvaMap()` when jobs are sent
-to a workload manager, such as SLURM, and can be changed with the `output`
-argument of `gsvaMap()`.
+The functions `gsvaJobMemory()` and `gsvaJobWalltime()` give values for these
+two arguments. `gsvaJobMemory()` recommends a memory from the model of the
+memory of GSVA, and `gsvaJobWalltime()` estimates the wall time by running
+small parts of each step on the machine where it is called, so it should be
+called on a compute node like those of the jobs, where it takes a few
+minutes. It returns twice the estimated time (argument `margin`), and its
+argument `arrayjobs` should be the one given to `gsvaBatchtoolsSlurmParam()`;
+see their help pages for further details.
+
+```{r, eval=FALSE}
+mem <- gsvaJobMemory(gsvapar, ncpus_per_task=4)
+walltime <- gsvaJobWalltime(gsvapar, mem=mem, ncpus_per_task=4, nodes=10)
+gsvabtpar <- gsvaBatchtoolsSlurmParam(partition="short", nodes=10,
+                                      ncpus_per_task=4, mem=mem,
+                                      walltime=walltime)
+```
+
+## Running the jobs
+
+Once we have built a parameter object with `gsvaBatchtoolsSlurmParam()`, the
+next step is to run the function `gsvaMap()`, which will create and submit the
+jobs to the SLURM workload manager, and return a list object with the paths to
+the intermediate results of each chunk of the input data, saved in the
+`GSVAOUTPUT` directory. Saving these results to disk is the default behavior of
+`gsvaMap()` when jobs are sent to a workload manager, such as SLURM, and can be
+changed with the `output` argument of `gsvaMap()`.
 
 ```{r, eval=FALSE}
 gsvamaprnorm <- gsvaMap(gsvaRowNorm, gsvapar, BTPARAM=gsvabtpar)
 ```
+How `gsvaMap()` splits the input data into chunks and distributes calculations
+across the computing nodes depends on the step of the calculations, specified
+in the first argument of the call to `gsvaMap()`. The column ranks and the
+enrichment scores of each column only depend on the values of that column, and
+`gsvaMap()` splits the data into chunks of columns. The row normalization with
+`gsvaParam(rowNorm="ecdf")` needs all the values of each row, and `gsvaMap()`
+splits the data into chunks of rows. With `gsvaParam(rowNorm="clr")`, the jobs
+only calculate, by chunks of columns, the geometric mean of each row, and the
+division of each row by its geometric mean is a delayed operation on the input
+data, which the next step, the calculation of the column ranks, reads again by
+chunks of columns. In this case, `gsvaMap()` saves no normalized values to disk,
+and the input data must remain in place until the column ranks are calculated.
+
+Since every step with `rowNorm="clr"` reads the input data by blocks of columns,
+how fast it runs depends on how the data are stored on disk. Single-cell data
+stored in the compressed sparse column (CSC) layout of 10x Genomics store only
+the nonzero values, column after column, and are read by blocks of columns
+several times faster than a dense HDF5 dataset, such as the one written by
+`saveHDF5SummarizedExperiment()`. A dense HDF5 dataset is stored and compressed
+in chunks of rows and columns, each of which has to be read and decompressed
+completely to obtain any of its values. GSVA aligns the blocks of columns it
+reads with these chunks but, when the memory available to each parallel worker
+only fits blocks narrower than a chunk, each chunk is read and decompressed
+several times, and GSVA gives a warning with the memory for which the blocks
+would take whole chunks, which can then be requested for each job with the `mem`
+argument of `gsvaBatchtoolsSlurmParam()`. Therefore, to improve performance on a
+single-cell data stored in a dense HDF5 format, we can save it in the CSC layout,
+e.g., with
+`writeTENxMatrix(logcounts(sce), "logcounts.h5", group="matrix")` of the
+`r Biocpkg("HDF5Array")` package.
+
 The final step is to merge the intermediate results into a single object, using
 the function `gsvaReduce()`, which in this example will return a
 `SingleCellExperiment` object with the row-normalized values stored in an
@@ -230,8 +237,7 @@ gsvarnorm <- gsvaReduce(gsvamaprnorm)
 To complete the three-step GSVA pipeline, we would then calculate the column
 rank values using the function `gsvaColRanks()`, and finally the GSVA scores
 using the function `gsvaColScores()`, as we would normally do in a single-node
-environment, but using `gsvaMap()` and `gsvaReduce()`, this time for a more
-compact coding in single line of code each.
+environment, but using `gsvaMap()` and `gsvaReduce()`.
 
 ```{r, eval=FALSE}
 gsvaranks <- gsvaReduce(gsvaMap(gsvaColRanks, gsvarnorm, BTPARAM=gsvabtpar))
@@ -277,10 +283,9 @@ start an R session, call interactively the `gsvaMap()` function and detach the
 tmux session to be able to log out and leave the jobs running in the background.
 You may reattach to the tmux session later to check the progress of the jobs or
 fetch the results. Note that the partition where the interactive job is
-submitted must have a walltime limit that is long enough to allow the jobs to finish.
-
-The second way is to submit a job with the R script that calls the `gsvaMap()`
-function, which will submit the jobs to the SLURM workload manager.
+submitted must have a walltime limit that is long enough to allow the jobs to
+finish. The second way is to submit a job with the R script that calls the
+`gsvaMap()` function, which will submit the jobs to the SLURM workload manager.
 
 ## Resubmitting failed chunks
 
