@@ -1386,7 +1386,7 @@ MAP_FUN_WRAPPER <- function(X, WRAPPED_FUN, output, ncpus, maxmem, ...) {
         idx <- x@index[[2L]]
         if (is.null(idx))
             x@seed <- .drop_unread_seed(x@seed, first, last)
-        else if (all(diff(idx[first:last]) == 1L))
+        else if (all(diff(idx[seq(first, last, by=1)]) == 1L))
             x@seed <- .drop_unread_seed(x@seed, idx[first], idx[last])
         return(x)
     }
