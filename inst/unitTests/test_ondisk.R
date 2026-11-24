@@ -224,7 +224,7 @@ test_load_sparse_by_blocks <- function() {
     checkTrue(is.null(GSVA:::.col_nzcounts(log1p(abs(x)))))
     ## blocks take the columns that fit in the memory available, or a single
     ## column when it does not fit by itself, and give the same object
-    bytes <- 160 * pmax(1, nz)
+    bytes <- GSVA:::.memory_model("sparsereadbytes") * pmax(1, nz)
     avail <- 5 * max(bytes)
     grid <- GSVA:::.nzcount_col_grid(x, bytes, avail, maxcols=100L)
     widths <- vapply(seq_along(grid), function(i) ncol(grid[[i]]),
@@ -334,6 +334,14 @@ test_load_sparse_by_blocks_bp <- function() {
     checkIdentical(GSVA:::.load_workers(h, 10L, procs + 9 * gb, gb, bp), 4L)
     checkIdentical(GSVA:::.load_workers(h, 10L, procs + 1.5 * gb, gb, bp),
                    1L)
+    ## forked workers take the memory of a forked worker with its input in
+    ## main memory and the buffers to read from disk
+    if (.Platform$OS.type != "windows") {
+        bp <- .without_core_limit(MulticoreParam(workers=4))
+        procs <- 4 * (gb + GSVA:::.disk_read_mem())
+        checkIdentical(GSVA:::.load_workers(h, 10L, procs + 2 * gb, gb, bp),
+                       2L)
+    }
 }
 
 test_memory_check <- function() {

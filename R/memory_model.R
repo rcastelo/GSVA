@@ -46,9 +46,22 @@
     diskreadmem=0.2 * 1024^3,
 
     ## memory in bytes per nonzero value of a block of sparse data read from
-    ## disk as sparse with the HDF5Array package while it is read, as
-    ## measured on single-cell data, see .load_sparse_by_blocks()
-    sparsereadbytes=160,
+    ## disk as sparse with the HDF5Array package while it is read, including
+    ## the block read, when the data is not stored in chunks of several
+    ## columns, as in the CSC layout: from 15 to 25 bytes, as measured on
+    ## single-cell data with blocks of 5,000 to 100,000 columns, which this
+    ## doubles, see .load_sparse_by_blocks() and measure_sparse_read_memory.sh
+    sparsereadbytes=50,
+
+    ## memory taken by a block of sparse data read from disk as sparse while
+    ## it is read, relative to the size of its dense form, when the data is
+    ## stored in chunks of several columns, as in a dense HDF5 dataset, whose
+    ## chunks are decompressed into their dense form before their nonzero
+    ## values are taken, so that it does not depend on the fraction of
+    ## nonzero values: about 2.3 to 2.5 times, as measured on single-cell data
+    ## with blocks of 5,000 to 100,000 columns, from which this leaves a
+    ## margin, see .load_sparse_by_blocks() and measure_sparse_read_memory.sh
+    densereadfactor=3,
 
     ## maximum fraction of nonzero values of the on-disk data loaded into main
     ## memory as a dense matrix by parallel workers reading it as sparse, see

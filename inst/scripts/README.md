@@ -22,7 +22,15 @@ options(GSVA.memorymodel=list(memfractionR=0.65,
 
 New constants should only be adopted after the sweep of memory budgets of
 `validate_maxmem_sweep.sh`, run with a hard memory limit (`-l`), completes all
-its runs.
+its runs. On a computer cluster with SLURM, `validate_maxmem_sweep_slurm.sh`
+runs the same sweep with each run in a job whose memory is its budget, which
+SLURM enforces as the hard memory limit only when its control groups constrain
+the memory of the jobs (`ConstrainRAMSpace=yes` in `cgroup.conf`), see the
+header of the script for how to check it; otherwise the sweep does not
+validate the model. It runs without `cgmemtime`, which cannot create its
+control group in the jobs of SLURM, so that the peak memory of each run is the
+one sampled by SLURM (`MaxRSS`), which overestimates the memory of forked
+workers.
 
 ## Setup
 
@@ -44,6 +52,10 @@ the scrapper package, and writes the log-counts in the compressed sparse column
 (CSC) layout of 10x Genomics and, with `--dense`, also in a dense HDF5 dataset,
 which takes about two hours and 26 GB of disk space more. It also downloads
 the M8 collection of mouse cell type signatures of MSigDB.
+`prepare_sparse_dense_data.R` writes, from the dense dataset, the genes with
+the fewest nonzero values in another dense dataset with the same chunks,
+about 3% of nonzero values instead of 17.6%, whose reading takes more memory
+per nonzero value, to validate `densereadfactor`.
 
 The peak memory of a process and its parallel workers is measured with
 `cgmemtime` on Linux, which needs control groups (cgroups) version 2, and with
@@ -59,11 +71,24 @@ memory-intensive processes, and the scripts run one calibration run at a time.
 | `stepfactors$*$forkcopy` | `measure_step_memory_forked.sh` | Increase of the peak memory with each forked worker at the same budget, with the input in main memory, beyond `procextramem`, relative to the memory of the main R process including its data |
 | `stepfactors` with input in main memory | `measure_step_memory_forked.sh` | Peak memory of one worker at budgets just above GSVA's estimate, which must stay within them |
 | `stepfactors$*$sparsedisk` | `measure_map_reduce_jobs.sh` | Peak memory of the jobs of `gsvaMap()` (`MaxRSS` of the accounting of SLURM) relative to the sparse size of their blocks |
+| `sparsereadbytes` | `measure_sparse_read_memory.sh` | Increase of the peak memory of the process while reading one block of columns as sparse from the CSC layout, per nonzero value of the block (`bytes_nz`) |
+| `densereadfactor` | `measure_sparse_read_memory.sh` | The same from the dense HDF5 dataset, whose chunks are decompressed into their dense form, relative to the size of the dense form of the block (`bytes_nz` / `dense_nz`) |
 | `maxparloaddensity` | `measure_input_load_time.R` | Fraction of nonzero values at which reading in parallel as sparse, whose time grows with the size of the sparse blocks, takes as long as reading as dense in one process |
-| all | `validate_maxmem_sweep.sh -l` | Every run within a hard memory limit equal to its budget must complete |
+| all | `validate_maxmem_sweep.sh -l`, or `validate_maxmem_sweep_slurm.sh` | Every run within a hard memory limit equal to its budget must complete |
 
-`newprocmem`, `diskreadmem`, `sparsereadbytes`, `dgcassembly` and
-`plagedelayedextra` were measured in ad hoc runs and have no script yet.
+`newprocmem`, `diskreadmem`, `dgcassembly` and `plagedelayedextra` were
+measured in ad hoc runs and have no script yet.
+
+When the input stored in chunks of several columns, such as a dense HDF5
+dataset, is read into main memory, `validate_maxmem_sweep.sh` also gives, in
+its last columns, how the memory model planned that reading: its number of
+blocks (`LOAD_BLOCKS`), the memory left for it (`LOAD_AVAIL`), the memory of
+each block while it is read (`LOAD_BLOCKMEM`), the memory reserved for the R
+processes of all the workers (`LOAD_PROCMEM`), in KiB, and the number of
+workers reading the blocks at the same time (`LOAD_WORKERS`), which is
+`(LOAD_AVAIL - LOAD_PROCMEM) / LOAD_BLOCKMEM`, at least 1 and at most the
+number of cores and of blocks. They are NA when the input is not read this
+way.
 
 `plot_maxmem_sweep.R` plots the peak memory and the time of a sweep against
 the memory budgets, and `plot_memory_time.R` against the number of cells.
@@ -83,6 +108,17 @@ script.
     data/m8.all.v2025.1.Mm.symbols.gmt 1000000 1 1000000 yes 16G,32G,64G,128G 10 \
     > results/maxmem_sweep_1M.csv
 Rscript plot_maxmem_sweep.R results/maxmem_sweep_1M.csv results/maxmem_sweep_1M.png
+
+# the same on a computer cluster with SLURM, on the dense dataset of the genes
+# with the fewest nonzero values loaded into main memory, with 6 cores
+Rscript prepare_sparse_dense_data.R 0.06 300000
+./validate_maxmem_sweep_slurm.sh -p normal -t 02:00:00 mylib \
+    data/TENxBrainDataMouseE18_processed_dense_sparsegenes.sce \
+    data/m8.all.v2025.1.Mm.symbols.gmt 100000 100000 300000 no 4G,6G,8G,12G,16G 6
+
+# memory per nonzero value of reading blocks of 5,000 and 50,000 columns
+./measure_sparse_read_memory.sh mylib csc,dense 5000,50000 3 \
+    > results/sparse_read_memory_mylib.out
 
 # time of loading the input in one process and with 6 workers
 Rscript measure_input_load_time.R 100000 6 3
