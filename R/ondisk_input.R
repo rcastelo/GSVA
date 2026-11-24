@@ -7,13 +7,17 @@
 ## load into main memory as an SVT_SparseMatrix object the sparse on-disk data
 ## in 'X', reading one block of columns at a time, because coercing 'X' as a
 ## whole with as() takes 5 to 8 times the memory of the result. reading a
-## block as sparse with the HDF5Array package takes about 160 bytes per
-## nonzero value while it lasts, as measured on single-cell data, and the
-## blocks of columns already read form the result, which takes their memory
-## when bound, see 'sparsereadbytes' in .memory_model_defaults. when 'X' is
-## stored in chunks of several columns, as in dense
-## HDF5 datasets, also through delayed operations such as a subset of its
-## columns, see .ondisk_chunkdim(), blocks span the width of the chunks,
+## block as sparse with the HDF5Array package takes memory while it lasts,
+## besides the blocks of columns already read, which form the result and take
+## their memory when bound: when 'X' is stored in chunks of several columns,
+## as in dense HDF5 datasets, each chunk is decompressed into its dense form
+## before its nonzero values are taken, so that a block takes a multiple of
+## the size of its dense form, whatever its fraction of nonzero values, see
+## 'densereadfactor' in .memory_model_defaults, and otherwise, as in the CSC
+## layout, a number of bytes per nonzero value, see 'sparsereadbytes'. when
+## 'X' is stored in chunks of several columns, also through delayed
+## operations such as a subset of its columns, see .ondisk_chunkdim(), blocks
+## span the width of the chunks,
 ## because blocks splitting chunks make their reading slower, while wider
 ## blocks do not make it faster: the smallest multiple of that width not
 ## narrower than the default block of the DelayedArray package. otherwise, as
@@ -76,6 +80,7 @@
     blockbytes <- NA_real_ ## memory of the largest block while it is read
     pm <- NULL
     nzbytes <- .memory_model("sparsereadbytes")
+    eltbytes <- if (type(X) == "integer") 4 else 8
     if (budget) {
         pm <- .block_worker_mem(X, 2L, forked=.forked_workers(BPPARAM))
         avail <- .mem_fraction_R() * maxmem - insize - .held_mem() - pm$workermem
@@ -90,12 +95,15 @@
             blockbytes <- max(diff(c(0, cumsum(nzbytes *
                                                pmax(1, nz))[ends])))
         } else {
-            eltbytes <- if (type(X) == "integer") 4 else 8
+            ## memory of each column while it is read, by the size of its
+            ## dense form when it is stored in chunks of several columns, and
+            ## otherwise by its average number of nonzero values
             nzpercol <- insize / (eltbytes + 4) / ncol(X)
+            colbytes <- if (multicol) .memory_model("densereadfactor") *
+                                      as.numeric(nrow(X)) * eltbytes
+                        else nzbytes * max(1, nzpercol)
             ncolblock <- max(mincols,
-                             min(ncolblock,
-                                 floor(avail / (nzbytes *
-                                                max(1, nzpercol)))))
+                             min(ncolblock, floor(avail / colbytes)))
             if (multicol) ## whole chunks
                 ncolblock <- cd[2] * (ncolblock %/% cd[2])
         }
@@ -104,7 +112,7 @@
         ncolblock <- as.integer(max(1, min(ncol(X), ncolblock, maxcols)))
         grid <- colAutoGrid(X, ncol=ncolblock)
         if (budget)
-            blockbytes <- nzbytes * max(1, nzpercol) * ncolblock
+            blockbytes <- colbytes * ncolblock
     }
     nworkers <- if (multicol) .load_workers(X, length(grid), avail,
                                             blockbytes, BPPARAM, pm)
@@ -134,11 +142,19 @@
 ## 'blockbytes' bytes while it is read, within the memory 'avail' left by the
 ## result, see .load_sparse_by_blocks(): as many as there are workers and
 ## blocks, when the memory is not known, and otherwise as many as fit in
-## 'avail' together with the memory of all the workers, 'pm', see
-## .block_worker_mem(), or 1, to read the blocks in this process, when fewer
-## than two fit. reading the blocks of 300,000 cells of single-cell data
-## stored in a dense HDF5 dataset took a third of the time with six workers,
-## each taking about 2.5 GiB more memory while reading its block
+## 'avail' together with the memory of all the workers, or 1, to read the
+## blocks in this process, when fewer than two fit. forked workers, such as
+## those of a MulticoreParam object, return each block as soon as it is read,
+## without keeping memory of their own from one block to the next, so that
+## each one takes, besides its block, the memory outside R of a forked
+## worker with its input in main memory, see .forked_worker_mem(), and its
+## buffers to read 'X' from disk, see .disk_read_mem(): together with a block
+## of 324 MiB in its dense form, at most about 0.75 GiB on Linux and 1.5 GiB
+## on macOS, as measured with two to six workers reading 100,000 to 300,000
+## cells;
+## workers not forked take the memory of .block_worker_mem(), given in 'pm'.
+## reading the blocks of 300,000 cells of single-cell data stored in a dense
+## HDF5 dataset took a third of the time with six workers
 #' @importFrom BiocParallel bpnworkers
 .load_workers <- function(X, nblocks, avail, blockbytes, BPPARAM,
                           pm=NULL) {
@@ -148,9 +164,14 @@
     if (nworkers < 2L || !is.finite(avail) || is.na(blockbytes))
         return(as.integer(nworkers))
 
-    if (is.null(pm))
-        pm <- .block_worker_mem(X, 2L, forked=.forked_workers(BPPARAM))
-    procs <- bpnworkers(BPPARAM) * (pm$parworkermem + pm$copiedmem)
+    if (.forked_workers(BPPARAM))
+        procmem <- .forked_worker_mem(inmemory=TRUE) + .disk_read_mem()
+    else {
+        if (is.null(pm))
+            pm <- .block_worker_mem(X, 2L, forked=FALSE)
+        procmem <- pm$parworkermem + pm$copiedmem
+    }
+    procs <- bpnworkers(BPPARAM) * procmem
     as.integer(max(1, min(nworkers, floor((avail - procs) / blockbytes))))
 }
 

@@ -11,6 +11,11 @@
 ##   ./validate_maxmem_sweep.sh -l data/TENxBrainDataMouseE18_processed_csc.sce \
 ##       data/m8.all.v2025.1.Mm.symbols.gmt 1000000 1 1000000 yes \
 ##       16G,32G,64G,128G 10 > results/maxmem_sweep_1M.csv
+## the environment variable GSVA_MEMTIME can give another memory profiler, or
+## 'none' to run without one, e.g., in the jobs of a workload manager that
+## does not let cgmemtime create its control group, whose memory limit is
+## then the hard one, see validate_maxmem_sweep_slurm.sh; the columns of the
+## memory of the process group are then NA
 
 usage() {
   echo "Usage: $0 [-l] <se_dir> <gmt_file> <first> <incr> <last> <ondisk:auto|yes|no> <maxmem:auto|XG[,YG,...]> [ncores]"
@@ -58,7 +63,12 @@ memtime=$here/tools/cgmemtime/cgmemtime
 if [[ $(uname -s) == "Darwin" ]]; then
   memtime=$here/tools/macmemtime/macmemtime
 fi
-if [[ ! -x $memtime ]]; then
+memtime=${GSVA_MEMTIME:-$memtime}
+if [[ $memtime == "none" && $limit == "yes" ]]; then
+  echo "a hard memory limit (-l) requires a memory profiler" 1>&2
+  exit 1
+fi
+if [[ $memtime != "none" && ! -x $memtime ]]; then
   echo "$memtime not found, build it first, see README.md" 1>&2
   exit 1
 fi
@@ -141,7 +151,7 @@ phase_cols() {
     }' "$1" "$3"
 }
 
-echo "NCELLS,NGSETS,NCORES,MAXMEM,ESTART,ENORM,ERANKS,ESCORES,R_MEM_START,R_MEM_NORM,R_MEM_RANKS,R_MEM_SCORES,R_MEM_HIGH,USER,SYS,WALL,CHILD_RSS_HIGH,GRP_MEM_HIGH,GRP_MEM_START,GRP_MEM_NORM,GRP_MEM_RANKS,GRP_MEM_SCORES,GRP_ANON_HIGH,GRP_ANON_START,GRP_ANON_NORM,GRP_ANON_RANKS,GRP_ANON_SCORES,OOM_KILLS,LAST_PHASE,STATUS"
+echo "NCELLS,NGSETS,NCORES,MAXMEM,ESTART,ENORM,ERANKS,ESCORES,R_MEM_START,R_MEM_NORM,R_MEM_RANKS,R_MEM_SCORES,R_MEM_HIGH,USER,SYS,WALL,CHILD_RSS_HIGH,GRP_MEM_HIGH,GRP_MEM_START,GRP_MEM_NORM,GRP_MEM_RANKS,GRP_MEM_SCORES,GRP_ANON_HIGH,GRP_ANON_START,GRP_ANON_NORM,GRP_ANON_RANKS,GRP_ANON_SCORES,OOM_KILLS,LAST_PHASE,STATUS,LOAD_BLOCKS,LOAD_AVAIL,LOAD_BLOCKMEM,LOAD_PROCMEM,LOAD_WORKERS"
 for nc in ${ncells[@]}; do {
   for mm in ${maxmems[@]}; do {
     echo NCELLS: $nc MAXMEM: $mm 1>&2
@@ -153,8 +163,15 @@ for nc in ${ncells[@]}; do {
     samplefile=$(mktemp "${TMPDIR:-/tmp}/maxmemsweep.samples.XXXXXX")
     ## the memory profiler writes its columns at the end of the last line of
     ## its output, also when the R script does not complete
-    out=$(GSVA_PHASEFILE=$phasefile $memtime -t -d ',' -s $samplefile $limitopt Rscript $here/validate_maxmem_sweep.R $hdf5_se_dir $gmt_file $nc $ondisk $mm $ncores)
-    status=$?
+    if [[ $memtime == "none" ]]; then
+      ## the columns of the memory profiler, as NA
+      out=$(GSVA_PHASEFILE=$phasefile Rscript $here/validate_maxmem_sweep.R $hdf5_se_dir $gmt_file $nc $ondisk $mm $ncores)
+      status=$?
+      out="$(echo "$out" | tail -n 1)NA,NA,NA,NA,NA"
+    else
+      out=$(GSVA_PHASEFILE=$phasefile $memtime -t -d ',' -s $samplefile $limitopt Rscript $here/validate_maxmem_sweep.R $hdf5_se_dir $gmt_file $nc $ondisk $mm $ncores)
+      status=$?
+    fi
     out=$(echo "$out" | tail -n 1)
     memcols=$(echo "$out" | awk -F, -v n=5 -v m=$nmemcols '{ s = $(NF-m+1); for (i = NF-m+2; i <= NF-m+n; i++) s = s "," $i; print s }')
     oomkills=NA
@@ -166,12 +183,24 @@ for nc in ${ncells[@]}; do {
       mmkib=$(to_kib $mm)
     fi
     cols=$(phase_cols $phasefile $mmkib $samplefile)
+    ## the reading of the input into main memory by parallel workers, NA
+    ## when it is not read in blocks of several columns, see
+    ## validate_maxmem_sweep.R
+    loadcols=$(awk -F, '$1 == "info" { info[$2] = $3 }
+      END {
+        n = split("loadblocks loadavail loadblockmem loadprocmem loadworkers", k, " ")
+        s = ""
+        for (i = 1; i <= n; i++)
+          s = s (i > 1 ? "," : "") ((k[i] in info) ? info[k[i]] : "NA")
+        print s
+      }' $phasefile)
     rm -f $phasefile $samplefile
-    echo "$nc,${cols%%|*},$memcols,${cols##*|}" | awk -F, -v OFS=, -v nc=$ncores -v oom=$oomkills -v st=$status '{
-      ## NCORES after NGSETS, OOM_KILLS before LAST_PHASE, and STATUS last
+    echo "$nc,${cols%%|*},$memcols,${cols##*|}" | awk -F, -v OFS=, -v nc=$ncores -v oom=$oomkills -v st=$status -v lc=$loadcols '{
+      ## NCORES after NGSETS, OOM_KILLS before LAST_PHASE, STATUS after it,
+      ## and the reading of the input last
       s = $1 "," $2 "," nc
       for (i = 3; i < NF; i++) s = s "," $i
-      print s "," oom "," $NF "," st
+      print s "," oom "," $NF "," st "," lc
     }'
   } done
 } done

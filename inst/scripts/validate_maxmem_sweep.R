@@ -117,6 +117,28 @@ step <- function(name, expr) {
          maxused=maxused)
 }
 
+## the reading into main memory of input stored on disk in chunks of several
+## columns, such as a dense HDF5 dataset, see GSVA:::.load_sparse_by_blocks(),
+## whose number of parallel workers reading its blocks is given by
+## GSVA:::.load_workers(), traced here to write at its exit, as information
+## of the progress of the phases, the number of blocks ('loadblocks'), the
+## memory left for reading them ('loadavail'), the memory of each block while
+## it is read ('loadblockmem'), the memory that the model reserves for the R
+## processes of all the workers ('loadprocmem'), and the number of workers
+## reading the blocks ('loadworkers'), with memory in KiB, NA when not
+## computed. the input of the runs with ondisk="yes" is not read this way
+logload <- function(env, nworkers) {
+    kib <- function(x) if (is.null(x) || !is.finite(x)) "NA"
+                       else sprintf("%.0f", x / 1024)
+    progress("info", "loadblocks", env$nblocks)
+    progress("info", "loadavail", kib(env$avail))
+    progress("info", "loadblockmem", kib(env$blockbytes))
+    progress("info", "loadprocmem", kib(env$procs))
+    progress("info", "loadworkers", nworkers)
+}
+invisible(trace(".load_workers", where=asNamespace("GSVA"), print=FALSE,
+                exit=quote(logload(environment(), returnValue()))))
+
 norm <- step("norm", gsvaRowNorm(gsvapar, verbose=FALSE, maxmem=maxmem,
                                  BPPARAM=MulticoreParam(workers=ncores)))
 ranks <- step("ranks", gsvaColRanks(norm$res, verbose=FALSE, maxmem=maxmem,
