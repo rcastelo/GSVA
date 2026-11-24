@@ -928,7 +928,7 @@ setMethod("mapGeneSetsToAnno",
 #' @importFrom annotate getAnnMap
 .geneSetIdMaps <- function(geneSets, to) {
     if (length(geneSets) == 0 ||
-        !all(vapply(geneSets, function(gs) class(gs) == "GeneSet", TRUE)))
+        !all(vapply(geneSets, function(gs) "GeneSet" %in% class(gs), TRUE)))
         return(NULL)
     from <- geneIdType(geneSets[[1]])
     if (is(from, "NullIdentifier") ||
