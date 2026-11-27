@@ -39,7 +39,7 @@ knitr::opts_chunk$set(collapse=TRUE,
 
 This is a list of some frequently asked questions (FAQ) on the GSVA package,
 with answers and links to the relevant documentation and resources. If you have
-any other question that you would like to see it included in this FAQ, please
+any other question that you would like to see included in this FAQ, please
 open an [issue](https://github.com/rcastelo/GSVA/issues) in the GSVA GitHub
 repo. Aside from this FAQ and opening a GitHub issue, you can also get help on
 the GSVA package by:
@@ -50,24 +50,20 @@ the GSVA package by:
    the GSVA package at https://bioconductor.org/packages/GSVA.
 
 2. Posting your question on the
-   [Bioconductor support site](https://support.bioconductor.org), please make
-   sure you have read first the
-   [Bioconductor posting guide](https://bioconductor.org/help/support/posting-guide).
+   [Bioconductor support site](https://support.bioconductor.org), after reading
+   the [Bioconductor posting guide](https://bioconductor.org/help/support/posting-guide).
 
-# How do I cite GSVA
+# How do I cite GSVA?
 
-If you use the GSVA package in your research, please cite the following paper:
+If you use the GSVA package in your research, please cite the GSVA publication
+[@haenzelmann2013gsva]. Additionally, if you use any of the following methods
+implemented in the GSVA package, please cite the corresponding publications:
 
-[@haenzelmann2013gsva]: Hänzelmann, Sonja, Robert Castelo, and Justin Guinney. 2013. “GSVA: Gene Set Variation Analysis for Microarray and RNA-Seq Data.” _BMC Bioinformatics_ 14: 7. https://doi.org/10.1186/1471-2105-14-7.
+  * _ssGSEA_ [@barbie_systematic_2009].
 
-Additionally, if you use any of the following methods implemented in the GSVA
-package, please cite the corresponding papers:
+  * _Z-score_ [@lee_inferring_2008].
 
-  * _ssgsea_ [@barbie_systematic_2009]: Barbie, David A., Pablo Tamayo, Jesse S. Boehm, So Young Kim, Susan E. Moody, Ian F. Dunn, Anna C. Schinzel, et al. 2009. “Systematic RNA Interference Reveals That Oncogenic KRAS-driven Cancers Require TBK1.” _Nature_ 462 (7269): 108–12. https://doi.org/10.1038/nature08460.
-
-  * _zscore_ [@lee_inferring_2008]: Lee, Eunjung, Han-Yu Chuang, Jong-Won Kim, Trey Ideker, and Doheon Lee. 2008. “Inferring Pathway Activity Toward Precise Disease Classification.” _PLOS Computational Biology_ 4:e1000217. https://doi.org/10.1371/journal.pcbi.1000217.
-
-  * _plage_ [@tomfohr_pathway_2005]: Tomfohr, John, Jun Lu, and Thomas B Kepler. 2005. “Pathway Level Analysis of Gene Expression Using Singular Value Decomposition.” _BMC Bioinformatics_ 6:225. https://doi.org/10.1186/1471-2105-6-225.
+  * _PLAGE_ [@tomfohr_pathway_2005].
 
 # Common error messages and how to fix them
 
@@ -101,7 +97,8 @@ library(GSVA)
 
 ## Unable to find an inherited method for function ‘gsva’ for signature
 
-If you encounter one of the following two errors:
+If you encounter one of the following two errors, the first one given by some
+versions of GSVA:
 
 ```{sh, eval=FALSE}
 Error in gsva(): Calling gsva(expr=., gset.idx.list=., method=., ...) is defunct
@@ -117,10 +114,14 @@ versions < 1.50 (up to October 2023, Bioconductor release 3.17), this first
 argument was the object containing the input expression data. However, starting
 with version 1.50 (October 2023, Bioconductor release 3.18), the first argument
 should be an object of class `GsvaMethodParam` built with a constructor function
-according to the method you want to use, e.g. `gsvaParam()`, `ssgseaParam()`,
-`zscoreParam()`, or `plageParam()`. See the first
-[GSVA package vignette](https://bioconductor.org/packages/GSVA) for more details
-and examples.
+according to the method you want to use, i.e., `gsvaParam()`, `ssgseaParam()`,
+`zscoreParam()`, `plageParam()` or `avgParam()`, as in:
+
+```{r, eval=FALSE}
+gsva(gsvaParam(expr, gsets))
+```
+See the first [GSVA package vignette](https://bioconductor.org/packages/GSVA)
+for more details and examples.
 
 ## No identifiers in the gene sets could be matched to the identifiers in the expression data
 
@@ -134,131 +135,143 @@ identifiers in your expression data. This is usually because the identifiers in
 your gene sets are of a different type than the identifiers in your expression
 data, and both input expression and gene sets lack the necessary metadata to
 map one type onto the other. For example, your gene sets may contain gene
-symbols, while your expression data may contain Ensembl gene IDs. You can check
-whether the annotation metadata is present in your input expression data by
-typing `gsvaAnnotation(expr)`, where `expr` is your input expression data. If
-the output is `NULL`, it means that the annotation metadata is missing. In such
-a case, you can add it with:
+symbols, while your expression data may contain Ensembl gene IDs. Other common
+causes are Ensembl identifiers with a version suffix (e.g., `ENSG00000141510.17`
+instead of `ENSG00000141510`), and gene sets of one organism used with data from
+another one (e.g., human symbols such as `TP53` with mouse data, where the
+symbol is `Trp53`).
+
+The simplest way to provide the missing metadata on the expression data is the
+`annotation` argument of the parameter constructor function, e.g.:
 
 ```{r, eval=FALSE}
 library(GSEABase)
 
-gsvaAnnotation(expr) <- xxxxIndentifier("org.Xx.eg.db")
+gsva(gsvaParam(expr, gsets, annotation=xxxxIdentifier("org.Xx.eg.db")))
 ```
 where `xxxxIdentifier` is the appropriate function for the type of identifiers
-in your expression data, e.g. `ENSEMBLIdentifier()`, `EntrezIdentifier()`, etc..
-Note that you should load the package
+in your expression data, e.g., `ENSEMBLIdentifier()`, `EntrezIdentifier()`,
+etc. Note that you should load the package
 [GSEABase](https://bioconductor.org/packages/GSEABase) to use these functions,
 and you may obtain help about them by typing `help(GeneIdentifierType)`. Here
-also`org.Xx.eg.db` is the appropriate organism-level annotation package for your
-expression data, e.g. `org.Hs.eg.db` for human, `org.Mm.eg.db` for mouse, etc.
-Please check the
+also `org.Xx.eg.db` is the appropriate organism-level annotation package for
+your expression data, e.g., `org.Hs.eg.db` for human, `org.Mm.eg.db` for mouse,
+etc. Please check the
 [Bioconductor annotation packages](https://bioconductor.org/packages/release/BiocViews.html#___AnnotationData)
-for the available organism-level annotation packages.
+for the available organism-level annotation packages. You can check whether
+this metadata is present in your input expression data with
+`gsvaAnnotation(expr)`, which returns `NULL` when it is missing, and you can
+also add it to the expression data with the following instruction:
 
-You can also check whether the annotation metadata is present in your gene sets
-by typing `gsvaAnnotation(gsets)`, where `gsets` is the object containing your
-input gene sets. If the output is `NULL`, it means that the annotation metadata
-is missing. In such a case, if `gsets` is a `list` object, you can add the
-annotation metadata in the same way as for the input expression data.
+```{r, eval=FALSE}
+gsvaAnnotation(expr) <- xxxxIdentifier("org.Xx.eg.db")
+```
 
-# GSVA scores
+Gene sets read with `readGMT()` already have this metadata, which is guessed
+from their identifiers. When `gsets` is a `list` object,
+`gsvaAnnotation(gsets)` returns `NULL`, and you can add the metadata in the
+same way as for the input expression data.
+
+# Input data and scores
 
 ## How should the input expression data be pre-processed before running GSVA?
 
 Our recommendation is to pre-process the input expression data in the same way
-as you would do for a differential expression analysis, i.e. removing lowly
+as you would do for a differential expression analysis, i.e., removing lowly
 expressed genes and normalizing the columns of expression data to reduce
 technical biases, such as differences in sequencing depth and RNA composition.
 GSVA does not read normalization factors or offsets produced by some
 normalization pipelines and associated with raw integer counts, so it is
-necessary to use those factors or offsets to transform the intput raw integer
+necessary to use those factors or offsets to transform the input raw integer
 counts into normalized continuous units of expression, such as log2 CPM, or
 log2 TPM.
 
-## Why GSVA scores differ with respect to previous versions of the GSVA package?
+## Do the scores of a column depend on the other columns of the input data?
+
+Yes, for the GSVA, Z-score and PLAGE methods, which normalize or decompose the
+expression of each gene across all the columns of the input data. ssGSEA scores
+depend on the other columns only through `normalize=TRUE`, the default, which
+divides the scores by their range over the whole input data. Therefore, adding
+or removing columns may change that normalizing range, which in turn may change
+the resulting ssGSEA scores. If you do not want ssGSEA scores to be affected by
+other columns use `ssgseaParam(..., normalize=FALSE)`. Note that this does not
+imply that ssGSEA scores from disparate columns or datasets are directly
+comparable.
+
+## Why are some of my gene sets missing from the output?
+
+Gene sets are first mapped to the rows of the input expression data, and those
+genes in gene sets that are absent from the expression data, are removed from
+each gene set. Then, gene sets with fewer than `minSize` or more than `maxSize`
+genes are discarded. The gene sets actually used can be obtained by calling
+`geneSets()` on the parameter object or on the output of `gsva()`.
+
+## Why do scores differ from those of previous versions of the GSVA package?
 
 The GSVA package includes _regression_ tests that are routinely run in the
-Bioconductor [build system](https://bioconductor.org/checkResults) and which are
-used to detect unintended changes in the GSVA scores with respect to previous
-versions of the package, caused by, e.g., bugs or new features. So, in
-principle, given the same input, GSVA scores should not differ with respect to
-previous versions of the package. However, this still could happen in the
-following cases:
+Bioconductor [build system](https://bioconductor.org/checkResults) to detect
+unintended changes in the scores with respect to previous versions of the
+package, caused by, e.g., bugs or new features. So, in principle, given the
+same input, scores should not differ with respect to previous versions of the
+package. However, this can still happen in the following cases:
 
-1. One or more of the input gene sets contain duplicated gene identifiers
-   within a gene set. Albeit uncommon, such duplicated gene identifiers could
-   be already present in the input gene sets, but more often they can be
-   introduced when mapping the identifiers in the input gene sets to a different
-   type of identifiers, e.g. when two gene symbols map to the same Ensembl gene
-   identifier. In previous versions of the GSVA package, such duplicated
-   identifiers were not detected and were included in the calculations, wrongly
-   biasing them. In the current version of GSVA such duplicated identifiers are
-   detected and removed before the calculations, leading to a GSVA score for
-   such a gene set that may differ with respect to previous versions of the
-   package.
-2. In single-cell or spatially resolved transcriptomics data, zero values in
-   gene sets were treated differently in previous versions of the GSVA package,
-   leading to different GSVA scores. In the current version of GSVA, zero values
-   in gene sets are treated in a particular way that makes GSVA scores stable.
-   In this type of data, the default row-normalization method has also changed,
-   to a more performant method (CLR). You can switch back to the previous method
-   using the parameter `rowNorm` in the call to `gsvaParam()`. Please consult
+1. With any method, when one or more input gene sets contain duplicated gene
+   identifiers. Such duplicates are uncommon in the input gene sets, but they
+   can be introduced when mapping their identifiers to a different type, e.g.,
+   when two gene symbols map to the same Ensembl gene identifier. Previous
+   versions of the GSVA package did not detect them and included them in the
+   calculations, biasing the scores. The current version removes them before
+   the calculations.
+2. With the GSVA method on single-cell or spatially resolved transcriptomics
+   data, because zero values are now handled in a way that makes GSVA scores
+   stable. In this type of data, the default row-normalization method has also
+   changed to a more performant one (CLR). You can switch back to the previous
+   method with the parameter `rowNorm` of `gsvaParam()`. Please consult
    `help(gsvaParam)` and the vignette on using GSVA with single-cell data.
-3. If you use GPU acceleration, GSVA scores may differ with respect to previous
-   versions of the GSVA package because the calculations are performed in single
-   precision, please consult the vignette on using GSVA with GPU hardware.
+3. With the GSVA method on input data with missing values, because random walks
+   now run only over the non-missing genes of each column.
+4. With the PLAGE method, whose sign, instead of being the arbitrary default of
+   the singular value decomposition, is now set so that scores correlate
+   positively with the mean expression of the gene set.
+5. With GPU acceleration when calculating GSVA scores, because calculations are
+   performed in single precision; please consult the vignette on using GSVA
+   with GPU hardware.
+
+# GSVA scores
 
 ## How do I interpret GSVA scores and fold changes between them?
 
-A positive GSVA score for a given gene set in a given column means that the
-genes that form that gene set tend to occur towards the top of the ranking of
-decreasing expression values of that column. A negative one means that those
-genes in the gene set tend to occur towards the bottom of that ranking. A GSVA
-score close to zero means that those genes in the gene set do not show any
-preference towards the top or the bottom of that ranking.
+GSVA first normalizes the expression of each gene across the columns of the
+input data, so that each value reflects how high is the expression of that gene
+in that column, relative to the other columns. A positive GSVA score for a
+given gene set in a given column means that the genes of that gene set tend to
+be more highly expressed in that column, relative to the other columns, than
+the genes outside the gene set. A negative score means the opposite, and a
+score close to zero means that the genes of the gene set show no such tendency.
 
-In the way that GSVA scores are derived, the magnitude of a fold change or
+Because of how GSVA scores are derived, the magnitude of a fold change or
 difference in means between two groups of columns for a given gene set is
 difficult to interpret, but you can interpret the direction (over-expression
-or under-expression of that gene set or pathway) and test with linear models
-whether a coefficient derived from GSVA scores is significantly different from
-zero; see subsection on differential expression at pathway level of the first
+or under-expression of that gene set or pathway). GSVA does not provide
+p-values on any hypothesis test about the magnitude of the score, but you can
+test with linear models whether a coefficient derived from GSVA scores is
+significantly different from zero; see the subsection on differential expression
+at pathway level of the first
 [GSVA vignette](https://bioconductor.org/packages/release/bioc/vignettes/GSVA/inst/doc/GSVA.html#72_Differential_expression_at_pathway_level)
 and the GSVA publication [@haenzelmann2013gsva] for further details.
 
 ## Why are some of the GSVA scores negative?
 
-A GSVA score for a given gene set in a given column is negative when the
-expression levels of the genes in that gene set rank lower than the expression
-levels of the genes outside that gene set in that column. The function
-`gsvaEnrichment()` can be used to produce an enrichment plot that helps to
-understand how the GSVA score was calculated. Please also consult the
-GSVA publication [@haenzelmann2013gsva] for more details on how the GSVA scores
-are calculated.
+A GSVA score for a given gene set in a given column is negative when the genes
+in that gene set are, relative to the other columns, less expressed in that
+column than the genes outside that gene set. The function `gsvaEnrichment()`
+produces an enrichment plot that helps to understand how a GSVA score was
+calculated. Please also consult the GSVA publication [@haenzelmann2013gsva] for
+more details on how the GSVA scores are calculated.
 
 # ssGSEA scores
 
-## Why ssGSEA scores differ with respect to previous versions of the GSVA package?
-
-The GSVA package includes _regression_ tests that are routinely run in the
-Bioconductor [build system](https://bioconductor.org/checkResults) and which are
-used to detect unintended changes in the ssGSEA scores with respect to previous
-versions of the package, caused by, e.g., bugs or new features. So, in
-principle, given the same input, ssGSEA scores should not differ with respect to
-previous versions of the package. However, this still could happen when one or
-more of the input gene sets contain duplicated gene identifiers within a gene
-set. Albeit uncommon, such duplicated gene identifiers could be already present
-in the input gene sets, but more often they can be introduced when mapping the
-identifiers in the input gene sets to a different type of identifiers, e.g. when
-two gene symbols map to the same Ensembl gene identifier. In previous versions
-of the GSVA package, such duplicated identifiers were not detected and were
-included in the calculations, wrongly biasing them. In the current version of
-GSVA such duplicated identifiers are detected and removed before the
-calculations, leading to a ssGSEA score for such a gene set that may differ with
-respect to previous versions of the package.
-
-## Are ssGSEA scores different between its GSVA implementation and the implementation by the Broad Institute?
+## Do the ssGSEA scores of GSVA differ from those of the Broad Institute implementation?
 
 The implementation of ssGSEA in the GSVA package is based on the original
 publication by Barbie et al. [@barbie_systematic_2009], and in principle the
@@ -267,79 +280,38 @@ with the first implementation by the authors of that publication, at the Broad
 Institute, available at https://github.com/GSEA-MSigDB/ssGSEA-gpmodule, and as
 the _ssGSEAProjection module_ in the
 [GenePattern](https://www.genepattern.org/modules/docs/ssGSEAProjection/4)
-software. There have been subsequent versions of the ssGSEA algorithm by
-the Broad Institute,
+software, provided that parameters such as the weight exponent (`alpha`) and
+the normalization of the scores (`normalize`) match. There have been subsequent
+versions of the ssGSEA algorithm by the Broad Institute,
 [ssGSEA 2.0](https://github.com/broadinstitute/ssGSEA2.0) and
 [ssGSEA 3.0](https://github.com/broadinstitute/ssGSEA3.0), which are not
 implemented in the GSVA package.
-
-# PLAGE scores
-
-## Why PLAGE scores differ with respect to previous versions of the GSVA package?
-
-The GSVA package includes _regression_ tests that are routinely run in the
-Bioconductor [build system](https://bioconductor.org/checkResults) and which are
-used to detect unintended changes in the PLAGE scores with respect to previous
-versions of the package, caused by, e.g., bugs or new features. So, in
-principle, given the same input, PLAGE scores should not differ with respect to
-previous versions of the package. However, this still could happen in the
-following cases:
-
-1. One or more of the input gene sets contain duplicated gene identifiers
-   within a gene set. Albeit uncommon, such duplicated gene identifiers could
-   be already present in the input gene sets, but more often they can be
-   introduced when mapping the identifiers in the input gene sets to a different
-   type of identifiers, e.g. when two gene symbols map to the same Ensembl gene
-   identifier. In previous versions of the GSVA package, such duplicated
-   identifiers were not detected and were included in the calculations, wrongly
-   biasing them. In the current version of GSVA such duplicated identifiers are
-   detected and removed before the calculations, leading to a PLAGE score for
-   such a gene set that may differ with respect to previous versions of the
-   package.
-2. The sign of PLAGE scores may change with respect to earlier versions of GSVA,
-   since instead of being the arbitrary default of the SVD, it is now set so
-   that scores correlate positively with the mean expression of the gene set.
-
-# Z-scores
-
-## Why Z-scores differ with respect to previous versions of the GSVA package?
-
-The GSVA package includes _regression_ tests that are routinely run in the
-Bioconductor [build system](https://bioconductor.org/checkResults) and which are
-used to detect unintended changes in the Z-scores with respect to previous
-versions of the package, caused by, e.g., bugs or new features. So, in
-principle, given the same input, Z-scores should not differ with respect to
-previous versions of the package. However, this still could happen when one or
-more of the input gene sets contain duplicated gene identifiers within a gene
-set. Albeit uncommon, such duplicated gene identifiers could be already present
-in the input gene sets, but more often they can be introduced when mapping the
-identifiers in the input gene sets to a different type of identifiers, e.g. when
-two gene symbols map to the same Ensembl gene identifier. In previous versions
-of the GSVA package, such duplicated identifiers were not detected and were
-included in the calculations, wrongly biasing them. In the current version of
-GSVA such duplicated identifiers are detected and removed before the
-calculations, leading to a Z-score for such a gene set that may differ with
-respect to previous versions of the package.
 
 # Large input expression datasets
 
 ## Can I run GSVA on a large input expression dataset that does not fit into main memory?
 
-Yes, as long as it is stored in HDF5 format with the proper layout. If the
-dataset is sparse, such as those produced by single-cell and spatially resolved
-transcriptomics, substantial performance gains can be obtained when the HDF5
-layout of the file only stores nonzero values as a compressed sparse column
-(CSC) matrix (e.g., [10x Genomics HDF5](https://www.10xgenomics.com/support/software/cell-ranger-arc/latest/analysis/outputs/outputs-h5-matrices)).
-With default parameters, GSVA will use 90% of the available main memory of the
-computer to perform calculations. Memory consumption can be controlled with the
-parameter `maxmem` in the calls to `gsva()`, `gsvaRowNorm()`, `gsvaColRanks()`
-and `gsvaColScores()`.
+Yes, as long as it is stored on disk, e.g., in an HDF5 file, and given to GSVA
+as a `DelayedArray` object, such as an `HDF5Array` object. If the dataset is
+sparse, such as those produced by single-cell and spatially resolved
+transcriptomics, substantial performance gains can be obtained when the file
+only stores nonzero values as a compressed sparse column (CSC) matrix (e.g.,
+[10x Genomics HDF5](https://www.10xgenomics.com/support/software/cell-ranger-arc/latest/analysis/outputs/outputs-h5-matrices)).
+With default parameters, GSVA will use 90% of the main memory of the computer
+or, if smaller, of the memory limit of the job in a computer cluster. Memory
+consumption can be controlled with the parameter `maxmem` in the calls to
+`gsva()`, `gsvaRowNorm()`, `gsvaColRanks()` and `gsvaColScores()`,and whether
+the calculations are performed on disk with the parameter `ondisk` in the
+calls to `gsvaParam()`, `ssgseaParam()`, `zscoreParam()`, `plageParam()` and
+`avgParam()`. Please consult the help pages of those functions for more details
+on those parameters.
 
 ## Can I run GSVA calculations in parallel in my computer?
 
 Yes, using the `BPPARAM` parameter in the calls to `gsva()`, `gsvaRowNorm()`,
-`gsvaColRanks()`; please consult the details on that parameter in the manual
-pages of those functions.
+`gsvaColRanks()` and `gsvaColScores()`, e.g.,
+`gsva(param, BPPARAM=MulticoreParam(workers=4))`; please consult the details on
+that parameter in the manual pages of those functions.
 
 ## Can I run GSVA calculations in parallel in a high-performance computing cluster?
 
@@ -358,12 +330,12 @@ as input to the `gsva()` function.
 
 ## scverse AnnData objects
 
-For AnnData objects version < 0.8.0, you can use the CRAN package
-[anndata](https://CRAN.R-project.org/package=anndata) and its function
-`read_h5ad()` to convert an AnnData object into a `SingleCellExperiment` object.
-If the `AnnData` object has version >= 0.8.0, you should use the Bioconductor
-[anndataR](https://bioconductor.org/packages/anndataR), and its function
-`read_h5ad()`. Please consult the documentation of those packages for more
-details on how to use them.
+You can read an AnnData `.h5ad` file into a `SingleCellExperiment` object with
+the function `readH5AD()` from the Bioconductor package
+[zellkonverter](https://bioconductor.org/packages/zellkonverter), or with the
+function `read_h5ad()` from the Bioconductor package
+[anndataR](https://bioconductor.org/packages/anndataR), and then use that object
+as input to the `*Param()` parameter constructor functions. Please consult the
+documentation of those packages for more details on how to use them.
 
 # References
