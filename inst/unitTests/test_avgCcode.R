@@ -247,3 +247,43 @@ test_avgInputTypes <- function() {
                                                       FALSE, FALSE),
                  "SVT_SparseMatrix"))
 }
+
+test_avgLacunarSVT <- function() {
+    message("Running unit tests for AVG C code with lacunar SVT_SparseMatrix")
+
+    suppressPackageStartupMessages(library(SparseArray))
+
+    m <- matrix(0, nrow=10, ncol=6,
+                dimnames=list(paste0("g", 1:10), paste0("s", 1:6)))
+    ## columns 1, 2, and 6 contain only 0s and 1s, producing lacunar leaves
+    ## in SVT_SparseMatrix; column 5 has different nonzero rows than column 6
+    ## to verify offsets are copied rather than reused across columns
+    m[c(2, 5, 8), 1] <- 1
+    m[c(3, 6, 9), 2] <- 1
+    m[c(1, 4, 7), 3] <- 2
+    m[c(2, 5, 8, 10), 4] <- 3
+    m[c(1, 2, 3, 6, 9), 5] <- 4
+    m[c(4, 7, 10), 6] <- 1
+
+    gsets <- list(gs1=c("g1", "g2", "g3"),
+                  gs2=c("g4", "g5", "g6"),
+                  gs3=c("g7", "g8", "g9"))
+
+    ref <- as.matrix(gsva(avgParam(m, gsets, verbose=FALSE), verbose=FALSE))
+
+    svt_dbl <- as(m, "SVT_SparseMatrix")
+    checkTrue(is.null(svt_dbl@SVT[[1]][[1]]))
+    checkTrue(is.null(svt_dbl@SVT[[6]][[1]]))
+    es_dbl <- as.matrix(gsva(avgParam(svt_dbl, gsets, verbose=FALSE),
+                             verbose=FALSE))
+    checkEqualsNumeric(ref, es_dbl)
+
+    mi <- m
+    storage.mode(mi) <- "integer"
+    svt_int <- as(mi, "SVT_SparseMatrix")
+    checkTrue(is.null(svt_int@SVT[[1]][[1]]))
+    checkTrue(is.null(svt_int@SVT[[6]][[1]]))
+    es_int <- as.matrix(gsva(avgParam(svt_int, gsets, verbose=FALSE),
+                             verbose=FALSE))
+    checkEqualsNumeric(ref, es_int)
+}

@@ -91,11 +91,11 @@ fetchnzcol_dblSVT_SparseMatrix(SEXP XsvtR, int nr, int j, double* col, int* idx)
 
         if (nvals > 0) {
           Memcpy(col, REAL(valsR), (size_t) nvals);
-          Memcpy(idx, INTEGER(offsetsR), (size_t) noffsets);
         } else { /* lacunar */
           for (int i=0; i < noffsets; i++)
             col[i] = 1;
         }
+        Memcpy(idx, INTEGER(offsetsR), (size_t) noffsets);
         nnz = noffsets;
     }
 
