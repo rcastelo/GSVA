@@ -6,7 +6,7 @@ author:
   - &idupf Dept. of Medicine and Life Sciences, Universitat Pompeu Fabra, Barcelona, Spain
   email: robert.castelo@upf.edu
 abstract: >
-  Here we list some frequently asked questions (FAQ) on the GSVA package, with answers and links to rthe relevant documentation and resources.
+  Here we list some frequently asked questions (FAQ) on the GSVA package, with answers and links to the relevant documentation and resources.
 date: "`r BiocStyle::doc_date()`"
 package: "`r pkg_ver('GSVA')`"
 vignette: >
@@ -50,7 +50,9 @@ the GSVA package by:
    the GSVA package at https://bioconductor.org/packages/GSVA.
 
 2. Posting your question on the
-   [Bioconductor support site](https://support.bioconductor.org).
+   [Bioconductor support site](https://support.bioconductor.org), please make
+   sure you have read first the
+   [Bioconductor posting guide](https://bioconductor.org/help/support/posting-guide).
 
 # How do I cite GSVA
 
@@ -61,11 +63,11 @@ If you use the GSVA package in your research, please cite the following paper:
 Additionally, if you use any of the following methods implemented in the GSVA
 package, please cite the corresponding papers:
 
-  * _ssgsea_ [@barbie_systematic_2009]: Barbie, David A., Pablo Tamayo, Jesse S. Boehm, So Young Kim, Susan E. Moody, Ian F. Dunn, Anna C. Schinzel, et al. 2009. “Systematic RNA Interference Reveals That Oncogenic KRAS-driven Cancers Require TBK1.” Nature 462 (7269): 108–12. https://doi.org/10.1038/nature08460.
+  * _ssgsea_ [@barbie_systematic_2009]: Barbie, David A., Pablo Tamayo, Jesse S. Boehm, So Young Kim, Susan E. Moody, Ian F. Dunn, Anna C. Schinzel, et al. 2009. “Systematic RNA Interference Reveals That Oncogenic KRAS-driven Cancers Require TBK1.” _Nature_ 462 (7269): 108–12. https://doi.org/10.1038/nature08460.
 
-  * _zscore_ [@lee_inferring_2008]: Lee, Eunjung, Han-Yu Chuang, Jong-Won Kim, Trey Ideker, and Doheon Lee. 2008. “Inferring Pathway Activity Toward Precise Disease Classification.” PLOS Comput Biol 4 (11): e1000217. https://doi.org/10.1371/journal.pcbi.1000217.
+  * _zscore_ [@lee_inferring_2008]: Lee, Eunjung, Han-Yu Chuang, Jong-Won Kim, Trey Ideker, and Doheon Lee. 2008. “Inferring Pathway Activity Toward Precise Disease Classification.” _PLOS Computational Biology_ 4:e1000217. https://doi.org/10.1371/journal.pcbi.1000217.
 
-  * _plage_ [@tomfohr_pathway_2005]: Tomfohr, John, Jun Lu, and Thomas B Kepler. 2005. “Pathway Level Analysis of Gene Expression Using Singular Value Decomposition.” BMC Bioinformatics 6 (September): 225. https://doi.org/10.1186/1471-2105-6-225.
+  * _plage_ [@tomfohr_pathway_2005]: Tomfohr, John, Jun Lu, and Thomas B Kepler. 2005. “Pathway Level Analysis of Gene Expression Using Singular Value Decomposition.” _BMC Bioinformatics_ 6:225. https://doi.org/10.1186/1471-2105-6-225.
 
 # Common error messages and how to fix them
 
@@ -116,7 +118,7 @@ argument was the object containing the input expression data. However, starting
 with version 1.50 (October 2023, Bioconductor release 3.18), the first argument
 should be an object of class `GsvaMethodParam` built with a constructor function
 according to the method you want to use, e.g. `gsvaParam()`, `ssgseaParam()`,
-`zscoreParam()`, or `plageParam()`. See the
+`zscoreParam()`, or `plageParam()`. See the first
 [GSVA package vignette](https://bioconductor.org/packages/GSVA) for more details
 and examples.
 
@@ -143,11 +145,14 @@ library(GSEABase)
 
 gsvaAnnotation(expr) <- xxxxIndentifier("org.Xx.eg.db")
 ```
-where `xxxxIdentifier` is the appropriate function for the type of identifiers in
-your expression data, e.g. `ENSEMBLIdentifier()`, `EntrezIdentifier()`, etc.,
-please check `help(GeneIdentifierType)`, and `org.Xx.eg.db` is the appropriate
-organism-level annotation package for your expression data, e.g. `org.Hs.eg.db`
-for human, `org.Mm.eg.db` for mouse, etc. Please check the
+where `xxxxIdentifier` is the appropriate function for the type of identifiers
+in your expression data, e.g. `ENSEMBLIdentifier()`, `EntrezIdentifier()`, etc..
+Note that you should load the package
+[GSEABase](https://bioconductor.org/packages/GSEABase) to use these functions,
+and you may obtain help about them by typing `help(GeneIdentifierType)`. Here
+also`org.Xx.eg.db` is the appropriate organism-level annotation package for your
+expression data, e.g. `org.Hs.eg.db` for human, `org.Mm.eg.db` for mouse, etc.
+Please check the
 [Bioconductor annotation packages](https://bioconductor.org/packages/release/BiocViews.html#___AnnotationData)
 for the available organism-level annotation packages.
 
@@ -163,12 +168,13 @@ annotation metadata in the same way as for the input expression data.
 
 Our recommendation is to pre-process the input expression data in the same way
 as you would do for a differential expression analysis, i.e. removing lowly
-expressed genes and normalize the columns of expression data to reduce technical
-biases, such as differences in sequencing depth and RNA composition. GSVA does
-not read normalization factors or offsets produced by some normalization
-pipelines and associated with raw integer counts, so it is necessary to use
-those factors or offsets to transform the intput raw integer counts into
-normalized continuous units of expression, such as log2 CPM, or log2 TPM.
+expressed genes and normalizing the columns of expression data to reduce
+technical biases, such as differences in sequencing depth and RNA composition.
+GSVA does not read normalization factors or offsets produced by some
+normalization pipelines and associated with raw integer counts, so it is
+necessary to use those factors or offsets to transform the intput raw integer
+counts into normalized continuous units of expression, such as log2 CPM, or
+log2 TPM.
 
 ## Why GSVA scores differ with respect to previous versions of the GSVA package?
 
@@ -195,7 +201,10 @@ following cases:
    gene sets were treated differently in previous versions of the GSVA package,
    leading to different GSVA scores. In the current version of GSVA, zero values
    in gene sets are treated in a particular way that makes GSVA scores stable.
-   Please consult the vignette on using GSVA with single-cell data.
+   In this type of data, the default row-normalization method has also changed,
+   to a more performant method (CLR). You can switch back to the previous method
+   using the parameter `rowNorm` in the call to `gsvaParam()`. Please consult
+   `help(gsvaParam)` and the vignette on using GSVA with single-cell data.
 3. If you use GPU acceleration, GSVA scores may differ with respect to previous
    versions of the GSVA package because the calculations are performed in single
    precision, please consult the vignette on using GSVA with GPU hardware.
@@ -212,9 +221,9 @@ preference towards the top or the bottom of that ranking.
 In the way that GSVA scores are derived, the magnitude of a fold change or
 difference in means between two groups of columns for a given gene set is
 difficult to interpret, but you can interpret the direction (over-expression
-or under-expression) and test with linear models whether a coefficient
-derived from GSVA scores is significantly different from zero; see subsection
-on differential expression at pathway level of the first
+or under-expression of that gene set or pathway) and test with linear models
+whether a coefficient derived from GSVA scores is significantly different from
+zero; see subsection on differential expression at pathway level of the first
 [GSVA vignette](https://bioconductor.org/packages/release/bioc/vignettes/GSVA/inst/doc/GSVA.html#72_Differential_expression_at_pathway_level)
 and the GSVA publication [@haenzelmann2013gsva] for further details.
 
@@ -252,12 +261,11 @@ respect to previous versions of the package.
 ## Are ssGSEA scores different between its GSVA implementation and the implementation by the Broad Institute?
 
 The implementation of ssGSEA in the GSVA package is based on the original
-publication by Barbie et al. [@barbie_systematic_2009], and in principle it
-the resulting enrichment scores should be nearly identical to the scores
-obtained with the first implementation by the authors of that publication,
-at the Broad Insitute, available at
-https://github.com/GSEA-MSigDB/ssGSEA-gpmodule, and as the
-_ssGSEAProjection module_ in the
+publication by Barbie et al. [@barbie_systematic_2009], and in principle the
+resulting enrichment scores should be nearly identical to the scores obtained
+with the first implementation by the authors of that publication, at the Broad
+Institute, available at https://github.com/GSEA-MSigDB/ssGSEA-gpmodule, and as
+the _ssGSEAProjection module_ in the
 [GenePattern](https://www.genepattern.org/modules/docs/ssGSEAProjection/4)
 software. There have been subsequent versions of the ssGSEA algorithm by
 the Broad Institute,
@@ -338,5 +346,24 @@ pages of those functions.
 Yes, using the functions `gsvaMap()` and `gsvaReduce()`; please consult the
 package vignette entitled
 [Using GSVA on GPUs, HPC clusters and the cloud](https://bioconductor.org/packages/release/bioc/vignettes/GSVA/inst/doc/GSVA_GPU_HPC_cloud.html).
+
+# Interoperability with other software ecosystems
+
+## Seurat objects
+
+You can convert a Seurat object into a `SingleCellExperiment` object with the
+function `as.SingleCellExperiment()` from the CRAN package
+[Seurat](https://CRAN.R-project.org/package=Seurat), and then use that object
+as input to the `gsva()` function.
+
+## scverse AnnData objects
+
+For AnnData objects version < 0.8.0, you can use the CRAN package
+[anndata](https://CRAN.R-project.org/package=anndata) and its function
+`read_h5ad()` to convert an AnnData object into a `SingleCellExperiment` object.
+If the `AnnData` object has version >= 0.8.0, you should use the Bioconductor
+[anndataR](https://bioconductor.org/packages/anndataR), and its function
+`read_h5ad()`. Please consult the documentation of those packages for more
+details on how to use them.
 
 # References
